@@ -1,0 +1,38 @@
+BCH SOLUTION OPEN SOURCE LICENSE
+
+Copyright 2018 nChain Holdings Limited.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction other
+than the conditions set out below, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+1. The grant to deal provided above is restricted to dealing in the Software only for purposes
+relating to the Bitcoin Cash (“BCH”) blockchain, provided that the provider of this
+license may designate from time to time the version of Bitcoin Cash (irrespective of the
+name or ticker symbol actually used) that is covered by this license.
+
+2. Redistributions of all copies or substantial portions of the source code of the Software
+must retain the above copyright notice and permission notice, this list of conditions and
+the following disclaimer.
+
+3. Redistributions of all copies or substantial portions of the object code of the Software
+must reproduce the above copyright notice, this list of conditions and the following
+disclaimer in the documentation and/or other materials provided with the distribution.
+
+4. Any work to the extent consisting of the Software or modifications made thereto, must be
+licensed under this license to anyone who comes into possession of a copy. regardless of
+how such work is packaged. Each time such a work is conveyed to a recipient, the
+recipient automatically receives this license from the original licensors, to run, modify
+and otherwise deal with that work.
+
+5. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF
+OR OTHER DEALINGS IN THE SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.

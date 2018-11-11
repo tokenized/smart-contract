@@ -1,0 +1,9 @@
+[Unit]
+Description=Tokenized smartcontract Service
+
+[Service]
+EnvironmentFile={{configFilePath}}
+ExecStart={{execPath}}
+
+[Install]
+WantedBy=multi-user.target

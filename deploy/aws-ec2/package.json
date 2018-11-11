@@ -1,0 +1,26 @@
+{
+    "name": "@tokenized/deploy-aws-ec2",
+    "version": "0.1.0",
+    "main": "bin/index.js",
+    "types": "bin/index.d.ts",
+    "bin": {
+        "tokenized": "bin/tokenized.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc -w",
+        "cdk": "cdk"
+    },
+    "devDependencies": {
+        "@types/node": "^8.9.4",
+        "typescript": "^3.1.2",
+        "aws-cdk": "^0.15.1"
+    },
+    "dependencies": {
+        "@aws-cdk/assets": "^0.15.1",
+        "@aws-cdk/aws-autoscaling": "^0.15.1",
+        "@aws-cdk/aws-ec2": "^0.15.1",
+        "@aws-cdk/aws-s3": "^0.15.1",
+        "@aws-cdk/cdk": "^0.15.1"
+    }
+}
