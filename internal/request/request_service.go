@@ -118,7 +118,7 @@ func (s RequestService) Process(ctx context.Context,
 	// select the handler for this message type
 	h, ok := s.handlers[msg.Type()]
 	if !ok {
-		return nil, fmt.Errorf("No contract handler found for type %v", msg.Type())
+		return nil, fmt.Errorf("No request handler found for type %v", msg.Type())
 	}
 
 	hash := tx.TxHash()

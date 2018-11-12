@@ -10,26 +10,80 @@ package response
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
 	"github.com/tokenized/smart-contract/internal/app/state"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
-type ResponseService struct {
-	State state.StateInterface
+var (
+	incomingMessageTypes = map[string]bool{
+		protocol.CodeAssetCreation:     true,
+		protocol.CodeContractFormation: true,
+		protocol.CodeSettlement:        true,
+		protocol.CodeVote:              true,
+		protocol.CodeBallotCounted:     true,
+		protocol.CodeResult:            true,
+		protocol.CodeFreeze:            true,
+		protocol.CodeThaw:              true,
+		protocol.CodeConfiscation:      true,
+		protocol.CodeReconciliation:    true,
+		protocol.CodeRejection:         true,
+	}
+)
+
+func newContractResponders(state state.StateInterface,
+	config config.Config) map[string]responseInterface {
+
+	return map[string]responseInterface{
+		protocol.CodeAssetCreation:     newAssetCreationResponse(),
+		protocol.CodeContractFormation: newContractFormationResponse(),
+		protocol.CodeSettlement:        newSettlementResponse(),
+		protocol.CodeVote:              newVoteResponse(),
+		protocol.CodeBallotCounted:     newBallotCountedResponse(),
+		protocol.CodeResult:            newResultResponse(),
+		protocol.CodeFreeze:            newFreezeResponse(),
+		protocol.CodeThaw:              newThawResponse(),
+		protocol.CodeConfiscation:      newConfiscationResponse(),
+		protocol.CodeReconciliation:    newReconciliationResponse(),
+		protocol.CodeRejection:         newRejectionResponse(),
+	}
 }
 
-func NewResponseService(contractState state.StateInterface) ResponseService {
+type ResponseService struct {
+	Config     config.Config
+	State      state.StateInterface
+	responders map[string]responseInterface
+}
+
+func NewResponseService(config config.Config,
+	state state.StateInterface) ResponseService {
 	return ResponseService{
-		State: contractState,
+		State:      state,
+		Config:     config,
+		responders: newContractResponders(state, config),
 	}
 }
 
 func (s ResponseService) Process(ctx context.Context,
-	tx *inspector.Transaction, contract *contract.Contract) error {
+	itx *inspector.Transaction, contract *contract.Contract) error {
 
-	// TODO: Move the logic request handlers are using to write to the contract state
+	msg := itx.MsgProto
+
+	// select the handler for this message type
+	h, ok := s.responders[msg.Type()]
+	if !ok {
+		return fmt.Errorf("No response handler found for type %v", msg.Type())
+	}
+
+	// Run the handler, return the response
+	err := h.process(ctx, itx, contract)
+	if err != nil {
+		return err
+	}
 
 	if err := s.State.Write(ctx, *contract); err != nil {
 		return err
