@@ -9,4 +9,7 @@ const (
 
 	// ComplianceActionConfiscation indicates a Confiscation Order
 	ComplianceActionConfiscation = byte('C')
+
+	// ComplianceActionReconciliation indicates a Reconciliation Order
+	ComplianceActionReconciliation = byte('R')
 )

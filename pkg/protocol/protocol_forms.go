@@ -10,24 +10,60 @@ import "encoding/json"
 // An error will be returned if there is no matching Form.
 func NewFormByCode(code string) (Form, error) {
 
-	if code == CodeAddition {
-		return &AdditionForm{}, nil
-	}
-
-	if code == CodeAlteration {
-		return &AlterationForm{}, nil
+	if code == CodeAssetDefinition {
+		return &AssetDefinitionForm{}, nil
 	}
 
 	if code == CodeAssetCreation {
 		return &AssetCreationForm{}, nil
 	}
 
-	if code == CodeAssetDefinition {
-		return &AssetDefinitionForm{}, nil
-	}
-
 	if code == CodeAssetModification {
 		return &AssetModificationForm{}, nil
+	}
+
+	if code == CodeContractOffer {
+		return &ContractOfferForm{}, nil
+	}
+
+	if code == CodeContractFormation {
+		return &ContractFormationForm{}, nil
+	}
+
+	if code == CodeContractAmendment {
+		return &ContractAmendmentForm{}, nil
+	}
+
+	if code == CodeOrder {
+		return &OrderForm{}, nil
+	}
+
+	if code == CodeFreeze {
+		return &FreezeForm{}, nil
+	}
+
+	if code == CodeThaw {
+		return &ThawForm{}, nil
+	}
+
+	if code == CodeConfiscation {
+		return &ConfiscationForm{}, nil
+	}
+
+	if code == CodeReconciliation {
+		return &ReconciliationForm{}, nil
+	}
+
+	if code == CodeInitiative {
+		return &InitiativeForm{}, nil
+	}
+
+	if code == CodeReferendum {
+		return &ReferendumForm{}, nil
+	}
+
+	if code == CodeVote {
+		return &VoteForm{}, nil
 	}
 
 	if code == CodeBallotCast {
@@ -38,106 +74,73 @@ func NewFormByCode(code string) (Form, error) {
 		return &BallotCountedForm{}, nil
 	}
 
-	if code == CodeConfiscation {
-		return &ConfiscationForm{}, nil
-	}
-
-	if code == CodeContractAmendment {
-		return &ContractAmendmentForm{}, nil
-	}
-
-	if code == CodeContractFormation {
-		return &ContractFormationForm{}, nil
-	}
-
-	if code == CodeContractOffer {
-		return &ContractOfferForm{}, nil
-	}
-
-	if code == CodeEstablishment {
-		return &EstablishmentForm{}, nil
-	}
-
-	if code == CodeExchange {
-		return &ExchangeForm{}, nil
-	}
-
-	if code == CodeFreeze {
-		return &FreezeForm{}, nil
-	}
-
-	if code == CodeInitiative {
-		return &InitiativeForm{}, nil
+	if code == CodeResult {
+		return &ResultForm{}, nil
 	}
 
 	if code == CodeMessage {
 		return &MessageForm{}, nil
 	}
 
-	if code == CodeOrder {
-		return &OrderForm{}, nil
-	}
-
-	if code == CodeReconciliation {
-		return &ReconciliationForm{}, nil
-	}
-
-	if code == CodeReferendum {
-		return &ReferendumForm{}, nil
-	}
-
 	if code == CodeRejection {
 		return &RejectionForm{}, nil
+	}
+
+	if code == CodeEstablishment {
+		return &EstablishmentForm{}, nil
+	}
+
+	if code == CodeAddition {
+		return &AdditionForm{}, nil
+	}
+
+	if code == CodeAlteration {
+		return &AlterationForm{}, nil
 	}
 
 	if code == CodeRemoval {
 		return &RemovalForm{}, nil
 	}
 
-	if code == CodeResult {
-		return &ResultForm{}, nil
-	}
-
 	if code == CodeSend {
 		return &SendForm{}, nil
 	}
 
-	if code == CodeSettlement {
-		return &SettlementForm{}, nil
+	if code == CodeExchange {
+		return &ExchangeForm{}, nil
 	}
 
 	if code == CodeSwap {
 		return &SwapForm{}, nil
 	}
 
-	if code == CodeThaw {
-		return &ThawForm{}, nil
-	}
-
-	if code == CodeVote {
-		return &VoteForm{}, nil
+	if code == CodeSettlement {
+		return &SettlementForm{}, nil
 	}
 
 	return nil, ErrUnknownMessage
 }
 
-// AdditionForm is the JSON friendly version of a Addition.
-type AdditionForm struct {
+// AssetDefinitionForm is the JSON friendly version of a AssetDefinition.
+type AssetDefinitionForm struct {
 	BaseForm
 
-	Version                     uint8  `json:"version,omitempty"`
-	Sublist                     string `json:"sublist,omitempty"`
-	KYC                         string `json:"kyc,omitempty"`
-	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
-	DOB                         uint64 `json:"dob,omitempty"`
-	CountryOfResidence          string `json:"country_of_residence,omitempty"`
-	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
-	Message                     string `json:"message,omitempty"`
+	Version             uint8           `json:"version,omitempty"`
+	AssetType           string          `json:"asset_type,omitempty"`
+	AssetID             string          `json:"asset_id,omitempty"`
+	AuthorizationFlags  string          `json:"authorization_flags,omitempty"`
+	VotingSystem        string          `json:"voting_system,omitempty"`
+	VoteMultiplier      uint8           `json:"vote_multiplier,omitempty"`
+	Qty                 uint64          `json:"qty,omitempty"`
+	ContractFeeCurrency string          `json:"contract_fee_currency,omitempty"`
+	ContractFeeVar      float32         `json:"contract_fee_var,omitempty"`
+	ContractFeeFixed    float32         `json:"contract_fee_fixed,omitempty"`
+	Payload             json.RawMessage `json:"payload,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *AdditionForm) Write(b []byte) (n int, err error) {
+func (f *AssetDefinitionForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -146,133 +149,90 @@ func (f *AdditionForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f AdditionForm) Validate() error {
+func (f AssetDefinitionForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f AdditionForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
+func (f AssetDefinitionForm) PayloadForm() (PayloadForm, error) {
+	pf, err := NewPayloadFormByCode(f.AssetType)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(f.Payload, pf); err != nil {
+		return nil, err
+	}
+
+	b, err := pf.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	f.Payload = b
+
+	return pf, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f AdditionForm) BuildMessage() (OpReturnMessage, error) {
+func (f AssetDefinitionForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewAddition()
+	m := NewAssetDefinition()
 
 	m.Version = f.Version
 
-	m.Sublist, err = f.pad(f.Sublist, 4)
+	m.AssetType, err = f.pad(f.AssetType, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	m.KYC, err = f.ensureByte(f.KYC)
+	m.AssetID, err = f.pad(f.AssetID, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
+	m.AuthorizationFlags, err = f.pad(f.AuthorizationFlags, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	m.DOB = f.DOB
-
-	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
+	m.VotingSystem, err = f.ensureByte(f.VotingSystem)
 	if err != nil {
 		return nil, err
 	}
 
-	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	m.VoteMultiplier = f.VoteMultiplier
+
+	m.Qty = f.Qty
+
+	m.ContractFeeCurrency, err = f.pad(f.ContractFeeCurrency, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	m.Message, err = f.pad(f.Message, 148)
+	m.ContractFeeVar = f.ContractFeeVar
+
+	m.ContractFeeFixed = f.ContractFeeFixed
+
+	m.Payload = f.Payload
+
+	pf, err := f.PayloadForm()
 	if err != nil {
 		return nil, err
 	}
 
-	return &m, nil
-}
-
-// AlterationForm is the JSON friendly version of a Alteration.
-type AlterationForm struct {
-	BaseForm
-
-	Version                     uint8  `json:"version,omitempty"`
-	Sublist                     string `json:"sublist,omitempty"`
-	KYC                         string `json:"kyc,omitempty"`
-	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
-	DOB                         uint64 `json:"dob,omitempty"`
-	CountryOfResidence          string `json:"country_of_residence,omitempty"`
-	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
-	Message                     string `json:"message,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *AlterationForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
+	if pf == nil {
+		return &m, nil
 	}
 
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f AlterationForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f AlterationForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f AlterationForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewAlteration()
-
-	m.Version = f.Version
-
-	m.Sublist, err = f.pad(f.Sublist, 4)
+	b, err := pf.Bytes()
 	if err != nil {
 		return nil, err
 	}
 
-	m.KYC, err = f.ensureByte(f.KYC)
-	if err != nil {
-		return nil, err
-	}
-
-	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
-	if err != nil {
-		return nil, err
-	}
-
-	m.DOB = f.DOB
-
-	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Message, err = f.pad(f.Message, 160)
-	if err != nil {
-		return nil, err
-	}
+	m.Payload = b
 
 	return &m, nil
 }
@@ -351,122 +311,6 @@ func (f AssetCreationForm) BuildMessage() (OpReturnMessage, error) {
 	}
 
 	m.AssetRevision = f.AssetRevision
-
-	m.AuthorizationFlags, err = f.pad(f.AuthorizationFlags, 2)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VotingSystem, err = f.ensureByte(f.VotingSystem)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteMultiplier = f.VoteMultiplier
-
-	m.Qty = f.Qty
-
-	m.ContractFeeCurrency, err = f.pad(f.ContractFeeCurrency, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.ContractFeeVar = f.ContractFeeVar
-
-	m.ContractFeeFixed = f.ContractFeeFixed
-
-	m.Payload = f.Payload
-
-	pf, err := f.PayloadForm()
-	if err != nil {
-		return nil, err
-	}
-
-	if pf == nil {
-		return &m, nil
-	}
-
-	b, err := pf.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	m.Payload = b
-
-	return &m, nil
-}
-
-// AssetDefinitionForm is the JSON friendly version of a AssetDefinition.
-type AssetDefinitionForm struct {
-	BaseForm
-
-	Version             uint8           `json:"version,omitempty"`
-	AssetType           string          `json:"asset_type,omitempty"`
-	AssetID             string          `json:"asset_id,omitempty"`
-	AuthorizationFlags  string          `json:"authorization_flags,omitempty"`
-	VotingSystem        string          `json:"voting_system,omitempty"`
-	VoteMultiplier      uint8           `json:"vote_multiplier,omitempty"`
-	Qty                 uint64          `json:"qty,omitempty"`
-	ContractFeeCurrency string          `json:"contract_fee_currency,omitempty"`
-	ContractFeeVar      float32         `json:"contract_fee_var,omitempty"`
-	ContractFeeFixed    float32         `json:"contract_fee_fixed,omitempty"`
-	Payload             json.RawMessage `json:"payload,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *AssetDefinitionForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f AssetDefinitionForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f AssetDefinitionForm) PayloadForm() (PayloadForm, error) {
-	pf, err := NewPayloadFormByCode(f.AssetType)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(f.Payload, pf); err != nil {
-		return nil, err
-	}
-
-	b, err := pf.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	f.Payload = b
-
-	return pf, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f AssetDefinitionForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewAssetDefinition()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
 
 	m.AuthorizationFlags, err = f.pad(f.AuthorizationFlags, 2)
 	if err != nil {
@@ -631,203 +475,8 @@ func (f AssetModificationForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// BallotCastForm is the JSON friendly version of a BallotCast.
-type BallotCastForm struct {
-	BaseForm
-
-	Version   uint8  `json:"version,omitempty"`
-	AssetType string `json:"asset_type,omitempty"`
-	AssetID   string `json:"asset_id,omitempty"`
-	VoteTxnID string `json:"vote_txn_id,omitempty"`
-	Vote      string `json:"vote,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *BallotCastForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f BallotCastForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f BallotCastForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f BallotCastForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewBallotCast()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteTxnID, err = f.pad(f.VoteTxnID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Vote, err = f.pad(f.Vote, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
-// BallotCountedForm is the JSON friendly version of a BallotCounted.
-type BallotCountedForm struct {
-	BaseForm
-
-	Version   uint8  `json:"version,omitempty"`
-	AssetType string `json:"asset_type,omitempty"`
-	AssetID   string `json:"asset_id,omitempty"`
-	VoteTxnID string `json:"vote_txn_id,omitempty"`
-	Vote      string `json:"vote,omitempty"`
-	Timestamp uint64 `json:"timestamp,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *BallotCountedForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f BallotCountedForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f BallotCountedForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f BallotCountedForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewBallotCounted()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteTxnID, err = f.pad(f.VoteTxnID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Vote, err = f.pad(f.Vote, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Timestamp = f.Timestamp
-
-	return &m, nil
-}
-
-// ConfiscationForm is the JSON friendly version of a Confiscation.
-type ConfiscationForm struct {
-	BaseForm
-
-	Version     uint8  `json:"version,omitempty"`
-	AssetType   string `json:"asset_type,omitempty"`
-	AssetID     string `json:"asset_id,omitempty"`
-	Timestamp   uint64 `json:"timestamp,omitempty"`
-	TargetsQty  uint64 `json:"targets_qty,omitempty"`
-	DepositsQty uint64 `json:"deposits_qty,omitempty"`
-	Message     string `json:"message,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *ConfiscationForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f ConfiscationForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f ConfiscationForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f ConfiscationForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewConfiscation()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Timestamp = f.Timestamp
-
-	m.TargetsQty = f.TargetsQty
-
-	m.DepositsQty = f.DepositsQty
-
-	m.Message, err = f.pad(f.Message, 61)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
-// ContractAmendmentForm is the JSON friendly version of a ContractAmendment.
-type ContractAmendmentForm struct {
+// ContractOfferForm is the JSON friendly version of a ContractOffer.
+type ContractOfferForm struct {
 	BaseForm
 
 	Version                     uint8   `json:"version,omitempty"`
@@ -837,7 +486,6 @@ type ContractAmendmentForm struct {
 	Jurisdiction                string  `json:"jurisdiction,omitempty"`
 	ContractExpiration          uint64  `json:"contract_expiration,omitempty"`
 	URI                         string  `json:"uri,omitempty"`
-	ContractRevision            uint16  `json:"contract_revision,omitempty"`
 	IssuerID                    string  `json:"issuer_id,omitempty"`
 	IssuerType                  string  `json:"issuer_type,omitempty"`
 	ContractOperatorID          string  `json:"contract_operator_id,omitempty"`
@@ -850,7 +498,7 @@ type ContractAmendmentForm struct {
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *ContractAmendmentForm) Write(b []byte) (n int, err error) {
+func (f *ContractOfferForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -859,21 +507,21 @@ func (f *ContractAmendmentForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f ContractAmendmentForm) Validate() error {
+func (f ContractOfferForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f ContractAmendmentForm) PayloadForm() (PayloadForm, error) {
+func (f ContractOfferForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f ContractAmendmentForm) BuildMessage() (OpReturnMessage, error) {
+func (f ContractOfferForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewContractAmendment()
+	m := NewContractOffer()
 
 	m.Version = f.Version
 
@@ -903,8 +551,6 @@ func (f ContractAmendmentForm) BuildMessage() (OpReturnMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	m.ContractRevision = f.ContractRevision
 
 	m.IssuerID, err = f.pad(f.IssuerID, 16)
 	if err != nil {
@@ -1060,8 +706,8 @@ func (f ContractFormationForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// ContractOfferForm is the JSON friendly version of a ContractOffer.
-type ContractOfferForm struct {
+// ContractAmendmentForm is the JSON friendly version of a ContractAmendment.
+type ContractAmendmentForm struct {
 	BaseForm
 
 	Version                     uint8   `json:"version,omitempty"`
@@ -1071,6 +717,7 @@ type ContractOfferForm struct {
 	Jurisdiction                string  `json:"jurisdiction,omitempty"`
 	ContractExpiration          uint64  `json:"contract_expiration,omitempty"`
 	URI                         string  `json:"uri,omitempty"`
+	ContractRevision            uint16  `json:"contract_revision,omitempty"`
 	IssuerID                    string  `json:"issuer_id,omitempty"`
 	IssuerType                  string  `json:"issuer_type,omitempty"`
 	ContractOperatorID          string  `json:"contract_operator_id,omitempty"`
@@ -1083,7 +730,7 @@ type ContractOfferForm struct {
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *ContractOfferForm) Write(b []byte) (n int, err error) {
+func (f *ContractAmendmentForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -1092,21 +739,21 @@ func (f *ContractOfferForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f ContractOfferForm) Validate() error {
+func (f ContractAmendmentForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f ContractOfferForm) PayloadForm() (PayloadForm, error) {
+func (f ContractAmendmentForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f ContractOfferForm) BuildMessage() (OpReturnMessage, error) {
+func (f ContractAmendmentForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewContractOffer()
+	m := NewContractAmendment()
 
 	m.Version = f.Version
 
@@ -1136,6 +783,8 @@ func (f ContractOfferForm) BuildMessage() (OpReturnMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	m.ContractRevision = f.ContractRevision
 
 	m.IssuerID, err = f.pad(f.IssuerID, 16)
 	if err != nil {
@@ -1174,23 +823,25 @@ func (f ContractOfferForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// EstablishmentForm is the JSON friendly version of a Establishment.
-type EstablishmentForm struct {
+// OrderForm is the JSON friendly version of a Order.
+type OrderForm struct {
 	BaseForm
 
-	Version                     uint8  `json:"version,omitempty"`
-	Registrar                   string `json:"registrar,omitempty"`
-	RegisterType                string `json:"register_type,omitempty"`
-	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
-	DOB                         uint64 `json:"dob,omitempty"`
-	CountryOfResidence          string `json:"country_of_residence,omitempty"`
-	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
-	Message                     string `json:"message,omitempty"`
+	Version                uint8  `json:"version,omitempty"`
+	AssetType              string `json:"asset_type,omitempty"`
+	AssetID                string `json:"asset_id,omitempty"`
+	ComplianceAction       string `json:"compliance_action,omitempty"`
+	TargetAddress          string `json:"target_address,omitempty"`
+	DepositAddress         string `json:"deposit_address,omitempty"`
+	SupportingEvidenceHash string `json:"supporting_evidence_hash,omitempty"`
+	Qty                    uint64 `json:"qty,omitempty"`
+	Expiration             uint64 `json:"expiration,omitempty"`
+	Message                string `json:"message,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *EstablishmentForm) Write(b []byte) (n int, err error) {
+func (f *OrderForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -1199,127 +850,59 @@ func (f *EstablishmentForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f EstablishmentForm) Validate() error {
+func (f OrderForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f EstablishmentForm) PayloadForm() (PayloadForm, error) {
+func (f OrderForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f EstablishmentForm) BuildMessage() (OpReturnMessage, error) {
+func (f OrderForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewEstablishment()
+	m := NewOrder()
 
 	m.Version = f.Version
 
-	m.Registrar, err = f.pad(f.Registrar, 16)
+	m.AssetType, err = f.pad(f.AssetType, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	m.RegisterType, err = f.ensureByte(f.RegisterType)
+	m.AssetID, err = f.pad(f.AssetID, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
+	m.ComplianceAction, err = f.ensureByte(f.ComplianceAction)
 	if err != nil {
 		return nil, err
 	}
 
-	m.DOB = f.DOB
-
-	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
+	m.TargetAddress, err = f.pad(f.TargetAddress, 34)
 	if err != nil {
 		return nil, err
 	}
 
-	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	m.DepositAddress, err = f.pad(f.DepositAddress, 34)
 	if err != nil {
 		return nil, err
 	}
 
-	m.Message, err = f.pad(f.Message, 148)
+	m.SupportingEvidenceHash, err = f.pad(f.SupportingEvidenceHash, 32)
 	if err != nil {
 		return nil, err
 	}
 
-	return &m, nil
-}
+	m.Qty = f.Qty
 
-// ExchangeForm is the JSON friendly version of a Exchange.
-type ExchangeForm struct {
-	BaseForm
+	m.Expiration = f.Expiration
 
-	Version             uint8   `json:"version,omitempty"`
-	Party1AssetType     string  `json:"party1_asset_type,omitempty"`
-	Party1AssetID       string  `json:"party1_asset_id,omitempty"`
-	Party1TokenQty      uint64  `json:"party1_token_qty,omitempty"`
-	OfferValidUntil     uint64  `json:"offer_valid_until,omitempty"`
-	ExchangeFeeCurrency string  `json:"exchange_fee_currency,omitempty"`
-	ExchangeFeeVar      float32 `json:"exchange_fee_var,omitempty"`
-	ExchangeFeeFixed    float32 `json:"exchange_fee_fixed,omitempty"`
-	ExchangeFeeAddress  string  `json:"exchange_fee_address,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *ExchangeForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f ExchangeForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f ExchangeForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f ExchangeForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewExchange()
-
-	m.Version = f.Version
-
-	m.Party1AssetType, err = f.pad(f.Party1AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Party1AssetID, err = f.pad(f.Party1AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Party1TokenQty = f.Party1TokenQty
-
-	m.OfferValidUntil = f.OfferValidUntil
-
-	m.ExchangeFeeCurrency, err = f.pad(f.ExchangeFeeCurrency, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.ExchangeFeeVar = f.ExchangeFeeVar
-
-	m.ExchangeFeeFixed = f.ExchangeFeeFixed
-
-	m.ExchangeFeeAddress, err = f.pad(f.ExchangeFeeAddress, 34)
+	m.Message, err = f.pad(f.Message, 61)
 	if err != nil {
 		return nil, err
 	}
@@ -1384,6 +967,204 @@ func (f FreezeForm) BuildMessage() (OpReturnMessage, error) {
 	m.Qty = f.Qty
 
 	m.Expiration = f.Expiration
+
+	m.Message, err = f.pad(f.Message, 61)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// ThawForm is the JSON friendly version of a Thaw.
+type ThawForm struct {
+	BaseForm
+
+	Version   uint8  `json:"version,omitempty"`
+	AssetType string `json:"asset_type,omitempty"`
+	AssetID   string `json:"asset_id,omitempty"`
+	Timestamp uint64 `json:"timestamp,omitempty"`
+	Qty       uint64 `json:"qty,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *ThawForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f ThawForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f ThawForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f ThawForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewThaw()
+
+	m.Version = f.Version
+
+	m.AssetType, err = f.pad(f.AssetType, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.AssetID, err = f.pad(f.AssetID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Timestamp = f.Timestamp
+
+	m.Qty = f.Qty
+
+	m.Message, err = f.pad(f.Message, 61)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// ConfiscationForm is the JSON friendly version of a Confiscation.
+type ConfiscationForm struct {
+	BaseForm
+
+	Version     uint8  `json:"version,omitempty"`
+	AssetType   string `json:"asset_type,omitempty"`
+	AssetID     string `json:"asset_id,omitempty"`
+	Timestamp   uint64 `json:"timestamp,omitempty"`
+	TargetsQty  uint64 `json:"targets_qty,omitempty"`
+	DepositsQty uint64 `json:"deposits_qty,omitempty"`
+	Message     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *ConfiscationForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f ConfiscationForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f ConfiscationForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f ConfiscationForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewConfiscation()
+
+	m.Version = f.Version
+
+	m.AssetType, err = f.pad(f.AssetType, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.AssetID, err = f.pad(f.AssetID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Timestamp = f.Timestamp
+
+	m.TargetsQty = f.TargetsQty
+
+	m.DepositsQty = f.DepositsQty
+
+	m.Message, err = f.pad(f.Message, 61)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// ReconciliationForm is the JSON friendly version of a Reconciliation.
+type ReconciliationForm struct {
+	BaseForm
+
+	Version          uint8  `json:"version,omitempty"`
+	AssetType        string `json:"asset_type,omitempty"`
+	AssetID          string `json:"asset_id,omitempty"`
+	RefTxnID         string `json:"ref_txn_id,omitempty"`
+	TargetAddressQty uint64 `json:"target_address_qty,omitempty"`
+	Timestamp        uint64 `json:"timestamp,omitempty"`
+	Message          string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *ReconciliationForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f ReconciliationForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f ReconciliationForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f ReconciliationForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewReconciliation()
+
+	m.Version = f.Version
+
+	m.AssetType, err = f.pad(f.AssetType, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.AssetID, err = f.pad(f.AssetID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.RefTxnID, err = f.pad(f.RefTxnID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.TargetAddressQty = f.TargetAddressQty
+
+	m.Timestamp = f.Timestamp
 
 	m.Message, err = f.pad(f.Message, 61)
 	if err != nil {
@@ -1480,213 +1261,6 @@ func (f InitiativeForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// MessageForm is the JSON friendly version of a Message.
-type MessageForm struct {
-	BaseForm
-
-	Version     uint8  `json:"version,omitempty"`
-	MessageType string `json:"message_type,omitempty"`
-	Message     string `json:"message,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *MessageForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f MessageForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f MessageForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f MessageForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewMessage()
-
-	m.Version = f.Version
-
-	m.MessageType, err = f.pad(f.MessageType, 2)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Message, err = f.pad(f.Message, 211)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
-// OrderForm is the JSON friendly version of a Order.
-type OrderForm struct {
-	BaseForm
-
-	Version                uint8  `json:"version,omitempty"`
-	AssetType              string `json:"asset_type,omitempty"`
-	AssetID                string `json:"asset_id,omitempty"`
-	ComplianceAction       string `json:"compliance_action,omitempty"`
-	TargetAddress          string `json:"target_address,omitempty"`
-	DepositAddress         string `json:"deposit_address,omitempty"`
-	SupportingEvidenceHash string `json:"supporting_evidence_hash,omitempty"`
-	Qty                    uint64 `json:"qty,omitempty"`
-	Expiration             uint64 `json:"expiration,omitempty"`
-	Message                string `json:"message,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *OrderForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f OrderForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f OrderForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f OrderForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewOrder()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.ComplianceAction, err = f.ensureByte(f.ComplianceAction)
-	if err != nil {
-		return nil, err
-	}
-
-	m.TargetAddress, err = f.pad(f.TargetAddress, 34)
-	if err != nil {
-		return nil, err
-	}
-
-	m.DepositAddress, err = f.pad(f.DepositAddress, 34)
-	if err != nil {
-		return nil, err
-	}
-
-	m.SupportingEvidenceHash, err = f.pad(f.SupportingEvidenceHash, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Qty = f.Qty
-
-	m.Expiration = f.Expiration
-
-	m.Message, err = f.pad(f.Message, 61)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
-// ReconciliationForm is the JSON friendly version of a Reconciliation.
-type ReconciliationForm struct {
-	BaseForm
-
-	Version          uint8  `json:"version,omitempty"`
-	AssetType        string `json:"asset_type,omitempty"`
-	AssetID          string `json:"asset_id,omitempty"`
-	RefTxnID         string `json:"ref_txn_id,omitempty"`
-	TargetAddressQty uint64 `json:"target_address_qty,omitempty"`
-	Timestamp        uint64 `json:"timestamp,omitempty"`
-	Message          string `json:"message,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *ReconciliationForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f ReconciliationForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f ReconciliationForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f ReconciliationForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewReconciliation()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.RefTxnID, err = f.pad(f.RefTxnID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.TargetAddressQty = f.TargetAddressQty
-
-	m.Timestamp = f.Timestamp
-
-	m.Message, err = f.pad(f.Message, 61)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
 // ReferendumForm is the JSON friendly version of a Referendum.
 type ReferendumForm struct {
 	BaseForm
@@ -1774,21 +1348,26 @@ func (f ReferendumForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// RejectionForm is the JSON friendly version of a Rejection.
-type RejectionForm struct {
+// VoteForm is the JSON friendly version of a Vote.
+type VoteForm struct {
 	BaseForm
 
-	Version       uint8  `json:"version,omitempty"`
-	AssetType     string `json:"asset_type,omitempty"`
-	AssetID       string `json:"asset_id,omitempty"`
-	RefTxnID      string `json:"ref_txn_id,omitempty"`
-	RejectionType string `json:"rejection_type,omitempty"`
-	Message       string `json:"message,omitempty"`
+	Version              uint8  `json:"version,omitempty"`
+	AssetType            string `json:"asset_type,omitempty"`
+	AssetID              string `json:"asset_id,omitempty"`
+	VoteType             string `json:"vote_type,omitempty"`
+	VoteOptions          string `json:"vote_options,omitempty"`
+	VoteMax              uint8  `json:"vote_max,omitempty"`
+	VoteLogic            string `json:"vote_logic,omitempty"`
+	ProposalDescription  string `json:"proposal_description,omitempty"`
+	ProposalDocumentHash string `json:"proposal_document_hash,omitempty"`
+	VoteCutOffTimestamp  uint64 `json:"vote_cut_off_timestamp,omitempty"`
+	Timestamp            uint64 `json:"timestamp,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *RejectionForm) Write(b []byte) (n int, err error) {
+func (f *VoteForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -1797,21 +1376,21 @@ func (f *RejectionForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f RejectionForm) Validate() error {
+func (f VoteForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f RejectionForm) PayloadForm() (PayloadForm, error) {
+func (f VoteForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f RejectionForm) BuildMessage() (OpReturnMessage, error) {
+func (f VoteForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewRejection()
+	m := NewVote()
 
 	m.Version = f.Version
 
@@ -1825,36 +1404,54 @@ func (f RejectionForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.RefTxnID, err = f.pad(f.RefTxnID, 32)
+	m.VoteType, err = f.ensureByte(f.VoteType)
 	if err != nil {
 		return nil, err
 	}
 
-	m.RejectionType, err = f.ensureByte(f.RejectionType)
+	m.VoteOptions, err = f.pad(f.VoteOptions, 16)
 	if err != nil {
 		return nil, err
 	}
 
-	m.Message, err = f.pad(f.Message, 145)
+	m.VoteMax = f.VoteMax
+
+	m.VoteLogic, err = f.ensureByte(f.VoteLogic)
 	if err != nil {
 		return nil, err
 	}
+
+	m.ProposalDescription, err = f.pad(f.ProposalDescription, 82)
+	if err != nil {
+		return nil, err
+	}
+
+	m.ProposalDocumentHash, err = f.pad(f.ProposalDocumentHash, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.VoteCutOffTimestamp = f.VoteCutOffTimestamp
+
+	m.Timestamp = f.Timestamp
 
 	return &m, nil
 }
 
-// RemovalForm is the JSON friendly version of a Removal.
-type RemovalForm struct {
+// BallotCastForm is the JSON friendly version of a BallotCast.
+type BallotCastForm struct {
 	BaseForm
 
-	Version                     uint8  `json:"version,omitempty"`
-	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
-	Message                     string `json:"message,omitempty"`
+	Version   uint8  `json:"version,omitempty"`
+	AssetType string `json:"asset_type,omitempty"`
+	AssetID   string `json:"asset_id,omitempty"`
+	VoteTxnID string `json:"vote_txn_id,omitempty"`
+	Vote      string `json:"vote,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *RemovalForm) Write(b []byte) (n int, err error) {
+func (f *BallotCastForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -1863,33 +1460,109 @@ func (f *RemovalForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f RemovalForm) Validate() error {
+func (f BallotCastForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f RemovalForm) PayloadForm() (PayloadForm, error) {
+func (f BallotCastForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f RemovalForm) BuildMessage() (OpReturnMessage, error) {
+func (f BallotCastForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewRemoval()
+	m := NewBallotCast()
 
 	m.Version = f.Version
 
-	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	m.AssetType, err = f.pad(f.AssetType, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	m.Message, err = f.pad(f.Message, 181)
+	m.AssetID, err = f.pad(f.AssetID, 32)
 	if err != nil {
 		return nil, err
 	}
+
+	m.VoteTxnID, err = f.pad(f.VoteTxnID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Vote, err = f.pad(f.Vote, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// BallotCountedForm is the JSON friendly version of a BallotCounted.
+type BallotCountedForm struct {
+	BaseForm
+
+	Version   uint8  `json:"version,omitempty"`
+	AssetType string `json:"asset_type,omitempty"`
+	AssetID   string `json:"asset_id,omitempty"`
+	VoteTxnID string `json:"vote_txn_id,omitempty"`
+	Vote      string `json:"vote,omitempty"`
+	Timestamp uint64 `json:"timestamp,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *BallotCountedForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f BallotCountedForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f BallotCountedForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f BallotCountedForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewBallotCounted()
+
+	m.Version = f.Version
+
+	m.AssetType, err = f.pad(f.AssetType, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.AssetID, err = f.pad(f.AssetID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.VoteTxnID, err = f.pad(f.VoteTxnID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Vote, err = f.pad(f.Vote, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Timestamp = f.Timestamp
 
 	return &m, nil
 }
@@ -2011,6 +1684,411 @@ func (f ResultForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
+// MessageForm is the JSON friendly version of a Message.
+type MessageForm struct {
+	BaseForm
+
+	Version     uint8  `json:"version,omitempty"`
+	Timestamp   uint64 `json:"timestamp,omitempty"`
+	MessageType string `json:"message_type,omitempty"`
+	Message     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *MessageForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f MessageForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f MessageForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f MessageForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewMessage()
+
+	m.Version = f.Version
+
+	m.Timestamp = f.Timestamp
+
+	m.MessageType, err = f.pad(f.MessageType, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 203)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// RejectionForm is the JSON friendly version of a Rejection.
+type RejectionForm struct {
+	BaseForm
+
+	Version       uint8  `json:"version,omitempty"`
+	Timestamp     uint64 `json:"timestamp,omitempty"`
+	AssetType     string `json:"asset_type,omitempty"`
+	AssetID       string `json:"asset_id,omitempty"`
+	RejectionType string `json:"rejection_type,omitempty"`
+	Message       string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *RejectionForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f RejectionForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f RejectionForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f RejectionForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewRejection()
+
+	m.Version = f.Version
+
+	m.Timestamp = f.Timestamp
+
+	m.AssetType, err = f.pad(f.AssetType, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.AssetID, err = f.pad(f.AssetID, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.RejectionType, err = f.ensureByte(f.RejectionType)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 169)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// EstablishmentForm is the JSON friendly version of a Establishment.
+type EstablishmentForm struct {
+	BaseForm
+
+	Version                     uint8  `json:"version,omitempty"`
+	Registrar                   string `json:"registrar,omitempty"`
+	RegisterType                string `json:"register_type,omitempty"`
+	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
+	DOB                         uint64 `json:"dob,omitempty"`
+	CountryOfResidence          string `json:"country_of_residence,omitempty"`
+	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
+	Message                     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *EstablishmentForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f EstablishmentForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f EstablishmentForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f EstablishmentForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewEstablishment()
+
+	m.Version = f.Version
+
+	m.Registrar, err = f.pad(f.Registrar, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	m.RegisterType, err = f.ensureByte(f.RegisterType)
+	if err != nil {
+		return nil, err
+	}
+
+	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	m.DOB = f.DOB
+
+	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 148)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// AdditionForm is the JSON friendly version of a Addition.
+type AdditionForm struct {
+	BaseForm
+
+	Version                     uint8  `json:"version,omitempty"`
+	Sublist                     string `json:"sublist,omitempty"`
+	KYC                         string `json:"kyc,omitempty"`
+	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
+	DOB                         uint64 `json:"dob,omitempty"`
+	CountryOfResidence          string `json:"country_of_residence,omitempty"`
+	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
+	Message                     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *AdditionForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f AdditionForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f AdditionForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f AdditionForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewAddition()
+
+	m.Version = f.Version
+
+	m.Sublist, err = f.pad(f.Sublist, 4)
+	if err != nil {
+		return nil, err
+	}
+
+	m.KYC, err = f.ensureByte(f.KYC)
+	if err != nil {
+		return nil, err
+	}
+
+	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	m.DOB = f.DOB
+
+	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 148)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// AlterationForm is the JSON friendly version of a Alteration.
+type AlterationForm struct {
+	BaseForm
+
+	Version                     uint8  `json:"version,omitempty"`
+	Sublist                     string `json:"sublist,omitempty"`
+	KYC                         string `json:"kyc,omitempty"`
+	KYCJurisdiction             string `json:"kyc_jurisdiction,omitempty"`
+	DOB                         uint64 `json:"dob,omitempty"`
+	CountryOfResidence          string `json:"country_of_residence,omitempty"`
+	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
+	Message                     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *AlterationForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f AlterationForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f AlterationForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f AlterationForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewAlteration()
+
+	m.Version = f.Version
+
+	m.Sublist, err = f.pad(f.Sublist, 4)
+	if err != nil {
+		return nil, err
+	}
+
+	m.KYC, err = f.ensureByte(f.KYC)
+	if err != nil {
+		return nil, err
+	}
+
+	m.KYCJurisdiction, err = f.pad(f.KYCJurisdiction, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	m.DOB = f.DOB
+
+	m.CountryOfResidence, err = f.pad(f.CountryOfResidence, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 160)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+// RemovalForm is the JSON friendly version of a Removal.
+type RemovalForm struct {
+	BaseForm
+
+	Version                     uint8  `json:"version,omitempty"`
+	SupportingDocumentationHash string `json:"supporting_documentation_hash,omitempty"`
+	Message                     string `json:"message,omitempty"`
+}
+
+// Write implements the io.Writer interface, writing the data in []byte to
+// the receiver.
+func (f *RemovalForm) Write(b []byte) (n int, err error) {
+	if err := json.Unmarshal(b, f); err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
+}
+
+// Validate returns an error if validations fails.
+func (f RemovalForm) Validate() error {
+	return nil
+}
+
+// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
+// no matching PayloadForm.
+func (f RemovalForm) PayloadForm() (PayloadForm, error) {
+	return nil, nil
+}
+
+// BuildMessage returns an OpReturnMessage from the form.
+func (f RemovalForm) BuildMessage() (OpReturnMessage, error) {
+	var err error
+
+	m := NewRemoval()
+
+	m.Version = f.Version
+
+	m.SupportingDocumentationHash, err = f.pad(f.SupportingDocumentationHash, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Message, err = f.pad(f.Message, 181)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
+}
+
 // SendForm is the JSON friendly version of a Send.
 type SendForm struct {
 	BaseForm
@@ -2065,21 +2143,24 @@ func (f SendForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// SettlementForm is the JSON friendly version of a Settlement.
-type SettlementForm struct {
+// ExchangeForm is the JSON friendly version of a Exchange.
+type ExchangeForm struct {
 	BaseForm
 
-	Version        uint8  `json:"version,omitempty"`
-	AssetType      string `json:"asset_type,omitempty"`
-	AssetID        string `json:"asset_id,omitempty"`
-	Party1TokenQty uint64 `json:"party1_token_qty,omitempty"`
-	Party2TokenQty uint64 `json:"party2_token_qty,omitempty"`
-	Timestamp      uint64 `json:"timestamp,omitempty"`
+	Version             uint8   `json:"version,omitempty"`
+	Party1AssetType     string  `json:"party1_asset_type,omitempty"`
+	Party1AssetID       string  `json:"party1_asset_id,omitempty"`
+	Party1TokenQty      uint64  `json:"party1_token_qty,omitempty"`
+	OfferValidUntil     uint64  `json:"offer_valid_until,omitempty"`
+	ExchangeFeeCurrency string  `json:"exchange_fee_currency,omitempty"`
+	ExchangeFeeVar      float32 `json:"exchange_fee_var,omitempty"`
+	ExchangeFeeFixed    float32 `json:"exchange_fee_fixed,omitempty"`
+	ExchangeFeeAddress  string  `json:"exchange_fee_address,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *SettlementForm) Write(b []byte) (n int, err error) {
+func (f *ExchangeForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -2088,39 +2169,51 @@ func (f *SettlementForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f SettlementForm) Validate() error {
+func (f ExchangeForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f SettlementForm) PayloadForm() (PayloadForm, error) {
+func (f ExchangeForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f SettlementForm) BuildMessage() (OpReturnMessage, error) {
+func (f ExchangeForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewSettlement()
+	m := NewExchange()
 
 	m.Version = f.Version
 
-	m.AssetType, err = f.pad(f.AssetType, 3)
+	m.Party1AssetType, err = f.pad(f.Party1AssetType, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	m.AssetID, err = f.pad(f.AssetID, 32)
+	m.Party1AssetID, err = f.pad(f.Party1AssetID, 32)
 	if err != nil {
 		return nil, err
 	}
 
 	m.Party1TokenQty = f.Party1TokenQty
 
-	m.Party2TokenQty = f.Party2TokenQty
+	m.OfferValidUntil = f.OfferValidUntil
 
-	m.Timestamp = f.Timestamp
+	m.ExchangeFeeCurrency, err = f.pad(f.ExchangeFeeCurrency, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	m.ExchangeFeeVar = f.ExchangeFeeVar
+
+	m.ExchangeFeeFixed = f.ExchangeFeeFixed
+
+	m.ExchangeFeeAddress, err = f.pad(f.ExchangeFeeAddress, 34)
+	if err != nil {
+		return nil, err
+	}
 
 	return &m, nil
 }
@@ -2215,21 +2308,21 @@ func (f SwapForm) BuildMessage() (OpReturnMessage, error) {
 	return &m, nil
 }
 
-// ThawForm is the JSON friendly version of a Thaw.
-type ThawForm struct {
+// SettlementForm is the JSON friendly version of a Settlement.
+type SettlementForm struct {
 	BaseForm
 
-	Version   uint8  `json:"version,omitempty"`
-	AssetType string `json:"asset_type,omitempty"`
-	AssetID   string `json:"asset_id,omitempty"`
-	Timestamp uint64 `json:"timestamp,omitempty"`
-	Qty       uint64 `json:"qty,omitempty"`
-	Message   string `json:"message,omitempty"`
+	Version        uint8  `json:"version,omitempty"`
+	AssetType      string `json:"asset_type,omitempty"`
+	AssetID        string `json:"asset_id,omitempty"`
+	Party1TokenQty uint64 `json:"party1_token_qty,omitempty"`
+	Party2TokenQty uint64 `json:"party2_token_qty,omitempty"`
+	Timestamp      uint64 `json:"timestamp,omitempty"`
 }
 
 // Write implements the io.Writer interface, writing the data in []byte to
 // the receiver.
-func (f *ThawForm) Write(b []byte) (n int, err error) {
+func (f *SettlementForm) Write(b []byte) (n int, err error) {
 	if err := json.Unmarshal(b, f); err != nil {
 		return 0, err
 	}
@@ -2238,21 +2331,21 @@ func (f *ThawForm) Write(b []byte) (n int, err error) {
 }
 
 // Validate returns an error if validations fails.
-func (f ThawForm) Validate() error {
+func (f SettlementForm) Validate() error {
 	return nil
 }
 
 // PayloadForm returns a PayloadForm for this Form, or nil if this Form has
 // no matching PayloadForm.
-func (f ThawForm) PayloadForm() (PayloadForm, error) {
+func (f SettlementForm) PayloadForm() (PayloadForm, error) {
 	return nil, nil
 }
 
 // BuildMessage returns an OpReturnMessage from the form.
-func (f ThawForm) BuildMessage() (OpReturnMessage, error) {
+func (f SettlementForm) BuildMessage() (OpReturnMessage, error) {
 	var err error
 
-	m := NewThaw()
+	m := NewSettlement()
 
 	m.Version = f.Version
 
@@ -2266,102 +2359,9 @@ func (f ThawForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.Timestamp = f.Timestamp
+	m.Party1TokenQty = f.Party1TokenQty
 
-	m.Qty = f.Qty
-
-	m.Message, err = f.pad(f.Message, 61)
-	if err != nil {
-		return nil, err
-	}
-
-	return &m, nil
-}
-
-// VoteForm is the JSON friendly version of a Vote.
-type VoteForm struct {
-	BaseForm
-
-	Version              uint8  `json:"version,omitempty"`
-	AssetType            string `json:"asset_type,omitempty"`
-	AssetID              string `json:"asset_id,omitempty"`
-	VoteType             string `json:"vote_type,omitempty"`
-	VoteOptions          string `json:"vote_options,omitempty"`
-	VoteMax              uint8  `json:"vote_max,omitempty"`
-	VoteLogic            string `json:"vote_logic,omitempty"`
-	ProposalDescription  string `json:"proposal_description,omitempty"`
-	ProposalDocumentHash string `json:"proposal_document_hash,omitempty"`
-	VoteCutOffTimestamp  uint64 `json:"vote_cut_off_timestamp,omitempty"`
-	Timestamp            uint64 `json:"timestamp,omitempty"`
-}
-
-// Write implements the io.Writer interface, writing the data in []byte to
-// the receiver.
-func (f *VoteForm) Write(b []byte) (n int, err error) {
-	if err := json.Unmarshal(b, f); err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
-}
-
-// Validate returns an error if validations fails.
-func (f VoteForm) Validate() error {
-	return nil
-}
-
-// PayloadForm returns a PayloadForm for this Form, or nil if this Form has
-// no matching PayloadForm.
-func (f VoteForm) PayloadForm() (PayloadForm, error) {
-	return nil, nil
-}
-
-// BuildMessage returns an OpReturnMessage from the form.
-func (f VoteForm) BuildMessage() (OpReturnMessage, error) {
-	var err error
-
-	m := NewVote()
-
-	m.Version = f.Version
-
-	m.AssetType, err = f.pad(f.AssetType, 3)
-	if err != nil {
-		return nil, err
-	}
-
-	m.AssetID, err = f.pad(f.AssetID, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteType, err = f.ensureByte(f.VoteType)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteOptions, err = f.pad(f.VoteOptions, 16)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteMax = f.VoteMax
-
-	m.VoteLogic, err = f.ensureByte(f.VoteLogic)
-	if err != nil {
-		return nil, err
-	}
-
-	m.ProposalDescription, err = f.pad(f.ProposalDescription, 82)
-	if err != nil {
-		return nil, err
-	}
-
-	m.ProposalDocumentHash, err = f.pad(f.ProposalDocumentHash, 32)
-	if err != nil {
-		return nil, err
-	}
-
-	m.VoteCutOffTimestamp = f.VoteCutOffTimestamp
+	m.Party2TokenQty = f.Party2TokenQty
 
 	m.Timestamp = f.Timestamp
 
