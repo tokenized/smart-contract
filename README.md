@@ -36,15 +36,37 @@ Make a copy the example file, and edit the values to suit. The file can be place
 
 The following configuration values are needed:
 
-- `OPERATOR_NAME`: the name of the operator of the smart contract. Eg: _ACME Corporation_
-- `RPC_HOST`
-- `RPC_USERNAME`
-- `RPC_PASSWORD` 
-- `NODE_STORAGE_ROOT`
-- `PRIV_KEY`
-- `PUB_KEY`
-- `FEE_ADDRESS`
-- `FEE_VALUE`
+##### Contract config
+
+- `OPERATOR_NAME` the name of the operator of the smart contract. Eg: _ACME Corporation_
+- `VERSION`
+- `FEE_ADDRESS` public address to earn fees upon every action
+- `FEE_VALUE` the cost in satoshis to perform an action (<2000 at this stage)
+
+##### Node config
+
+- `NODE_ADDRESS` hostname or IP address for a public node
+- `NODE_USER_AGENT` the user agent to provide when connecting to the public node
+- `RPC_HOST` hostname or IP address for a private node (RPC)
+- `RPC_USERNAME` username for RPC authentication
+- `RPC_PASSWORD` password for RPC authentication
+- `PRIV_KEY` private key (WIF) used by the smart contract
+
+##### Contract storage
+
+- `CONTRACT_STORAGE_REGION` S3 region for data storage
+- `CONTRACT_STORAGE_ACCESS_KEY` S3 access key for data storage
+- `CONTRACT_STORAGE_SECRET` S3 secret for data storage
+- `CONTRACT_STORAGE_BUCKET` bucket for data storage, use *standalone* for local filesystem
+- `CONTRACT_STORAGE_ROOT` root directory for storage
+
+##### Node storage
+
+- `NODE_STORAGE_REGION` S3 region for data storage
+- `NODE_STORAGE_ACCESS_KEY` S3 access key for data storage
+- `NODE_STORAGE_SECRET` S3 secret for data storage
+- `NODE_STORAGE_BUCKET` bucket for data storage, use *standalone* for local filesystem
+- `NODE_STORAGE_ROOT` root directory for storage
 
 ## Running
 
@@ -67,11 +89,11 @@ The Smart Contract requires RPC access to a full bitcoin node, such as [Bitcoin 
 
 To perform unit tests run:
 
-    $ make test
+    make test
 
 ## Deployment
 
-TBA
+See the [deploy directory](deploy/) for information on how to deploy the smart contract.
 
 # License
 
