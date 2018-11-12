@@ -29,9 +29,13 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 	m := vd.m.(*protocol.Send)
 
 	// Get the asset
-	k := string(m.AssetID)
-	asset, ok := c.Assets[k]
+	assetKey := string(m.AssetID)
+	asset, ok := c.Assets[assetKey]
 	if !ok {
+		return protocol.RejectionCodeAssetNotFound
+	}
+
+	if asset.Holdings == nil {
 		return protocol.RejectionCodeAssetNotFound
 	}
 

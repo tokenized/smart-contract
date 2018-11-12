@@ -39,7 +39,8 @@ type Contract struct {
 	Hashes                      []string         `json:"hashes"`
 }
 
-// NewContract returns a new Contract.
+// NewContract returns a new Contract. Must come from an Offer because
+// it is created early on in the life cycle.
 func NewContract(tx *wire.MsgTx,
 	contractAddress btcutil.Address,
 	issuerAddress btcutil.Address,
@@ -82,6 +83,28 @@ func NewContract(tx *wire.MsgTx,
 	}
 
 	return &c
+}
+
+func EditContract(c *Contract, cf *protocol.ContractFormation) *Contract {
+	newContract := c
+
+	newContract.ContractName = string(cf.ContractName)
+	newContract.ContractFileHash = string(cf.ContractFileHash)
+	newContract.GoverningLaw = string(cf.GoverningLaw)
+	newContract.Jurisdiction = string(cf.Jurisdiction)
+	newContract.ContractExpiration = cf.ContractExpiration
+	newContract.URI = string(cf.URI)
+	newContract.Revision = cf.ContractRevision
+	newContract.IssuerID = string(cf.IssuerID)
+	newContract.IssuerType = string(cf.IssuerType)
+	newContract.ContractOperatorID = string(cf.ContractOperatorID)
+	newContract.AuthorizationFlags = cf.AuthorizationFlags
+	newContract.VotingSystem = string(cf.VotingSystem)
+	newContract.InitiativeThreshold = cf.InitiativeThreshold
+	newContract.InitiativeThresholdCurrency = string(cf.InitiativeThresholdCurrency)
+	newContract.Qty = cf.RestrictedQty
+
+	return newContract
 }
 
 // Address returns the contract ID as an Address.

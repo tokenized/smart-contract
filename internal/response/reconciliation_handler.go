@@ -13,14 +13,8 @@ func newReconciliationHandler() reconciliationHandler {
 	return reconciliationHandler{}
 }
 
-// can returns a code indicating if the message can be applied to the
-// contract.
-//
-// A return value of 0 (protocol.RejectionCodeOK) indicates that the message
-// can be applied to the Contract. Any non-zero value should be interpreted
-// as the rejection code.
 func (h reconciliationHandler) process(ctx context.Context,
-	itx *inspector.Transaction, contract *contract.Contract) error {
+	itx *inspector.Transaction, c *contract.Contract) error {
 
 	return nil
 }

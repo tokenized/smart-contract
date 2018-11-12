@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/logger"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
@@ -36,64 +35,39 @@ func (h exchangeHandler) handle(ctx context.Context,
 	// Contract
 	c := r.contract
 
-	// find the asset
+	// Find the asset
 	assetKey := string(exchange.Party1AssetID)
 	asset, ok := c.Assets[assetKey]
 	if !ok {
 		return nil, fmt.Errorf("exchange : Asset ID not found : contract=%s assetID=%s", c.ID, exchange.Party1AssetID)
 	}
 
-	// bounds check for receivers - contract, party1, party2
+	// Bounds check for receivers - contract, party1, party2
 	if len(r.receivers) < 3 {
 		return nil, fmt.Errorf("Missing receivers")
 	}
 
-	// does the seller hold the asset?
+	// Locate Balance for Party 1
 	party1Address := r.receivers[1]
 	party1Key := party1Address.Address.EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Key]
 	if !ok {
 		return nil, fmt.Errorf("exchange : holding not found contract=%s assetID=%s party1=%s", c.ID, assetKey, party1Key)
 	}
+	party1Balance := party1Holding.Balance
 
-	// get or create a holding for party2
+	// Locate Balance for Party 2
 	party2Address := r.receivers[2]
 	party2Key := party2Address.Address.EncodeAddress()
 	party2Holding, ok := asset.Holdings[party2Key]
-	if !ok {
-		// create an empty holding for party2
-		party2Holding = contract.NewHolding(party2Key, 0)
+	party2Balance := uint64(0)
+	if ok {
+		party2Balance = party2Holding.Balance
 	}
 
-	// check the token balance
-	if party1Holding.Balance < exchange.Party1TokenQty {
+	// Check the token balance
+	if party1Balance < exchange.Party1TokenQty {
 		return nil, fmt.Errorf("exchange : insufficient assets contract=%s assetID=%s party1=%s", c.ID, assetKey, party1Key)
-	}
-
-	if party1Holding.HoldingStatus != nil {
-		// this holding is marked as Frozen.
-		status := party1Holding.HoldingStatus
-
-		if !status.Expired() {
-			// this order is in force
-			return nil, fmt.Errorf("exchange : assets are frozen contract=%s assetID=%s party1=%s", c.ID, assetKey, party1Key)
-		}
-
-		// clear the expired freeze
-		party1Holding.HoldingStatus = nil
-	}
-
-	if party2Holding.HoldingStatus != nil {
-		// this holding is marked as Frozen.
-		status := party2Holding.HoldingStatus
-
-		if !status.Expired() {
-			// this order is in force
-			return nil, fmt.Errorf("exchange : assets are frozen contract=%s assetID=%s party2=%s", c.ID, assetKey, party2Key)
-		}
-
-		// clear the expired freeze
-		party2Holding.HoldingStatus = nil
 	}
 
 	logger := logger.NewLoggerFromContext(ctx).Sugar()
@@ -104,18 +78,9 @@ func (h exchangeHandler) handle(ctx context.Context,
 		assetKey,
 		exchange.Party1TokenQty)
 
-	party1Holding.Balance -= exchange.Party1TokenQty
-	party2Holding.Balance += exchange.Party1TokenQty
-
-	party1Balance := party1Holding.Balance
-	party2Balance := party2Holding.Balance
-
-	// put the holdings back on the asset
-	asset.Holdings[party1Key] = party1Holding
-	asset.Holdings[party2Key] = party2Holding
-
-	// put the asset back  on the contract
-	c.Assets[assetKey] = asset
+	// Modify balances
+	party1Balance -= exchange.Party1TokenQty
+	party2Balance += exchange.Party1TokenQty
 
 	// Settlement <- Exchange
 	settlement := protocol.NewSettlement()

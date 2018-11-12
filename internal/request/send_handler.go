@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
@@ -40,69 +39,46 @@ func (h sendHandler) handle(ctx context.Context,
 		return nil, fmt.Errorf("send : Asset ID not found : contract=%s assetID=%s", c.ID, issue.AssetID)
 	}
 
-	// the issuer address is the key
+	// Bounds check for receivers - contract, receiver
+	if len(r.receivers) < 2 {
+		return nil, fmt.Errorf("Missing receivers")
+	}
+
+	// Party 1 (Sender)
 	party1Addr := r.senders[0].EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Addr]
 	if !ok {
 		return nil, fmt.Errorf("send : holding not found contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
 	}
+	party1Balance := party1Holding.Balance
 
-	// The balance is an unsigned int, so we can't substract without
-	// wrapping. Do a comparison instead.
-	if issue.TokenQty > party1Holding.Balance {
+	// Check the token balance
+	if party1Balance < issue.TokenQty {
 		return nil, fmt.Errorf("send : insufficient assets contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
 	}
 
-	if party1Holding.HoldingStatus != nil {
-		// this holding is marked as Frozen.
-		status := party1Holding.HoldingStatus
-
-		if !status.Expired() {
-			// this order is in force
-			return nil, fmt.Errorf("send : assets are frozen contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
-		}
-
-		// clear the expired freeze
-		party1Holding.HoldingStatus = nil
-	}
-
-	party1Holding.Balance -= issue.TokenQty
-
-	if len(r.receivers) < 2 {
-		return nil, fmt.Errorf("send : not enough outputs, no receiver contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
-	}
-
+	// Party 2 (Receiver)
 	party2Addr := r.receivers[1].Address.EncodeAddress()
-
 	if party1Addr == party2Addr {
 		return nil, fmt.Errorf("send : cannot transfer to own self contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
 	}
 
 	party2Holding, ok := asset.Holdings[party2Addr]
-
-	if !ok {
-		party2Holding = contract.NewHolding(party2Addr, 0)
+	party2Balance := uint64(0)
+	if ok {
+		party2Balance = party2Holding.Balance
 	}
 
-	party2Holding.Balance += issue.TokenQty
-
-	if asset.Holdings == nil {
-		asset.Holdings = map[string]contract.Holding{}
-	}
-
-	// set the holdings
-	asset.Holdings[party1Addr] = party1Holding
-	asset.Holdings[party2Addr] = party2Holding
-
-	// put the asset back on the contract
-	c.Assets[k] = asset
+	// Modify balances
+	party1Balance -= issue.TokenQty
+	party2Balance += issue.TokenQty
 
 	// Settlement <- Send
 	settlement := protocol.NewSettlement()
 	settlement.AssetType = issue.AssetType
 	settlement.AssetID = issue.AssetID
-	settlement.Party1TokenQty = party1Holding.Balance
-	settlement.Party2TokenQty = party2Holding.Balance
+	settlement.Party1TokenQty = party1Balance
+	settlement.Party2TokenQty = party2Balance
 	settlement.Timestamp = uint64(time.Now().Unix())
 
 	// Outputs

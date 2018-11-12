@@ -14,7 +14,7 @@ func newBallotCountedHandler() ballotCountedHandler {
 }
 
 func (h ballotCountedHandler) process(ctx context.Context,
-	itx *inspector.Transaction, contract *contract.Contract) error {
+	itx *inspector.Transaction, c *contract.Contract) error {
 
 	return nil
 }

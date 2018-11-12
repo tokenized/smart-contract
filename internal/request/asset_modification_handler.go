@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
@@ -30,13 +29,6 @@ func (h assetModificationHandler) handle(ctx context.Context,
 
 	// Contract
 	c := r.contract
-
-	// we know the asset exists, already checked
-	assetID := string(am.AssetID)
-	asset, _ := c.Assets[assetID]
-
-	asset = contract.NewAssetFromAssetModification(asset, am)
-	c.Assets[asset.ID] = asset
 
 	// Asset Creation <- Asset Modification
 	ac := protocol.NewAssetCreation()

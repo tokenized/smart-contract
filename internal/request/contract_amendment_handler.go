@@ -32,7 +32,7 @@ func (h contractAmendmentHandler) handle(ctx context.Context,
 	// Contract
 	contract := r.contract
 
-	// bump the revision
+	// Bump the revision
 	newRevision := contract.Revision + 1
 
 	// Contract Formation <- Contract Amendment
@@ -54,25 +54,6 @@ func (h contractAmendmentHandler) handle(ctx context.Context,
 	cf.InitiativeThresholdCurrency = ca.InitiativeThresholdCurrency
 	cf.RestrictedQty = ca.RestrictedQty
 
-	// now assign contract values
-	newContract := contract
-
-	newContract.ContractName = string(cf.ContractName)
-	newContract.ContractFileHash = string(cf.ContractFileHash)
-	newContract.GoverningLaw = string(cf.GoverningLaw)
-	newContract.Jurisdiction = string(cf.Jurisdiction)
-	newContract.ContractExpiration = cf.ContractExpiration
-	newContract.URI = string(cf.URI)
-	newContract.Revision = newRevision
-	newContract.IssuerID = string(cf.IssuerID)
-	newContract.IssuerType = string(cf.IssuerType)
-	newContract.ContractOperatorID = string(cf.ContractOperatorID)
-	newContract.AuthorizationFlags = cf.AuthorizationFlags
-	newContract.VotingSystem = string(cf.VotingSystem)
-	newContract.InitiativeThreshold = cf.InitiativeThreshold
-	newContract.InitiativeThresholdCurrency = string(cf.InitiativeThresholdCurrency)
-	newContract.Qty = cf.RestrictedQty
-
 	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
@@ -87,7 +68,7 @@ func (h contractAmendmentHandler) handle(ctx context.Context,
 	// }
 
 	resp := contractResponse{
-		Contract: newContract,
+		Contract: contract,
 		Message:  &cf,
 		outs:     outputs,
 	}

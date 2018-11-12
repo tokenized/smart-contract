@@ -55,6 +55,20 @@ func (h orderHandler) handle(ctx context.Context,
 func (h orderHandler) freeze(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
 
+	// Find the asset
+	assetKey := string(order.AssetID)
+	asset, ok := c.Assets[assetKey]
+	if !ok {
+		return nil, fmt.Errorf("freeze : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
+	}
+
+	// Does the target hold the asset?
+	targetKey := string(order.TargetAddress)
+	_, ok = asset.Holdings[targetKey]
+	if !ok {
+		return nil, fmt.Errorf("freeze : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
+	}
+
 	// Freeze <- Order
 	freeze := protocol.NewFreeze()
 	freeze.AssetID = order.AssetID
@@ -63,33 +77,6 @@ func (h orderHandler) freeze(c contract.Contract,
 	freeze.Qty = order.Qty
 	freeze.Message = order.Message
 	freeze.Expiration = order.Expiration
-
-	// find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	targetHolding, ok := asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
-
-	orderStatus := contract.HoldingStatus{
-		Code:    "F",
-		Expires: freeze.Expiration,
-	}
-
-	targetHolding.HoldingStatus = &orderStatus
-
-	// put the holding back on the asset
-	asset.Holdings[targetKey] = targetHolding
-
-	// put the asset back on the contract
-	c.Assets[assetKey] = asset
 
 	contractAddr, err := c.Address()
 	if err != nil {
@@ -116,6 +103,20 @@ func (h orderHandler) freeze(c contract.Contract,
 func (h orderHandler) thaw(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
 
+	// Find the asset
+	assetKey := string(order.AssetID)
+	asset, ok := c.Assets[assetKey]
+	if !ok {
+		return nil, fmt.Errorf("thaw : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
+	}
+
+	// Does the target hold the asset?
+	targetKey := string(order.TargetAddress)
+	_, ok = asset.Holdings[targetKey]
+	if !ok {
+		return nil, fmt.Errorf("thaw : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
+	}
+
 	// Thaw <- Order
 	thaw := protocol.NewThaw()
 	thaw.AssetID = order.AssetID
@@ -123,28 +124,6 @@ func (h orderHandler) thaw(c contract.Contract,
 	thaw.Timestamp = uint64(time.Now().Unix())
 	thaw.Qty = order.Qty
 	thaw.Message = order.Message
-
-	// find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	targetHolding, ok := asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
-
-	targetHolding.HoldingStatus = nil
-
-	// put the holding back on the asset
-	asset.Holdings[targetKey] = targetHolding
-
-	// put the asset back on the contract
-	c.Assets[assetKey] = asset
 
 	contractAddr, err := c.Address()
 	if err != nil {
@@ -171,84 +150,67 @@ func (h orderHandler) thaw(c contract.Contract,
 func (h orderHandler) confiscate(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
 
-	// Confiscation <- Order
-	confiscation := protocol.NewConfiscation()
-	confiscation.AssetID = order.AssetID
-	confiscation.AssetType = order.AssetType
-	confiscation.Timestamp = uint64(time.Now().Unix())
-	confiscation.Message = order.Message
-
-	// find the asset
+	// Find the asset
 	assetKey := string(order.AssetID)
 	asset, ok := c.Assets[assetKey]
 	if !ok {
 		return nil, fmt.Errorf("confiscate : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
 	}
 
-	// does the target hold the asset?
+	// Does the target hold the asset?
 	targetKey := string(order.TargetAddress)
 	targetHolding, ok := asset.Holdings[targetKey]
 	if !ok {
 		return nil, fmt.Errorf("confiscate : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
 	}
+	targetBalance := targetHolding.Balance
 
-	// we have asset
-
-	// get the deposit holding, creating if needed
+	// Get the deposit holding, creating if needed
 	depositKey := string(order.DepositAddress)
 	depositHolding, ok := asset.Holdings[depositKey]
-	if !ok {
-		depositHolding = contract.NewHolding(string(order.DepositAddress), 0)
+	depositBalance := uint64(0)
+	if ok {
+		depositBalance = depositHolding.Balance
 	}
 
-	// transfer the qty from the target to the deposit
+	// Transfer the qty from the target to the deposit
 	qty := order.Qty
 
-	if qty > targetHolding.Balance {
-		// we are trying to take more than is held by the target. limit
-		// to the amount they are holding.
-		qty = targetHolding.Balance
+	// Trying to take more than is held by the target, limit
+	// to the amount they are holding.
+	if targetBalance < qty {
+		qty = targetBalance
 	}
 
-	targetHolding.Balance -= qty
-	depositHolding.Balance += qty
+	// Modify balances
+	targetBalance -= qty
+	depositBalance += qty
 
-	asset.Holdings[targetKey] = targetHolding
-	asset.Holdings[depositKey] = depositHolding
-
+	// Confiscation <- Order
+	confiscation := protocol.NewConfiscation()
+	confiscation.AssetID = order.AssetID
+	confiscation.AssetType = order.AssetType
+	confiscation.Timestamp = uint64(time.Now().Unix())
+	confiscation.Message = order.Message
 	confiscation.TargetsQty = targetHolding.Balance
 	confiscation.DepositsQty = depositHolding.Balance
 
-	c.Assets[assetKey] = asset
-
-	// we need a txout to the target
-	targetAddr, err := btcutil.DecodeAddress(targetKey,
-		&chaincfg.MainNetParams)
+	// Outputs
+	outputs, err := h.buildConfiscateOutputs(c, order)
 	if err != nil {
 		return nil, err
 	}
 
-	depositAddr, err := btcutil.DecodeAddress(depositKey,
-		&chaincfg.MainNetParams)
+	contractAddr, err := c.Address()
 	if err != nil {
 		return nil, err
-	}
-
-	outs := []txbuilder.TxOutput{
-		txbuilder.TxOutput{
-			Address: targetAddr,
-			Value:   dustLimit,
-		},
-		txbuilder.TxOutput{
-			Address: depositAddr,
-			Value:   dustLimit,
-		},
 	}
 
 	cr := contractResponse{
-		Contract: c,
-		Message:  &confiscation,
-		outs:     outs,
+		Contract:      c,
+		Message:       &confiscation,
+		outs:          outputs,
+		changeAddress: contractAddr,
 	}
 
 	return &cr, nil

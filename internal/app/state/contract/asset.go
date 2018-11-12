@@ -22,27 +22,7 @@ type Asset struct {
 	CreatedAt          int64              `json:"created_at"`
 }
 
-func NewAssetFromAssetModification(a Asset,
-	am *protocol.AssetModification) Asset {
-
-	a.Type = string(am.AssetType)
-	a.AuthorizationFlags = am.AuthorizationFlags
-	a.VotingSystem = am.VotingSystem
-	a.VoteMultiplier = am.VoteMultiplier
-	a.Qty = am.Qty
-	// a.TxnFeeCurrency = string(am.TxnFeeCurrency)
-	// a.TxnFeeVar = am.TxnFeeVar
-	// a.TxnFeeFixed = am.TxnFeeFixed
-
-	if a.AuthorizationFlags == nil {
-		a.AuthorizationFlags = []byte{}
-	}
-
-	return a
-}
-
-func NewAssetFromAssetDefinition(am *protocol.AssetDefinition,
-	holding Holding) Asset {
+func NewAsset(am *protocol.AssetCreation, holding Holding) Asset {
 
 	holdings := map[string]Holding{
 		holding.Address: holding,
@@ -61,6 +41,24 @@ func NewAssetFromAssetDefinition(am *protocol.AssetDefinition,
 		Holdings:  holdings,
 		CreatedAt: time.Now().UnixNano(),
 	}
+
+	if a.AuthorizationFlags == nil {
+		a.AuthorizationFlags = []byte{}
+	}
+
+	return a
+}
+
+func EditAsset(a Asset, am *protocol.AssetCreation) Asset {
+
+	a.Type = string(am.AssetType)
+	a.AuthorizationFlags = am.AuthorizationFlags
+	a.VotingSystem = am.VotingSystem
+	a.VoteMultiplier = am.VoteMultiplier
+	a.Qty = am.Qty
+	// a.TxnFeeCurrency = string(am.TxnFeeCurrency)
+	// a.TxnFeeVar = am.TxnFeeVar
+	// a.TxnFeeFixed = am.TxnFeeFixed
 
 	if a.AuthorizationFlags == nil {
 		a.AuthorizationFlags = []byte{}

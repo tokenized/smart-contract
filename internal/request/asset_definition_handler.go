@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
@@ -32,12 +31,6 @@ func (h assetDefinitionHandler) handle(ctx context.Context,
 
 	// Contract
 	c := r.contract
-
-	// asset will be assigned to the Issuer address
-	issuerAddr := r.senders[0].EncodeAddress()
-	holding := contract.NewHolding(issuerAddr, ad.Qty)
-	asset := contract.NewAssetFromAssetDefinition(ad, holding)
-	c.Assets[asset.ID] = asset
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.NewAssetCreation()

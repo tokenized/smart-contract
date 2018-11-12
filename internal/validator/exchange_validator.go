@@ -35,6 +35,10 @@ func (h exchangeValidator) validate(itx *inspector.Transaction, vd validatorData
 		return protocol.RejectionCodeAssetNotFound
 	}
 
+	if asset.Holdings == nil {
+		return protocol.RejectionCodeAssetNotFound
+	}
+
 	// Party 1: Reject if no holding
 	//
 	party1Address := itx.Outputs[1]
@@ -52,14 +56,9 @@ func (h exchangeValidator) validate(itx *inspector.Transaction, vd validatorData
 
 	// Party 1: Frozen assets
 	//
-	if party1Holding.HoldingStatus != nil {
-		// this holding is marked as Frozen.
-		status := party1Holding.HoldingStatus
-
-		if !status.Expired() {
-			// this order is in force
-			return protocol.RejectionCodeFrozen
-		}
+	// An order is in force
+	if party1Holding.HoldingStatus != nil && !party1Holding.HoldingStatus.Expired() {
+		return protocol.RejectionCodeFrozen
 	}
 
 	// Party 2: Skip if no holding
@@ -67,15 +66,10 @@ func (h exchangeValidator) validate(itx *inspector.Transaction, vd validatorData
 	party2Address := itx.Outputs[2]
 	party2Key := party2Address.Address.EncodeAddress()
 	party2Holding, ok := asset.Holdings[party2Key]
-	if ok {
 
-		// this holding is marked as Frozen.
-		status := party2Holding.HoldingStatus
-
-		if !status.Expired() {
-			// this order is in force
-			return protocol.RejectionCodeFrozen
-		}
+	// An order is in force
+	if ok && party2Holding.HoldingStatus != nil && !party2Holding.HoldingStatus.Expired() {
+		return protocol.RejectionCodeFrozen
 	}
 
 	return protocol.RejectionCodeOK
