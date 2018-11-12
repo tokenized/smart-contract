@@ -33,8 +33,6 @@ func main() {
 		panic(err)
 	}
 
-	log.Infof("Started %v with config %s", buildDetails(), *config)
-
 	// Trusted Peer Node
 	spvStorageConfig := storage.NewConfig(os.Getenv("NODE_STORAGE_REGION"),
 		os.Getenv("NODE_STORAGE_ACCESS_KEY"),
@@ -83,6 +81,10 @@ func main() {
 	} else {
 		contractStorage = storage.NewS3Storage(contractStorageConfig)
 	}
+
+	// Log startup sequence
+	log.Infof("Started %v with config %s", buildDetails(), *config)
+	log.Infof("Running contract %s", wallet.PublicAddress)
 
 	// Smart Contract Node
 	n := node.NewNode(*config, network, *wallet, contractStorage)

@@ -75,7 +75,6 @@ func (w Wallet) Get(address string) (*btcec.PrivateKey, error) {
 func (w Wallet) BuildTX(key *btcec.PrivateKey,
 	utxos txbuilder.UTXOs,
 	outs []txbuilder.TxOutput,
-	sender btcutil.Address,
 	changeAddress btcutil.Address,
 	m protocol.OpReturnMessage) (*wire.MsgTx, error) {
 

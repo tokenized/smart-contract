@@ -28,7 +28,6 @@ import (
 var (
 	ErrInsufficientPayment   = errors.New("Insufficient payment")
 	ErrContractAlreadyExists = errors.New("Contract already exists at address")
-	ErrContractNotFound      = errors.New("Contract not found")
 )
 
 const (
@@ -95,11 +94,11 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	if err != nil {
 		if err == ErrContractAlreadyExists {
 			code := protocol.RejectionCodeContractExists
-			newtx, err := s.reject(ctx, itx, code)
+			newTx, err := s.reject(ctx, itx, code)
 			if err != nil {
 				return nil, nil, err
 			}
-			return newtx, nil, nil
+			return newTx, nil, nil
 		}
 		return nil, nil, err
 	}
@@ -119,12 +118,12 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 		// There is insufficient value to fund this transaction.
 		code := protocol.RejectionCodeInsufficientValue
 
-		newtx, err := s.reject(ctx, itx, code)
+		newTx, err := s.reject(ctx, itx, code)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		return newtx, nil, nil
+		return newTx, nil, nil
 	}
 
 	// State: I have seen this already
@@ -135,11 +134,11 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	// General permission check
 	if !s.isPermitted(itx, contract) {
 		code := protocol.RejectionCodeIssuerAddress
-		newtx, err := s.reject(ctx, itx, code)
+		newTx, err := s.reject(ctx, itx, code)
 		if err != nil {
 			return nil, nil, err
 		}
-		return newtx, nil, nil
+		return newTx, nil, nil
 	}
 
 	// Action based validation
@@ -157,11 +156,11 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	// Run the custom validator
 	vcode := h.validate(itx, vdata)
 	if vcode > 0 {
-		newtx, err := s.reject(ctx, itx, vcode)
+		newTx, err := s.reject(ctx, itx, vcode)
 		if err != nil {
 			return nil, nil, err
 		}
-		return newtx, nil, nil
+		return newTx, nil, nil
 	}
 
 	return nil, contract, nil
@@ -189,7 +188,7 @@ func (s ValidatorService) findContract(ctx context.Context,
 		// this is a CO, so there must be not existing contract at this
 		// address.
 		c, err := s.State.Read(ctx, addr)
-		if err != nil && err != ErrContractNotFound {
+		if err != nil && err != state.ErrContractNotFound {
 			return nil, err
 		}
 
@@ -199,7 +198,7 @@ func (s ValidatorService) findContract(ctx context.Context,
 			return nil, ErrContractAlreadyExists
 		}
 
-		// contract was not found, we can create it.
+		// Contract was not found, so create it.
 		cof := m.(*protocol.ContractOffer)
 		con := contract.NewContract(itx.MsgTx, contractAddress, issuer, operator, cof)
 		return con, nil
@@ -305,12 +304,12 @@ func (s ValidatorService) reject(ctx context.Context,
 		return nil, err
 	}
 
-	newtx, err := s.Wallet.BuildTX(key, utxos, outs, receiver.Address, changeAddress, &rejection)
+	newTx, err := s.Wallet.BuildTX(key, utxos, outs, changeAddress, &rejection)
 	if err != nil {
 		return nil, err
 	}
 
-	return newtx, nil
+	return newTx, nil
 }
 
 // Build a rejection protocol message

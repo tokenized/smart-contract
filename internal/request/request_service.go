@@ -149,8 +149,27 @@ func (s RequestService) Process(ctx context.Context,
 		return nil, err
 	}
 
+	// Send change back to the sender by default,
+	// unless there is a specific address.
+	changeAddress := itx.InputAddrs[0]
+	if res.changeAddress != nil {
+		changeAddress = res.changeAddress
+	}
+
+	// Contract private key
+	key, err := s.Wallet.Get(contractAddress.String())
+	if err != nil {
+		return nil, err
+	}
+
 	// Create usable transaction to pass back
+	newTx, err := s.Wallet.BuildTX(key, utxos, res.outs, changeAddress, res.Message)
+	if err != nil {
+		return nil, err
+	}
+
 	newItx := s.Inspector.CreateTransaction(utxos, res.outs, res.Message)
+	newItx.MsgTx = newTx
 
 	return newItx, nil
 }

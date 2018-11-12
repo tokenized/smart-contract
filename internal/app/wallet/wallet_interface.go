@@ -15,6 +15,5 @@ type WalletInterface interface {
 		txbuilder.UTXOs,
 		[]txbuilder.TxOutput,
 		btcutil.Address,
-		btcutil.Address,
 		protocol.OpReturnMessage) (*wire.MsgTx, error)
 }
