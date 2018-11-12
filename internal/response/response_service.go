@@ -35,36 +35,36 @@ var (
 	}
 )
 
-func newContractResponders(state state.StateInterface,
-	config config.Config) map[string]responseInterface {
+func newResponseHandlers(state state.StateInterface,
+	config config.Config) map[string]responseHandlerInterface {
 
-	return map[string]responseInterface{
-		protocol.CodeAssetCreation:     newAssetCreationResponse(),
-		protocol.CodeContractFormation: newContractFormationResponse(),
-		protocol.CodeSettlement:        newSettlementResponse(),
-		protocol.CodeVote:              newVoteResponse(),
-		protocol.CodeBallotCounted:     newBallotCountedResponse(),
-		protocol.CodeResult:            newResultResponse(),
-		protocol.CodeFreeze:            newFreezeResponse(),
-		protocol.CodeThaw:              newThawResponse(),
-		protocol.CodeConfiscation:      newConfiscationResponse(),
-		protocol.CodeReconciliation:    newReconciliationResponse(),
-		protocol.CodeRejection:         newRejectionResponse(),
+	return map[string]responseHandlerInterface{
+		protocol.CodeAssetCreation:     newAssetCreationHandler(),
+		protocol.CodeContractFormation: newContractFormationHandler(),
+		protocol.CodeSettlement:        newSettlementHandler(),
+		protocol.CodeVote:              newVoteHandler(),
+		protocol.CodeBallotCounted:     newBallotCountedHandler(),
+		protocol.CodeResult:            newResultHandler(),
+		protocol.CodeFreeze:            newFreezeHandler(),
+		protocol.CodeThaw:              newThawHandler(),
+		protocol.CodeConfiscation:      newConfiscationHandler(),
+		protocol.CodeReconciliation:    newReconciliationHandler(),
+		protocol.CodeRejection:         newRejectionHandler(),
 	}
 }
 
 type ResponseService struct {
-	Config     config.Config
-	State      state.StateInterface
-	responders map[string]responseInterface
+	Config   config.Config
+	State    state.StateInterface
+	handlers map[string]responseHandlerInterface
 }
 
 func NewResponseService(config config.Config,
 	state state.StateInterface) ResponseService {
 	return ResponseService{
-		State:      state,
-		Config:     config,
-		responders: newContractResponders(state, config),
+		State:    state,
+		Config:   config,
+		handlers: newResponseHandlers(state, config),
 	}
 }
 
@@ -74,7 +74,7 @@ func (s ResponseService) Process(ctx context.Context,
 	msg := itx.MsgProto
 
 	// select the handler for this message type
-	h, ok := s.responders[msg.Type()]
+	h, ok := s.handlers[msg.Type()]
 	if !ok {
 		return fmt.Errorf("No response handler found for type %v", msg.Type())
 	}

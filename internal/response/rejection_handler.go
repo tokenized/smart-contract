@@ -7,10 +7,10 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
-type voteResponse struct{}
+type rejectionHandler struct{}
 
-func newVoteResponse() voteResponse {
-	return voteResponse{}
+func newRejectionHandler() rejectionHandler {
+	return rejectionHandler{}
 }
 
 // can returns a code indicating if the message can be applied to the
@@ -19,7 +19,7 @@ func newVoteResponse() voteResponse {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h voteResponse) process(ctx context.Context,
+func (h rejectionHandler) process(ctx context.Context,
 	itx *inspector.Transaction, contract *contract.Contract) error {
 
 	return nil

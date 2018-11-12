@@ -7,13 +7,13 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
-type settlementResponse struct{}
+type contractFormationHandler struct{}
 
-func newSettlementResponse() settlementResponse {
-	return settlementResponse{}
+func newContractFormationHandler() contractFormationHandler {
+	return contractFormationHandler{}
 }
 
-func (h settlementResponse) process(ctx context.Context,
+func (h contractFormationHandler) process(ctx context.Context,
 	itx *inspector.Transaction, contract *contract.Contract) error {
 
 	return nil

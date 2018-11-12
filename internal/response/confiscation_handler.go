@@ -7,13 +7,13 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
-type ballotCountedResponse struct{}
+type confiscationHandler struct{}
 
-func newBallotCountedResponse() ballotCountedResponse {
-	return ballotCountedResponse{}
+func newConfiscationHandler() confiscationHandler {
+	return confiscationHandler{}
 }
 
-func (h ballotCountedResponse) process(ctx context.Context,
+func (h confiscationHandler) process(ctx context.Context,
 	itx *inspector.Transaction, contract *contract.Contract) error {
 
 	return nil

@@ -42,7 +42,7 @@ const (
 	dustLimit = 546
 )
 
-func newContractHandlers(state state.StateInterface,
+func newRequestHandlers(state state.StateInterface,
 	config config.Config) map[string]requestHandlerInterface {
 
 	return map[string]requestHandlerInterface{
@@ -77,7 +77,7 @@ func NewRequestService(config config.Config,
 		State:     state,
 		Wallet:    wallet,
 		Inspector: inspector,
-		handlers:  newContractHandlers(state, config),
+		handlers:  newRequestHandlers(state, config),
 	}
 }
 

@@ -7,6 +7,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
-type responseInterface interface {
+type responseHandlerInterface interface {
 	process(context.Context, *inspector.Transaction, *contract.Contract) error
 }

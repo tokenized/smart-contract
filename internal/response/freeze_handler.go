@@ -7,10 +7,10 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
-type thawResponse struct{}
+type freezeHandler struct{}
 
-func newThawResponse() thawResponse {
-	return thawResponse{}
+func newFreezeHandler() freezeHandler {
+	return freezeHandler{}
 }
 
 // can returns a code indicating if the message can be applied to the
@@ -19,7 +19,7 @@ func newThawResponse() thawResponse {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h thawResponse) process(ctx context.Context,
+func (h freezeHandler) process(ctx context.Context,
 	itx *inspector.Transaction, contract *contract.Contract) error {
 
 	return nil

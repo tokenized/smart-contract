@@ -35,7 +35,7 @@ const (
 	MinimumForResponse = protocol.LimitDefault
 )
 
-func newContractValidators(state state.StateInterface,
+func newRequestValidators(state state.StateInterface,
 	config config.Config) map[string]validatorInterface {
 
 	return map[string]validatorInterface{
@@ -68,7 +68,7 @@ func NewValidatorService(config config.Config,
 		State:      state,
 		Wallet:     wallet,
 		Fees:       protocol.Minimum,
-		validators: newContractValidators(state, config),
+		validators: newRequestValidators(state, config),
 	}
 }
 
