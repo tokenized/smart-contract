@@ -15,6 +15,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/internal/app/state"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/internal/app/wallet"
@@ -77,6 +78,9 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 
 	m := itx.MsgProto
 
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+	log.Infof("Received message : %s", m.Type())
+
 	if _, ok := protocol.TypeMapping[m.Type()]; !ok {
 		return nil, nil, fmt.Errorf("Missing type mapping type : %v", m.Type())
 	}
@@ -98,6 +102,7 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 			if err != nil {
 				return nil, nil, err
 			}
+			log.Infof("Rejecting message : Contract already exists")
 			return newTx, nil, nil
 		}
 		return nil, nil, err
@@ -117,12 +122,11 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	if uint64(utxos.Value()) < minimum {
 		// There is insufficient value to fund this transaction.
 		code := protocol.RejectionCodeInsufficientValue
-
 		newTx, err := s.reject(ctx, itx, code)
 		if err != nil {
 			return nil, nil, err
 		}
-
+		log.Infof("Rejecting message : Insufficient value provided")
 		return newTx, nil, nil
 	}
 
@@ -154,12 +158,13 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	}
 
 	// Run the custom validator
-	vcode := h.validate(itx, vdata)
+	vcode := h.validate(ctx, itx, vdata)
 	if vcode > 0 {
 		newTx, err := s.reject(ctx, itx, vcode)
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Infof("Rejecting message : Custom validator failed")
 		return newTx, nil, nil
 	}
 

@@ -2,6 +2,10 @@
 
 An autonomous agent that operates on behalf of the Issuer to recognize and enforce some or all the terms and conditions of the specified contract.  At a minimum, the Smart Contract operates within the bounds of the Tokenized Protocol on the Bitcoin Cash (BCH) network. The Smart Contract is written in Go and is intended to offer all the basic functionality required to issue, manage and exchange tokens, but it can also be used as the basis for much more complex smart contracts.
 
+### Usage Warning
+
+**This is an Alpha release, with more changes likely before the final version. Do not use this in production.**
+
 ## Getting Started
 
 ### Quick Start

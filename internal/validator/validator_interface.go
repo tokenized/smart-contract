@@ -1,9 +1,11 @@
 package validator
 
 import (
+	"context"
+
 	"github.com/tokenized/smart-contract/internal/app/inspector"
 )
 
 type validatorInterface interface {
-	validate(*inspector.Transaction, validatorData) uint8
+	validate(context.Context, *inspector.Transaction, validatorData) uint8
 }

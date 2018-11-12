@@ -1,8 +1,11 @@
 package validator
 
 import (
+	"context"
+
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -22,7 +25,10 @@ func newSendValidator(fee config.Fee) sendValidator {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) uint8 {
+func (h sendValidator) validate(ctx context.Context,
+	itx *inspector.Transaction, vd validatorData) uint8 {
+
+	log := logger.NewLoggerFromContext(ctx).Sugar()
 
 	// Contract and Message
 	c := vd.contract
@@ -32,10 +38,12 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 	assetKey := string(m.AssetID)
 	asset, ok := c.Assets[assetKey]
 	if !ok {
+		log.Errorf("send : Asset ID not found : contract=%s assetID=%s", c.ID, m.AssetID)
 		return protocol.RejectionCodeAssetNotFound
 	}
 
 	if asset.Holdings == nil {
+		log.Errorf("send : No holdings for Asset ID : contract=%s assetID=%s", c.ID, m.AssetID)
 		return protocol.RejectionCodeAssetNotFound
 	}
 
@@ -45,12 +53,14 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 	party1Addr := party1Address.Address.EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Addr]
 	if !ok {
+		log.Errorf("send : Party holding not found contract=%s assetID=%s party1=%s", c.ID, m.AssetID, party1Addr)
 		return protocol.RejectionCodeInsufficientAssets
 	}
 
 	// The balance is an unsigned int, so we can't substract without
 	// wrapping. Do a comparison instead.
 	if m.TokenQty > party1Holding.Balance {
+		log.Errorf("send : Insufficient assets contract=%s assetID=%s party1=%s", c.ID, m.AssetID, party1Addr)
 		return protocol.RejectionCodeInsufficientAssets
 	}
 
@@ -61,6 +71,7 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 		status := party1Holding.HoldingStatus
 
 		if !status.Expired() {
+			log.Errorf("send : Party has assets frozen")
 			// this order is in force
 			return protocol.RejectionCodeFrozen
 		}
@@ -69,6 +80,7 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 	// Not enough outputs / Receiver missing
 	//
 	if len(itx.Outputs) < 2 {
+		log.Errorf("send : Not enough outputs")
 		return protocol.RejectionCodeReceiverUnspecified
 	}
 
@@ -77,6 +89,7 @@ func (h sendValidator) validate(itx *inspector.Transaction, vd validatorData) ui
 	// Cannot transfer to self
 	//
 	if party1Addr == party2Addr {
+		log.Errorf("send : Cannot transfer to own self contract=%s assetID=%s party1=%s", c.ID, m.AssetID, party1Addr)
 		return protocol.RejectionCodeTransferSelf
 	}
 

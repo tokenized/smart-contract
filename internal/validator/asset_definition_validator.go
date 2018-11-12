@@ -1,6 +1,8 @@
 package validator
 
 import (
+	"context"
+
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
@@ -24,7 +26,8 @@ func newAssetDefinitionValidator(fee config.Fee) assetDefinitionValidator {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h assetDefinitionValidator) validate(itx *inspector.Transaction, vd validatorData) uint8 {
+func (h assetDefinitionValidator) validate(ctx context.Context,
+	itx *inspector.Transaction, vd validatorData) uint8 {
 
 	// Contract and Message
 	c := vd.contract

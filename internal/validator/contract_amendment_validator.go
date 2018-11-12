@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/tokenized/smart-contract/internal/app/config"
@@ -26,7 +27,8 @@ func newContractAmendmentValidator(fee config.Fee) contractAmendmentValidator {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h contractAmendmentValidator) validate(itx *inspector.Transaction, vd validatorData) uint8 {
+func (h contractAmendmentValidator) validate(ctx context.Context,
+	itx *inspector.Transaction, vd validatorData) uint8 {
 
 	// Contract and Message
 	c := vd.contract
