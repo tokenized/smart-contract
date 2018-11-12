@@ -72,6 +72,8 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Decorate the Context with the hash of the TX we are processing
 	ctx = logger.ContextWithTXHash(ctx, tx.TxHash().String())
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+	log.Infof("Received transaction : %s", tx.TxHash())
 	ts := time.Now()
 
 	// Inspector: Does this transaction concern the protocol?
@@ -93,6 +95,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	// Introduce Inputs and UTXOs in the Transaction
 	itx, err = h.Inspector.PromoteTransaction(itx)
 	if err != nil {
+		log.Error(err)
 		return nil
 	}
 
@@ -106,6 +109,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	// Validator: Check this request, return the related Contract
 	rejectTx, contract, err := h.Validator.CheckAndFetch(ctx, itx)
 	if err != nil {
+		log.Error(err)
 		return nil
 	}
 
@@ -121,18 +125,21 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	// Request: Grab me a response
 	resItx, err := h.Request.Process(ctx, itx, contract)
 	if err != nil {
+		log.Error(err)
 		return nil
 	}
 
 	// Response: Process response
 	err = h.Response.Process(ctx, resItx, contract)
 	if err != nil {
+		log.Error(err)
 		return nil
 	}
 
 	// Broadcaster: Broadcast response
 	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
 	if err != nil {
+		log.Error(err)
 		return nil
 	}
 

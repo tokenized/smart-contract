@@ -44,8 +44,8 @@ func (h exchangeValidator) validate(ctx context.Context,
 
 	// Party 1: Reject if no holding
 	//
-	party1Address := itx.Outputs[1]
-	party1Key := party1Address.Address.EncodeAddress()
+	party1Address := itx.InputAddrs[0]
+	party1Key := party1Address.EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Key]
 	if !ok {
 		return protocol.RejectionCodeInsufficientAssets
@@ -66,8 +66,8 @@ func (h exchangeValidator) validate(ctx context.Context,
 
 	// Party 2: Skip if no holding
 	//
-	party2Address := itx.Outputs[2]
-	party2Key := party2Address.Address.EncodeAddress()
+	party2Address := itx.InputAddrs[1]
+	party2Key := party2Address.EncodeAddress()
 	party2Holding, ok := asset.Holdings[party2Key]
 
 	// An order is in force

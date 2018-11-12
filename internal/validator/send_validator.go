@@ -47,10 +47,10 @@ func (h sendValidator) validate(ctx context.Context,
 		return protocol.RejectionCodeAssetNotFound
 	}
 
-	// Party 1: Reject if no holding
+	// Party 1 (Sender): Reject if no holding
 	//
-	party1Address := itx.Outputs[1]
-	party1Addr := party1Address.Address.EncodeAddress()
+	party1Address := itx.InputAddrs[0]
+	party1Addr := party1Address.EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Addr]
 	if !ok {
 		log.Errorf("send : Party holding not found contract=%s assetID=%s party1=%s", c.ID, m.AssetID, party1Addr)
@@ -84,6 +84,7 @@ func (h sendValidator) validate(ctx context.Context,
 		return protocol.RejectionCodeReceiverUnspecified
 	}
 
+	// Party 2 (Receiver)
 	party2Addr := itx.Outputs[1].Address.EncodeAddress()
 
 	// Cannot transfer to self
