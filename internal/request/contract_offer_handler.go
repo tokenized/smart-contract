@@ -22,16 +22,31 @@ func newContractOfferHandler(fee config.Fee) contractOfferHandler {
 func (h contractOfferHandler) handle(ctx context.Context,
 	r contractRequest) (*contractResponse, error) {
 
-	o, ok := r.m.(*protocol.ContractOffer)
+	co, ok := r.m.(*protocol.ContractOffer)
 	if !ok {
 		return nil, errors.New("Not *protocol.ContractOffer")
 	}
 
-	// the request was received from the issuer. The Service has already
-	// verified that there is no existing Contract at this addrress in
-	// prior validation.
-	f := buildContractFormationFromContractOffer(ctx, *o)
+	// Contract Formation <- Contract Offer
+	cf := protocol.NewContractFormation()
+	cf.Version = co.Version
+	cf.ContractName = co.ContractName
+	cf.ContractFileHash = co.ContractFileHash
+	cf.GoverningLaw = co.GoverningLaw
+	cf.Jurisdiction = co.Jurisdiction
+	cf.ContractExpiration = co.ContractExpiration
+	cf.URI = co.URI
+	cf.ContractRevision = 0
+	cf.IssuerID = co.IssuerID
+	cf.IssuerType = co.IssuerType
+	cf.ContractOperatorID = co.ContractOperatorID
+	cf.AuthorizationFlags = co.AuthorizationFlags
+	cf.VotingSystem = co.VotingSystem
+	cf.InitiativeThreshold = co.InitiativeThreshold
+	cf.InitiativeThresholdCurrency = co.InitiativeThresholdCurrency
+	cf.RestrictedQty = co.RestrictedQty
 
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err
@@ -39,7 +54,7 @@ func (h contractOfferHandler) handle(ctx context.Context,
 
 	resp := contractResponse{
 		Contract: r.contract,
-		Message:  f,
+		Message:  &cf,
 		outs:     outputs,
 	}
 

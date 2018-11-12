@@ -11,8 +11,10 @@ package request
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
 	"github.com/tokenized/smart-contract/internal/app/state"
@@ -159,4 +161,12 @@ func (s RequestService) isIncomingMessageType(msg protocol.OpReturnMessage) bool
 	_, ok := incomingMessageTypes[msg.Type()]
 
 	return ok
+}
+
+// hashToBytes returns a Hash in little endian format as Hash.CloneByte()
+// returns bytes in big endian format.
+func hashToBytes(hash chainhash.Hash) []byte {
+	b, _ := hex.DecodeString(hash.String())
+
+	return b
 }

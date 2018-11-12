@@ -1,14 +1,15 @@
 package request
 
 import (
-	"fmt"
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
 type sendHandler struct {
@@ -96,11 +97,15 @@ func (h sendHandler) handle(ctx context.Context,
 	// put the asset back on the contract
 	c.Assets[k] = asset
 
-	settlement := buildSettlementFromIssue(issue,
-		r.hash,
-		party1Holding.Balance,
-		party2Holding.Balance)
+	// Settlement <- Send
+	settlement := protocol.NewSettlement()
+	settlement.AssetType = issue.AssetType
+	settlement.AssetID = issue.AssetID
+	settlement.Party1TokenQty = party1Holding.Balance
+	settlement.Party2TokenQty = party2Holding.Balance
+	settlement.Timestamp = uint64(time.Now().Unix())
 
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err

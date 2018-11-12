@@ -124,14 +124,14 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		return nil
 	}
 
-	// Broadcaster: Broadcast response
-	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
+	// Response: Process response
+	err = h.Response.Process(ctx, resItx, contract)
 	if err != nil {
 		return nil
 	}
 
-	// Response: Process response
-	err = h.Response.Process(ctx, resItx, contract)
+	// Broadcaster: Broadcast response
+	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
 	if err != nil {
 		return nil
 	}

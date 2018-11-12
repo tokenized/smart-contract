@@ -24,15 +24,56 @@ func newContractAmendmentHandler(fee config.Fee) contractAmendmentHandler {
 func (h contractAmendmentHandler) handle(ctx context.Context,
 	r contractRequest) (*contractResponse, error) {
 
-	a, ok := r.m.(*protocol.ContractAmendment)
+	ca, ok := r.m.(*protocol.ContractAmendment)
 	if !ok {
 		return nil, errors.New("Not *protocol.ContractAmendment")
 	}
 
 	// Contract
 	contract := r.contract
-	newContract, b := buildContractFormationFromContractAmendment(contract, a)
 
+	// bump the revision
+	newRevision := contract.Revision + 1
+
+	// Contract Formation <- Contract Amendment
+	cf := protocol.NewContractFormation()
+	cf.Version = ca.Version
+	cf.ContractName = ca.ContractName
+	cf.ContractFileHash = ca.ContractFileHash
+	cf.GoverningLaw = ca.GoverningLaw
+	cf.Jurisdiction = ca.Jurisdiction
+	cf.ContractExpiration = ca.ContractExpiration
+	cf.URI = ca.URI
+	cf.ContractRevision = newRevision
+	cf.IssuerID = ca.IssuerID
+	cf.IssuerType = ca.IssuerType
+	cf.ContractOperatorID = ca.ContractOperatorID
+	cf.AuthorizationFlags = ca.AuthorizationFlags
+	cf.VotingSystem = ca.VotingSystem
+	cf.InitiativeThreshold = ca.InitiativeThreshold
+	cf.InitiativeThresholdCurrency = ca.InitiativeThresholdCurrency
+	cf.RestrictedQty = ca.RestrictedQty
+
+	// now assign contract values
+	newContract := contract
+
+	newContract.ContractName = string(cf.ContractName)
+	newContract.ContractFileHash = string(cf.ContractFileHash)
+	newContract.GoverningLaw = string(cf.GoverningLaw)
+	newContract.Jurisdiction = string(cf.Jurisdiction)
+	newContract.ContractExpiration = cf.ContractExpiration
+	newContract.URI = string(cf.URI)
+	newContract.Revision = newRevision
+	newContract.IssuerID = string(cf.IssuerID)
+	newContract.IssuerType = string(cf.IssuerType)
+	newContract.ContractOperatorID = string(cf.ContractOperatorID)
+	newContract.AuthorizationFlags = cf.AuthorizationFlags
+	newContract.VotingSystem = string(cf.VotingSystem)
+	newContract.InitiativeThreshold = cf.InitiativeThreshold
+	newContract.InitiativeThresholdCurrency = string(cf.InitiativeThresholdCurrency)
+	newContract.Qty = cf.RestrictedQty
+
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err
@@ -47,7 +88,7 @@ func (h contractAmendmentHandler) handle(ctx context.Context,
 
 	resp := contractResponse{
 		Contract: newContract,
-		Message:  &b,
+		Message:  &cf,
 		outs:     outputs,
 	}
 

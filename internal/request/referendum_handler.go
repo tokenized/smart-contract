@@ -3,10 +3,11 @@ package request
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
 type referendumHandler struct{}
@@ -26,8 +27,18 @@ func (h referendumHandler) handle(ctx context.Context,
 	// Contract
 	c := r.contract
 
-	// create the protocol.Vote
-	vote := buildVoteFromReferendum(r.hash, referendum)
+	// Vote <- Referendum
+	vote := protocol.NewVote()
+	vote.AssetType = referendum.AssetType
+	vote.AssetID = referendum.AssetID
+	vote.VoteType = referendum.VoteType
+	vote.VoteOptions = referendum.VoteOptions
+	vote.VoteMax = referendum.VoteMax
+	vote.VoteLogic = referendum.VoteLogic
+	vote.ProposalDescription = referendum.ProposalDescription
+	vote.ProposalDocumentHash = referendum.ProposalDocumentHash
+	vote.VoteCutOffTimestamp = referendum.VoteCutOffTimestamp
+	vote.Timestamp = uint64(time.Now().Unix())
 
 	// create the Vote
 	v := contract.NewVoteFromProtocolVote(r.senders[0].EncodeAddress(), &vote)

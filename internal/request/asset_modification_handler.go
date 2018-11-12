@@ -38,8 +38,21 @@ func (h assetModificationHandler) handle(ctx context.Context,
 	asset = contract.NewAssetFromAssetModification(asset, am)
 	c.Assets[asset.ID] = asset
 
-	ac := buildAssetCreationFromAssetModification(am)
+	// Asset Creation <- Asset Modification
+	ac := protocol.NewAssetCreation()
+	ac.AssetType = am.AssetType
+	ac.AssetID = am.AssetID
+	ac.AssetRevision = am.AssetRevision + 1
+	ac.AuthorizationFlags = am.AuthorizationFlags
+	ac.VotingSystem = am.VotingSystem
+	ac.VoteMultiplier = am.VoteMultiplier
+	ac.Qty = am.Qty
+	ac.ContractFeeCurrency = am.ContractFeeCurrency
+	ac.ContractFeeVar = am.ContractFeeVar
+	ac.ContractFeeFixed = am.ContractFeeFixed
+	ac.Payload = am.Payload
 
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err

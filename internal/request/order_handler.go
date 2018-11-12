@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/pkg/protocol"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/internal/app/config"
+	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
 type orderHandler struct {
@@ -34,44 +35,148 @@ func (h orderHandler) handle(ctx context.Context,
 	contract := r.contract
 
 	var err error
-
 	var resp *contractResponse
-	enforcement := buildEnforcementFromOrder(order, r.hash)
 
-	switch enforcement.Type() {
-	case protocol.CodeConfiscation:
-		m, ok := enforcement.(*protocol.Confiscation)
-		if !ok {
-			return nil, errors.New("Could not assert as Confiscation")
-		}
-
-		resp, err = h.confiscate(contract, order, m)
-
-	case protocol.CodeFreeze:
-		m, ok := enforcement.(*protocol.Freeze)
-		if !ok {
-			return nil, errors.New("Could not assert as Freeze")
-		}
-		resp, err = h.freeze(contract, order, m)
-
-	case protocol.CodeThaw:
-		m, ok := enforcement.(*protocol.Thaw)
-		if !ok {
-			return nil, errors.New("Could not assert as Thaw")
-		}
-		resp, err = h.thaw(contract, order, m)
-
+	switch order.ComplianceAction {
+	case protocol.ComplianceActionFreeze:
+		resp, err = h.freeze(contract, order)
+	case protocol.ComplianceActionThaw:
+		resp, err = h.thaw(contract, order)
+	case protocol.ComplianceActionConfiscation:
+		resp, err = h.confiscate(contract, order)
 	default:
-		return nil, fmt.Errorf("Unknown enforcement : %v", enforcement.Type())
+		return nil, fmt.Errorf("Unknown enforcement : %v", order.ComplianceAction)
 	}
 
 	return resp, err
 }
 
+// freeze sets the state of a holding to frozen.
+func (h orderHandler) freeze(c contract.Contract,
+	order *protocol.Order) (*contractResponse, error) {
+
+	// Freeze <- Order
+	freeze := protocol.NewFreeze()
+	freeze.AssetID = order.AssetID
+	freeze.AssetType = order.AssetType
+	freeze.Timestamp = uint64(time.Now().Unix())
+	freeze.Qty = order.Qty
+	freeze.Message = order.Message
+	freeze.Expiration = order.Expiration
+
+	// find the asset
+	assetKey := string(order.AssetID)
+	asset, ok := c.Assets[assetKey]
+	if !ok {
+		return nil, fmt.Errorf("freeze : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
+	}
+
+	// does the target hold the asset?
+	targetKey := string(order.TargetAddress)
+	targetHolding, ok := asset.Holdings[targetKey]
+	if !ok {
+		return nil, fmt.Errorf("freeze : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
+	}
+
+	orderStatus := contract.HoldingStatus{
+		Code:    "F",
+		Expires: freeze.Expiration,
+	}
+
+	targetHolding.HoldingStatus = &orderStatus
+
+	// put the holding back on the asset
+	asset.Holdings[targetKey] = targetHolding
+
+	// put the asset back on the contract
+	c.Assets[assetKey] = asset
+
+	contractAddr, err := c.Address()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outputs
+	outputs, err := h.buildFreezeThawOutputs(c, order)
+	if err != nil {
+		return nil, err
+	}
+
+	cr := contractResponse{
+		Contract:      c,
+		Message:       &freeze,
+		outs:          outputs,
+		changeAddress: contractAddr,
+	}
+
+	return &cr, nil
+}
+
+// thaw reverses the freeze operation on a holding.
+func (h orderHandler) thaw(c contract.Contract,
+	order *protocol.Order) (*contractResponse, error) {
+
+	// Thaw <- Order
+	thaw := protocol.NewThaw()
+	thaw.AssetID = order.AssetID
+	thaw.AssetType = order.AssetType
+	thaw.Timestamp = uint64(time.Now().Unix())
+	thaw.Qty = order.Qty
+	thaw.Message = order.Message
+
+	// find the asset
+	assetKey := string(order.AssetID)
+	asset, ok := c.Assets[assetKey]
+	if !ok {
+		return nil, fmt.Errorf("thaw : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
+	}
+
+	// does the target hold the asset?
+	targetKey := string(order.TargetAddress)
+	targetHolding, ok := asset.Holdings[targetKey]
+	if !ok {
+		return nil, fmt.Errorf("thaw : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
+	}
+
+	targetHolding.HoldingStatus = nil
+
+	// put the holding back on the asset
+	asset.Holdings[targetKey] = targetHolding
+
+	// put the asset back on the contract
+	c.Assets[assetKey] = asset
+
+	contractAddr, err := c.Address()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outputs
+	outputs, err := h.buildFreezeThawOutputs(c, order)
+	if err != nil {
+		return nil, err
+	}
+
+	cr := contractResponse{
+		Contract:      c,
+		Message:       &thaw,
+		outs:          outputs,
+		changeAddress: contractAddr,
+	}
+
+	return &cr, nil
+}
+
 // confiscate performs a confiscation of assets.
 func (h orderHandler) confiscate(c contract.Contract,
-	order *protocol.Order,
-	confiscation *protocol.Confiscation) (*contractResponse, error) {
+	order *protocol.Order) (*contractResponse, error) {
+
+	// Confiscation <- Order
+	confiscation := protocol.NewConfiscation()
+	confiscation.AssetID = order.AssetID
+	confiscation.AssetType = order.AssetType
+	confiscation.Timestamp = uint64(time.Now().Unix())
+	confiscation.Message = order.Message
 
 	// find the asset
 	assetKey := string(order.AssetID)
@@ -142,108 +247,8 @@ func (h orderHandler) confiscate(c contract.Contract,
 
 	cr := contractResponse{
 		Contract: c,
-		Message:  confiscation,
+		Message:  &confiscation,
 		outs:     outs,
-	}
-
-	return &cr, nil
-}
-
-// freeze sets the state of a holding to frozen.
-func (h orderHandler) freeze(c contract.Contract,
-	order *protocol.Order,
-	freeze *protocol.Freeze) (*contractResponse, error) {
-
-	// find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	targetHolding, ok := asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
-
-	orderStatus := contract.HoldingStatus{
-		Code:    "F",
-		Expires: freeze.Expiration,
-	}
-
-	targetHolding.HoldingStatus = &orderStatus
-
-	// put the holding back on the asset
-	asset.Holdings[targetKey] = targetHolding
-
-	// put the asset back on the contract
-	c.Assets[assetKey] = asset
-
-	contractAddr, err := c.Address()
-	if err != nil {
-		return nil, err
-	}
-
-	outputs, err := h.buildFreezeThawOutputs(c, order)
-	if err != nil {
-		return nil, err
-	}
-
-	cr := contractResponse{
-		Contract:      c,
-		Message:       freeze,
-		outs:          outputs,
-		changeAddress: contractAddr,
-	}
-
-	return &cr, nil
-}
-
-
-// thaw reverses the freeze operation on a holding.
-func (h orderHandler) thaw(c contract.Contract,
-	order *protocol.Order,
-	thaw *protocol.Thaw) (*contractResponse, error) {
-
-	// find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	targetHolding, ok := asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
-
-	targetHolding.HoldingStatus = nil
-
-	// put the holding back on the asset
-	asset.Holdings[targetKey] = targetHolding
-
-	// put the asset back on the contract
-	c.Assets[assetKey] = asset
-
-	contractAddr, err := c.Address()
-	if err != nil {
-		return nil, err
-	}
-
-	outputs, err := h.buildFreezeThawOutputs(c, order)
-	if err != nil {
-		return nil, err
-	}
-
-	cr := contractResponse{
-		Contract:      c,
-		Message:       thaw,
-		outs:          outputs,
-		changeAddress: contractAddr,
 	}
 
 	return &cr, nil

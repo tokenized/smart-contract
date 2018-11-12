@@ -3,12 +3,13 @@ package request
 import (
 	"context"
 	"errors"
+	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 )
 
 type initiativeHandler struct{}
@@ -28,8 +29,18 @@ func (h initiativeHandler) handle(ctx context.Context,
 	// Contract
 	c := r.contract
 
-	// create the protocol.Vote
-	vote := buildVoteFromInitiative(r.hash, initiative)
+	// Vote <- Initiative
+	vote := protocol.NewVote()
+	vote.AssetType = initiative.AssetType
+	vote.AssetID = initiative.AssetID
+	vote.VoteType = initiative.VoteType
+	vote.VoteOptions = initiative.VoteOptions
+	vote.VoteMax = initiative.VoteMax
+	vote.VoteLogic = initiative.VoteLogic
+	vote.ProposalDescription = initiative.ProposalDescription
+	vote.ProposalDocumentHash = initiative.ProposalDocumentHash
+	vote.VoteCutOffTimestamp = initiative.VoteCutOffTimestamp
+	vote.Timestamp = uint64(time.Now().Unix())
 
 	// create the Vote
 	v := contract.NewVoteFromProtocolVote(r.senders[0].EncodeAddress(),

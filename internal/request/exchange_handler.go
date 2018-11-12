@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/logger"
-	"github.com/tokenized/smart-contract/pkg/protocol"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/internal/app/config"
+	"github.com/tokenized/smart-contract/internal/app/logger"
+	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
 type exchangeHandler struct {
@@ -116,7 +117,13 @@ func (h exchangeHandler) handle(ctx context.Context,
 	// put the asset back  on the contract
 	c.Assets[assetKey] = asset
 
-	settlement := buildSettlementFromExchange(exchange, r.tx.TxHash(), party1Balance, party2Balance)
+	// Settlement <- Exchange
+	settlement := protocol.NewSettlement()
+	settlement.AssetType = exchange.Party1AssetType
+	settlement.AssetID = exchange.Party1AssetID
+	settlement.Party1TokenQty = party1Balance
+	settlement.Party2TokenQty = party2Balance
+	settlement.Timestamp = uint64(time.Now().Unix())
 
 	// try to return as much as possible to party1, and we need to send
 	// to the party2 address as well
@@ -128,6 +135,7 @@ func (h exchangeHandler) handle(ctx context.Context,
 		party1OutValue = 546
 	}
 
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err

@@ -39,8 +39,21 @@ func (h assetDefinitionHandler) handle(ctx context.Context,
 	asset := contract.NewAssetFromAssetDefinition(ad, holding)
 	c.Assets[asset.ID] = asset
 
-	ac := buildAssetCreationFromAssetDefinition(ad)
+	// Asset Creation <- Asset Definition
+	ac := protocol.NewAssetCreation()
+	ac.AssetType = ad.AssetType
+	ac.AssetID = ad.AssetID
+	ac.AssetRevision = 0
+	ac.AuthorizationFlags = ad.AuthorizationFlags
+	ac.VotingSystem = ad.VotingSystem
+	ac.VoteMultiplier = ad.VoteMultiplier
+	ac.Qty = ad.Qty
+	ac.ContractFeeCurrency = ad.ContractFeeCurrency
+	ac.ContractFeeVar = ad.ContractFeeVar
+	ac.ContractFeeFixed = ad.ContractFeeFixed
+	ac.Payload = ad.Payload
 
+	// Outputs
 	outputs, err := h.buildOutputs(r)
 	if err != nil {
 		return nil, err

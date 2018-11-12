@@ -113,3 +113,109 @@ func (v VoteService) generateResult(c contract.Contract, vo contract.Vote) contr
 
 	return result
 }
+
+// TBA
+/*
+func (s VoteService) FinaliseVotes(ctx context.Context,
+	key *btcec.PrivateKey,
+	contractAddr string) error {
+
+	contract, err := s.ContractService.find(ctx, contractAddr)
+	if err != nil {
+		return err
+	}
+
+	voteService := NewVoteService()
+
+	// get any votes that we can close, and result
+	votes, err := voteService.handle(ctx, *contract)
+	if err != nil {
+		return err
+	}
+
+	if len(votes) == 0 {
+		return nil
+	}
+
+	if key == nil {
+		return fmt.Errorf("No private key for address %v", contractAddr)
+	}
+
+	for _, vote := range votes {
+		hash, err := chainhash.NewHashFromStr(vote.UTXO.Hash)
+		if err != nil {
+			return err
+		}
+
+		sender, _ := contract.Address()
+
+		utxo := txbuilder.UTXO{
+			Hash:     *hash,
+			Index:    vote.UTXO.Index,
+			PkScript: vote.UTXO.PkScript,
+			Value:    vote.UTXO.Value,
+		}
+
+		result := buildResultFromVoteResult(vote)
+		contract.Votes[vote.Address] = vote
+
+		cr := ContractResponse{
+			Message:  &result,
+			Contract: *contract,
+		}
+
+		utxos := txbuilder.UTXOs{utxo}
+
+		changeAddr := sender
+		if err := s.handleResponse(ctx, key, utxos, sender, changeAddr, cr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func buildResultFromVoteResult(vote contract.Vote) protocol.Result {
+	result := protocol.NewResult()
+	result.AssetType = []byte(vote.AssetType)
+	result.AssetID = []byte(vote.AssetID)
+	result.VoteType = vote.VoteType
+	result.VoteTxnID = []byte(vote.RefTxnIDHash)
+
+	// get the result from the vote, which is a map of counts
+	voteResult := *vote.Result
+
+	// maximum seen vote count for an option
+	max := uint64(0)
+
+	for _, option := range vote.VoteOptions {
+		count := voteResult[option]
+
+		if count < max {
+			continue
+		}
+
+		max = count
+	}
+
+	// we know the largest value, find any values with that count. there
+	// can be more than one as it is possible for a vote to draw.
+	winners := make([]byte, 16, 16)
+	winnerIdx := 0
+
+	for _, option := range vote.VoteOptions {
+		count := voteResult[option]
+
+		if count != max {
+			continue
+		}
+
+		winners[winnerIdx] = option
+		winnerIdx++
+	}
+
+	result.Result = winners
+
+	return result
+}
+*/
