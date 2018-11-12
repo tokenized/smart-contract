@@ -12,9 +12,7 @@ GO_DIST = CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_BUILD) -a -tags netgo -ldfl
 BINARY=smartcontractd
 
 # tools
-BINARY_LOAD_TX=load-message-from-tx
-BINARY_LOAD_MESSAGE=load-message-from-payload
-BINARY_CONTRACT_REBUILD=contract-rebuild
+BINARY_CONTRACT_CLI=smartcontract
 BINARY_SPVNODE=spvnode
 
 all: clean prepare deps test dist
@@ -29,16 +27,14 @@ dist: dist-smartcontractd dist-tools
 dist-smartcontractd:
 	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/smartcontractd.go
 
-dist-tools: dist-load-message-from-payload \
-	dist-load-message-from-tx \
-	dist-contract-rebuild \
-	dist-spvnode-rebuild
+dist-tools: dist-cli \
+	dist-spvnode
 
-dist-contract-rebuild:
-	$(GO_DIST) -o dist/$(BINARY_CONTRACT_REBUILD) cmd/$(BINARY_CONTRACT_REBUILD)/main.go
+dist-cli:
+	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
 
-dist-spvnode-rebuild:
-	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/main.go
+dist-spvnode:
+	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/spvnode.go
 
 prepare:
 	mkdir -p dist tmp
@@ -50,11 +46,11 @@ tools:
 run:
 	go run cmd/$(BINARY)/smartcontractd.go
 
-run-rebuild:
-	go run cmd/$(BINARY_CONTRACT_REBUILD)/main.go
+run-cli:
+	go run cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
 
 run-spvnode:
-	go run cmd/$(BINARY_SPVNODE)/main.go
+	go run cmd/$(BINARY_SPVNODE)/spvnode.go
 
 lint: golint vet goimports
 

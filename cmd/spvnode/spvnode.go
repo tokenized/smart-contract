@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
@@ -18,19 +20,28 @@ var (
 //
 func main() {
 	// Logger
-	ctx, log := logger.NewLoggerWithContext()
+	_, log := logger.NewLoggerWithContext()
 
-	config := spvnode.NewConfig()
+	storeConfig := storage.NewConfig(os.Getenv("NODE_STORAGE_REGION"),
+		os.Getenv("NODE_STORAGE_ACCESS_KEY"),
+		os.Getenv("NODE_STORAGE_SECRET"),
+		os.Getenv("NODE_STORAGE_BUCKET"),
+		os.Getenv("NODE_STORAGE_ROOT"))
 
-	store := storage.NewFilesystemStorage(config.Storage)
-	stateRepo := spvnode.NewStateRepository(store)
-	blockRepo := spvnode.NewBlockRepository(store)
+	var spvStorage storage.Storage
+	if strings.ToLower(storeConfig.Bucket) == "standalone" {
+		spvStorage = storage.NewFilesystemStorage(storeConfig)
+	} else {
+		spvStorage = storage.NewS3Storage(storeConfig)
+	}
 
-	logger.Infof("Started %v with config %s", buildDetails(), config)
+	config := spvnode.NewConfig(os.Getenv("NODE_ADDRESS"),
+		os.Getenv("NODE_USER_AGENT"))
 
-	blockService := spvnode.NewBlockService(blockRepo, stateRepo)
+	// Log startup sequence
+	log.Infof("Started %v with config %s", buildDetails(), config)
 
-	n := spvnode.NewNode(config, &blockService)
+	n := spvnode.NewNode(config, spvStorage)
 	if err := n.Start(); err != nil {
 		panic(err)
 	}
