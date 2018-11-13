@@ -34,16 +34,22 @@ func (h assetModificationValidator) validate(ctx context.Context,
 	c := vd.contract
 	m := vd.m.(*protocol.AssetModification)
 
-	// does the asset exist?
-	k := string(m.AssetID)
-
-	a, ok := c.Assets[k]
+	// Asset
+	assetID := string(m.AssetID)
+	a, ok := c.Assets[assetID]
 	if !ok {
 		log.Errorf("asset modification : Asset ID not found")
 		return protocol.RejectionCodeAssetNotFound
 	}
 
-	// TODO check asset revision
+	// @TODO: When reducing an assets available supply, the amount must
+	// be deducted from the issuers balance, otherwise the action cannot
+	// be performed. i.e: Reduction amount must not be in circulation.
+
+	// @TODO: Likewise when the asset quantity is increased, the amount
+	// must be added to the issuers holding balance.
+
+	// Revision mismatch
 	if a.Revision != m.AssetRevision {
 		log.Errorf("asset modification : Asset Revision does not match current")
 		return protocol.RejectionCodeAssetRevision

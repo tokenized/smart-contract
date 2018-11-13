@@ -32,18 +32,34 @@ func (h orderHandler) handle(ctx context.Context,
 		return nil, errors.New("Not *protocol.Order")
 	}
 
-	contract := r.contract
+	// Contract
+	c := r.contract
 
+	// Asset check
+	assetKey := string(order.AssetID)
+	asset, ok := c.Assets[assetKey]
+	if !ok {
+		return nil, fmt.Errorf("order : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
+	}
+
+	// Holdings check
+	targetAddr := string(order.TargetAddress)
+	_, ok = asset.Holdings[targetAddr]
+	if !ok {
+		return nil, fmt.Errorf("order : Holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetAddr)
+	}
+
+	// Apply logic based on Compliance Action type
 	var err error
 	var resp *contractResponse
 
 	switch order.ComplianceAction {
 	case protocol.ComplianceActionFreeze:
-		resp, err = h.freeze(contract, order)
+		resp, err = h.freeze(c, order)
 	case protocol.ComplianceActionThaw:
-		resp, err = h.thaw(contract, order)
+		resp, err = h.thaw(c, order)
 	case protocol.ComplianceActionConfiscation:
-		resp, err = h.confiscate(contract, order)
+		resp, err = h.confiscate(c, order)
 	default:
 		return nil, fmt.Errorf("Unknown enforcement : %v", order.ComplianceAction)
 	}
@@ -54,20 +70,6 @@ func (h orderHandler) handle(ctx context.Context,
 // freeze sets the state of a holding to frozen.
 func (h orderHandler) freeze(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
-
-	// Find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// Does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	_, ok = asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("freeze : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
 
 	// Freeze <- Order
 	freeze := protocol.NewFreeze()
@@ -103,20 +105,6 @@ func (h orderHandler) freeze(c contract.Contract,
 func (h orderHandler) thaw(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
 
-	// Find the asset
-	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
-
-	// Does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	_, ok = asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("thaw : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
-
 	// Thaw <- Order
 	thaw := protocol.NewThaw()
 	thaw.AssetID = order.AssetID
@@ -150,22 +138,16 @@ func (h orderHandler) thaw(c contract.Contract,
 func (h orderHandler) confiscate(c contract.Contract,
 	order *protocol.Order) (*contractResponse, error) {
 
-	// Find the asset
+	// Asset
 	assetKey := string(order.AssetID)
-	asset, ok := c.Assets[assetKey]
-	if !ok {
-		return nil, fmt.Errorf("confiscate : Asset ID not found : contract=%s assetID=%s", c.ID, order.AssetID)
-	}
+	asset := c.Assets[assetKey]
 
-	// Does the target hold the asset?
-	targetKey := string(order.TargetAddress)
-	targetHolding, ok := asset.Holdings[targetKey]
-	if !ok {
-		return nil, fmt.Errorf("confiscate : holding not found contract=%s assetID=%s target=%s", c.ID, assetKey, targetKey)
-	}
+	// Target Holding
+	targetAddr := string(order.TargetAddress)
+	targetHolding := asset.Holdings[targetAddr]
 	targetBalance := targetHolding.Balance
 
-	// Get the deposit holding, creating if needed
+	// Depositor Holding
 	depositKey := string(order.DepositAddress)
 	depositHolding, ok := asset.Holdings[depositKey]
 	depositBalance := uint64(0)
@@ -192,8 +174,8 @@ func (h orderHandler) confiscate(c contract.Contract,
 	confiscation.AssetType = order.AssetType
 	confiscation.Timestamp = uint64(time.Now().Unix())
 	confiscation.Message = order.Message
-	confiscation.TargetsQty = targetHolding.Balance
-	confiscation.DepositsQty = depositHolding.Balance
+	confiscation.TargetsQty = targetBalance
+	confiscation.DepositsQty = depositBalance
 
 	// Outputs
 	outputs, err := h.buildConfiscateOutputs(c, order)

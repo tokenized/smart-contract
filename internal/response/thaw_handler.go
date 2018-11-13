@@ -18,7 +18,7 @@ func newThawHandler() thawHandler {
 func (h thawHandler) process(ctx context.Context,
 	itx *inspector.Transaction, c *contract.Contract) error {
 
-	msg := itx.MsgProto.(*protocol.Freeze)
+	msg := itx.MsgProto.(*protocol.Thaw)
 	assetKey := string(msg.AssetID)
 	asset, ok := c.Assets[assetKey]
 	if !ok {
