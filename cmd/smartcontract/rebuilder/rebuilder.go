@@ -1,5 +1,6 @@
 package rebuilder
 
+/*
 import (
 	"context"
 	"errors"
@@ -213,3 +214,4 @@ func (c ContractBuilder) findFormationTX(ctx context.Context,
 
 	return nil, errors.New("Cannot find a CO")
 }
+*/
