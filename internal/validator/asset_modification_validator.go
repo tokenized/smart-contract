@@ -5,6 +5,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -27,6 +28,8 @@ func newAssetModificationValidator(fee config.Fee) assetModificationValidator {
 func (h assetModificationValidator) validate(ctx context.Context,
 	itx *inspector.Transaction, vd validatorData) uint8 {
 
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+
 	// Contract and Message
 	c := vd.contract
 	m := vd.m.(*protocol.AssetModification)
@@ -36,11 +39,13 @@ func (h assetModificationValidator) validate(ctx context.Context,
 
 	a, ok := c.Assets[k]
 	if !ok {
+		log.Errorf("asset modification : Asset ID not found")
 		return protocol.RejectionCodeAssetNotFound
 	}
 
 	// TODO check asset revision
 	if a.Revision != m.AssetRevision {
+		log.Errorf("asset modification : Asset Revision does not match current")
 		return protocol.RejectionCodeAssetRevision
 	}
 

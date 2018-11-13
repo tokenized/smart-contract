@@ -5,6 +5,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
@@ -29,6 +30,8 @@ func newAssetDefinitionValidator(fee config.Fee) assetDefinitionValidator {
 func (h assetDefinitionValidator) validate(ctx context.Context,
 	itx *inspector.Transaction, vd validatorData) uint8 {
 
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+
 	// Contract and Message
 	c := vd.contract
 	m := vd.m.(*protocol.AssetDefinition)
@@ -37,13 +40,13 @@ func (h assetDefinitionValidator) validate(ctx context.Context,
 	assetID := string(m.AssetID)
 
 	if _, ok := c.Assets[assetID]; ok {
-		// Asset ID already exists.
+		log.Errorf("asset definition : Asset ID already exists")
 		return protocol.RejectionCodeDuplicateAssetID
 	}
 
 	// check that the contract can have more assets added.
 	if !h.canHaveMoreAssets(c) {
-		// Number of assets exceeds contract Qty for a fixed contract.
+		log.Errorf("asset definition : Number of assets exceeds contract Qty")
 		return protocol.RejectionCodeFixedQuantity
 	}
 

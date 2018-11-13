@@ -6,6 +6,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/app/config"
 	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
@@ -30,6 +31,8 @@ func newContractAmendmentValidator(fee config.Fee) contractAmendmentValidator {
 func (h contractAmendmentValidator) validate(ctx context.Context,
 	itx *inspector.Transaction, vd validatorData) uint8 {
 
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+
 	// Contract and Message
 	c := vd.contract
 	m := vd.m.(*protocol.ContractAmendment)
@@ -50,9 +53,10 @@ func (h contractAmendmentValidator) validate(ctx context.Context,
 	// 	return protocol.RejectionCodeContractAuthFlags
 	// }
 
-	// ensure reduction in qty is OK, keeping in mind that zero (0) means
+	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if c.Qty > 0 && int(m.RestrictedQty) < len(c.Assets) {
+		log.Errorf("contract amendment : Cannot reduce allowable assets below existing number")
 		return protocol.RejectionCodeContractQtyReduction
 	}
 
