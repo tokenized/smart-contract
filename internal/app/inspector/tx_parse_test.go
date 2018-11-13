@@ -1,12 +1,10 @@
 package inspector
 
 import (
-	"encoding/hex"
 	"reflect"
 	"testing"
 
 	"github.com/tokenized/smart-contract/pkg/protocol"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestConfiscate_qty(t *testing.T) {
@@ -48,24 +46,14 @@ func TestConfiscate_qty(t *testing.T) {
 		t.Errorf("got %v, want %v", c.AssetID, wantAssetID)
 	}
 
-	// the tx hash
-	txhash := "3a1d0d8f0690cb765235cb29c8d2fa05da67c7bd79cfa4a40d18bda0cf20d690"
-	h, _ := chainhash.NewHashFromStr(txhash)
-
-	wantRefTxnID, _ := hex.DecodeString(h.String())
-
-	if !reflect.DeepEqual(c.RefTxnID, wantRefTxnID) {
-		t.Errorf("got\n%x\nwant\n%x", c.RefTxnID, wantRefTxnID)
-	}
-
 	wantOffenderQty := uint64(1)
-	if c.OffendersQty != wantOffenderQty {
-		t.Errorf("got %v, want %v", c.OffendersQty, wantOffenderQty)
+	if c.TargetsQty != wantOffenderQty {
+		t.Errorf("got %v, want %v", c.TargetsQty, wantOffenderQty)
 	}
 
 	wantCustodianQty := uint64(92)
-	if c.CustodiansQty != wantCustodianQty {
-		t.Errorf("got %v, want %v", c.CustodiansQty, wantCustodianQty)
+	if c.DepositsQty != wantCustodianQty {
+		t.Errorf("got %v, want %v", c.DepositsQty, wantCustodianQty)
 	}
 
 	wantMessage := "Confiscate fix"

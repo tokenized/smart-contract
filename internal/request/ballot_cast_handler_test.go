@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/internal/app/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/btcsuite/btcutil"
 )
 
 func TestBallotCastHandler_handle(t *testing.T) {
@@ -47,16 +48,16 @@ func TestBallotCastHandler_handle(t *testing.T) {
 	}
 
 	// build the existing asset
-	asset := Asset{
+	asset := contract.Asset{
 		ID:   "1v2mwouuzz2x73ulv6o57llbx5udym6l",
 		Qty:  43,
 		Type: "GOO",
-		Holdings: map[string]Holding{
-			issuerAddr: Holding{
+		Holdings: map[string]contract.Holding{
+			issuerAddr: contract.Holding{
 				Address: issuerAddr,
 				Balance: 43,
 			},
-			userAddr: Holding{
+			userAddr: contract.Holding{
 				Address: issuerAddr,
 				Balance: 43,
 			},
@@ -68,13 +69,13 @@ func TestBallotCastHandler_handle(t *testing.T) {
 	// setup the existing contract
 	expires := time.Now().Add(time.Hour * 1).UnixNano()
 
-	contract := Contract{
+	c := contract.Contract{
 		ID: contractAddr,
-		Assets: map[string]Asset{
+		Assets: map[string]contract.Asset{
 			asset.ID: asset,
 		},
-		Votes: map[string]Vote{
-			voteHash: Vote{
+		Votes: map[string]contract.Vote{
+			voteHash: contract.Vote{
 				VoteCutOffTimestamp: expires,
 			},
 		},
@@ -91,7 +92,7 @@ func TestBallotCastHandler_handle(t *testing.T) {
 	req := contractRequest{
 		hash: newHash(hash),
 		// tx:        &tx,
-		contract:  contract,
+		contract:  c,
 		senders:   senders,
 		receivers: receivers,
 		m:         &ballotCast,
@@ -121,7 +122,7 @@ func TestBallotCastHandler_handle(t *testing.T) {
 		gotVote.Ballots[k] = b
 	}
 
-	wantVote := Vote{
+	wantVote := contract.Vote{
 		// Address:
 		// AssetType:
 		// AssetID:
@@ -133,8 +134,8 @@ func TestBallotCastHandler_handle(t *testing.T) {
 		// ProposalDocumentHash:
 		VoteCutOffTimestamp: expires,
 		// RefTxnIDHash:
-		Ballots: []Ballot{
-			Ballot{
+		Ballots: []contract.Ballot{
+			contract.Ballot{
 				Address:   userAddr,
 				AssetType: "GOO",
 				AssetID:   asset.ID,

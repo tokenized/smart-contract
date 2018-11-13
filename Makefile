@@ -63,15 +63,8 @@ golint:
 goimports:
 	ret=0 && test -z "$$(goimports -l ./... | tee /dev/stderr)" || ret=1 ; exit $$ret
 
-# run the tests with coverage
 test: prepare
-	go test -coverprofile=tmp/coverage.out
-
-# run tests with coverage and open html file in the browser
-#
-# See https://blog.golang.org/cover for more output options
-test-coverage: test
-	go tool cover -html=tmp/coverage.out
+	go test ./...
 
 clean:
 	rm -rf dist

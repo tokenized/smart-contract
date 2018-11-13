@@ -8,6 +8,8 @@ import (
 )
 
 func TestSign(t *testing.T) {
+	t.Skip("Update needed")
+
 	secret := "5JhvsapkHeHjy2FiUQYwXh1d74evuMd3rGcKGnifCdFR5G8e6nH"
 
 	// load the WIF

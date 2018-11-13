@@ -58,7 +58,7 @@ func TestUTXOs_InputValue(t *testing.T) {
 		},
 	}
 
-	want := int64(utxos[0].Value + utxos[1].Value)
+	want := utxos[0].Value + utxos[1].Value
 
 	got := utxos.Value()
 

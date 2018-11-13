@@ -3,6 +3,8 @@ package vote
 import (
 	"reflect"
 	"testing"
+
+	"github.com/tokenized/smart-contract/internal/app/state/contract"
 )
 
 func TestVoteService_generateResult(t *testing.T) {
@@ -19,15 +21,15 @@ func TestVoteService_generateResult(t *testing.T) {
 
 	otherUserAddress := "1DnoezsMcKZeQrXVW7eqU5v8HRKmnPSYd2"
 
-	contract := Contract{
-		Assets: map[string]Asset{
-			assetID: Asset{
-				Holdings: map[string]Holding{
-					issuerAddr: Holding{
+	c := contract.Contract{
+		Assets: map[string]contract.Asset{
+			assetID: contract.Asset{
+				Holdings: map[string]contract.Holding{
+					issuerAddr: contract.Holding{
 						Address: issuerAddr,
 						Balance: 15,
 					},
-					userAddress: Holding{
+					userAddress: contract.Holding{
 						Address: userAddress,
 						Balance: 5,
 					},
@@ -38,94 +40,94 @@ func TestVoteService_generateResult(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		contract Contract
-		vote     Vote
-		want     Result
+		contract contract.Contract
+		vote     contract.Vote
+		want     contract.BallotResult
 	}{
 		{
 			// "Y" = 89 (0x59), "N" = 78 (0x4e)
 			name:     "yes no vote (YN)",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				Address: assetID,
 				VoteOptions: []byte{
 					0x59, 0x4c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
 				VoteLogic: '0',
 				VoteMax:   1,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{0x59},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				0x59: 5,
 			},
 		},
 		{
 			// "Y" = 89 (0x59), "N" = 78 (0x4e)
 			name:     "yes no vote (YN), one rejected",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				Address: assetID,
 				VoteOptions: []byte{
 					0x59, 0x4c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
 				VoteLogic: '0',
 				VoteMax:   1,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{0x59},
 					},
-					Ballot{
+					contract.Ballot{
 						Address: otherUserAddress,
 						AssetID: wrongAssetID,
 						Vote:    []byte{0x59},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				0x59: 5,
 			},
 		},
 		{
 			// "Y" = 89 (0x59), "N" = 78 (0x4e)
 			name:     "yes no vote (YN), wrong option",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				Address: assetID,
 				VoteOptions: []byte{
 					0x59, 0x4c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				},
 				VoteLogic: '0',
 				VoteMax:   1,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{0x59},
 					},
-					Ballot{
+					contract.Ballot{
 						Address: otherUserAddress,
 						AssetID: assetID,
 						Vote:    []byte{0x03},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				0x59: 5,
 			},
 		},
 		{
 			// Options : ABCDEFGHIJKLMNOP, 2 max choices
 			name:     "16 selections, 2 max",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				Address: assetID,
 				VoteOptions: []byte{
 					65, 66, 67, 68, 69, 70, 71, 72,
@@ -133,15 +135,15 @@ func TestVoteService_generateResult(t *testing.T) {
 				},
 				VoteLogic: '0',
 				VoteMax:   2,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{73, 65},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				0x49: 5,
 				0x41: 5,
 			},
@@ -149,8 +151,8 @@ func TestVoteService_generateResult(t *testing.T) {
 		{
 			// Options : ABCDEFGHIJKLMNOP, 2 max choices
 			name:     "16 selections, 2 max, weighted voting",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				Address: assetID,
 				VoteOptions: []byte{
 					65, 66, 67, 68, 69, 70, 71, 72,
@@ -158,15 +160,15 @@ func TestVoteService_generateResult(t *testing.T) {
 				},
 				VoteLogic: '1',
 				VoteMax:   4,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{80, 79, 78, 77},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				80: 20,
 				79: 15,
 				78: 10,
@@ -176,23 +178,23 @@ func TestVoteService_generateResult(t *testing.T) {
 		{
 			// Options : ABCDEFGHIJKLMNOP, 2 max choices
 			name:     "16 selections, 2 max, weighted voting, contract vote",
-			contract: contract,
-			vote: Vote{
+			contract: c,
+			vote: contract.Vote{
 				VoteOptions: []byte{
 					65, 66, 67, 68, 69, 70, 71, 72,
 					73, 74, 75, 76, 77, 78, 79, 80,
 				},
 				VoteLogic: '1',
 				VoteMax:   4,
-				Ballots: []Ballot{
-					Ballot{
+				Ballots: []contract.Ballot{
+					contract.Ballot{
 						Address: userAddress,
 						AssetID: assetID,
 						Vote:    []byte{80, 79, 78, 77},
 					},
 				},
 			},
-			want: Result{
+			want: contract.BallotResult{
 				80: 20,
 				79: 15,
 				78: 10,

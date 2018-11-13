@@ -22,7 +22,7 @@ func TestConvertBCHToSatoshis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := convertBCHToSatoshis(tt.bch)
+			got := ConvertBCHToSatoshis(tt.bch)
 
 			if got != tt.want {
 				t.Errorf("got %v, want %v", got, tt.want)

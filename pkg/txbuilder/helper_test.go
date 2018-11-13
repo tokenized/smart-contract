@@ -2,17 +2,28 @@ package txbuilder
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"go.uber.org/zap"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/internal/app/logger"
 )
+
+// newSilentContext creates a Context with a no-op Logger.
+func newSilentContext() context.Context {
+	ctx := logger.NewContext()
+	l := zap.NewNop()
+
+	return logger.ContextWithLogger(ctx, l)
+}
 
 func loadFixture(name string) []byte {
 	filename := fmt.Sprintf("fixtures/%s", name)

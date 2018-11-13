@@ -273,7 +273,7 @@ func TestContract_getUsers(t *testing.T) {
 		userAddr,
 	}
 
-	if !isSliceEqual(got, want) {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got\n%+v\nwant\n%+v", got, want)
 	}
 }
