@@ -204,8 +204,7 @@ func (s ValidatorService) findContract(ctx context.Context,
 		}
 
 		// Contract was not found, so create it.
-		cof := m.(*protocol.ContractOffer)
-		con := contract.NewContract(itx.MsgTx, contractAddress, issuer, operator, cof)
+		con := contract.NewContract(itx.MsgTx, contractAddress, issuer, operator)
 		return con, nil
 	}
 

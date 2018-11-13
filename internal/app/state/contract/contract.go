@@ -39,47 +39,22 @@ type Contract struct {
 	Hashes                      []string         `json:"hashes"`
 }
 
-// NewContract returns a new Contract. Must come from an Offer because
-// it is created early on in the life cycle.
 func NewContract(tx *wire.MsgTx,
 	contractAddress btcutil.Address,
 	issuerAddress btcutil.Address,
-	operatorAddress btcutil.Address,
-	m *protocol.ContractOffer) *Contract {
+	operatorAddress btcutil.Address) *Contract {
 
 	c := Contract{
-		ID:                          contractAddress.EncodeAddress(),
-		CreatedAt:                   time.Now().UnixNano(),
-		IssuerAddress:               issuerAddress.EncodeAddress(),
-		ContractName:                string(m.ContractName),
-		ContractFileHash:            fmt.Sprintf("%x", m.ContractFileHash),
-		GoverningLaw:                string(m.GoverningLaw),
-		Jurisdiction:                string(m.Jurisdiction),
-		ContractExpiration:          m.ContractExpiration,
-		URI:                         string(m.URI),
-		IssuerID:                    string(m.IssuerID),
-		IssuerType:                  string(m.IssuerType),
-		ContractOperatorID:          string(m.ContractOperatorID),
-		AuthorizationFlags:          m.AuthorizationFlags,
-		VotingSystem:                string(m.VotingSystem),
-		InitiativeThreshold:         m.InitiativeThreshold,
-		InitiativeThresholdCurrency: string(m.InitiativeThresholdCurrency),
-		Qty:                         m.RestrictedQty,
-		Hashes:                      []string{},
-		Assets:                      map[string]Asset{},
-		Votes:                       map[string]Vote{},
+		ID:            contractAddress.EncodeAddress(),
+		CreatedAt:     time.Now().UnixNano(),
+		IssuerAddress: issuerAddress.EncodeAddress(),
+		Hashes:        []string{},
+		Assets:        map[string]Asset{},
+		Votes:         map[string]Vote{},
 	}
 
 	if operatorAddress != nil {
 		c.OperatorAddress = operatorAddress.EncodeAddress()
-	}
-
-	if m.VotingSystem == 0x0 {
-		c.VotingSystem = ""
-	}
-
-	if m.IssuerType == 0x0 {
-		c.IssuerType = ""
 	}
 
 	return &c
@@ -89,7 +64,7 @@ func EditContract(c *Contract, cf *protocol.ContractFormation) *Contract {
 	newContract := c
 
 	newContract.ContractName = string(cf.ContractName)
-	newContract.ContractFileHash = string(cf.ContractFileHash)
+	newContract.ContractFileHash = fmt.Sprintf("%x", cf.ContractFileHash)
 	newContract.GoverningLaw = string(cf.GoverningLaw)
 	newContract.Jurisdiction = string(cf.Jurisdiction)
 	newContract.ContractExpiration = cf.ContractExpiration
@@ -103,6 +78,14 @@ func EditContract(c *Contract, cf *protocol.ContractFormation) *Contract {
 	newContract.InitiativeThreshold = cf.InitiativeThreshold
 	newContract.InitiativeThresholdCurrency = string(cf.InitiativeThresholdCurrency)
 	newContract.Qty = cf.RestrictedQty
+
+	if cf.VotingSystem == 0x0 {
+		c.VotingSystem = ""
+	}
+
+	if cf.IssuerType == 0x0 {
+		c.IssuerType = ""
+	}
 
 	return newContract
 }

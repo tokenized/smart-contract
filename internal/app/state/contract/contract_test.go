@@ -22,10 +22,11 @@ func TestContract_NewContract(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := protocol.NewContractOffer()
+	m := protocol.NewContractFormation()
 	m.ContractFileHash = cfh
 
-	c := NewContract(tx, contractAddress, issuer, nil, &m)
+	c := NewContract(tx, contractAddress, issuer, nil)
+	c = EditContract(c, &m)
 
 	if c.CreatedAt == 0 {
 		t.Errorf("got 0, but want a timestamp")
