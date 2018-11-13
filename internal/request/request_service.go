@@ -52,10 +52,10 @@ func newRequestHandlers(state state.StateInterface,
 		protocol.CodeAssetModification: newAssetModificationHandler(config.Fee),
 		protocol.CodeSend:              newSendHandler(config.Fee),
 		protocol.CodeExchange:          newExchangeHandler(config.Fee),
-		protocol.CodeInitiative:        newInitiativeHandler(),
-		protocol.CodeReferendum:        newReferendumHandler(),
-		protocol.CodeBallotCast:        newBallotCastHandler(),
 		protocol.CodeOrder:             newOrderHandler(config.Fee),
+		// protocol.CodeInitiative:        newInitiativeHandler(),
+		// protocol.CodeReferendum:        newReferendumHandler(),
+		// protocol.CodeBallotCast:        newBallotCastHandler(),
 	}
 }
 

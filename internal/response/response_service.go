@@ -42,14 +42,14 @@ func newResponseHandlers(state state.StateInterface,
 		protocol.CodeAssetCreation:     newAssetCreationHandler(),
 		protocol.CodeContractFormation: newContractFormationHandler(),
 		protocol.CodeSettlement:        newSettlementHandler(),
-		protocol.CodeVote:              newVoteHandler(),
-		protocol.CodeBallotCounted:     newBallotCountedHandler(),
-		protocol.CodeResult:            newResultHandler(),
 		protocol.CodeFreeze:            newFreezeHandler(),
 		protocol.CodeThaw:              newThawHandler(),
 		protocol.CodeConfiscation:      newConfiscationHandler(),
 		protocol.CodeReconciliation:    newReconciliationHandler(),
 		protocol.CodeRejection:         newRejectionHandler(),
+		// protocol.CodeVote:              newVoteHandler(),
+		// protocol.CodeBallotCounted:     newBallotCountedHandler(),
+		// protocol.CodeResult:            newResultHandler(),
 	}
 }
 

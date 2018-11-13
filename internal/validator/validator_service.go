@@ -45,10 +45,10 @@ func newRequestValidators(state state.StateInterface,
 		protocol.CodeAssetModification: newAssetModificationValidator(config.Fee),
 		protocol.CodeSend:              newSendValidator(config.Fee),
 		protocol.CodeExchange:          newExchangeValidator(config.Fee),
-		protocol.CodeInitiative:        newInitiativeValidator(),
-		protocol.CodeReferendum:        newReferendumValidator(),
-		protocol.CodeBallotCast:        newBallotCastValidator(),
 		protocol.CodeOrder:             newOrderValidator(config.Fee),
+		// protocol.CodeInitiative:        newInitiativeValidator(),
+		// protocol.CodeReferendum:        newReferendumValidator(),
+		// protocol.CodeBallotCast:        newBallotCastValidator(),
 	}
 }
 
