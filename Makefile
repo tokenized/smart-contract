@@ -46,8 +46,8 @@ tools:
 run:
 	go run cmd/$(BINARY)/smartcontractd.go
 
-run-cli:
-	go run cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
+run-sync:
+	go run cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go sync
 
 run-spvnode:
 	go run cmd/$(BINARY_SPVNODE)/spvnode.go

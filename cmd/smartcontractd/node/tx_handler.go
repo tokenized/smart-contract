@@ -118,6 +118,8 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
 		return nil
 	}
+
+	// Missing a contract (do nothing)
 	if contract == nil {
 		return nil
 	}

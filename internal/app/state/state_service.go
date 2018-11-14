@@ -22,6 +22,8 @@ import (
 
 const (
 	ContractPrefix = "contracts"
+	StateSoft      = "soft"
+	StateHard      = "hard"
 )
 
 var ErrContractNotFound = errors.New("Contract not found")
@@ -39,22 +41,22 @@ func NewStateService(store storage.ReadWriter) StateService {
 func (r StateService) Write(ctx context.Context, c contract.Contract) error {
 	defer logger.Elapsed(ctx, time.Now(), "StateService.Write")
 
-	b, err := json.Marshal(c)
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
 
 	key := r.buildPath(c.ID)
 
-	return r.Storage.Write(ctx, key, b, nil)
+	return r.Storage.Write(ctx, key, data, nil)
 }
 
 func (r StateService) Read(ctx context.Context,
-	id string) (*contract.Contract, error) {
+	addr string) (*contract.Contract, error) {
 
 	defer logger.Elapsed(ctx, time.Now(), "StateService.Read")
 
-	key := r.buildPath(id)
+	key := r.buildPath(addr)
 
 	b, err := r.Storage.Read(ctx, key)
 	if err != nil {

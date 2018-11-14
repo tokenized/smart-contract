@@ -23,7 +23,32 @@ import (
 )
 
 var (
-	targetVersion = []byte{0x0, 0x0, 0x0, 0x20}
+	targetVersion        = []byte{0x0, 0x0, 0x0, 0x20}
+	incomingMessageTypes = map[string]bool{
+		protocol.CodeContractOffer:     true,
+		protocol.CodeContractAmendment: true,
+		protocol.CodeAssetDefinition:   true,
+		protocol.CodeAssetModification: true,
+		protocol.CodeSend:              true,
+		protocol.CodeExchange:          true,
+		protocol.CodeInitiative:        true,
+		protocol.CodeReferendum:        true,
+		protocol.CodeBallotCast:        true,
+		protocol.CodeOrder:             true,
+	}
+	outgoingMessageTypes = map[string]bool{
+		protocol.CodeAssetCreation:     true,
+		protocol.CodeContractFormation: true,
+		protocol.CodeSettlement:        true,
+		protocol.CodeVote:              true,
+		protocol.CodeBallotCounted:     true,
+		protocol.CodeResult:            true,
+		protocol.CodeFreeze:            true,
+		protocol.CodeThaw:              true,
+		protocol.CodeConfiscation:      true,
+		protocol.CodeReconciliation:    true,
+		protocol.CodeRejection:         true,
+	}
 )
 
 type InspectorService struct {
@@ -109,6 +134,22 @@ func (s InspectorService) PromoteTransaction(tx *Transaction) (*Transaction, err
 	tx.UTXOs = allUtxos
 
 	return tx, nil
+}
+
+// IsIncomingMessageType returns true is the message type is one that we
+// want to process, false otherwise.
+func (s InspectorService) IsIncomingMessageType(msg protocol.OpReturnMessage) bool {
+	_, ok := incomingMessageTypes[msg.Type()]
+
+	return ok
+}
+
+// IsOutgoingMessageType returns true is the message type is one that we
+// responded with, false otherwise.
+func (s InspectorService) IsOutgoingMessageType(msg protocol.OpReturnMessage) bool {
+	_, ok := outgoingMessageTypes[msg.Type()]
+
+	return ok
 }
 
 func (s InspectorService) getOutputs(tx *wire.MsgTx) ([]txbuilder.TxOutput, error) {

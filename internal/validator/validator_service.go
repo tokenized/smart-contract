@@ -72,22 +72,30 @@ func NewValidatorService(config config.Config,
 	}
 }
 
-// Validate and Return Contract
+// Validate Existing Contract
+func (s ValidatorService) CheckContract(ctx context.Context,
+	itx *inspector.Transaction,
+	contract *contract.Contract) (*wire.MsgTx, *contract.Contract, error) {
+
+	err := s.check(ctx, itx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return s.checkContract(ctx, itx, contract)
+}
+
+// Validate and Find Contract
 func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	itx *inspector.Transaction) (*wire.MsgTx, *contract.Contract, error) {
 
 	m := itx.MsgProto
-
 	log := logger.NewLoggerFromContext(ctx).Sugar()
 	log.Infof("Received message : %s", m.Type())
 
-	if _, ok := protocol.TypeMapping[m.Type()]; !ok {
-		return nil, nil, fmt.Errorf("Missing type mapping type : %v", m.Type())
-	}
-
-	minimum, ok := s.Fees[m.Type()]
-	if !ok {
-		return nil, nil, fmt.Errorf("No minimum for type : %v", m.Type())
+	err := s.check(ctx, itx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	contractAddress := itx.Outputs[0].Address
@@ -108,6 +116,36 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 		return nil, nil, err
 	}
 
+	return s.checkContract(ctx, itx, contract)
+}
+
+// Basic Check
+func (s ValidatorService) check(ctx context.Context,
+	itx *inspector.Transaction) error {
+
+	m := itx.MsgProto
+
+	if _, ok := protocol.TypeMapping[m.Type()]; !ok {
+		return fmt.Errorf("Missing type mapping type : %v", m.Type())
+	}
+
+	_, ok := s.Fees[m.Type()]
+	if !ok {
+		return fmt.Errorf("No minimum for type : %v", m.Type())
+	}
+
+	return nil
+}
+
+// Contract-based Check
+func (s ValidatorService) checkContract(ctx context.Context,
+	itx *inspector.Transaction,
+	contract *contract.Contract) (*wire.MsgTx, *contract.Contract, error) {
+
+	m := itx.MsgProto
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+	contractAddress := itx.Outputs[0].Address
+
 	// Get spendable UTXO's received for the contract address
 	utxos, err := itx.UTXOs.ForAddress(contractAddress)
 	if err != nil {
@@ -119,6 +157,7 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 	// The txn fee (if any) will be paid by the responding transaction, so
 	// the amount paid to the contract address needs to be the minimum, plus
 	// the txn fee value.
+	minimum := s.Fees[m.Type()]
 	if uint64(utxos.Value()) < minimum {
 		// There is insufficient value to fund this transaction.
 		code := protocol.RejectionCodeInsufficientValue

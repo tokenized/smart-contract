@@ -17,6 +17,10 @@ func newAssetCreationHandler() assetCreationHandler {
 func (h assetCreationHandler) process(ctx context.Context,
 	itx *inspector.Transaction, c *contract.Contract) error {
 
+	if len(itx.Outputs) < 2 {
+		return nil
+	}
+
 	msg := itx.MsgProto.(*protocol.AssetCreation)
 	assetKey := string(msg.AssetID)
 

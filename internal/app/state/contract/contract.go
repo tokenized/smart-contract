@@ -17,6 +17,8 @@ import (
 type Contract struct {
 	ID                          string           `json:"id"`
 	CreatedAt                   int64            `json:"created_at"`
+	UpdatedAt                   int64            `json:"updated_at"`
+	TxHeadCount                 uint64           `json:"tx_head_count"`
 	IssuerAddress               string           `json:"issuer_address"`
 	OperatorAddress             string           `json:"operator_address"`
 	Revision                    uint16           `json:"revision"`
@@ -47,6 +49,8 @@ func NewContract(tx *wire.MsgTx,
 	c := Contract{
 		ID:            contractAddress.EncodeAddress(),
 		CreatedAt:     time.Now().UnixNano(),
+		UpdatedAt:     0,
+		TxHeadCount:   0,
 		IssuerAddress: issuerAddress.EncodeAddress(),
 		Hashes:        []string{},
 		Assets:        map[string]Asset{},

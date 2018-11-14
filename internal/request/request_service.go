@@ -23,21 +23,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
-var (
-	incomingMessageTypes = map[string]bool{
-		protocol.CodeContractOffer:     true,
-		protocol.CodeContractAmendment: true,
-		protocol.CodeAssetDefinition:   true,
-		protocol.CodeAssetModification: true,
-		protocol.CodeSend:              true,
-		protocol.CodeExchange:          true,
-		protocol.CodeInitiative:        true,
-		protocol.CodeReferendum:        true,
-		protocol.CodeBallotCast:        true,
-		protocol.CodeOrder:             true,
-	}
-)
-
 const (
 	dustLimit = 546
 )
@@ -87,7 +72,7 @@ func (s RequestService) PreFilter(ctx context.Context,
 	itx *inspector.Transaction) (*inspector.Transaction, error) {
 
 	// Filter by: Request-type action
-	if !s.isIncomingMessageType(itx.MsgProto) {
+	if !s.Inspector.IsIncomingMessageType(itx.MsgProto) {
 		// This isn't an error, it just isn't an incoming message we don't
 		// want to process, such as a "response" message, such as a
 		// ContractFormation. We send those to the network, but we don't
@@ -172,14 +157,6 @@ func (s RequestService) Process(ctx context.Context,
 	newItx.MsgTx = newTx
 
 	return newItx, nil
-}
-
-// isIncomingMessageType returns true is the message type is one that we
-// want to process, false otherwise.
-func (s RequestService) isIncomingMessageType(msg protocol.OpReturnMessage) bool {
-	_, ok := incomingMessageTypes[msg.Type()]
-
-	return ok
 }
 
 // hashToBytes returns a Hash in little endian format as Hash.CloneByte()

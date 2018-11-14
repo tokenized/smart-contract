@@ -19,22 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
-var (
-	incomingMessageTypes = map[string]bool{
-		protocol.CodeAssetCreation:     true,
-		protocol.CodeContractFormation: true,
-		protocol.CodeSettlement:        true,
-		protocol.CodeVote:              true,
-		protocol.CodeBallotCounted:     true,
-		protocol.CodeResult:            true,
-		protocol.CodeFreeze:            true,
-		protocol.CodeThaw:              true,
-		protocol.CodeConfiscation:      true,
-		protocol.CodeReconciliation:    true,
-		protocol.CodeRejection:         true,
-	}
-)
-
 func newResponseHandlers(state state.StateInterface,
 	config config.Config) map[string]responseHandlerInterface {
 
