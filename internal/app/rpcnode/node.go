@@ -20,7 +20,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
@@ -53,13 +52,22 @@ func NewNode(config Config) (*RPCNode, error) {
 	return n, nil
 }
 
-func (r RPCNode) ListTransactions(ctx context.Context,
-	address btcutil.Address) ([]btcjson.ListTransactionsResult, error) {
-
+func (r RPCNode) WatchAddress(ctx context.Context, address btcutil.Address) error {
 	strAddr := address.String()
 
 	// Make address known to node without rescan
 	if err := r.client.ImportAddressRescan(strAddr, strAddr, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r RPCNode) ListTransactions(ctx context.Context,
+	address btcutil.Address) ([]btcjson.ListTransactionsResult, error) {
+
+	// Make address known to node without rescan
+	if err := r.WatchAddress(ctx, address); err != nil {
 		return nil, err
 	}
 
@@ -101,20 +109,12 @@ func (r RPCNode) ListTransactions(ctx context.Context,
 func (r RPCNode) ListUnspent(ctx context.Context,
 	address btcutil.Address) ([]btcjson.ListUnspentResult, error) {
 
-	strAddr := address.String()
-
 	// Make address known to node without rescan
-	if err := r.client.ImportAddressRescan(strAddr, strAddr, false); err != nil {
+	if err := r.WatchAddress(ctx, address); err != nil {
 		return nil, err
 	}
 
-	// Decode address from string in to array
-	a, err := btcutil.DecodeAddress(strAddr, &chaincfg.MainNetParams)
-	if err != nil {
-		return nil, err
-	}
-
-	addresses := []btcutil.Address{a}
+	addresses := []btcutil.Address{address}
 
 	// out []btcjson.ListUnspentResult
 	out, err := r.client.ListUnspentMinMaxAddresses(0, 999999, addresses)

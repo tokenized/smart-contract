@@ -38,7 +38,24 @@ func NewStateService(store storage.ReadWriter) StateService {
 	}
 }
 
+func (r StateService) WriteHard(ctx context.Context, c contract.Contract) error {
+	return r.write(ctx, c, StateHard)
+}
+
+func (r StateService) ReadHard(ctx context.Context, addr string) (*contract.Contract, error) {
+	return r.read(ctx, addr, StateHard)
+}
+
 func (r StateService) Write(ctx context.Context, c contract.Contract) error {
+	return r.write(ctx, c, StateSoft)
+}
+
+func (r StateService) Read(ctx context.Context, addr string) (*contract.Contract, error) {
+	return r.read(ctx, addr, StateSoft)
+}
+
+func (r StateService) write(ctx context.Context,
+	c contract.Contract, stateStore string) error {
 	defer logger.Elapsed(ctx, time.Now(), "StateService.Write")
 
 	data, err := json.Marshal(c)
@@ -46,17 +63,17 @@ func (r StateService) Write(ctx context.Context, c contract.Contract) error {
 		return err
 	}
 
-	key := r.buildPath(c.ID)
+	key := r.buildPath(c.ID) + "-" + stateStore
 
 	return r.Storage.Write(ctx, key, data, nil)
 }
 
-func (r StateService) Read(ctx context.Context,
-	addr string) (*contract.Contract, error) {
+func (r StateService) read(ctx context.Context,
+	addr string, stateStore string) (*contract.Contract, error) {
 
 	defer logger.Elapsed(ctx, time.Now(), "StateService.Read")
 
-	key := r.buildPath(addr)
+	key := r.buildPath(addr) + "-" + stateStore
 
 	b, err := r.Storage.Read(ctx, key)
 	if err != nil {

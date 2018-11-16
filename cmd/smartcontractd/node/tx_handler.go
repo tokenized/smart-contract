@@ -106,8 +106,8 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	mtx.Lock()
 	defer mtx.Unlock()
 
-	// Validator: Check this request, return the related Contract
-	rejectTx, contract, err := h.Validator.CheckAndFetch(ctx, itx)
+	// Validator: Look up the Contract
+	rejectTx, contract, err := h.Validator.CheckContract(ctx, itx)
 	if err != nil {
 		log.Error(err)
 		return nil
@@ -119,8 +119,16 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		return nil
 	}
 
-	// Missing a contract (do nothing)
-	if contract == nil {
+	// Validator: Validate the request
+	rejectTx, err := h.Validator.Check(ctx, itx, contract)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
+
+	// Validator: Message is a reject
+	if rejectTx != nil {
+		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
 		return nil
 	}
 
@@ -131,15 +139,15 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		return nil
 	}
 
-	// Response: Process response
-	err = h.Response.Process(ctx, resItx, contract)
+	// Broadcaster: Broadcast response
+	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
 
-	// Broadcaster: Broadcast response
-	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
+	// Response: Process response
+	err = h.Response.Process(ctx, resItx, contract)
 	if err != nil {
 		log.Error(err)
 		return nil

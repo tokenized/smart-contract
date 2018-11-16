@@ -72,15 +72,13 @@ func (s RequestService) PreFilter(ctx context.Context,
 	itx *inspector.Transaction) (*inspector.Transaction, error) {
 
 	// Filter by: Request-type action
+	//
 	if !s.Inspector.IsIncomingMessageType(itx.MsgProto) {
-		// This isn't an error, it just isn't an incoming message we don't
-		// want to process, such as a "response" message, such as a
-		// ContractFormation. We send those to the network, but we don't
-		// process them as incoming messages.
 		return nil, nil
 	}
 
 	// Filter by: Contract PKH
+	//
 	if len(itx.Outputs) == 0 {
 		return nil, fmt.Errorf("No outputs in TX %s", itx.MsgTx.TxHash())
 	}

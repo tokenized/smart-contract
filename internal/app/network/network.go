@@ -71,3 +71,7 @@ func (n Network) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, e
 func (n Network) ListTransactions(ctx context.Context, address btcutil.Address) ([]btcjson.ListTransactionsResult, error) {
 	return n.TrustedNode.RpcNode.ListTransactions(ctx, address)
 }
+
+func (n Network) WatchAddress(ctx context.Context, address btcutil.Address) error {
+	return n.TrustedNode.RpcNode.WatchAddress(ctx, address)
+}

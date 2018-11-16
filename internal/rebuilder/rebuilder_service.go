@@ -2,6 +2,7 @@ package rebuilder
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/app/inspector"
@@ -16,7 +17,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 )
@@ -63,26 +63,83 @@ func NewRebuilderService(network network.NetworkInterface,
 	}
 }
 
-func (r RebuilderService) Sync(ctx context.Context,
-	softContract *contract.Contract,
-	hardContract *contract.Contract,
-	addr string) error {
+func (r RebuilderService) FindState(ctx context.Context,
+	addr btcutil.Address) (*contract.Contract, *contract.Contract, error) {
 
-	log := logger.NewLoggerFromContext(ctx).Sugar()
+	var (
+		soft   *contract.Contract
+		hard   *contract.Contract
+		headTx int
+		err    error
+	)
 
-	contractAddr, err := btcutil.DecodeAddress(string(addr), &chaincfg.MainNetParams)
+	// Soft state
+	//
+	soft, err = r.State.Read(ctx, addr.String())
 	if err != nil {
-		return err
+		soft, headTx, err = r.FindContract(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		soft.TxHeadCount = headTx
 	}
 
-	respondedHashes := []string{}
-	txHeadCount := hardContract.TxHeadCount
-	hourAgo := int64(time.Now().Add(-(time.Hour * 1)).Unix())
+	// Hard state
+	//
+	hard, err = r.State.ReadHard(ctx, addr.String())
+	if err != nil {
+		hard = soft
+	}
+
+	return &*hard, &*soft, nil
+}
+
+func (r RebuilderService) FindContract(ctx context.Context,
+	addr btcutil.Address) (*contract.Contract, int, error) {
+
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+	txHeadCount := 0
+
+	// Find transactions
+	transactions, err := r.ListTx(ctx, addr, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// First pass, find responses
+	for _, tx := range transactions {
+		txHeadCount++
+
+		// Inspector: Does this transaction concern the protocol?
+		itx, err := r.Inspector.MakeTransaction(tx.msg)
+		if err != nil || itx == nil {
+			continue
+		}
+
+		// Introduce Inputs and UTXOs in the Transaction
+		itx, err = r.Inspector.PromoteTransaction(itx)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+
+		_, contract, err := r.Validator.CheckContract(ctx, itx)
+		if contract != nil && contract.ID == addr.String() {
+			return contract, txHeadCount, nil
+		}
+	}
+
+	return nil, 0, errors.New("Could not find a contract offer for PKH anywhere")
+}
+
+func (r RebuilderService) ListTx(ctx context.Context,
+	addr btcutil.Address, headCount int) ([]*RebuilderItem, error) {
 
 	// Oldest -> Newest
-	listResults, err := r.Network.ListTransactions(ctx, contractAddr)
+	listResults, err := r.Network.ListTransactions(ctx, addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Make usable TX
@@ -103,6 +160,27 @@ func (r RebuilderService) Sync(ctx context.Context,
 		transactions = append(transactions, item)
 	}
 
+	return transactions, nil
+}
+
+func (r RebuilderService) Sync(ctx context.Context,
+	softContract *contract.Contract,
+	hardContract *contract.Contract,
+	contractAddr btcutil.Address) error {
+
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+
+	respondedHashes := []string{}
+	txHeadCount := hardContract.TxHeadCount
+
+	hourAgo := int64(time.Now().Add(-(time.Hour * 1)).Unix())
+
+	// Find transactions
+	transactions, err := r.ListTx(ctx, contractAddr, 0)
+	if err != nil {
+		return err
+	}
+
 	// First pass, find responses
 	for _, tx := range transactions {
 		txHeadCount++
@@ -113,8 +191,9 @@ func (r RebuilderService) Sync(ctx context.Context,
 			continue
 		}
 
-		// Inspector: Is transaction a response?
-		if !r.Inspector.IsOutgoingMessageType(itx.MsgProto) {
+		// Filter by Contract PKH and Response-type action
+		itx, err = r.Response.PreFilter(ctx, itx)
+		if err != nil || itx == nil {
 			continue
 		}
 
@@ -170,7 +249,7 @@ func (r RebuilderService) Sync(ctx context.Context,
 		}
 
 		// Validator: Check this request, return the related Contract
-		rejectTx, contract, err := r.Validator.CheckContract(ctx, itx, softContract)
+		rejectTx, err := r.Validator.Check(ctx, itx, softContract)
 		if err != nil {
 			log.Error(err)
 			continue
@@ -182,11 +261,6 @@ func (r RebuilderService) Sync(ctx context.Context,
 			continue
 		}
 
-		// Missing a contract (do nothing)
-		if contract == nil {
-			continue
-		}
-
 		// Request: Grab me a response
 		resItx, err := r.Request.Process(ctx, itx, softContract)
 		if err != nil {
@@ -194,15 +268,15 @@ func (r RebuilderService) Sync(ctx context.Context,
 			continue
 		}
 
-		// Response: Process response
-		err = r.Response.Process(ctx, resItx, softContract)
+		// Broadcaster: Broadcast response
+		_, err = r.Broadcaster.Announce(ctx, resItx.MsgTx)
 		if err != nil {
 			log.Error(err)
 			continue
 		}
 
-		// Broadcaster: Broadcast response
-		_, err = r.Broadcaster.Announce(ctx, resItx.MsgTx)
+		// Response: Process response
+		err = r.Response.Process(ctx, resItx, softContract)
 		if err != nil {
 			log.Error(err)
 			continue

@@ -16,5 +16,6 @@ type NetworkInterface interface {
 	RegisterBlockListener(Listener)
 	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
 	SendTX(context.Context, *wire.MsgTx) (*chainhash.Hash, error)
+	WatchAddress(context.Context, btcutil.Address) error
 	ListTransactions(context.Context, btcutil.Address) ([]btcjson.ListTransactionsResult, error)
 }

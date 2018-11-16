@@ -16,7 +16,24 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/inspector"
 	"github.com/tokenized/smart-contract/internal/app/state"
 	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/app/wallet"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+)
+
+var (
+	outgoingMessageOutputs = map[string]int{
+		protocol.CodeAssetCreation:     0,
+		protocol.CodeContractFormation: 0,
+		protocol.CodeSettlement:        2,
+		protocol.CodeVote:              0,
+		protocol.CodeBallotCounted:     1,
+		protocol.CodeResult:            0,
+		protocol.CodeFreeze:            1,
+		protocol.CodeThaw:              1,
+		protocol.CodeConfiscation:      2,
+		protocol.CodeReconciliation:    1,
+		protocol.CodeRejection:         1,
+	}
 )
 
 func newResponseHandlers(state state.StateInterface,
@@ -38,18 +55,58 @@ func newResponseHandlers(state state.StateInterface,
 }
 
 type ResponseService struct {
-	Config   config.Config
-	State    state.StateInterface
-	handlers map[string]responseHandlerInterface
+	Config    config.Config
+	State     state.StateInterface
+	Wallet    wallet.WalletInterface
+	Inspector inspector.InspectorService
+	handlers  map[string]responseHandlerInterface
 }
 
 func NewResponseService(config config.Config,
-	state state.StateInterface) ResponseService {
+	wallet wallet.WalletInterface,
+	state state.StateInterface,
+	inspector inspector.InspectorService) ResponseService {
 	return ResponseService{
-		State:    state,
-		Config:   config,
-		handlers: newResponseHandlers(state, config),
+		State:     state,
+		Wallet:    wallet,
+		Config:    config,
+		Inspector: inspector,
+		handlers:  newResponseHandlers(state, config),
 	}
+}
+
+// Performant filter to run before validation checks
+//
+func (s ResponseService) PreFilter(ctx context.Context,
+	itx *inspector.Transaction) (*inspector.Transaction, error) {
+
+	// Filter by: Response-type action
+	//
+	if !s.Inspector.IsOutgoingMessageType(itx.MsgProto) {
+		return nil, nil
+	}
+
+	// Select the output index for this message type
+	//
+	msg := itx.MsgProto
+	outputIndex, ok := outgoingMessageOutputs[msg.Type()]
+	if !ok {
+		return nil, fmt.Errorf("No output index found for type %v", msg.Type())
+	}
+
+	// Filter by: Contract PKH
+	//
+	if len(itx.Outputs) < (outputIndex + 1) {
+		return nil, fmt.Errorf("Not enough outputs in TX %s", itx.MsgTx.TxHash())
+	}
+
+	contractAddress := itx.Outputs[outputIndex].Address.String()
+	_, err := s.Wallet.Get(contractAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	return itx, nil
 }
 
 func (s ResponseService) Process(ctx context.Context,

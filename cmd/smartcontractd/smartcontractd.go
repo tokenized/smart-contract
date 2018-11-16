@@ -13,6 +13,9 @@ import (
 	"github.com/tokenized/smart-contract/internal/app/wallet"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
+
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 )
 
 var (
@@ -25,7 +28,7 @@ var (
 //
 func main() {
 	// Logger
-	_, log := logger.NewLoggerWithContext()
+	ctx, log := logger.NewLoggerWithContext()
 
 	// Configuration
 	config, err := config.NewConfig()
@@ -81,6 +84,13 @@ func main() {
 	} else {
 		contractStorage = storage.NewS3Storage(contractStorageConfig)
 	}
+
+	// Always watch Contract address
+	contractAddr, err := btcutil.DecodeAddress(string(n.Wallet.PublicAddress), &chaincfg.MainNetParams)
+	if err != nil {
+		panic(err)
+	}
+	network.WatchAddress(ctx, contractAddr)
 
 	// Log startup sequence
 	log.Infof("Started %v with config %s", buildDetails(), *config)

@@ -56,7 +56,7 @@ func (n Node) Start() error {
 	broadcaster := broadcaster.NewBroadcastService(n.Network)
 	validator := validator.NewValidatorService(n.Config, n.Wallet, n.State)
 	request := request.NewRequestService(n.Config, n.Wallet, n.State, inspector)
-	response := response.NewResponseService(n.Config, n.State)
+	response := response.NewResponseService(n.Config, n.Wallet, n.State, inspector)
 
 	txHandler := NewTXHandler(n.Config,
 		n.Network,

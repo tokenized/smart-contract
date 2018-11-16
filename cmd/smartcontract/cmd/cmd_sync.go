@@ -19,6 +19,8 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 	"github.com/spf13/cobra"
 )
 
@@ -98,17 +100,27 @@ var cmdSync = &cobra.Command{
 		state := state.NewStateService(contractStorage)
 		inspector := inspector.NewInspectorService(network)
 		request := request.NewRequestService(*config, wallet, state, inspector)
-		response := response.NewResponseService(*config, state)
+		response := response.NewResponseService(*config, wallet, state, inspector)
 		validator := validator.NewValidatorService(*config, wallet, state)
 		broadcaster := broadcaster.NewBroadcastService(network)
 
-		// Go
+		// Rebuilder
 		reb := rebuilder.NewRebuilderService(network, inspector, broadcaster, request, response, validator, state)
 
-		soft, _ := state.Read(ctx, wallet.PublicAddress)
-		hard, _ := state.Read(ctx, wallet.PublicAddress)
+		// Contract address
+		contractAddr, err := btcutil.DecodeAddress(string(wallet.PublicAddress), &chaincfg.MainNetParams)
+		if err != nil {
+			panic(err)
+		}
 
-		reb.Sync(ctx, soft, hard, wallet.PublicAddress)
+		// Find or create state
+		hard, soft, err := reb.FindState(ctx, contractAddr)
+		if err != nil {
+			panic(err)
+		}
+
+		// Sync
+		reb.Sync(ctx, soft, hard, contractAddr)
 
 		return nil
 	},
