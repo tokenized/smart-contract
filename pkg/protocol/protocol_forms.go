@@ -245,6 +245,7 @@ type AssetCreationForm struct {
 	AssetType           string          `json:"asset_type,omitempty"`
 	AssetID             string          `json:"asset_id,omitempty"`
 	AssetRevision       uint16          `json:"asset_revision,omitempty"`
+	Timestamp           uint64          `json:"timestamp,omitempty"`
 	AuthorizationFlags  string          `json:"authorization_flags,omitempty"`
 	VotingSystem        string          `json:"voting_system,omitempty"`
 	VoteMultiplier      uint8           `json:"vote_multiplier,omitempty"`
@@ -311,6 +312,8 @@ func (f AssetCreationForm) BuildMessage() (OpReturnMessage, error) {
 	}
 
 	m.AssetRevision = f.AssetRevision
+
+	m.Timestamp = f.Timestamp
 
 	m.AuthorizationFlags, err = f.pad(f.AuthorizationFlags, 2)
 	if err != nil {
@@ -547,7 +550,7 @@ func (f ContractOfferForm) BuildMessage() (OpReturnMessage, error) {
 
 	m.ContractExpiration = f.ContractExpiration
 
-	m.URI, err = f.pad(f.URI, 78)
+	m.URI, err = f.pad(f.URI, 70)
 	if err != nil {
 		return nil, err
 	}
@@ -598,6 +601,7 @@ type ContractFormationForm struct {
 	ContractFileHash            string  `json:"contract_file_hash,omitempty"`
 	GoverningLaw                string  `json:"governing_law,omitempty"`
 	Jurisdiction                string  `json:"jurisdiction,omitempty"`
+	Timestamp                   uint64  `json:"timestamp,omitempty"`
 	ContractExpiration          uint64  `json:"contract_expiration,omitempty"`
 	URI                         string  `json:"uri,omitempty"`
 	ContractRevision            uint16  `json:"contract_revision,omitempty"`
@@ -660,9 +664,11 @@ func (f ContractFormationForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
+	m.Timestamp = f.Timestamp
+
 	m.ContractExpiration = f.ContractExpiration
 
-	m.URI, err = f.pad(f.URI, 78)
+	m.URI, err = f.pad(f.URI, 70)
 	if err != nil {
 		return nil, err
 	}
@@ -779,7 +785,7 @@ func (f ContractAmendmentForm) BuildMessage() (OpReturnMessage, error) {
 
 	m.ContractExpiration = f.ContractExpiration
 
-	m.URI, err = f.pad(f.URI, 78)
+	m.URI, err = f.pad(f.URI, 70)
 	if err != nil {
 		return nil, err
 	}
@@ -1234,7 +1240,7 @@ func (f InitiativeForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.VoteOptions, err = f.pad(f.VoteOptions, 16)
+	m.VoteOptions, err = f.pad(f.VoteOptions, 15)
 	if err != nil {
 		return nil, err
 	}
@@ -1321,7 +1327,7 @@ func (f ReferendumForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.VoteOptions, err = f.pad(f.VoteOptions, 16)
+	m.VoteOptions, err = f.pad(f.VoteOptions, 15)
 	if err != nil {
 		return nil, err
 	}
@@ -1409,7 +1415,7 @@ func (f VoteForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.VoteOptions, err = f.pad(f.VoteOptions, 16)
+	m.VoteOptions, err = f.pad(f.VoteOptions, 15)
 	if err != nil {
 		return nil, err
 	}
@@ -1493,7 +1499,7 @@ func (f BallotCastForm) BuildMessage() (OpReturnMessage, error) {
 		return nil, err
 	}
 
-	m.Vote, err = f.pad(f.Vote, 16)
+	m.Vote, err = f.pad(f.Vote, 15)
 	if err != nil {
 		return nil, err
 	}

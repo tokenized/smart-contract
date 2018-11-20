@@ -73,7 +73,7 @@ func (m AssetTypeCoupon) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Description, 100)); err != nil {
+	if err := m.write(buf, m.pad(m.Description, 93)); err != nil {
 		return nil, err
 	}
 
@@ -111,7 +111,7 @@ func (m *AssetTypeCoupon) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	m.Description = make([]byte, 100)
+	m.Description = make([]byte, 93)
 	if err := m.readLen(buf, m.Description); err != nil {
 		return 0, err
 	}
@@ -191,7 +191,7 @@ func (m AssetTypeMovieTicket) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Description, 95)); err != nil {
+	if err := m.write(buf, m.pad(m.Description, 88)); err != nil {
 		return nil, err
 	}
 
@@ -236,7 +236,7 @@ func (m *AssetTypeMovieTicket) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	m.Description = make([]byte, 95)
+	m.Description = make([]byte, 88)
 	if err := m.readLen(buf, m.Description); err != nil {
 		return 0, err
 	}
@@ -331,7 +331,7 @@ func (m AssetTypeShareCommon) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Description, 120)); err != nil {
+	if err := m.write(buf, m.pad(m.Description, 113)); err != nil {
 		return nil, err
 	}
 
@@ -388,7 +388,7 @@ func (m *AssetTypeShareCommon) Write(b []byte) (int, error) {
 
 	m.ISIN = bytes.Trim(m.ISIN, "\x00")
 
-	m.Description = make([]byte, 120)
+	m.Description = make([]byte, 113)
 	if err := m.readLen(buf, m.Description); err != nil {
 		return 0, err
 	}
@@ -463,7 +463,7 @@ func (m AssetTypeTicketAdmission) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Description, 127)); err != nil {
+	if err := m.write(buf, m.pad(m.Description, 120)); err != nil {
 		return nil, err
 	}
 
@@ -501,7 +501,7 @@ func (m *AssetTypeTicketAdmission) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	m.Description = make([]byte, 127)
+	m.Description = make([]byte, 120)
 	if err := m.readLen(buf, m.Description); err != nil {
 		return 0, err
 	}

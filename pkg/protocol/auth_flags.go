@@ -1,89 +1,73 @@
 package protocol
 
 const (
-	// ContractIssuerUpdate indicates that the Issuer can amend/update the
-	// Contract (Except for the Authorization Flags).
-	ContractIssuerUpdate = 1 << 0
-
-	// ContractOwnerAmendments indicates that a Token Owner Vote is required
-	// for Contract Amendments/updates (excluding Contract Authorization
+	// FlagAmendment indicates that the Issuer or Operator can amend the
+	// Contract or Asset. This flag does (Except for the Authorization
 	// Flags).
-	ContractOwnerAmendments = 1 << 1
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagAmendment = 1 << 0
 
-	// ContractAuthFlagsIssuer indicates that the Issuer can amend the
-	// Contract's Authorization Flags.
-	ContractAuthFlagsIssuer = 1 << 2
+	// FlagVoteRequired indicates that a Token Owner Vote is required for
+	// amendments (excluding Authorization Flags).
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagVoteRequired = 1 << 1
 
-	// ContractAuthFlagReferendum indicates that Contract Authorization Flag
-	// amendments permitted with Referendum (Token Owner Vote. Voting Type
-	// Specified in Contract Formation).
-	ContractAuthFlagReferendum = 1 << 3
+	// FlagAmendAuthFlags indicates that the Issuer or Operator can amend
+	// the Authorization Flags.
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagAmendAuthFlags = 1 << 2
 
-	// ContractUserInitiatives allows Users to propose Initiatives to amend
-	// the Contract.
-	ContractUserInitiatives = 1 << 4
+	// FlagReferendumAuthFlags indicates that Authorization Flag amendments
+	// are permitted with a successful Referendum.
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagReferendumAuthFlags = 1 << 3
 
-	// ContractQuantityUpdate permits Issuer to Create new Assets.
-	ContractQuantityUpdate = 1 << 5
+	// FlagInitiatives allows Users to propose Initiatives.
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagInitiatives = 1 << 4
 
-	// ContractReferendum indicates that a Referendum required for new Asset
-	// Creations.
-	ContractReferendum = 1 << 6
+	// FlagContractEnforcement indicates if the Contract permits Issuer or
+	// Operator to issue Enforcement Orders,
+	//
+	// This flag is only used with Contract Authorization Flags.
+	FlagContractEnforcement = 1 << 5
 
-	// ContractAssetConfiscate indicates that the Issuer can confiscate
-	// existing Assets.
-	ContractAssetConfiscate = 1 << 7
+	// FlagContractWhitelist indicates that transfers are restricted to a
+	// Whitelist.
+	//
+	// This is not yet implemented.
+	//
+	// This flag is only used with Contract Authorization Flags.
+	FlagContractWhitelist = 1 << 6
 
-	// ContractAssetFreezeThaw indicates that the Issuer can freeze/thaw the
-	// Asset state (The Smart Contract will ignore user requests).
-	ContractAssetFreezeThaw = 1 << 8
+	// FlagAssetInitiatives indicates that Token Owners can propose
+	// Initiatives to modify an Asset.
+	//
+	// This flag is only used with Asset Authorization Flags.
+	FlagAssetInitiatives = 1 << 4
 
-	// ContractAssetWhitelist indicates that Asset trading is restricted to
-	// a Whitelist.
-	ContractAssetWhitelist = 1 << 9
+	// FlagAssetInitiativesModify permits the Issuer to modify the Asset.
+	//
+	// This flag is only used with Asset Authorization Flags.
+	FlagAssetInitiativesModify = 1 << 5
 
-	// ContractBindingInitiatives indicates that Initiatives are binding.
-	ContractBindingInitiatives = 1 << 10
-
-	// ContractExpirationUpdate indicates that the Contract Expiration Date
-	// Can be Amended.
-	ContractExpirationUpdate = 1 << 11
-
-	// AssetIssuerModification permits the Issuer to modify the Asset
-	AssetIssuerModification = 1 << 0
-
-	// AssetVoteRequired means the Token Owner Vote required for Asset
-	// Amendments/updates (excluding Asset Authorization Flags)
-	AssetVoteRequired = 1 << 1
-
-	// AssetIsserAmendFlags indicates that the Issuer can amend the Asset's
-	// Authorization Flags.
-	AssetIsserAmendFlags = 1 << 2
-
-	// AssetAuthFlagAmendment permits Asset Authorization Flag amendments
-	// permitted with Token Owner Vote.
-	AssetAuthFlagAmendment = 1 << 3
-
-	// AssetUserInitiative permits Users to propose initiatives to modify
-	// the Asset.
-	AssetUserInitiative = 1 << 4
-
-	// AssetIssuerMintBurn permits the Issuer to mint/burn tokens.
-	AssetIssuerMintBurn = 1 << 5
-
-	// AssetTokenOwnerVote Token Owner Vote required for new token issuances.
-	AssetTokenOwnerVote = 1 << 6
-
-	// AssetIssuerConfiscate permits the Issuer to confiscate existing
-	// tokens.
-	AssetIssuerConfiscate = 1 << 7
-
-	// AssetIsserFreeThaw permits the Issuer to freeze/thaw the token state
-	// (The Smart Contract will ignore user requests).
-	AssetIsserFreeThaw = 1 << 8
-
-	// AssetUserTransfer allows the user to transfer existing tokens.
-	AssetUserTransfer = 1 << 9
+	// FlagAssetWhitelist indicates that transfers are restricted to a
+	// Whitelist.
+	//
+	// This is not yet implemented.
+	//
+	// This flag is only used with Asset Authorization Flags.
+	FlagAssetWhitelist = 1 << 6
 )
 
 // IsAuthorized returns true if the given flags match the existing state,

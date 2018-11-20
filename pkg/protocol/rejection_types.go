@@ -33,10 +33,10 @@ const (
 	// the number of assets below the number of assets the contract has.
 	RejectionCodeContractQtyReduction
 
-	// RejectionCodeContractAuthFlags is sent when a CA tries to change the
+	// RejectionCodeAuthFlags is sent when a CA tries to change the
 	// authorization flags, but the authorization flags do not permit the
 	// change.
-	RejectionCodeContractAuthFlags
+	RejectionCodeAuthFlags
 
 	// RejectionCodeContractExpiration is sent when a CA tries to modify the
 	// Contract, but the auth flags do not permit the update.
@@ -87,4 +87,8 @@ const (
 	// RejectionCodeAssetRevision is returned when the incorrect asset
 	// revision is sent.
 	RejectionCodeAssetRevision
+
+	// RejectionCodeInvalidValue is returned because the message contains
+	// invalid values.
+	RejectionCodeInvalidValue
 )
