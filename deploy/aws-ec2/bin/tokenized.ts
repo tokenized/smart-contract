@@ -182,7 +182,15 @@ class TokenizedEC2Stack extends cdk.Stack {
         const binPath = "/usr/local/bin";
         const execPath = path.join(binPath, serviceName);
 
-        const cfnInitCmd = `/opt/aws/bin/cfn-init -v --stack=${new cdk.AwsStackName} --region=${new cdk.AwsRegion} --resource=${asgLaunchConfig.logicalId}`;
+        const stackRegionResource = new cdk.FnJoin("", [
+            "--stack=", new cdk.AwsStackName, " ",
+            "--region=", new cdk.AwsRegion, " ",
+            "--resource=", asgLaunchConfig.logicalId,
+        ]);
+
+        const cfnInitCmd = new cdk.FnJoin(" ", [
+            "/opt/aws/bin/cfn-init -v", stackRegionResource
+        ]);
 
         let configFileContext = props.appConfig;
 
@@ -311,9 +319,9 @@ class TokenizedEC2Stack extends cdk.Stack {
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-signal.html
         appAsg.addUserData(
-            "yum install -y aws-cfn-bootstrap",
-            `${cfnInitCmd} --configsets install`,
-            `/opt/aws/bin/cfn-signal --stack=${new cdk.AwsStackName} --region=${new cdk.AwsRegion} --resource=${asgLaunchConfig.logicalId} --exit-code \$?`,
+            "yum install -y aws-cfn-bootstrap;",
+            new cdk.FnJoin(" ", [cfnInitCmd, "--configsets install;"]).toString(),
+            new cdk.FnJoin(" ", ["/opt/aws/bin/cfn-signal", stackRegionResource, "--exit-code $?;"]).toString()
         );
     }
 }
