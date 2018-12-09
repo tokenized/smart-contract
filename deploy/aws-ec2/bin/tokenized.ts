@@ -41,11 +41,17 @@ class TokenizedEC2Stack extends cdk.Stack {
 
         natSecurityGroup.tags.setTag("Name", natSecurityGroup.path);
 
-        if (props.enableSSH) {
-            // Allow ssh access
-            // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#allowing-connections
-            natSecurityGroup.connections.allowFromAnyIPv4(new ec2.TcpPort(22));
-        }
+        // TODO: Is this ok?
+        natSecurityGroup.connections.allowFromAnyIPv4(new ec2.TcpAllPorts());
+
+        // Ref: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+        // natSecurityGroup.connections.allowFromAnyIPv4(new ec2.TcpPortRange(32768, 65535));
+
+        // if (props.enableSSH) {
+        //     // Allow ssh access
+        //     // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#allowing-connections
+        //     natSecurityGroup.connections.allowFromAnyIPv4(new ec2.TcpPort(22));
+        // }
 
         // Ref: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-instance.html
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#@aws-cdk/aws-ec2.SecurityGroupProps
@@ -93,10 +99,13 @@ class TokenizedEC2Stack extends cdk.Stack {
             // }
         });
 
+        // Ref: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+        appAsg.connections.allowFromAnyIPv4(new ec2.TcpPortRange(32768, 65535));
+
         if (props.enableSSH) {
             // Allow ssh access
             // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#allowing-connections
-            appAsg.connections.allowFrom(natSecurityGroup, new ec2.TcpPort(22))
+            appAsg.connections.allowFromAnyIPv4(new ec2.TcpPort(22));
         }
 
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_assets.html
