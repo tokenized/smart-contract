@@ -16,8 +16,7 @@ class TokenizedEC2Stack extends cdk.Stack {
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-autoscaling.html
 
         const vpc = new ec2.VpcNetwork(this, 'Tokenized-VPC', {
-            natGateways: 1,
-            natGatewayPlacement: {subnetName: 'Public'},
+            natGateways: 0, // Set to 0 because we manually setup our own NAT instance, which is a lot cheaper
             subnetConfiguration: [
                 {
                     cidrMask: 26,
@@ -32,6 +31,42 @@ class TokenizedEC2Stack extends cdk.Stack {
             defaultInstanceTenancy: ec2.DefaultInstanceTenancy.Default,
         });
 
+        // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#@aws-cdk/aws-ec2.SecurityGroup
+        const natSecurityGroup = new ec2.SecurityGroup(this, 'NATSecurityGroup', {
+            vpc,
+            groupName: "NATSecurityGroup",
+            description: "NAT Instance Security Group",
+            allowAllOutbound: true,
+        });
+
+        natSecurityGroup.tags.setTag("Name", natSecurityGroup.path);
+
+        if (props.enableSSH) {
+            // Allow ssh access
+            // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#allowing-connections
+            natSecurityGroup.connections.allowFromAnyIPv4(new ec2.TcpPort(22));
+        }
+
+        // Ref: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-instance.html
+        // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#@aws-cdk/aws-ec2.SecurityGroupProps
+        const natInstance = new ec2.cloudformation.InstanceResource(this, 'NATInstance', {
+            imageId: "ami-062c04ec46aecd204", // ap-southeast-2: amzn-ami-vpc-nat-hvm-2018.03.0.20181116-x86_64-ebs
+            instanceType: new ec2.InstanceTypePair(props.ec2NATInstanceClass, props.ec2NATInstanceSize).toString(),
+            subnetId: vpc.publicSubnets[0].subnetId,
+            securityGroupIds: [natSecurityGroup.securityGroupId],
+            sourceDestCheck: false, // Required for NAT
+            keyName: "tokenized-ssh",
+        });
+
+        natInstance.propertyOverrides.tags = [
+            {key: "Name", value: `${natInstance.path}`}
+        ];
+
+        // Route private subnets through the NAT instance
+        vpc.privateSubnets.forEach(subnet => {
+            const defaultRoute = subnet.findChild('DefaultRoute') as ec2.cloudformation.RouteResource;
+            defaultRoute.propertyOverrides.instanceId = natInstance.instanceId;
+        });
         // Ref: https://aws.amazon.com/amazon-linux-2/
         // Ref: https://aws.amazon.com/amazon-linux-2/release-notes/
         const amazonLinux2 = new ec2.AmazonLinuxImage({
@@ -39,8 +74,7 @@ class TokenizedEC2Stack extends cdk.Stack {
         });
 
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-autoscaling.html
-        const vpcPlacementSubnet = props.enableSSH ? "Public" : "Application";
-        const asg = new autoscaling.AutoScalingGroup(this, 'AutoScalingGroup', {
+        const appAsg = new autoscaling.AutoScalingGroup(this, 'AppAutoScalingGroup', {
             vpc,
             minSize: 1,
             maxSize: 1,
@@ -49,7 +83,7 @@ class TokenizedEC2Stack extends cdk.Stack {
             machineImage: amazonLinux2,
             keyName: "tokenized-ssh",
             vpcPlacement: {
-                subnetName: vpcPlacementSubnet,
+                subnetName: 'Application'
             },
             updateType: autoscaling.UpdateType.ReplacingUpdate,
             // updateType: autoscaling.UpdateType.RollingUpdate,
@@ -62,7 +96,7 @@ class TokenizedEC2Stack extends cdk.Stack {
         if (props.enableSSH) {
             // Allow ssh access
             // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-ec2.html#allowing-connections
-            asg.connections.allowFromAnyIPv4(new ec2.TcpPort(22));
+            appAsg.connections.allowFrom(natSecurityGroup, new ec2.TcpPort(22))
         }
 
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_assets.html
@@ -82,9 +116,9 @@ class TokenizedEC2Stack extends cdk.Stack {
         });
 
         // Allow the server to access uploaded assets
-        appAsset.grantRead(asg.role);
-        configTemplateAsset.grantRead(asg.role);
-        serviceTemplateAsset.grantRead(asg.role);
+        appAsset.grantRead(appAsg.role);
+        configTemplateAsset.grantRead(appAsg.role);
+        serviceTemplateAsset.grantRead(appAsg.role);
 
         // Ref: https://awslabs.github.io/aws-cdk/refs/_aws-cdk_aws-s3.html
 
@@ -104,7 +138,7 @@ class TokenizedEC2Stack extends cdk.Stack {
         }
 
         if (nodeStorageBucket) {
-            nodeStorageBucket.grantReadWrite(asg.role);
+            nodeStorageBucket.grantReadWrite(appAsg.role);
         }
 
         // Setup Contract Storage
@@ -123,7 +157,7 @@ class TokenizedEC2Stack extends cdk.Stack {
         }
 
         if (contractStorageBucket) {
-            contractStorageBucket.grantReadWrite(asg.role);
+            contractStorageBucket.grantReadWrite(appAsg.role);
         }
 
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
@@ -132,7 +166,10 @@ class TokenizedEC2Stack extends cdk.Stack {
         // Ref: https://aws.amazon.com/blogs/devops/authenticated-file-downloads-with-cloudformation/
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html
         // TODO: Improve this when the following is resolved: https://github.com/awslabs/aws-cdk/issues/777
-        const asgLaunchConfig = asg.findChild('LaunchConfig') as autoscaling.cloudformation.LaunchConfigurationResource;
+        const asgLaunchConfig = appAsg.findChild('LaunchConfig') as autoscaling.cloudformation.LaunchConfigurationResource;
+
+        asgLaunchConfig.addDependency(natInstance);
+        asgLaunchConfig.addDependency(appAsg.role);
 
         const cfnhupConfigFilePath = "/etc/cfn/cfn-hup.conf";
         const cfnhupAutoReloadFilePath = "/etc/cfn/hooks.d/cfn-auto-reloader.conf";
@@ -262,20 +299,18 @@ class TokenizedEC2Stack extends cdk.Stack {
             "AWS::CloudFormation::Authentication": {
                 "S3AccessCreds": {
                     "type": "S3",
-                    "roleName": asg.role.roleName,
+                    "roleName": appAsg.role.roleName,
                     "buckets": useAuthBuckets,
                 }
             }
         });
-
-        asgLaunchConfig.addDependency(asg.role);
 
         // Ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
         // Ref: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-linux-ami-basics.html#extras-library
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
         // Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-signal.html
-        asg.addUserData(
+        appAsg.addUserData(
             "yum install -y aws-cfn-bootstrap",
             `${cfnInitCmd} --configsets install`,
             `/opt/aws/bin/cfn-signal --stack=${new cdk.AwsStackName} --region=${new cdk.AwsRegion} --resource=${asgLaunchConfig.logicalId} --exit-code \$?`,
@@ -321,6 +356,8 @@ interface AppConfig {
 
 interface TokenizedProps extends cdk.StackProps {
     appConfig: AppConfig;
+    ec2NATInstanceClass: ec2.InstanceClass;
+    ec2NATInstanceSize: ec2.InstanceSize;
     ec2InstanceClass: ec2.InstanceClass;
     ec2InstanceSize: ec2.InstanceSize;
     enableSSH?: boolean;
@@ -342,6 +379,8 @@ new TokenizedEC2Stack(app, 'TokenizedEC2', {
         // RPC_PASSWORD: "yoursecretpassword",
         // PRIV_KEY: "yourwif",
     },
+    ec2NATInstanceClass: ec2.InstanceClass.T3,
+    ec2NATInstanceSize: ec2.InstanceSize.Micro,
     ec2InstanceClass: ec2.InstanceClass.T3,
     ec2InstanceSize: ec2.InstanceSize.Micro,
     enableSSH: false,

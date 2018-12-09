@@ -71,6 +71,33 @@ If you're happy with the proposed changes, deploy the stack:
 cdk deploy
 ```
 
+## SSH
+
+You can SSH through the NAT instance using a `~/.ssh/config` setup similar to the following:
+
+```
+Host tokenized-nat tokenised-nat
+Hostname 1.2.3.4
+User ec2-user
+IdentityFile ~/.ssh/tokenized-ssh
+IdentitiesOnly yes
+
+Host tokenized tokenised
+Hostname 10.0.111.195
+User ec2-user
+IdentityFile ~/.ssh/tokenized-ssh
+IdentitiesOnly yes
+ProxyCommand ssh -A tokenized-nat -W %h:%p
+```
+
+Note: Make sure you set the public IP of your NAT gateway + private IP of your tokenized server correctly.
+
+Then you can just connect with:
+
+```
+ssh tokenized
+```
+
 ## Config
 
 `config.template` uses [mustache](https://mustache.github.io/) template syntax to [generate the config file at deploy time](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html#aws-resource-init-files).
