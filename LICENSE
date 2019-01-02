@@ -6,7 +6,7 @@ Copyright © 2018 nChain Holdings Limited.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction other than the conditions set out below, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-1.  Blockchain Limitation.  The grant to deal provided above is restricted to dealing in the Software only for purposes relating to the Bitcoin SV blockchain.  The Bitcoin SV blockchain is defined as the Bitcoin chain containing block height #556767 with this hash: 000000000000000001d956714215d96ffc00e0afda4cd0a96c96f8d802b1662b.
+1.  Blockchain Limitation.  The grant to deal provided above is restricted to dealing in the Software only for purposes relating to the Bitcoin SV blockchain.  The Bitcoin SV blockchain is defined, for purposes of this license, as the Bitcoin chain containing block height #556767 with this hash: 000000000000000001d956714215d96ffc00e0afda4cd0a96c96f8d802b1662b.
 
 2.  Redistributions of all copies or substantial portions of the source code of the Software must retain the above copyright notice and above permission notice (with blockchain limitation), this list of conditions and the following disclaimer.
 
