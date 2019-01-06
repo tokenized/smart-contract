@@ -11,7 +11,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -27,21 +26,20 @@ type Config struct {
 }
 
 // NewConfig returns a new Config populated from environment variables.
-func NewConfig() (*Config, error) {
+func NewConfig(operatorName, version, feeAddr, feeAmount string) (*Config, error) {
 	c := Config{
-		ContractProviderID: os.Getenv("OPERATOR_NAME"),
-		Version:            os.Getenv("VERSION"),
+		ContractProviderID: operatorName,
+		Version:            version,
 	}
 
 	// Operator fee address
-	feeAddr := os.Getenv("FEE_ADDRESS")
 	feeAddress, err := btcutil.DecodeAddress(feeAddr, &chaincfg.MainNetParams)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fee Value per TXN
-	fee, err := strconv.ParseInt(os.Getenv("FEE_VALUE"), 10, 64)
+	fee, err := strconv.ParseInt(feeAmount, 10, 64)
 	if err != nil {
 		return nil, err
 	}
