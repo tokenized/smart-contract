@@ -86,7 +86,7 @@ func main() {
 	}
 
 	// Always watch Contract address
-	contractAddr, err := btcutil.DecodeAddress(string(n.Wallet.PublicAddress), &chaincfg.MainNetParams)
+	contractAddr, err := btcutil.DecodeAddress(string(wallet.PublicAddress), &chaincfg.MainNetParams)
 	if err != nil {
 		panic(err)
 	}

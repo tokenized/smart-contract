@@ -22,12 +22,12 @@ func newCommandHandlers(config Config,
 	listeners map[string]Listener) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
-		wire.CmdPing:       NewPingHandler(config),
-		wire.CmdVersion:    NewVersionHandler(config),
-		wire.CmdInv:        NewInvHandler(config),
-		wire.CmdTx:         NewTXHandler(config, blockService, listeners[ListenerTX]),
-		wire.CmdBlock:      NewBlockHandler(config, blockService, listeners[ListenerBlock]),
-		wire.CmdGetHeaders: NewGetHeadersHandler(config, blockService),
-		wire.CmdHeaders:    NewHeadersHandler(config, blockService),
+		wire.CmdPing:    NewPingHandler(config),
+		wire.CmdVersion: NewVersionHandler(config),
+		wire.CmdInv:     NewInvHandler(config),
+		wire.CmdTx:      NewTXHandler(config, blockService, listeners[ListenerTX]),
+		wire.CmdBlock:   NewBlockHandler(config, blockService, listeners[ListenerBlock]),
+		// wire.CmdGetHeaders: NewGetHeadersHandler(config, blockService),
+		// wire.CmdHeaders:    NewHeadersHandler(config, blockService),
 	}
 }

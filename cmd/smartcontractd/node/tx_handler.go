@@ -120,7 +120,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	}
 
 	// Validator: Validate the request
-	rejectTx, err := h.Validator.Check(ctx, itx, contract)
+	rejectTx, err = h.Validator.Check(ctx, itx, contract)
 	if err != nil {
 		log.Error(err)
 		return nil

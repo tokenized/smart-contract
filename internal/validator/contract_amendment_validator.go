@@ -65,15 +65,15 @@ func (h contractAmendmentValidator) validate(ctx context.Context,
 
 // canChangeAuthFlags returns true if the auth flags allow the issuer to
 // change auh flags, false otherwise.
-func (h contractAmendmentValidator) canChangeAuthFlags(c contract.Contract) bool {
-	return protocol.IsAuthorized(c.Flags(), protocol.ContractAuthFlagsIssuer)
-}
+// func (h contractAmendmentValidator) canChangeAuthFlags(c contract.Contract) bool {
+// 	return protocol.IsAuthorized(c.Flags(), protocol.ContractAuthFlagsIssuer)
+// }
 
-// canUpdate returns true if the contract auth flags permit the issuer to
-// change the contract, false otherwise.
-func (h contractAmendmentValidator) canUpdate(c contract.Contract) bool {
-	return protocol.IsAuthorized(c.Flags(), protocol.ContractIssuerUpdate)
-}
+// // canUpdate returns true if the contract auth flags permit the issuer to
+// // change the contract, false otherwise.
+// func (h contractAmendmentValidator) canUpdate(c contract.Contract) bool {
+// 	return protocol.IsAuthorized(c.Flags(), protocol.ContractIssuerUpdate)
+// }
 
 // authFlagsChanged returns true if the message is changing auth flags,
 // false otherwise.
