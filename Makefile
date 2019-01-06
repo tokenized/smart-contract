@@ -25,16 +25,16 @@ deps:
 dist: dist-smartcontractd dist-tools
 
 dist-smartcontractd:
-	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/smartcontractd.go
+	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/main.go
 
 dist-tools: dist-cli \
 	dist-spvnode
 
 dist-cli:
-	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
+	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/main.go
 
 dist-spvnode:
-	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/spvnode.go
+	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/main.go
 
 prepare:
 	mkdir -p dist tmp
@@ -44,13 +44,13 @@ tools:
 	go get github.com/golang/lint/golint
 
 run:
-	go run cmd/$(BINARY)/smartcontractd.go
+	go run cmd/$(BINARY)/main.go
 
 run-sync:
-	go run cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go sync
+	go run cmd/$(BINARY_CONTRACT_CLI)/main.go sync
 
 run-spvnode:
-	go run cmd/$(BINARY_SPVNODE)/spvnode.go
+	go run cmd/$(BINARY_SPVNODE)/main.go
 
 lint: golint vet goimports
 

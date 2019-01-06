@@ -3,7 +3,7 @@ package validator
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/app/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
 )
 
 type validatorInterface interface {

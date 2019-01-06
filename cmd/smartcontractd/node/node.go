@@ -3,12 +3,12 @@ package node
 import (
 	"net"
 
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/inspector"
-	"github.com/tokenized/smart-contract/internal/app/network"
-	"github.com/tokenized/smart-contract/internal/app/state"
-	"github.com/tokenized/smart-contract/internal/app/wallet"
 	"github.com/tokenized/smart-contract/internal/broadcaster"
+	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/network"
+	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/request"
 	"github.com/tokenized/smart-contract/internal/response"
 	"github.com/tokenized/smart-contract/internal/validator"

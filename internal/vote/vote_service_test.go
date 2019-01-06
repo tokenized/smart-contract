@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 )
 
 func TestVoteService_generateResult(t *testing.T) {

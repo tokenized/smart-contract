@@ -13,7 +13,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/tokenized/smart-contract/internal/app/network"
+	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"

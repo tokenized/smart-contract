@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/tokenized/smart-contract/internal/app/logger"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
 )

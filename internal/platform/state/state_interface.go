@@ -3,7 +3,7 @@ package state
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 )
 
 type StateInterface interface {

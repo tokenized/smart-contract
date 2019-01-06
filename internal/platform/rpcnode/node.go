@@ -24,7 +24,7 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/internal/app/logger"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
 )
 
 type RPCNode struct {

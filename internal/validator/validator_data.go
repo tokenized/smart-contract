@@ -1,7 +1,7 @@
 package validator
 
 import (
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 

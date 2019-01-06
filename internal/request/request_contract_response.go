@@ -2,7 +2,7 @@ package request
 
 import (
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
