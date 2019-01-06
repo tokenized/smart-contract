@@ -332,7 +332,7 @@ func (m AssetDefinition) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -569,7 +569,7 @@ func (m AssetCreation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -815,7 +815,7 @@ func (m AssetModification) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1087,7 +1087,7 @@ func (m ContractOffer) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1378,7 +1378,7 @@ func (m ContractFormation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1678,7 +1678,7 @@ func (m ContractAmendment) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 

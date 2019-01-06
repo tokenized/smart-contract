@@ -50,6 +50,32 @@ const (
 	// This flag is only used with Contract Authorization Flags.
 	FlagContractWhitelist = 1 << 6
 
+	// FlagAssetAmendment indicates that the Issuer or Operator can amend
+	// the Asset. This flag does (Except for the Authorization Flags).
+	//
+	// This flag can be applied to the AuthorizationFlags of an Asset.
+	FlagAssetAmendment = 1 << 0
+
+	// FlagAssetVoteRequired indicates that a Token Owner Vote is required for
+	// amendments (excluding Authorization Flags).
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagAssetVoteRequired = 1 << 1
+
+	// FlagAssetAmendAuthFlags indicates that the Issuer or Operator can
+	// amend the Authorization Flags.
+	//
+	// This flag can be applied to the AuthorizationFlags of a Contract or
+	// an Asset.
+	FlagAssetAmendAuthFlags = 1 << 2
+
+	// FlagAssetReferendumAuthFlags indicates that Authorization Flag
+	// amendments are permitted with a successful Referendum.
+	//
+	// This flag can be applied to the AuthorizationFlags of an Asset.
+	FlagAssetReferendumAuthFlags = 1 << 3
+
 	// FlagAssetInitiatives indicates that Token Owners can propose
 	// Initiatives to modify an Asset.
 	//
@@ -61,13 +87,13 @@ const (
 	// This flag is only used with Asset Authorization Flags.
 	FlagAssetInitiativesModify = 1 << 5
 
-	// FlagAssetWhitelist indicates that transfers are restricted to a
-	// Whitelist.
+	// FlagAssetTransfersPermitted indicates that transfers are restricted
+	// to a Whitelist.
 	//
 	// This is not yet implemented.
 	//
 	// This flag is only used with Asset Authorization Flags.
-	FlagAssetWhitelist = 1 << 6
+	FlagAssetTransfersPermitted = 1 << 6
 )
 
 // IsAuthorized returns true if the given flags match the existing state,

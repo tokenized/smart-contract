@@ -91,4 +91,8 @@ const (
 	// RejectionCodeInvalidValue is returned because the message contains
 	// invalid values.
 	RejectionCodeInvalidValue
+
+	// RejectionCodeBallotExists is returned because the Vote has already
+	// received a Ballot from the address.
+	RejectionCodeBallotExists
 )
