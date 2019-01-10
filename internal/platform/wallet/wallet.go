@@ -105,7 +105,11 @@ func (w Wallet) buildOutputs(outs []txbuilder.TxOutput) []txbuilder.PayAddress {
 			continue
 		}
 
-		payment := txbuilder.NewPayAddress(outAddress, out.Value)
+		payment := txbuilder.PayAddress{
+			Address: outAddress,
+			Value:   out.Value,
+		}
+
 		outputs = append(outputs, payment)
 	}
 

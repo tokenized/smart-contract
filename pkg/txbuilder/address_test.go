@@ -48,7 +48,9 @@ func TestAddressSet_Set(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			set := NewAddressSet(tt.addresses)
+			set := AddressSet{
+				Addresses: tt.addresses,
+			}
 
 			got := set.Set()
 

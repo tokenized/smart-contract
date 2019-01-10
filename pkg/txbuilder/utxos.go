@@ -58,7 +58,9 @@ func (u UTXOs) UniqueAddresses() ([]btcutil.Address, error) {
 		return nil, err
 	}
 
-	set := NewAddressSet(addresses)
+	set := AddressSet{
+		Addresses: addresses,
+	}
 	return set.Set(), nil
 }
 
