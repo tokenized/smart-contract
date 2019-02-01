@@ -8,8 +8,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/network"
-	"github.com/tokenized/smart-contract/internal/platform/rpcnode"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
 

@@ -3,7 +3,7 @@ package network
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/platform/rpcnode"
+	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
