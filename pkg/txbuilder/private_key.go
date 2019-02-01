@@ -9,13 +9,24 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/pkg/errors"
 )
 
-func GetPrivateKey(secretHex string) PrivateKey {
-	secret, _ := hex.DecodeString(secretHex)
-	return PrivateKey{
+type PrivateKey struct {
+	Secret []byte
+}
+
+func NewPrivateKey(secretHex string) (*PrivateKey, error) {
+	secret, err := hex.DecodeString(secretHex)
+	if err != nil {
+		return nil, errors.Wrap(err, "parsing priv key")
+	}
+
+	newPk := &PrivateKey{
 		Secret: secret,
 	}
+
+	return newPk, nil
 }
 
 func GeneratePrivateKey() PrivateKey {
@@ -35,10 +46,6 @@ func ImportPrivateKey(wifString string) (PrivateKey, error) {
 	return PrivateKey{
 		Secret: wif.PrivKey.Serialize(),
 	}, nil
-}
-
-type PrivateKey struct {
-	Secret []byte
 }
 
 func (k PrivateKey) GetBinaryString() string {

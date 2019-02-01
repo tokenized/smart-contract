@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -28,13 +29,15 @@ const (
 	firstBCHBlock = 478559
 )
 
+type Listeners map[string][]Listener
+
 type Node struct {
 	Config       Config
 	Handlers     map[string]CommandHandler
 	conn         net.Conn
 	messages     chan wire.Message
 	BlockService *BlockService
-	Listeners    map[string]Listener
+	Listeners    Listeners
 }
 
 func NewNode(config Config, store storage.Storage) Node {
@@ -46,7 +49,10 @@ func NewNode(config Config, store storage.Storage) Node {
 		Config:       config,
 		messages:     make(chan wire.Message),
 		BlockService: &blockService,
-		Listeners:    map[string]Listener{},
+		Listeners: map[string][]Listener{
+			ListenerTX:    []Listener{},
+			ListenerBlock: []Listener{},
+		},
 	}
 
 	return n
@@ -85,7 +91,7 @@ func (n *Node) Start() error {
 	}
 
 	// we will probably never really exit.
-	defer n.close()
+	defer n.Close()
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -117,7 +123,7 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) connect() error {
-	n.close()
+	n.Close()
 
 	conn, err := net.Dial("tcp", n.Config.NodeAddress)
 	if err != nil {
@@ -129,15 +135,16 @@ func (n *Node) connect() error {
 	return nil
 }
 
-func (n *Node) close() {
+func (n *Node) Close() error {
 	if n.conn == nil {
-		return
+		return nil
 	}
 
 	// close the connection, ignoring any errors
 	_ = n.conn.Close()
 
 	n.conn = nil
+	return nil
 }
 
 // readPeer reads new messages from the Peer.
@@ -155,7 +162,7 @@ func (n Node) readPeer() {
 			log.Error(err.Error())
 
 			// wait before reconnecting
-			time.Sleep(time.Second * 30)
+			time.Sleep(time.Second * 1)
 			continue
 		}
 
@@ -202,8 +209,16 @@ func (n Node) handle(ctx context.Context,
 	return multierr.Combine(errors...)
 }
 
-func (n *Node) RegisterListener(name string, listener Listener) {
-	n.Listeners[name] = listener
+func (n *Node) RegisterListener(messageType string,
+	listener Listener) error {
+
+	if messageType != ListenerTX && messageType != ListenerBlock {
+		return errors.New("Unknown listner type")
+	}
+
+	n.Listeners[messageType] = append(n.Listeners[messageType], listener)
+
+	return nil
 }
 
 // handshake starts the handshake process.

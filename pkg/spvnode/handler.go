@@ -19,7 +19,7 @@ type Listener interface {
 // newCommandHandlers returns a mapping of commands and Handler's.
 func newCommandHandlers(config Config,
 	blockService *BlockService,
-	listeners map[string]Listener) map[string]CommandHandler {
+	listeners Listeners) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
 		wire.CmdPing:       NewPingHandler(config),

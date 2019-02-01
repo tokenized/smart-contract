@@ -13,12 +13,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/inspector"
-	"github.com/tokenized/smart-contract/internal/app/logger"
-	"github.com/tokenized/smart-contract/internal/app/state"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
-	"github.com/tokenized/smart-contract/internal/app/wallet"
+	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
+	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -72,23 +72,98 @@ func NewValidatorService(config config.Config,
 	}
 }
 
-// Validate and Return Contract
-func (s ValidatorService) CheckAndFetch(ctx context.Context,
+// Validate Existing Contract
+func (s ValidatorService) Check(ctx context.Context,
+	itx *inspector.Transaction,
+	contract *contract.Contract) (*wire.MsgTx, error) {
+
+	m := itx.MsgProto
+	log := logger.NewLoggerFromContext(ctx).Sugar()
+	log.Infof("Checking message : %s", m.Type())
+
+	// Custom handler
+	if _, ok := protocol.TypeMapping[m.Type()]; !ok {
+		return nil, fmt.Errorf("Missing type mapping type : %v", m.Type())
+	}
+
+	// Min fees
+	minimum, ok := s.Fees[m.Type()]
+	if !ok {
+		return nil, fmt.Errorf("No minimum for type : %v", m.Type())
+	}
+
+	// Get spendable UTXO's received for the contract address
+	contractAddress := itx.Outputs[0].Address
+	utxos, err := itx.UTXOs.ForAddress(contractAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check that we have received enough to perform the action.
+	//
+	// The txn fee (if any) will be paid by the responding transaction, so
+	// the amount paid to the contract address needs to be the minimum, plus
+	// the txn fee value.
+	if uint64(utxos.Value()) < minimum {
+		// There is insufficient value to fund this transaction.
+		code := protocol.RejectionCodeInsufficientValue
+		newTx, err := s.reject(ctx, itx, code)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Rejecting message : Insufficient value provided")
+		return newTx, nil
+	}
+
+	// State: I have seen this already
+	if contract.KnownTX(ctx, itx.MsgTx) {
+		return nil, fmt.Errorf("Already seen transaction : %v", itx.MsgTx.TxHash().String())
+	}
+
+	// General permission check
+	if !s.isPermitted(itx, contract) {
+		code := protocol.RejectionCodeIssuerAddress
+		newTx, err := s.reject(ctx, itx, code)
+		if err != nil {
+			return nil, err
+		}
+		return newTx, nil
+	}
+
+	// Action based validation
+	msg := itx.MsgProto
+	h, ok := s.validators[msg.Type()]
+	if !ok {
+		return nil, fmt.Errorf("No validator found for type %v", msg.Type())
+	}
+
+	vdata := validatorData{
+		contract: contract,
+		m:        msg,
+	}
+
+	// Run the custom validator
+	vcode := h.validate(ctx, itx, vdata)
+	if vcode > 0 {
+		newTx, err := s.reject(ctx, itx, vcode)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Rejecting message : Custom validator failed")
+		return newTx, nil
+	}
+
+	return nil, nil
+}
+
+// Check that there is a valid contract to work with, or if this message
+// wants us to make one.
+func (s ValidatorService) CheckContract(ctx context.Context,
 	itx *inspector.Transaction) (*wire.MsgTx, *contract.Contract, error) {
 
 	m := itx.MsgProto
-
 	log := logger.NewLoggerFromContext(ctx).Sugar()
-	log.Infof("Received message : %s", m.Type())
-
-	if _, ok := protocol.TypeMapping[m.Type()]; !ok {
-		return nil, nil, fmt.Errorf("Missing type mapping type : %v", m.Type())
-	}
-
-	minimum, ok := s.Fees[m.Type()]
-	if !ok {
-		return nil, nil, fmt.Errorf("No minimum for type : %v", m.Type())
-	}
+	log.Infof("Checking message : %s", m.Type())
 
 	contractAddress := itx.Outputs[0].Address
 
@@ -106,66 +181,6 @@ func (s ValidatorService) CheckAndFetch(ctx context.Context,
 			return newTx, nil, nil
 		}
 		return nil, nil, err
-	}
-
-	// Get spendable UTXO's received for the contract address
-	utxos, err := itx.UTXOs.ForAddress(contractAddress)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Check that we have received enough to perform the action.
-	//
-	// The txn fee (if any) will be paid by the responding transaction, so
-	// the amount paid to the contract address needs to be the minimum, plus
-	// the txn fee value.
-	if uint64(utxos.Value()) < minimum {
-		// There is insufficient value to fund this transaction.
-		code := protocol.RejectionCodeInsufficientValue
-		newTx, err := s.reject(ctx, itx, code)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Infof("Rejecting message : Insufficient value provided")
-		return newTx, nil, nil
-	}
-
-	// State: I have seen this already
-	if contract.KnownTX(ctx, itx.MsgTx) {
-		return nil, nil, nil
-	}
-
-	// General permission check
-	if !s.isPermitted(itx, contract) {
-		code := protocol.RejectionCodeIssuerAddress
-		newTx, err := s.reject(ctx, itx, code)
-		if err != nil {
-			return nil, nil, err
-		}
-		return newTx, nil, nil
-	}
-
-	// Action based validation
-	msg := itx.MsgProto
-	h, ok := s.validators[msg.Type()]
-	if !ok {
-		return nil, nil, fmt.Errorf("No validator found for type %v", msg.Type())
-	}
-
-	vdata := validatorData{
-		contract: contract,
-		m:        msg,
-	}
-
-	// Run the custom validator
-	vcode := h.validate(ctx, itx, vdata)
-	if vcode > 0 {
-		newTx, err := s.reject(ctx, itx, vcode)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Infof("Rejecting message : Custom validator failed")
-		return newTx, nil, nil
 	}
 
 	return nil, contract, nil
@@ -204,8 +219,7 @@ func (s ValidatorService) findContract(ctx context.Context,
 		}
 
 		// Contract was not found, so create it.
-		cof := m.(*protocol.ContractOffer)
-		con := contract.NewContract(itx.MsgTx, contractAddress, issuer, operator, cof)
+		con := contract.NewContract(itx.MsgTx, contractAddress, issuer, operator)
 		return con, nil
 	}
 

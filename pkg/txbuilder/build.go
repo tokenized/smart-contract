@@ -11,21 +11,6 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
-const (
-	MaxTxFee          = 425
-	OutputFeeP2PKH    = 34
-	OutputFeeOpReturn = 20
-	OutputOpDataFee   = 3
-	InputFeeP2PKH     = 148
-	BaseTxFee         = 10
-)
-
-const DustMinimumOutput uint64 = 546
-
-const notEnoughValueErrorText = "unable to find enough value to spend"
-
-var notEnoughValueError = errors.New(notEnoughValueErrorText)
-
 func build(spendableTxOuts []*TxOutput,
 	outputs []TxOutput,
 	privateKey *btcec.PrivateKey,

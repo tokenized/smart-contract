@@ -274,7 +274,7 @@ type AssetDefinition struct {
 // NewAssetDefinition returns a new AssetDefinition with defaults set.
 func NewAssetDefinition() AssetDefinition {
 	return AssetDefinition{
-		Header:       []byte{0x6a, 0x4c, 0xd9},
+		Header:       []byte{0x6a, 0x4c, 0xd2},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeAssetDefinition),
 	}
@@ -287,7 +287,7 @@ func (m AssetDefinition) Type() string {
 
 // Len returns the byte size of this message.
 func (m AssetDefinition) Len() int64 {
-	return int64(len(m.Header)) + 217
+	return int64(len(m.Header)) + 210
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -332,7 +332,7 @@ func (m AssetDefinition) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -360,7 +360,7 @@ func (m AssetDefinition) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Payload, 152)); err != nil {
+	if err := m.write(buf, m.pad(m.Payload, 145)); err != nil {
 		return nil, err
 	}
 
@@ -428,12 +428,12 @@ func (m *AssetDefinition) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.ContractFeeFixed)
 
-	m.Payload = make([]byte, 152)
+	m.Payload = make([]byte, 145)
 	if err := m.readLen(buf, m.Payload); err != nil {
 		return 0, err
 	}
 
-	return 220, nil
+	return 213, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -489,6 +489,7 @@ type AssetCreation struct {
 	AssetType           []byte
 	AssetID             []byte
 	AssetRevision       uint16
+	Timestamp           uint64
 	AuthorizationFlags  []byte
 	VotingSystem        byte
 	VoteMultiplier      uint8
@@ -502,7 +503,7 @@ type AssetCreation struct {
 // NewAssetCreation returns a new AssetCreation with defaults set.
 func NewAssetCreation() AssetCreation {
 	return AssetCreation{
-		Header:       []byte{0x6a, 0x4c, 0xdb},
+		Header:       []byte{0x6a, 0x4c, 0xdc},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeAssetCreation),
 	}
@@ -515,7 +516,7 @@ func (m AssetCreation) Type() string {
 
 // Len returns the byte size of this message.
 func (m AssetCreation) Len() int64 {
-	return int64(len(m.Header)) + 219
+	return int64(len(m.Header)) + 220
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -564,7 +565,11 @@ func (m AssetCreation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.Timestamp); err != nil {
+		return nil, err
+	}
+
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -592,7 +597,7 @@ func (m AssetCreation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Payload, 152)); err != nil {
+	if err := m.write(buf, m.pad(m.Payload, 145)); err != nil {
 		return nil, err
 	}
 
@@ -638,6 +643,8 @@ func (m *AssetCreation) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.AssetRevision)
 
+	m.read(buf, &m.Timestamp)
+
 	m.AuthorizationFlags = make([]byte, 2)
 	if err := m.readLen(buf, m.AuthorizationFlags); err != nil {
 		return 0, err
@@ -662,12 +669,12 @@ func (m *AssetCreation) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.ContractFeeFixed)
 
-	m.Payload = make([]byte, 152)
+	m.Payload = make([]byte, 145)
 	if err := m.readLen(buf, m.Payload); err != nil {
 		return 0, err
 	}
 
-	return 222, nil
+	return 223, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -698,6 +705,8 @@ func (m AssetCreation) String() string {
 	vals = append(vals, fmt.Sprintf("AssetID:\"%v\"", string(m.AssetID)))
 
 	vals = append(vals, fmt.Sprintf("AssetRevision:%v", m.AssetRevision))
+
+	vals = append(vals, fmt.Sprintf("Timestamp:%v", m.Timestamp))
 
 	vals = append(vals, fmt.Sprintf("VotingSystem:\"%v\"", string(m.VotingSystem)))
 
@@ -744,7 +753,7 @@ type AssetModification struct {
 // NewAssetModification returns a new AssetModification with defaults set.
 func NewAssetModification() AssetModification {
 	return AssetModification{
-		Header:       []byte{0x6a, 0x4c, 0xdb},
+		Header:       []byte{0x6a, 0x4c, 0xd4},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeAssetModification),
 	}
@@ -757,7 +766,7 @@ func (m AssetModification) Type() string {
 
 // Len returns the byte size of this message.
 func (m AssetModification) Len() int64 {
-	return int64(len(m.Header)) + 219
+	return int64(len(m.Header)) + 212
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -806,7 +815,7 @@ func (m AssetModification) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -834,7 +843,7 @@ func (m AssetModification) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Payload, 152)); err != nil {
+	if err := m.write(buf, m.pad(m.Payload, 145)); err != nil {
 		return nil, err
 	}
 
@@ -904,12 +913,12 @@ func (m *AssetModification) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.ContractFeeFixed)
 
-	m.Payload = make([]byte, 152)
+	m.Payload = make([]byte, 145)
 	if err := m.readLen(buf, m.Payload); err != nil {
 		return 0, err
 	}
 
-	return 222, nil
+	return 215, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -992,7 +1001,7 @@ type ContractOffer struct {
 // NewContractOffer returns a new ContractOffer with defaults set.
 func NewContractOffer() ContractOffer {
 	return ContractOffer{
-		Header:       []byte{0x6a, 0x4c, 0xda},
+		Header:       []byte{0x6a, 0x4c, 0xd2},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeContractOffer),
 	}
@@ -1005,7 +1014,7 @@ func (m ContractOffer) Type() string {
 
 // Len returns the byte size of this message.
 func (m ContractOffer) Len() int64 {
-	return int64(len(m.Header)) + 218
+	return int64(len(m.Header)) + 210
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -1062,7 +1071,7 @@ func (m ContractOffer) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.URI, 78)); err != nil {
+	if err := m.write(buf, m.pad(m.URI, 70)); err != nil {
 		return nil, err
 	}
 
@@ -1078,7 +1087,7 @@ func (m ContractOffer) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1154,7 +1163,7 @@ func (m *ContractOffer) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.ContractExpiration)
 
-	m.URI = make([]byte, 78)
+	m.URI = make([]byte, 70)
 	if err := m.readLen(buf, m.URI); err != nil {
 		return 0, err
 	}
@@ -1197,7 +1206,7 @@ func (m *ContractOffer) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.RestrictedQty)
 
-	return 221, nil
+	return 213, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -1258,6 +1267,7 @@ type ContractFormation struct {
 	ContractFileHash            []byte
 	GoverningLaw                []byte
 	Jurisdiction                []byte
+	Timestamp                   uint64
 	ContractExpiration          uint64
 	URI                         []byte
 	ContractRevision            uint16
@@ -1340,11 +1350,15 @@ func (m ContractFormation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
+	if err := m.write(buf, m.Timestamp); err != nil {
+		return nil, err
+	}
+
 	if err := m.write(buf, m.ContractExpiration); err != nil {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.URI, 78)); err != nil {
+	if err := m.write(buf, m.pad(m.URI, 70)); err != nil {
 		return nil, err
 	}
 
@@ -1364,7 +1378,7 @@ func (m ContractFormation) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1438,9 +1452,11 @@ func (m *ContractFormation) Write(b []byte) (int, error) {
 
 	m.Jurisdiction = bytes.Trim(m.Jurisdiction, "\x00")
 
+	m.read(buf, &m.Timestamp)
+
 	m.read(buf, &m.ContractExpiration)
 
-	m.URI = make([]byte, 78)
+	m.URI = make([]byte, 70)
 	if err := m.readLen(buf, m.URI); err != nil {
 		return 0, err
 	}
@@ -1510,6 +1526,8 @@ func (m ContractFormation) String() string {
 
 	vals = append(vals, fmt.Sprintf("Jurisdiction:\"%v\"", string(m.Jurisdiction)))
 
+	vals = append(vals, fmt.Sprintf("Timestamp:%v", m.Timestamp))
+
 	vals = append(vals, fmt.Sprintf("ContractExpiration:%v", m.ContractExpiration))
 
 	vals = append(vals, fmt.Sprintf("URI:\"%v\"", string(m.URI)))
@@ -1570,7 +1588,7 @@ type ContractAmendment struct {
 // NewContractAmendment returns a new ContractAmendment with defaults set.
 func NewContractAmendment() ContractAmendment {
 	return ContractAmendment{
-		Header:       []byte{0x6a, 0x4c, 0xdc},
+		Header:       []byte{0x6a, 0x4c, 0xd4},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeContractAmendment),
 	}
@@ -1583,7 +1601,7 @@ func (m ContractAmendment) Type() string {
 
 // Len returns the byte size of this message.
 func (m ContractAmendment) Len() int64 {
-	return int64(len(m.Header)) + 220
+	return int64(len(m.Header)) + 212
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -1640,7 +1658,7 @@ func (m ContractAmendment) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.URI, 78)); err != nil {
+	if err := m.write(buf, m.pad(m.URI, 70)); err != nil {
 		return nil, err
 	}
 
@@ -1660,7 +1678,7 @@ func (m ContractAmendment) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.AuthorizationFlags, 2)); err != nil {
+	if err := m.write(buf, m.AuthorizationFlags); err != nil {
 		return nil, err
 	}
 
@@ -1736,7 +1754,7 @@ func (m *ContractAmendment) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.ContractExpiration)
 
-	m.URI = make([]byte, 78)
+	m.URI = make([]byte, 70)
 	if err := m.readLen(buf, m.URI); err != nil {
 		return 0, err
 	}
@@ -1781,7 +1799,7 @@ func (m *ContractAmendment) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.RestrictedQty)
 
-	return 223, nil
+	return 215, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -2793,7 +2811,7 @@ type Initiative struct {
 // NewInitiative returns a new Initiative with defaults set.
 func NewInitiative() Initiative {
 	return Initiative{
-		Header:       []byte{0x6a, 0x4c, 0xb7},
+		Header:       []byte{0x6a, 0x4c, 0xb6},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeInitiative),
 	}
@@ -2806,7 +2824,7 @@ func (m Initiative) Type() string {
 
 // Len returns the byte size of this message.
 func (m Initiative) Len() int64 {
-	return int64(len(m.Header)) + 183
+	return int64(len(m.Header)) + 182
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -2855,7 +2873,7 @@ func (m Initiative) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.VoteOptions, 16)); err != nil {
+	if err := m.write(buf, m.pad(m.VoteOptions, 15)); err != nil {
 		return nil, err
 	}
 
@@ -2921,7 +2939,7 @@ func (m *Initiative) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.VoteType)
 
-	m.VoteOptions = make([]byte, 16)
+	m.VoteOptions = make([]byte, 15)
 	if err := m.readLen(buf, m.VoteOptions); err != nil {
 		return 0, err
 	}
@@ -2948,7 +2966,7 @@ func (m *Initiative) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.VoteCutOffTimestamp)
 
-	return 186, nil
+	return 185, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -3009,7 +3027,7 @@ type Referendum struct {
 // NewReferendum returns a new Referendum with defaults set.
 func NewReferendum() Referendum {
 	return Referendum{
-		Header:       []byte{0x6a, 0x4c, 0xb7},
+		Header:       []byte{0x6a, 0x4c, 0xb6},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeReferendum),
 	}
@@ -3022,7 +3040,7 @@ func (m Referendum) Type() string {
 
 // Len returns the byte size of this message.
 func (m Referendum) Len() int64 {
-	return int64(len(m.Header)) + 183
+	return int64(len(m.Header)) + 182
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -3071,7 +3089,7 @@ func (m Referendum) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.VoteOptions, 16)); err != nil {
+	if err := m.write(buf, m.pad(m.VoteOptions, 15)); err != nil {
 		return nil, err
 	}
 
@@ -3137,7 +3155,7 @@ func (m *Referendum) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.VoteType)
 
-	m.VoteOptions = make([]byte, 16)
+	m.VoteOptions = make([]byte, 15)
 	if err := m.readLen(buf, m.VoteOptions); err != nil {
 		return 0, err
 	}
@@ -3164,7 +3182,7 @@ func (m *Referendum) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.VoteCutOffTimestamp)
 
-	return 186, nil
+	return 185, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -3226,7 +3244,7 @@ type Vote struct {
 // NewVote returns a new Vote with defaults set.
 func NewVote() Vote {
 	return Vote{
-		Header:       []byte{0x6a, 0x4c, 0xbf},
+		Header:       []byte{0x6a, 0x4c, 0xbe},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeVote),
 	}
@@ -3239,7 +3257,7 @@ func (m Vote) Type() string {
 
 // Len returns the byte size of this message.
 func (m Vote) Len() int64 {
-	return int64(len(m.Header)) + 191
+	return int64(len(m.Header)) + 190
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -3288,7 +3306,7 @@ func (m Vote) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.VoteOptions, 16)); err != nil {
+	if err := m.write(buf, m.pad(m.VoteOptions, 15)); err != nil {
 		return nil, err
 	}
 
@@ -3358,7 +3376,7 @@ func (m *Vote) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.VoteType)
 
-	m.VoteOptions = make([]byte, 16)
+	m.VoteOptions = make([]byte, 15)
 	if err := m.readLen(buf, m.VoteOptions); err != nil {
 		return 0, err
 	}
@@ -3387,7 +3405,7 @@ func (m *Vote) Write(b []byte) (int, error) {
 
 	m.read(buf, &m.Timestamp)
 
-	return 194, nil
+	return 193, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.
@@ -3446,7 +3464,7 @@ type BallotCast struct {
 // NewBallotCast returns a new BallotCast with defaults set.
 func NewBallotCast() BallotCast {
 	return BallotCast{
-		Header:       []byte{0x6a, 0x4c, 0x5a},
+		Header:       []byte{0x6a, 0x4c, 0x59},
 		ProtocolID:   ProtocolID,
 		ActionPrefix: []byte(CodeBallotCast),
 	}
@@ -3459,7 +3477,7 @@ func (m BallotCast) Type() string {
 
 // Len returns the byte size of this message.
 func (m BallotCast) Len() int64 {
-	return int64(len(m.Header)) + 90
+	return int64(len(m.Header)) + 89
 }
 
 // Read implements the io.Reader interface, writing the receiver to the
@@ -3508,7 +3526,7 @@ func (m BallotCast) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := m.write(buf, m.pad(m.Vote, 16)); err != nil {
+	if err := m.write(buf, m.pad(m.Vote, 15)); err != nil {
 		return nil, err
 	}
 
@@ -3559,14 +3577,14 @@ func (m *BallotCast) Write(b []byte) (int, error) {
 
 	m.VoteTxnID = bytes.Trim(m.VoteTxnID, "\x00")
 
-	m.Vote = make([]byte, 16)
+	m.Vote = make([]byte, 15)
 	if err := m.readLen(buf, m.Vote); err != nil {
 		return 0, err
 	}
 
 	m.Vote = bytes.Trim(m.Vote, "\x00")
 
-	return 93, nil
+	return 92, nil
 }
 
 // PayloadMessage returns the PayloadMessage, if any.

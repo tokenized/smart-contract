@@ -10,7 +10,7 @@ package broadcaster
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/app/network"
+	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"

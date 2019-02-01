@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tokenized/smart-contract/internal/app/config"
+	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )

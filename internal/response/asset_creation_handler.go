@@ -3,8 +3,8 @@ package response
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/app/inspector"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -16,6 +16,10 @@ func newAssetCreationHandler() assetCreationHandler {
 
 func (h assetCreationHandler) process(ctx context.Context,
 	itx *inspector.Transaction, c *contract.Contract) error {
+
+	if len(itx.Outputs) < 2 {
+		return nil
+	}
 
 	msg := itx.MsgProto.(*protocol.AssetCreation)
 	assetKey := string(msg.AssetID)

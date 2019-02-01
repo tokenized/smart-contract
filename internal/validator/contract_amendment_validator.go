@@ -4,10 +4,10 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/inspector"
-	"github.com/tokenized/smart-contract/internal/app/logger"
-	"github.com/tokenized/smart-contract/internal/app/state/contract"
+	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
+	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -65,15 +65,15 @@ func (h contractAmendmentValidator) validate(ctx context.Context,
 
 // canChangeAuthFlags returns true if the auth flags allow the issuer to
 // change auh flags, false otherwise.
-func (h contractAmendmentValidator) canChangeAuthFlags(c contract.Contract) bool {
-	return protocol.IsAuthorized(c.Flags(), protocol.ContractAuthFlagsIssuer)
-}
+// func (h contractAmendmentValidator) canChangeAuthFlags(c contract.Contract) bool {
+// 	return protocol.IsAuthorized(c.Flags(), protocol.ContractAuthFlagsIssuer)
+// }
 
-// canUpdate returns true if the contract auth flags permit the issuer to
-// change the contract, false otherwise.
-func (h contractAmendmentValidator) canUpdate(c contract.Contract) bool {
-	return protocol.IsAuthorized(c.Flags(), protocol.ContractIssuerUpdate)
-}
+// // canUpdate returns true if the contract auth flags permit the issuer to
+// // change the contract, false otherwise.
+// func (h contractAmendmentValidator) canUpdate(c contract.Contract) bool {
+// 	return protocol.IsAuthorized(c.Flags(), protocol.ContractIssuerUpdate)
+// }
 
 // authFlagsChanged returns true if the message is changing auth flags,
 // false otherwise.

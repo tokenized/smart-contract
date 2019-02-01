@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tokenized/smart-contract/internal/app/config"
-	"github.com/tokenized/smart-contract/internal/app/inspector"
-	"github.com/tokenized/smart-contract/internal/app/logger"
-	"github.com/tokenized/smart-contract/internal/app/network"
-	"github.com/tokenized/smart-contract/internal/app/wallet"
 	"github.com/tokenized/smart-contract/internal/broadcaster"
+	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
+	"github.com/tokenized/smart-contract/internal/platform/network"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/request"
 	"github.com/tokenized/smart-contract/internal/response"
 	"github.com/tokenized/smart-contract/internal/validator"
@@ -106,8 +106,8 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	mtx.Lock()
 	defer mtx.Unlock()
 
-	// Validator: Check this request, return the related Contract
-	rejectTx, contract, err := h.Validator.CheckAndFetch(ctx, itx)
+	// Validator: Look up the Contract
+	rejectTx, contract, err := h.Validator.CheckContract(ctx, itx)
 	if err != nil {
 		log.Error(err)
 		return nil
@@ -118,7 +118,17 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
 		return nil
 	}
-	if contract == nil {
+
+	// Validator: Validate the request
+	rejectTx, err = h.Validator.Check(ctx, itx, contract)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
+
+	// Validator: Message is a reject
+	if rejectTx != nil {
+		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
 		return nil
 	}
 
@@ -129,15 +139,15 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 		return nil
 	}
 
-	// Response: Process response
-	err = h.Response.Process(ctx, resItx, contract)
+	// Broadcaster: Broadcast response
+	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
 
-	// Broadcaster: Broadcast response
-	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
+	// Response: Process response
+	err = h.Response.Process(ctx, resItx, contract)
 	if err != nil {
 		log.Error(err)
 		return nil

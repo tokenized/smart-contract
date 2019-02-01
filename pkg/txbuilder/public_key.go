@@ -3,22 +3,26 @@ package txbuilder
 import (
 	"fmt"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 )
-
-func GetPublicKey(pkBytes []byte) PublicKey {
-	pubKey, err := btcec.ParsePubKey(pkBytes, btcec.S256())
-	if err != nil {
-		//jerr.Get("error parsing pub key", err).Print()
-	}
-	return PublicKey{
-		publicKey: pubKey,
-	}
-}
 
 type PublicKey struct {
 	publicKey *btcec.PublicKey
+}
+
+func NewPublicKey(pkBytes []byte) (*PublicKey, error) {
+	pubKey, err := btcec.ParsePubKey(pkBytes, btcec.S256())
+	if err != nil {
+		return nil, errors.Wrap(err, "parsing pub key")
+	}
+
+	newPk := &PublicKey{
+		publicKey: pubKey,
+	}
+
+	return newPk, nil
 }
 
 func (k PublicKey) GetSerialized() []byte {

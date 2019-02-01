@@ -14,7 +14,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/internal/app/logger"
+	"github.com/tokenized/smart-contract/internal/platform/logger"
 )
 
 // newSilentContext creates a Context with a no-op Logger.

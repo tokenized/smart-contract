@@ -13,20 +13,20 @@ func TestIsAuthorized(t *testing.T) {
 	}{
 		{
 			name:  "exact match",
-			state: ContractIssuerUpdate + ContractBindingInitiatives + ContractAssetWhitelist,
-			flags: ContractIssuerUpdate + ContractBindingInitiatives + ContractAssetWhitelist,
+			state: FlagAmendment + FlagVoteRequired,
+			flags: FlagAmendment + FlagVoteRequired,
 			want:  true,
 		},
 		{
 			name:  "more state than flags",
-			state: ContractIssuerUpdate + ContractOwnerAmendments + ContractBindingInitiatives + ContractAssetWhitelist,
-			flags: ContractIssuerUpdate + ContractBindingInitiatives + ContractAssetWhitelist,
+			state: FlagAmendment + FlagVoteRequired + FlagAmendAuthFlags,
+			flags: FlagAmendment + FlagVoteRequired,
 			want:  true,
 		},
 		{
 			name:  "insufficient flags",
-			state: ContractBindingInitiatives + ContractAssetWhitelist,
-			flags: ContractIssuerUpdate + ContractBindingInitiatives + ContractAssetWhitelist,
+			state: FlagAmendment + FlagVoteRequired,
+			flags: FlagAmendment + FlagVoteRequired + FlagAmendAuthFlags,
 			want:  false,
 		},
 	}

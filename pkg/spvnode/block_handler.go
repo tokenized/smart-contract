@@ -11,16 +11,16 @@ import (
 type BlockHandler struct {
 	Config       Config
 	BlockService *BlockService
-	Listener     Listener
+	Listeners    []Listener
 }
 
 // NewBlockHandler returns a new BlockHandler with the given Config.
-func NewBlockHandler(config Config, blockService *BlockService, listener Listener) BlockHandler {
+func NewBlockHandler(config Config, blockService *BlockService, listeners []Listener) BlockHandler {
 
 	return BlockHandler{
 		Config:       config,
 		BlockService: blockService,
-		Listener:     listener,
+		Listeners:    listeners,
 	}
 }
 
@@ -68,9 +68,11 @@ func (h BlockHandler) handle(ctx context.Context,
 		return nil, err
 	}
 
-	// do we need to send the block to the notifier?
-	if h.shouldNotify(block) && h.Listener != nil {
-		h.Listener.Handle(ctx, b)
+	// do we need to send the block to the listeners?
+	if h.shouldNotify(block) && h.Listeners != nil {
+		for _, listener := range h.Listeners {
+			listener.Handle(ctx, b)
+		}
 	}
 
 	// potenitally update te "last seen" block.

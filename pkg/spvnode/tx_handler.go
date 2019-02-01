@@ -11,18 +11,18 @@ import (
 type TXHandler struct {
 	Config       Config
 	BlockService *BlockService
-	Listener     Listener
+	Listeners    []Listener
 }
 
 // NewTXHandler returns a new TXHandler with the given Config.
 func NewTXHandler(config Config,
 	blockService *BlockService,
-	listener Listener) TXHandler {
+	listeners []Listener) TXHandler {
 
 	return TXHandler{
 		Config:       config,
 		BlockService: blockService,
-		Listener:     listener,
+		Listeners:    listeners,
 	}
 }
 
@@ -47,9 +47,11 @@ func (h TXHandler) Handle(ctx context.Context,
 func (h TXHandler) handle(ctx context.Context,
 	tx *wire.MsgTx) ([]wire.Message, error) {
 
-	if h.Listener != nil {
-		// notify the listener
-		h.Listener.Handle(ctx, tx)
+	if h.Listeners != nil {
+		// notify the listeners
+		for _, listener := range h.Listeners {
+			listener.Handle(ctx, tx)
+		}
 	}
 
 	return nil, nil
