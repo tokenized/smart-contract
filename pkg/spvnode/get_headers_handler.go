@@ -80,12 +80,10 @@ func (h GetHeadersHandler) handle(ctx context.Context,
 		return nil, err
 	}
 
-	return nil, nil
+	out := wire.NewMsgGetHeaders()
+	out.BlockLocatorHashes = []*chainhash.Hash{
+		mostRecent,
+	}
 
-	// out := wire.NewMsgGetHeaders()
-	// out.BlockLocatorHashes = []*chainhash.Hash{
-	// 	mostRecent,
-	// }
-
-	// return []wire.Message{out}, nil
+	return []wire.Message{out}, nil
 }
