@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -28,13 +29,15 @@ const (
 	firstBCHBlock = 478559
 )
 
+type Listeners map[string][]Listener
+
 type Node struct {
 	Config       Config
 	Handlers     map[string]CommandHandler
 	conn         net.Conn
 	messages     chan wire.Message
 	BlockService *BlockService
-	Listeners    map[string]Listener
+	Listeners    Listeners
 }
 
 func NewNode(config Config, store storage.Storage) Node {
@@ -46,7 +49,10 @@ func NewNode(config Config, store storage.Storage) Node {
 		Config:       config,
 		messages:     make(chan wire.Message),
 		BlockService: &blockService,
-		Listeners:    map[string]Listener{},
+		Listeners: map[string][]Listener{
+			ListenerTX:    []Listener{},
+			ListenerBlock: []Listener{},
+		},
 	}
 
 	return n
@@ -202,8 +208,16 @@ func (n Node) handle(ctx context.Context,
 	return multierr.Combine(errors...)
 }
 
-func (n *Node) RegisterListener(name string, listener Listener) {
-	n.Listeners[name] = listener
+func (n *Node) RegisterListener(messageType string,
+	listener Listener) error {
+
+	if messageType != ListenerTX && messageType != ListenerBlock {
+		return errors.New("Unknown listner type")
+	}
+
+	n.Listeners[messageType] = append(n.Listeners[messageType], listener)
+
+	return nil
 }
 
 // handshake starts the handshake process.
