@@ -155,7 +155,7 @@ func (n Node) readPeer() {
 			log.Error(err.Error())
 
 			// wait before reconnecting
-			time.Sleep(time.Second * 30)
+			time.Sleep(time.Second * 1)
 			continue
 		}
 
