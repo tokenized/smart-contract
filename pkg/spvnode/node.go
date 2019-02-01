@@ -91,7 +91,7 @@ func (n *Node) Start() error {
 	}
 
 	// we will probably never really exit.
-	defer n.close()
+	defer n.Close()
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -123,7 +123,7 @@ func (n *Node) Start() error {
 }
 
 func (n *Node) connect() error {
-	n.close()
+	n.Close()
 
 	conn, err := net.Dial("tcp", n.Config.NodeAddress)
 	if err != nil {
@@ -135,15 +135,16 @@ func (n *Node) connect() error {
 	return nil
 }
 
-func (n *Node) close() {
+func (n *Node) Close() error {
 	if n.conn == nil {
-		return
+		return nil
 	}
 
 	// close the connection, ignoring any errors
 	_ = n.conn.Close()
 
 	n.conn = nil
+	return nil
 }
 
 // readPeer reads new messages from the Peer.
