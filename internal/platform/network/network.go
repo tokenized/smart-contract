@@ -68,8 +68,8 @@ func (n Network) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, e
 	return n.TrustedNode.RpcNode.SendTX(ctx, tx)
 }
 
-func (n Network) ListTransactions(ctx context.Context, address btcutil.Address) ([]btcjson.ListTransactionsResult, error) {
-	return n.TrustedNode.RpcNode.ListTransactions(ctx, address)
+func (n Network) ListTransactions(ctx context.Context) ([]btcjson.ListTransactionsResult, error) {
+	return n.TrustedNode.RpcNode.ListTransactions(ctx)
 }
 
 func (n Network) WatchAddress(ctx context.Context, address btcutil.Address) error {

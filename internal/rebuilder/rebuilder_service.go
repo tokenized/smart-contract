@@ -137,7 +137,7 @@ func (r RebuilderService) ListTx(ctx context.Context,
 	addr btcutil.Address, headCount int) ([]*RebuilderItem, error) {
 
 	// Oldest -> Newest
-	listResults, err := r.Network.ListTransactions(ctx, addr)
+	listResults, err := r.Network.ListTransactions(ctx)
 	if err != nil {
 		return nil, err
 	}
