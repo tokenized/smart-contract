@@ -63,13 +63,7 @@ func (r RPCNode) WatchAddress(ctx context.Context, address btcutil.Address) erro
 	return nil
 }
 
-func (r RPCNode) ListTransactions(ctx context.Context,
-	address btcutil.Address) ([]btcjson.ListTransactionsResult, error) {
-
-	// Make address known to node without rescan
-	if err := r.WatchAddress(ctx, address); err != nil {
-		return nil, err
-	}
+func (r RPCNode) ListTransactions(ctx context.Context) ([]btcjson.ListTransactionsResult, error) {
 
 	// Prepare listtransactions command
 	cmd := btcjson.NewListTransactionsCmd(

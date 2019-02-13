@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -38,19 +37,23 @@ func (f FilesystemStorage) Write(ctx context.Context,
 	filename := f.buildPath(key)
 
 	// make sure directory exists.
-	dir := path.Dir(filename)
+	dir := filepath.Dir(filename)
 
 	if err := f.ensureExists(dir, nil); err != nil {
 		return err
 	}
 
-	var mode os.FileMode = 0644
+	file, err := os.Create(filename)
 
-	if options != nil && options.Mode != 0 {
-		mode = options.Mode
+	if err != nil {
+		return err
 	}
 
-	return ioutil.WriteFile(filename, body, mode)
+	if _, err := file.Write(body); err != nil {
+		return err
+	}
+
+	return file.Close()
 }
 
 // Read reads the data from a file on the local filesystem.
