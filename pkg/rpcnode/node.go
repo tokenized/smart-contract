@@ -179,6 +179,22 @@ func (r RPCNode) SendTX(ctx context.Context,
 	return r.client.SendRawTransaction(nx, false)
 }
 
+func (r RPCNode) GetLatestBlock() (*chainhash.Hash, int32, error) {
+	// get the best block hash
+	hash, err := r.client.GetBestBlockHash()
+	if err != nil {
+		return nil, -1, err
+	}
+
+	// the height is in the header
+	header, err := r.client.GetBlockHeaderVerbose(hash)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	return hash, header.Height, nil
+}
+
 func (r RPCNode) getRawPayload(tx *btcwire.MsgTx) string {
 	var buf bytes.Buffer
 	tx.Serialize(&buf)
