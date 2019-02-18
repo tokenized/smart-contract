@@ -183,6 +183,14 @@ func (o OutPoint) String() string {
 	return string(buf)
 }
 
+// OutpointHash generates the Hash for the transaction.
+func (op OutPoint) OutpointHash() chainhash.Hash {
+	buf := bytes.NewBuffer(make([]byte, 0, chainhash.HashSize  + 4))
+	buf.Write(op.Hash[:])
+	binarySerializer.PutUint32(buf, littleEndian, op.Index)
+	return chainhash.HashH(buf.Bytes())
+}
+
 // TxIn defines a bitcoin transaction input.
 type TxIn struct {
 	PreviousOutPoint OutPoint
