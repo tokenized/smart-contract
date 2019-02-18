@@ -45,3 +45,39 @@ func (u UTXO) PublicAddress(params *chaincfg.Params) (btcutil.Address, error) {
 
 	return btcutil.NewAddressPubKeyHash(u.PkScript[3:23], params)
 }
+
+// UTXOs is a wrapper for a []UTXO.
+type UTXOs []UTXO
+
+// Value returns the total value of the set of UTXO's.
+func (u UTXOs) Value() int64 {
+	v := int64(0)
+
+	for _, utxo := range u {
+		v += utxo.Value
+	}
+
+	return v
+}
+
+// ForAddress returns UTXOs that match the given Address.
+func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
+	filtered := UTXOs{}
+
+	s := address.String()
+
+	for _, utxo := range u {
+		publicAddress, err := utxo.PublicAddress(&chaincfg.MainNetParams)
+		if err != nil {
+			return nil, err
+		}
+
+		if publicAddress.String() != s {
+			continue
+		}
+
+		filtered = append(filtered, utxo)
+	}
+
+	return filtered, nil
+}

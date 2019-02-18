@@ -188,6 +188,17 @@ func (itx *Transaction) IsOutgoingMessageType() bool {
 	return ok
 }
 
+// UTXOs returns all the unspent transactions
+func (itx *Transaction) UTXOs() UTXOs {
+	utxos := UTXOs{}
+
+	for _, input := range itx.Inputs {
+		utxos = append(utxos, input.UTXO)
+	}
+
+	return utxos
+}
+
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []btcutil.Address {
 	l := len(itx.Inputs) + len(itx.Outputs)
