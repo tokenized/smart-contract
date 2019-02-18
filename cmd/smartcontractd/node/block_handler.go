@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tokenized/smart-contract/internal/broadcaster"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
@@ -17,31 +16,28 @@ import (
 
 // BlockHandler exists to handle the Block command.
 type BlockHandler struct {
-	Config      config.Config
-	Network     network.NetworkInterface
-	Inspector   inspector.InspectorService
-	Broadcaster broadcaster.BroadcastService
-	Validator   validator.ValidatorService
-	Request     request.RequestService
-	Response    response.ResponseService
+	Config    config.Config
+	Network   network.NetworkInterface
+	Inspector inspector.InspectorService
+	Validator validator.ValidatorService
+	Request   request.RequestService
+	Response  response.ResponseService
 }
 
 // NewBlockHandler returns a new BlockHandler with the given Config.
 func NewBlockHandler(config config.Config,
 	network network.NetworkInterface,
 	inspector inspector.InspectorService,
-	broadcaster broadcaster.BroadcastService,
 	validator validator.ValidatorService,
 	request request.RequestService,
 	response response.ResponseService) TXHandler {
 	return TXHandler{
-		Config:      config,
-		Network:     network,
-		Inspector:   inspector,
-		Broadcaster: broadcaster,
-		Validator:   validator,
-		Request:     request,
-		Response:    response,
+		Config:    config,
+		Network:   network,
+		Inspector: inspector,
+		Validator: validator,
+		Request:   request,
+		Response:  response,
 	}
 }
 

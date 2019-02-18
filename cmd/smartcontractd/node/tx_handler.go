@@ -19,15 +19,14 @@ import (
 
 // TXHandler exists to handle the TX command.
 type TXHandler struct {
-	Config      config.Config
-	Network     network.NetworkInterface
-	Wallet      wallet.Wallet
-	Inspector   inspector.InspectorService
-	Broadcaster broadcaster.BroadcastService
-	Validator   validator.ValidatorService
-	Request     request.RequestService
-	Response    response.ResponseService
-	mapLock     mapLock
+	Config    config.Config
+	Network   network.NetworkInterface
+	Wallet    wallet.Wallet
+	Inspector inspector.InspectorService
+	Validator validator.ValidatorService
+	Request   request.RequestService
+	Response  response.ResponseService
+	mapLock   mapLock
 }
 
 // NewTXHandler returns a new TXHandler with the given Config.
@@ -35,20 +34,18 @@ func NewTXHandler(config config.Config,
 	network network.NetworkInterface,
 	wallet wallet.Wallet,
 	inspector inspector.InspectorService,
-	broadcaster broadcaster.BroadcastService,
 	validator validator.ValidatorService,
 	request request.RequestService,
 	response response.ResponseService) TXHandler {
 	return TXHandler{
-		Config:      config,
-		Network:     network,
-		Wallet:      wallet,
-		Inspector:   inspector,
-		Broadcaster: broadcaster,
-		Validator:   validator,
-		Request:     request,
-		Response:    response,
-		mapLock:     newMapLock(),
+		Config:    config,
+		Network:   network,
+		Wallet:    wallet,
+		Inspector: inspector,
+		Validator: validator,
+		Request:   request,
+		Response:  response,
+		mapLock:   newMapLock(),
 	}
 }
 
@@ -115,7 +112,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Validator: Message is a reject
 	if rejectTx != nil {
-		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
+		_, _ = broadcaster.Announce(ctx, h.Network, rejectTx)
 		return nil
 	}
 
@@ -128,7 +125,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Validator: Message is a reject
 	if rejectTx != nil {
-		_, _ = h.Broadcaster.Announce(ctx, rejectTx)
+		_, _ = broadcaster.Announce(ctx, h.Network, rejectTx)
 		return nil
 	}
 
@@ -140,7 +137,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	}
 
 	// Broadcaster: Broadcast response
-	_, err = h.Broadcaster.Announce(ctx, resItx.MsgTx)
+	_, err = broadcaster.Announce(ctx, h.Network, resItx.MsgTx)
 	if err != nil {
 		log.Error(err)
 		return nil

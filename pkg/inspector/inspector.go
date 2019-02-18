@@ -15,6 +15,15 @@ import (
 	"github.com/pkg/errors"
 )
 
+/**
+ * Inspector Service
+ *
+ * What is my purpose?
+ * - You look at Bitcoin transactions that I give you
+ * - You tell me if they contain return data of interest
+ * - You give me back special transaction objects (ITX objects)
+ */
+
 var (
 	// ErrDecodeFail Failed to decode a transaction payload
 	ErrDecodeFail = errors.New("Failed to decode payload")

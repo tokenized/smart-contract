@@ -36,30 +36,27 @@ type RebuilderItem struct {
 }
 
 type RebuilderService struct {
-	Network     network.NetworkInterface
-	Inspector   inspector.InspectorService
-	Broadcaster broadcaster.BroadcastService
-	Request     request.RequestService
-	Response    response.ResponseService
-	Validator   validator.ValidatorService
-	State       state.StateInterface
+	Network   network.NetworkInterface
+	Inspector inspector.InspectorService
+	Request   request.RequestService
+	Response  response.ResponseService
+	Validator validator.ValidatorService
+	State     state.StateInterface
 }
 
 func NewRebuilderService(network network.NetworkInterface,
 	inspector inspector.InspectorService,
-	broadcaster broadcaster.BroadcastService,
 	request request.RequestService,
 	response response.ResponseService,
 	validator validator.ValidatorService,
 	state state.StateInterface) RebuilderService {
 	return RebuilderService{
-		Network:     network,
-		Inspector:   inspector,
-		Broadcaster: broadcaster,
-		Request:     request,
-		Response:    response,
-		Validator:   validator,
-		State:       state,
+		Network:   network,
+		Inspector: inspector,
+		Request:   request,
+		Response:  response,
+		Validator: validator,
+		State:     state,
 	}
 }
 
@@ -163,10 +160,7 @@ func (r RebuilderService) ListTx(ctx context.Context,
 	return transactions, nil
 }
 
-func (r RebuilderService) Sync(ctx context.Context,
-	softContract *contract.Contract,
-	hardContract *contract.Contract,
-	contractAddr btcutil.Address) error {
+func (r RebuilderService) Sync(ctx context.Context, softContract *contract.Contract, hardContract *contract.Contract, contractAddr btcutil.Address) error {
 
 	log := logger.NewLoggerFromContext(ctx).Sugar()
 
@@ -257,7 +251,7 @@ func (r RebuilderService) Sync(ctx context.Context,
 
 		// Validator: Message is a reject
 		if rejectTx != nil {
-			_, _ = r.Broadcaster.Announce(ctx, rejectTx)
+			_, _ = broadcaster.Announce(ctx, r.Network, rejectTx)
 			continue
 		}
 
@@ -269,7 +263,7 @@ func (r RebuilderService) Sync(ctx context.Context,
 		}
 
 		// Broadcaster: Broadcast response
-		_, err = r.Broadcaster.Announce(ctx, resItx.MsgTx)
+		_, err = broadcaster.Announce(ctx, r.Network, resItx.MsgTx)
 		if err != nil {
 			log.Error(err)
 			continue

@@ -3,7 +3,6 @@ package node
 import (
 	"net"
 
-	"github.com/tokenized/smart-contract/internal/broadcaster"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/network"
@@ -53,7 +52,6 @@ func NewNode(config config.Config,
 
 func (n Node) Start() error {
 	inspector := inspector.NewInspectorService(n.Network)
-	broadcaster := broadcaster.NewBroadcastService(n.Network)
 	validator := validator.NewValidatorService(n.Config, n.Wallet, n.State)
 	request := request.NewRequestService(n.Config, n.Wallet, n.State, inspector)
 	response := response.NewResponseService(n.Config, n.Wallet, n.State, inspector)
@@ -62,7 +60,6 @@ func (n Node) Start() error {
 		n.Network,
 		n.Wallet,
 		inspector,
-		broadcaster,
 		validator,
 		request,
 		response)

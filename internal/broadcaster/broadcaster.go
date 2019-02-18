@@ -16,19 +16,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
-type BroadcastService struct {
-	Network network.NetworkInterface
-}
-
-func NewBroadcastService(network network.NetworkInterface) BroadcastService {
-	return BroadcastService{
-		Network: network,
-	}
-}
-
-func (s BroadcastService) Announce(ctx context.Context,
-	tx *wire.MsgTx) (*chainhash.Hash, error) {
-	hash, err := s.Network.SendTX(ctx, tx)
+func Announce(ctx context.Context, network network.NetworkInterface, tx *wire.MsgTx) (*chainhash.Hash, error) {
+	hash, err := network.SendTX(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
