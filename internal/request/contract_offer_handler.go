@@ -73,7 +73,7 @@ func (h contractOfferHandler) buildOutputs(r contractRequest) ([]txbuilder.TxOut
 			Value:   dustLimit,
 		},
 		txbuilder.TxOutput{
-			Address: r.senders[0],
+			Address: r.senders[0].Address,
 			Value:   dustLimit, // any change will be added to this output value
 		},
 	}

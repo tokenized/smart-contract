@@ -116,7 +116,7 @@ func (h exchangeHandler) handle(ctx context.Context,
 }
 
 func (h exchangeHandler) buildOutputs(r contractRequest) ([]txbuilder.TxOutput, error) {
-	party1Addr := r.senders[0]
+	party1Addr := r.senders[0].Address
 	party2Addr := r.receivers[2].Address
 
 	contractAddress, err := r.contract.Address()

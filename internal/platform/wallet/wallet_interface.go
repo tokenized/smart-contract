@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -11,9 +12,5 @@ import (
 
 type WalletInterface interface {
 	Get(string) (*btcec.PrivateKey, error)
-	BuildTX(*btcec.PrivateKey,
-		txbuilder.UTXOs,
-		[]txbuilder.TxOutput,
-		btcutil.Address,
-		protocol.OpReturnMessage) (*wire.MsgTx, error)
+	BuildTX(*btcec.PrivateKey, inspector.UTXOs, []txbuilder.TxOutput, btcutil.Address, protocol.OpReturnMessage) (*wire.MsgTx, error)
 }

@@ -14,11 +14,11 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -73,9 +73,7 @@ func NewValidatorService(config config.Config,
 }
 
 // Validate Existing Contract
-func (s ValidatorService) Check(ctx context.Context,
-	itx *inspector.Transaction,
-	contract *contract.Contract) (*wire.MsgTx, error) {
+func (s ValidatorService) Check(ctx context.Context, itx *inspector.Transaction, contract *contract.Contract) (*wire.MsgTx, error) {
 
 	m := itx.MsgProto
 	log := logger.NewLoggerFromContext(ctx).Sugar()
@@ -94,7 +92,7 @@ func (s ValidatorService) Check(ctx context.Context,
 
 	// Get spendable UTXO's received for the contract address
 	contractAddress := itx.Outputs[0].Address
-	utxos, err := itx.UTXOs.ForAddress(contractAddress)
+	utxos, err := itx.UTXOs().ForAddress(contractAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +156,7 @@ func (s ValidatorService) Check(ctx context.Context,
 
 // Check that there is a valid contract to work with, or if this message
 // wants us to make one.
-func (s ValidatorService) CheckContract(ctx context.Context,
-	itx *inspector.Transaction) (*wire.MsgTx, *contract.Contract, error) {
+func (s ValidatorService) CheckContract(ctx context.Context, itx *inspector.Transaction) (*wire.MsgTx, *contract.Contract, error) {
 
 	m := itx.MsgProto
 	log := logger.NewLoggerFromContext(ctx).Sugar()
@@ -188,9 +185,7 @@ func (s ValidatorService) CheckContract(ctx context.Context,
 
 // findContract returns a new Contract for a ContractOffer, or finds the
 // existing Contract for all other message types.
-func (s ValidatorService) findContract(ctx context.Context,
-	itx *inspector.Transaction,
-	contractAddress btcutil.Address) (*contract.Contract, error) {
+func (s ValidatorService) findContract(ctx context.Context, itx *inspector.Transaction, contractAddress btcutil.Address) (*contract.Contract, error) {
 
 	addr := contractAddress.EncodeAddress()
 	m := itx.MsgProto
@@ -198,12 +193,12 @@ func (s ValidatorService) findContract(ctx context.Context,
 	// Operator
 	var operator btcutil.Address
 
-	if len(itx.InputAddrs) > 1 {
-		operator = itx.InputAddrs[1]
+	if len(itx.Inputs) > 1 {
+		operator = itx.Inputs[1].Address
 	}
 
 	if m.Type() == protocol.CodeContractOffer {
-		issuer := itx.InputAddrs[0]
+		issuer := itx.Inputs[0].Address
 
 		// this is a CO, so there must be not existing contract at this
 		// address.
@@ -253,11 +248,10 @@ func (s ValidatorService) findContract(ctx context.Context,
 
 // Permission check
 //
-func (s ValidatorService) isPermitted(itx *inspector.Transaction,
-	contract *contract.Contract) bool {
+func (s ValidatorService) isPermitted(itx *inspector.Transaction, contract *contract.Contract) bool {
 
 	msg := itx.MsgProto
-	sender := itx.InputAddrs[0]
+	sender := itx.Inputs[0].Address
 
 	if msg.Type() == protocol.CodeContractOffer {
 		// anyone can send a CO
@@ -281,22 +275,20 @@ func (s ValidatorService) isPermitted(itx *inspector.Transaction,
 // A Rejection message will be sent to the network, if there are enough
 // funds issue the message.
 //
-func (s ValidatorService) reject(ctx context.Context,
-	itx *inspector.Transaction,
-	code uint8) (*wire.MsgTx, error) {
+func (s ValidatorService) reject(ctx context.Context, itx *inspector.Transaction, code uint8) (*wire.MsgTx, error) {
 
 	// sender is the address that sent the message that we are rejecting.
-	sender := itx.InputAddrs[0]
+	sender := itx.Inputs[0].Address
 
 	// receiver (contract) is the address sending the message (UTXO)
 	receiver := itx.Outputs[0]
-	if receiver.Value < MinimumForResponse {
+	if uint64(receiver.Value) < MinimumForResponse {
 		// we did not receive enough to fund the response.
 		return nil, ErrInsufficientPayment
 	}
 
 	// Find spendable UTXOs
-	utxos, err := itx.UTXOs.ForAddress(receiver.Address)
+	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
 	if err != nil {
 		return nil, err
 	}

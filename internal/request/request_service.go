@@ -16,10 +16,10 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -45,35 +45,31 @@ func newRequestHandlers(state state.StateInterface,
 }
 
 type RequestService struct {
-	Config    config.Config
-	State     state.StateInterface
-	Wallet    wallet.WalletInterface
-	Inspector inspector.InspectorService
-	handlers  map[string]requestHandlerInterface
+	Config   config.Config
+	State    state.StateInterface
+	Wallet   wallet.WalletInterface
+	handlers map[string]requestHandlerInterface
 }
 
 func NewRequestService(config config.Config,
 	wallet wallet.WalletInterface,
-	state state.StateInterface,
-	inspector inspector.InspectorService) RequestService {
+	state state.StateInterface) RequestService {
 
 	return RequestService{
-		Config:    config,
-		State:     state,
-		Wallet:    wallet,
-		Inspector: inspector,
-		handlers:  newRequestHandlers(state, config),
+		Config:   config,
+		State:    state,
+		Wallet:   wallet,
+		handlers: newRequestHandlers(state, config),
 	}
 }
 
 // Performant filter to run before validation checks
 //
-func (s RequestService) PreFilter(ctx context.Context,
-	itx *inspector.Transaction) (*inspector.Transaction, error) {
+func (s RequestService) PreFilter(ctx context.Context, itx *inspector.Transaction) (*inspector.Transaction, error) {
 
 	// Filter by: Request-type action
 	//
-	if !s.Inspector.IsIncomingMessageType(itx.MsgProto) {
+	if !itx.IsIncomingMessageType() {
 		return nil, nil
 	}
 
@@ -94,8 +90,7 @@ func (s RequestService) PreFilter(ctx context.Context,
 
 // Process the request through a handler
 //
-func (s RequestService) Process(ctx context.Context,
-	itx *inspector.Transaction, contract *contract.Contract) (*inspector.Transaction, error) {
+func (s RequestService) Process(ctx context.Context, itx *inspector.Transaction, contract *contract.Contract) (*inspector.Transaction, error) {
 
 	tx := itx.MsgTx
 	msg := itx.MsgProto
@@ -111,7 +106,7 @@ func (s RequestService) Process(ctx context.Context,
 	req := contractRequest{
 		tx:        tx,
 		hash:      hash,
-		senders:   itx.InputAddrs,
+		senders:   itx.Inputs,
 		receivers: itx.Outputs,
 		contract:  *contract,
 		m:         msg,
@@ -127,14 +122,14 @@ func (s RequestService) Process(ctx context.Context,
 
 	// Get spendable UTXO's received for the contract address
 	contractAddress := itx.Outputs[0].Address
-	utxos, err := itx.UTXOs.ForAddress(contractAddress)
+	utxos, err := itx.UTXOs().ForAddress(contractAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	// Send change back to the sender by default,
 	// unless there is a specific address.
-	changeAddress := itx.InputAddrs[0]
+	changeAddress := itx.Inputs[0].Address
 	if res.changeAddress != nil {
 		changeAddress = res.changeAddress
 	}
@@ -151,8 +146,17 @@ func (s RequestService) Process(ctx context.Context,
 		return nil, err
 	}
 
-	newItx := s.Inspector.CreateTransaction(utxos, res.outs, res.Message)
-	newItx.MsgTx = newTx
+	// newItx := &inspector.Transaction{
+	// 	Hash:     newTx.TxHash(),
+	// 	MsgTx:    newTx,
+	// 	MsgProto: res.Message,
+	// 	Inputs:   utxos,
+	// 	Outputs: res.outs,
+	// }
+	newItx, err := inspector.NewTransactionFromWire(ctx, newTx)
+	if err != nil {
+		return nil, err
+	}
 
 	return newItx, nil
 }

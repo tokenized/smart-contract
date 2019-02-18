@@ -4,7 +4,6 @@ import (
 	"net"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -51,15 +50,13 @@ func NewNode(config config.Config,
 }
 
 func (n Node) Start() error {
-	inspector := inspector.NewInspectorService(n.Network)
 	validator := validator.NewValidatorService(n.Config, n.Wallet, n.State)
-	request := request.NewRequestService(n.Config, n.Wallet, n.State, inspector)
-	response := response.NewResponseService(n.Config, n.Wallet, n.State, inspector)
+	request := request.NewRequestService(n.Config, n.Wallet, n.State)
+	response := response.NewResponseService(n.Config, n.Wallet, n.State)
 
 	txHandler := NewTXHandler(n.Config,
 		n.Network,
 		n.Wallet,
-		inspector,
 		validator,
 		request,
 		response)

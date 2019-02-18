@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/state/contract"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -15,8 +15,7 @@ func newFreezeHandler() freezeHandler {
 	return freezeHandler{}
 }
 
-func (h freezeHandler) process(ctx context.Context,
-	itx *inspector.Transaction, c *contract.Contract) error {
+func (h freezeHandler) process(ctx context.Context, itx *inspector.Transaction, c *contract.Contract) error {
 
 	msg := itx.MsgProto.(*protocol.Freeze)
 	assetKey := string(msg.AssetID)

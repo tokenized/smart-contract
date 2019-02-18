@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -18,7 +18,6 @@ func newContractOfferValidator(fee config.Fee) contractOfferValidator {
 	}
 }
 
-func (h contractOfferValidator) validate(ctx context.Context,
-	itx *inspector.Transaction, vd validatorData) uint8 {
+func (h contractOfferValidator) validate(ctx context.Context, itx *inspector.Transaction, vd validatorData) uint8 {
 	return protocol.RejectionCodeOK
 }

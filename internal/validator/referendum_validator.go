@@ -3,7 +3,7 @@ package validator
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -19,8 +19,7 @@ func newReferendumValidator() referendumValidator {
 // A return value of 0 (protocol.RejectionCodeOK) indicates that the message
 // can be applied to the Contract. Any non-zero value should be interpreted
 // as the rejection code.
-func (h referendumValidator) validate(ctx context.Context,
-	itx *inspector.Transaction, vd validatorData) uint8 {
+func (h referendumValidator) validate(ctx context.Context, itx *inspector.Transaction, vd validatorData) uint8 {
 
 	// Contract and Message
 	c := vd.contract

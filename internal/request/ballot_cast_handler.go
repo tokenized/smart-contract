@@ -32,7 +32,7 @@ func (h ballotCastHandler) handle(ctx context.Context,
 		return nil, errors.New("Vote not found")
 	}
 
-	ballot := contract.NewBallotFromBallotCast(r.senders[0], ballotCast)
+	ballot := contract.NewBallotFromBallotCast(r.senders[0].Address, ballotCast)
 
 	// there is no response from the ballot cast, until the vote cut off
 	// time has been reached.

@@ -13,10 +13,10 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/state/contract"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -55,34 +55,30 @@ func newResponseHandlers(state state.StateInterface,
 }
 
 type ResponseService struct {
-	Config    config.Config
-	State     state.StateInterface
-	Wallet    wallet.WalletInterface
-	Inspector inspector.InspectorService
-	handlers  map[string]responseHandlerInterface
+	Config   config.Config
+	State    state.StateInterface
+	Wallet   wallet.WalletInterface
+	handlers map[string]responseHandlerInterface
 }
 
 func NewResponseService(config config.Config,
 	wallet wallet.WalletInterface,
-	state state.StateInterface,
-	inspector inspector.InspectorService) ResponseService {
+	state state.StateInterface) ResponseService {
 	return ResponseService{
-		State:     state,
-		Wallet:    wallet,
-		Config:    config,
-		Inspector: inspector,
-		handlers:  newResponseHandlers(state, config),
+		State:    state,
+		Wallet:   wallet,
+		Config:   config,
+		handlers: newResponseHandlers(state, config),
 	}
 }
 
 // Performant filter to run before validation checks
 //
-func (s ResponseService) PreFilter(ctx context.Context,
-	itx *inspector.Transaction) (*inspector.Transaction, error) {
+func (s ResponseService) PreFilter(ctx context.Context, itx *inspector.Transaction) (*inspector.Transaction, error) {
 
 	// Filter by: Response-type action
 	//
-	if !s.Inspector.IsOutgoingMessageType(itx.MsgProto) {
+	if !itx.IsOutgoingMessageType() {
 		return nil, nil
 	}
 
@@ -109,8 +105,7 @@ func (s ResponseService) PreFilter(ctx context.Context,
 	return itx, nil
 }
 
-func (s ResponseService) Process(ctx context.Context,
-	itx *inspector.Transaction, contract *contract.Contract) error {
+func (s ResponseService) Process(ctx context.Context, itx *inspector.Transaction, contract *contract.Contract) error {
 
 	msg := itx.MsgProto
 

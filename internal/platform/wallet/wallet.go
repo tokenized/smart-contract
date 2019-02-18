@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -72,11 +73,19 @@ func (w Wallet) Get(address string) (*btcec.PrivateKey, error) {
 	return w.KeyStore.Get(address)
 }
 
-func (w Wallet) BuildTX(key *btcec.PrivateKey,
-	utxos txbuilder.UTXOs,
-	outs []txbuilder.TxOutput,
-	changeAddress btcutil.Address,
-	m protocol.OpReturnMessage) (*wire.MsgTx, error) {
+func (w Wallet) BuildTX(key *btcec.PrivateKey, iutxos inspector.UTXOs, outs []txbuilder.TxOutput, changeAddress btcutil.Address, m protocol.OpReturnMessage) (*wire.MsgTx, error) {
+
+	// Convert inspector to txbuilder
+	utxos := txbuilder.UTXOs{}
+	for _, iutxo := range iutxos {
+		utxo := txbuilder.UTXO{
+			Hash:     iutxo.Hash,
+			PkScript: iutxo.PkScript,
+			Index:    iutxo.Index,
+			Value:    uint64(iutxo.Value),
+		}
+		utxos = append(utxos, utxo)
+	}
 
 	outputs := w.buildOutputs(outs)
 

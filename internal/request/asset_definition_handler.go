@@ -79,7 +79,7 @@ func (h assetDefinitionHandler) buildOutputs(r contractRequest) ([]txbuilder.TxO
 			Value:   dustLimit,
 		},
 		txbuilder.TxOutput{
-			Address: r.senders[0],
+			Address: r.senders[0].Address,
 			Value:   dustLimit, // any change will be added to this output value
 		},
 	}

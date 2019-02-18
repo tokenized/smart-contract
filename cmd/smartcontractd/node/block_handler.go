@@ -5,12 +5,12 @@ import (
 	"errors"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/request"
 	"github.com/tokenized/smart-contract/internal/response"
 	"github.com/tokenized/smart-contract/internal/validator"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -18,7 +18,6 @@ import (
 type BlockHandler struct {
 	Config    config.Config
 	Network   network.NetworkInterface
-	Inspector inspector.InspectorService
 	Validator validator.ValidatorService
 	Request   request.RequestService
 	Response  response.ResponseService
@@ -27,14 +26,12 @@ type BlockHandler struct {
 // NewBlockHandler returns a new BlockHandler with the given Config.
 func NewBlockHandler(config config.Config,
 	network network.NetworkInterface,
-	inspector inspector.InspectorService,
 	validator validator.ValidatorService,
 	request request.RequestService,
 	response response.ResponseService) TXHandler {
 	return TXHandler{
 		Config:    config,
 		Network:   network,
-		Inspector: inspector,
 		Validator: validator,
 		Request:   request,
 		Response:  response,
@@ -62,8 +59,8 @@ func (h BlockHandler) handle(ctx context.Context, b *wire.MsgBlock) error {
 	for _, tx := range b.Transactions {
 
 		// Inspector: Does this transaction concern the protocol?
-		itx, err := h.Inspector.MakeTransaction(tx)
-		if err != nil || itx == nil {
+		itx, err := inspector.NewTransactionFromWire(ctx, tx)
+		if err != nil || !itx.IsTokenized() {
 			// log.Error(err)
 			return nil
 		}

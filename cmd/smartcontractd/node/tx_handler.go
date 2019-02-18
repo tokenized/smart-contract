@@ -7,13 +7,13 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/broadcaster"
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/request"
 	"github.com/tokenized/smart-contract/internal/response"
 	"github.com/tokenized/smart-contract/internal/validator"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -22,7 +22,6 @@ type TXHandler struct {
 	Config    config.Config
 	Network   network.NetworkInterface
 	Wallet    wallet.Wallet
-	Inspector inspector.InspectorService
 	Validator validator.ValidatorService
 	Request   request.RequestService
 	Response  response.ResponseService
@@ -33,7 +32,6 @@ type TXHandler struct {
 func NewTXHandler(config config.Config,
 	network network.NetworkInterface,
 	wallet wallet.Wallet,
-	inspector inspector.InspectorService,
 	validator validator.ValidatorService,
 	request request.RequestService,
 	response response.ResponseService) TXHandler {
@@ -41,7 +39,6 @@ func NewTXHandler(config config.Config,
 		Config:    config,
 		Network:   network,
 		Wallet:    wallet,
-		Inspector: inspector,
 		Validator: validator,
 		Request:   request,
 		Response:  response,
@@ -74,8 +71,8 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	ts := time.Now()
 
 	// Inspector: Does this transaction concern the protocol?
-	itx, err := h.Inspector.MakeTransaction(tx)
-	if err != nil || itx == nil {
+	itx, err := inspector.NewTransactionFromWire(ctx, tx)
+	if err != nil || !itx.IsTokenized() {
 		return nil
 	}
 
@@ -90,8 +87,7 @@ func (h TXHandler) handle(ctx context.Context, tx *wire.MsgTx) error {
 	defer logger.Elapsed(ctx, ts, "TXHandler.handle")
 
 	// Introduce Inputs and UTXOs in the Transaction
-	itx, err = h.Inspector.PromoteTransaction(itx)
-	if err != nil {
+	if err := itx.Promote(ctx, h.Network); err != nil {
 		log.Error(err)
 		return nil
 	}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/broadcaster"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -14,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/request"
 	"github.com/tokenized/smart-contract/internal/response"
 	"github.com/tokenized/smart-contract/internal/validator"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
@@ -37,7 +37,6 @@ type RebuilderItem struct {
 
 type RebuilderService struct {
 	Network   network.NetworkInterface
-	Inspector inspector.InspectorService
 	Request   request.RequestService
 	Response  response.ResponseService
 	Validator validator.ValidatorService
@@ -45,14 +44,12 @@ type RebuilderService struct {
 }
 
 func NewRebuilderService(network network.NetworkInterface,
-	inspector inspector.InspectorService,
 	request request.RequestService,
 	response response.ResponseService,
 	validator validator.ValidatorService,
 	state state.StateInterface) RebuilderService {
 	return RebuilderService{
 		Network:   network,
-		Inspector: inspector,
 		Request:   request,
 		Response:  response,
 		Validator: validator,
@@ -60,8 +57,7 @@ func NewRebuilderService(network network.NetworkInterface,
 	}
 }
 
-func (r RebuilderService) FindState(ctx context.Context,
-	addr btcutil.Address) (*contract.Contract, *contract.Contract, error) {
+func (r RebuilderService) FindState(ctx context.Context, addr btcutil.Address) (*contract.Contract, *contract.Contract, error) {
 
 	var (
 		soft   *contract.Contract
@@ -92,8 +88,7 @@ func (r RebuilderService) FindState(ctx context.Context,
 	return &*hard, &*soft, nil
 }
 
-func (r RebuilderService) FindContract(ctx context.Context,
-	addr btcutil.Address) (*contract.Contract, int, error) {
+func (r RebuilderService) FindContract(ctx context.Context, addr btcutil.Address) (*contract.Contract, int, error) {
 
 	log := logger.NewLoggerFromContext(ctx).Sugar()
 	txHeadCount := 0
@@ -109,14 +104,13 @@ func (r RebuilderService) FindContract(ctx context.Context,
 		txHeadCount++
 
 		// Inspector: Does this transaction concern the protocol?
-		itx, err := r.Inspector.MakeTransaction(tx.msg)
-		if err != nil || itx == nil {
+		itx, err := inspector.NewTransactionFromWire(ctx, tx.msg)
+		if err != nil || !itx.IsTokenized() {
 			continue
 		}
 
 		// Introduce Inputs and UTXOs in the Transaction
-		itx, err = r.Inspector.PromoteTransaction(itx)
-		if err != nil {
+		if err := itx.Promote(ctx, r.Network); err != nil {
 			log.Error(err)
 			continue
 		}
@@ -130,8 +124,7 @@ func (r RebuilderService) FindContract(ctx context.Context,
 	return nil, 0, errors.New("Could not find a contract offer for PKH anywhere")
 }
 
-func (r RebuilderService) ListTx(ctx context.Context,
-	addr btcutil.Address, headCount int) ([]*RebuilderItem, error) {
+func (r RebuilderService) ListTx(ctx context.Context, addr btcutil.Address, headCount int) ([]*RebuilderItem, error) {
 
 	// Oldest -> Newest
 	listResults, err := r.Network.ListTransactions(ctx)
@@ -180,8 +173,8 @@ func (r RebuilderService) Sync(ctx context.Context, softContract *contract.Contr
 		txHeadCount++
 
 		// Inspector: Does this transaction concern the protocol?
-		itx, err := r.Inspector.MakeTransaction(tx.msg)
-		if err != nil || itx == nil {
+		itx, err := inspector.NewTransactionFromWire(ctx, tx.msg)
+		if err != nil || !itx.IsTokenized() {
 			continue
 		}
 
@@ -219,8 +212,8 @@ func (r RebuilderService) Sync(ctx context.Context, softContract *contract.Contr
 	for _, tx := range transactions {
 
 		// Inspector: Does this transaction concern the protocol?
-		itx, err := r.Inspector.MakeTransaction(tx.msg)
-		if err != nil || itx == nil {
+		itx, err := inspector.NewTransactionFromWire(ctx, tx.msg)
+		if err != nil || !itx.IsTokenized() {
 			continue
 		}
 
@@ -236,8 +229,7 @@ func (r RebuilderService) Sync(ctx context.Context, softContract *contract.Contr
 		}
 
 		// Introduce Inputs and UTXOs in the Transaction
-		itx, err = r.Inspector.PromoteTransaction(itx)
-		if err != nil {
+		if err := itx.Promote(ctx, r.Network); err != nil {
 			log.Error(err)
 			continue
 		}

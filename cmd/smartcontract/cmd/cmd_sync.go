@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/inspector"
 	"github.com/tokenized/smart-contract/internal/platform/logger"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -154,15 +153,14 @@ var cmdSync = &cobra.Command{
 		// Builder
 
 		state := state.NewStateService(contractStorage)
-		inspector := inspector.NewInspectorService(network)
-		request := request.NewRequestService(*appConfig, wallet, state, inspector)
-		response := response.NewResponseService(*appConfig, wallet, state, inspector)
+		request := request.NewRequestService(*appConfig, wallet, state)
+		response := response.NewResponseService(*appConfig, wallet, state)
 		validator := validator.NewValidatorService(*appConfig, wallet, state)
 
 		// -------------------------------------------------------------------------
 		// Rebuilder
 
-		reb := rebuilder.NewRebuilderService(network, inspector, request, response, validator, state)
+		reb := rebuilder.NewRebuilderService(network, request, response, validator, state)
 
 		// -------------------------------------------------------------------------
 		// Contract address

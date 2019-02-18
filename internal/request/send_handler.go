@@ -45,7 +45,7 @@ func (h sendHandler) handle(ctx context.Context,
 	}
 
 	// Party 1 (Sender)
-	party1Addr := r.senders[0].EncodeAddress()
+	party1Addr := r.senders[0].Address.EncodeAddress()
 	party1Holding, ok := asset.Holdings[party1Addr]
 	if !ok {
 		return nil, fmt.Errorf("send : holding not found contract=%s assetID=%s party1=%s", c.ID, issue.AssetID, party1Addr)
@@ -97,7 +97,7 @@ func (h sendHandler) handle(ctx context.Context,
 }
 
 func (h sendHandler) buildOutputs(r contractRequest) ([]txbuilder.TxOutput, error) {
-	party1Addr := r.senders[0]
+	party1Addr := r.senders[0].Address
 	party2Addr := r.receivers[1].Address
 
 	contractAddress, err := r.contract.Address()

@@ -43,8 +43,7 @@ func (h initiativeHandler) handle(ctx context.Context,
 	vote.Timestamp = uint64(time.Now().Unix())
 
 	// create the Vote
-	v := contract.NewVoteFromProtocolVote(r.senders[0].EncodeAddress(),
-		&vote)
+	v := contract.NewVoteFromProtocolVote(r.senders[0].Address.EncodeAddress(), &vote)
 
 	// record the UTXO for later when we need to send the Result when the
 	// Vote cutoff time passes.
