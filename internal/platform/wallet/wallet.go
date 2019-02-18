@@ -22,6 +22,11 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
+type WalletInterface interface {
+	Get(string) (*btcec.PrivateKey, error)
+	BuildTX(*btcec.PrivateKey, inspector.UTXOs, []txbuilder.TxOutput, btcutil.Address, protocol.OpReturnMessage) (*wire.MsgTx, error)
+}
+
 type Wallet struct {
 	KeyStore      *KeyStore
 	PublicAddress string

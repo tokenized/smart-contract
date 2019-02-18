@@ -26,7 +26,16 @@ const (
 	StateHard      = "hard"
 )
 
-var ErrContractNotFound = errors.New("Contract not found")
+var (
+	ErrContractNotFound = errors.New("Contract not found")
+)
+
+type StateInterface interface {
+	Write(context.Context, contract.Contract) error
+	Read(context.Context, string) (*contract.Contract, error)
+	WriteHard(context.Context, contract.Contract) error
+	ReadHard(context.Context, string) (*contract.Contract, error)
+}
 
 type StateService struct {
 	Storage storage.ReadWriter

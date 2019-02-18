@@ -21,6 +21,25 @@ import (
  * - You tell me about double spends
  * - You tell me about transaction propagation
  */
+type NetworkInterface interface {
+	Start() error
+	RegisterTxListener(Listener)
+	RegisterBlockListener(Listener)
+	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
+	SendTX(context.Context, *wire.MsgTx) (*chainhash.Hash, error)
+	WatchAddress(context.Context, btcutil.Address) error
+	ListTransactions(context.Context) ([]btcjson.ListTransactionsResult, error)
+}
+
+type Listener interface {
+	Handle(context.Context, wire.Message) error
+}
+
+type TrustedNode struct {
+	RpcNode  *rpcnode.RPCNode
+	PeerNode spvnode.Node
+}
+
 type Network struct {
 	TrustedNode TrustedNode
 	// PeerNodes     []spvnode.Node
