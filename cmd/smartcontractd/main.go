@@ -2,11 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"log"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/node"
-	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/logger"
+	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/network"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -30,7 +34,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Logging
 
-	ctx, log := logger.NewLoggerWithContext()
+	log := log.New(os.Stdout, "Node : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 
 	// -------------------------------------------------------------------------
 	// Config
@@ -75,18 +79,18 @@ func main() {
 	// -------------------------------------------------------------------------
 	// App Starting
 
-	log.Info("main : Started : Application Initializing")
-	defer log.Info("main : Completed")
+	log.Println("main : Started : Application Initializing")
+	defer log.Println("main : Completed")
 
 	cfgJSON, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
 		log.Fatalf("main : Marshalling Config to JSON : %v", err)
 	}
 
-	log.Infof("main : Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
+	log.Printf("main : Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
 
 	// TODO: Mask sensitive values
-	log.Infof("main : Config : %v\n", string(cfgJSON))
+	log.Printf("main : Config : %v\n", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
 	// Trusted Peer Node
@@ -128,53 +132,83 @@ func main() {
 		panic(err)
 	}
 
-	// -------------------------------------------------------------------------
-	// Contract Storage
-
-	contractStorageConfig := storage.NewConfig(cfg.Storage.Region,
-		cfg.Storage.AccessKey,
-		cfg.Storage.Secret,
-		cfg.Storage.Bucket,
-		cfg.Storage.Root)
-
-	var contractStorage storage.Storage
-	if strings.ToLower(contractStorageConfig.Bucket) == "standalone" {
-		contractStorage = storage.NewFilesystemStorage(contractStorageConfig)
-	} else {
-		contractStorage = storage.NewS3Storage(contractStorageConfig)
-	}
-
-	// -------------------------------------------------------------------------
 	// Always watch Contract address
-	//
 	// TODO Move this to app config, watch the address from the node instead
-	//
-
 	contractAddr, err := btcutil.DecodeAddress(string(wallet.PublicAddress), &chaincfg.MainNetParams)
 	if err != nil {
 		panic(err)
 	}
 	network.WatchAddress(ctx, contractAddr)
 
-	log.Infof("Running contract %s", contractAddr)
+	log.Printf("main : Running Contract %s", contractAddr)
 
 	// -------------------------------------------------------------------------
-	// App Config
+	// Start Database / Storage
 
-	appConfig, err := config.NewConfig(cfg.Contract.OperatorName,
-		cfg.Contract.Version,
-		cfg.Contract.FeeAddress,
-		cfg.Contract.FeeAmount)
+	log.Println("main : Started : Initialize Database")
 
+	masterDB, err := db.New(nil, &db.StorageConfig{
+		Region:    cfg.Storage.Region,
+		AccessKey: cfg.Storage.AccessKey,
+		Secret:    cfg.Storage.Secret,
+		Bucket:    cfg.Storage.Bucket,
+		Root:      cfg.Storage.Root,
+	})
 	if err != nil {
-		panic(err)
+		log.Fatalf("main : Register DB : %v", err)
 	}
+	defer masterDB.Close()
+
+	// -------------------------------------------------------------------------
+	// Node Config
+
+	nodeConfig := &node.Config{
+		ContractProviderID: cfg.Contract.OperatorName,
+		Version:            cfg.Contract.Version,
+		FeeAddress:         cfg.Contract.FeeAddress,
+		FeeValue:           cfg.Contract.FeeAmount,
+	}
+
+	// -------------------------------------------------------------------------
+	// Register Hooks
+
+	handlers.Register(spvNode, log, nodeConfig, masterDB)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
 
-	n := node.NewNode(*appConfig, network, *wallet, contractStorage)
-	if err := n.Start(); err != nil {
-		panic(err)
+	// Make a channel to listen for errors coming from the listener. Use a
+	// buffered channel so the goroutine can exit if we don't collect this error.
+	serverErrors := make(chan error, 1)
+
+	// Start the service listening for requests.
+	go func() {
+		log.Print("main : Node Running")
+		serverErrors <- spvNode.Start()
+	}()
+
+	// -------------------------------------------------------------------------
+	// Shutdown
+
+	// Make a channel to listen for an interrupt or terminate signal from the OS.
+	// Use a buffered channel because the signal package requires it.
+	osSignals := make(chan os.Signal, 1)
+	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
+
+	// -------------------------------------------------------------------------
+	// Stop API Service
+
+	// Blocking main and waiting for shutdown.
+	select {
+	case err := <-serverErrors:
+		log.Fatalf("main : Error starting server: %v", err)
+
+	case <-osSignals:
+		log.Println("main : Start shutdown...")
+
+		// Asking listener to shutdown and load shed.
+		if err := spvNode.Close(); err != nil {
+			log.Fatalf("main : Could not stop spvnode server: %v", err)
+		}
 	}
 }
