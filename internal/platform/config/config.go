@@ -18,6 +18,12 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
+// Fee represents the standard fee required for a contract to respond.
+type Fee struct {
+	Address btcutil.Address
+	Value   uint64
+}
+
 // Config holds all configuration for the running service.
 type Config struct {
 	ContractProviderID string
