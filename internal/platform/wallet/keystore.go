@@ -1,44 +1,42 @@
 package wallet
 
 import (
-	"encoding/hex"
 	"errors"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 )
 
 var (
 	ErrKeyNotFound = errors.New("Key not found")
 )
 
+type RootKey struct {
+	PublicAddress string
+	PrivateKey    *btcec.PrivateKey
+	PublicKey     *btcec.PublicKey
+}
+
 type KeyStore struct {
-	Keys map[string]*btcec.PrivateKey
+	Keys map[string]*RootKey
 }
 
-func NewKeyStore(privKey *btcec.PrivateKey) (*KeyStore, error) {
-	pub := privKey.PubKey()
-
-	h := hex.EncodeToString(pub.SerializeCompressed())
-
-	pubhash, err := btcutil.DecodeAddress(h, &chaincfg.MainNetParams)
-	if err != nil {
-		return nil, err
+func NewKeyStore() *KeyStore {
+	return &KeyStore{
+		Keys: make(map[string]*RootKey),
 	}
-
-	address := pubhash.EncodeAddress()
-
-	store := KeyStore{
-		Keys: map[string]*btcec.PrivateKey{
-			address: privKey,
-		},
-	}
-
-	return &store, nil
 }
 
-func (k KeyStore) Get(address string) (*btcec.PrivateKey, error) {
+func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey) error {
+	k.Keys[pkh] = &RootKey{
+		PublicAddress: pkh,
+		PrivateKey:    privKey,
+		PublicKey:     pubKey,
+	}
+
+	return nil
+}
+
+func (k KeyStore) Get(address string) (*RootKey, error) {
 	key, ok := k.Keys[address]
 
 	if !ok {

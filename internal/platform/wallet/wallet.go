@@ -23,26 +23,31 @@ import (
 )
 
 type WalletInterface interface {
-	Get(string) (*btcec.PrivateKey, error)
+	Get(string) (*RootKey, error)
+	List([]string) ([]*RootKey, error)
 	BuildTX(*btcec.PrivateKey, inspector.UTXOs, []txbuilder.TxOutput, btcutil.Address, protocol.OpReturnMessage) (*wire.MsgTx, error)
 }
 
 type Wallet struct {
-	KeyStore      *KeyStore
-	PublicAddress string
-	PrivateKey    *btcec.PrivateKey
-	PublicKey     *btcec.PublicKey
+	KeyStore *KeyStore
 }
 
-func NewWallet(secret string) (*Wallet, error) {
+func New() *Wallet {
+	return &Wallet{
+		KeyStore: NewKeyStore(),
+	}
+}
+
+// Register a private key with the wallet
+func (w Wallet) Register(secret string) error {
 	if len(secret) == 0 {
-		return nil, errors.New("Create wallet failed: missing secret")
+		return errors.New("Create wallet failed: missing secret")
 	}
 
 	// load the WIF if we have one
 	wif, err := btcutil.DecodeWIF(secret)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Private / Public Keys
@@ -53,29 +58,36 @@ func NewWallet(secret string) (*Wallet, error) {
 	h := hex.EncodeToString(pub.SerializeCompressed())
 	pubhash, err := btcutil.DecodeAddress(h, &chaincfg.MainNetParams)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
 	pubaddr := pubhash.EncodeAddress()
 
-	// Key Store
-	keystore, err := NewKeyStore(priv)
-	if err != nil {
-		return nil, err
-	}
+	// Put in key store
+	w.KeyStore.Put(pubaddr, priv, pub)
 
-	w := Wallet{
-		KeyStore:      keystore,
-		PublicAddress: pubaddr,
-		PrivateKey:    priv,
-		PublicKey:     pub,
-	}
-
-	return &w, nil
+	return nil
 }
 
-func (w Wallet) Get(address string) (*btcec.PrivateKey, error) {
-	return w.KeyStore.Get(address)
+func (w Wallet) List(addrs []string) ([]*RootKey, error) {
+	var rks []*RootKey
+
+	for _, addr := range addrs {
+		rk, err := w.Get(addr)
+		if err != nil {
+			if err == ErrKeyNotFound {
+				continue
+			}
+			return nil, err
+		}
+
+		rks = append(rks, rk)
+	}
+
+	return rks, nil
+}
+
+func (w Wallet) Get(addr string) (*RootKey, error) {
+	return w.KeyStore.Get(addr)
 }
 
 func (w Wallet) BuildTX(key *btcec.PrivateKey, iutxos inspector.UTXOs, outs []txbuilder.TxOutput, changeAddress btcutil.Address, m protocol.OpReturnMessage) (*wire.MsgTx, error) {

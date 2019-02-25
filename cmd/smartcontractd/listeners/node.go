@@ -15,7 +15,7 @@ type Server struct {
 func (s *Server) Start() error {
 
 	// Register listeners
-	txListener := &TXListener{Handler: s.Handler}
+	txListener := &TXListener{Handler: s.Handler, Node: s.RpcNode}
 	s.SpvNode.RegisterListener(spvnode.ListenerTX, txListener)
 
 	if err := s.SpvNode.Start(); err != nil {

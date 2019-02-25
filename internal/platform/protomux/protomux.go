@@ -25,18 +25,17 @@ const (
 
 // Handler is the interface for this Protocol Mux
 type Handler interface {
-	Respond(ctx context.Context, m wire.Message) error
-	Trigger(ctx context.Context, verb string, m wire.Message) error
+	Respond(context.Context, wire.Message) error
+	Trigger(context.Context, string, *inspector.Transaction) error
 }
 
 // A Handler is a type that handles a protocol messages
-type HandlerFunc func(itx *inspector.Transaction, m protocol.OpReturnMessage)
+type HandlerFunc func(itx *inspector.Transaction, pkhs []string, m protocol.OpReturnMessage)
 
 // A ResponderFunc will handle responses
 type ResponderFunc func(ctx context.Context, tx *wire.MsgTx)
 
 type ProtoMux struct {
-	// Node          NodeInterface
 	Responder     ResponderFunc
 	SeeHandlers   map[string][]HandlerFunc
 	LostHandlers  map[string][]HandlerFunc
@@ -68,11 +67,7 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 }
 
 // Trigger fires a handler
-func (p *ProtoMux) Trigger(ctx context.Context, verb string, m wire.Message) error {
-	tx, ok := m.(*wire.MsgTx)
-	if !ok {
-		return errors.New("Could not assert as *wire.MsgTx")
-	}
+func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Transaction) error {
 
 	var group map[string][]HandlerFunc
 
@@ -87,19 +82,19 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, m wire.Message) err
 		return errors.New("Unknown handler type")
 	}
 
-	// Check if transaction relates to protocol
-	itx, err := inspector.NewTransactionFromWire(ctx, tx)
-	if err != nil || !itx.IsTokenized() {
-		return nil
-	}
-
 	// Locate the handlers from the group
 	txAction := itx.MsgProto.Type()
 	handlers, _ := group[txAction]
 
+	// Find contract PKHs
+	var pkhs []string
+	for _, addr := range itx.ContractAddresses() {
+		pkhs = append(pkhs, addr.String())
+	}
+
 	// Notify the listeners
 	for _, listener := range handlers {
-		listener(itx, itx.MsgProto)
+		listener(itx, pkhs, itx.MsgProto)
 	}
 
 	return nil

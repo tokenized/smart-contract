@@ -199,6 +199,11 @@ func (itx *Transaction) UTXOs() UTXOs {
 	return utxos
 }
 
+// ContractAddresses returns the contract address, which may include more than one
+func (itx *Transaction) ContractAddresses() []btcutil.Address {
+	return GetProtocolContractAddresses(itx, itx.MsgProto)
+}
+
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []btcutil.Address {
 	l := len(itx.Inputs) + len(itx.Outputs)

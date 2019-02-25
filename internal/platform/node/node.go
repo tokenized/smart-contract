@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
@@ -26,15 +27,16 @@ type Values struct {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-type Handler func(ctx context.Context, log *log.Logger, itx *inspector.Transaction, m protocol.OpReturnMessage) error
+type Handler func(ctx context.Context, log *log.Logger, itx *inspector.Transaction, rk *wallet.RootKey, m protocol.OpReturnMessage) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
 // data/logic on this App struct
 type App struct {
 	*protomux.ProtoMux
-	log *log.Logger
-	mw  []Middleware
+	log    *log.Logger
+	mw     []Middleware
+	wallet wallet.WalletInterface
 }
 
 // Node configuration
@@ -46,11 +48,12 @@ type Config struct {
 }
 
 // New creates an App value that handle a set of routes for the application.
-func New(log *log.Logger, mw ...Middleware) *App {
+func New(log *log.Logger, wallet wallet.WalletInterface, mw ...Middleware) *App {
 	return &App{
 		ProtoMux: protomux.New(),
 		log:      log,
 		mw:       mw,
+		wallet:   wallet,
 	}
 }
 
@@ -63,7 +66,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(itx *inspector.Transaction, m protocol.OpReturnMessage) {
+	h := func(itx *inspector.Transaction, pkhs []string, m protocol.OpReturnMessage) {
 
 		// Start trace span.
 		ctx, span := trace.StartSpan(context.Background(), "internal.platform.node")
@@ -76,9 +79,14 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 		ctx = context.WithValue(ctx, KeyValues, &v)
 
-		// Call the wrapped handler functions.
-		if err := handler(ctx, a.log, itx, m); err != nil {
-			Error(ctx, a.log, a.ProtoMux, err)
+		// For each address controlled by this wallet
+		rootKeys, _ := a.wallet.List(pkhs)
+		for _, rootKey := range rootKeys {
+
+			// Call the wrapped handler functions.
+			if err := handler(ctx, a.log, itx, rootKey, m); err != nil {
+				Error(ctx, a.log, a.ProtoMux, err)
+			}
 		}
 	}
 

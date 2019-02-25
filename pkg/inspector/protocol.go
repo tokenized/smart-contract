@@ -1,8 +1,6 @@
 package inspector
 
 import (
-	"context"
-
 	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
@@ -12,7 +10,7 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(ctx context.Context, itx *Transaction, m protocol.OpReturnMessage, address btcutil.Address) Balance {
+func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address btcutil.Address) Balance {
 
 	b := Balance{}
 
@@ -66,7 +64,47 @@ func GetProtocolQuantity(ctx context.Context, itx *Transaction, m protocol.OpRet
 	return b
 }
 
-func GetProtocolAddresses(ctx context.Context, itx *Transaction, m protocol.OpReturnMessage, contractAddress btcutil.Address) []btcutil.Address {
+func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []btcutil.Address {
+
+	addresses := []btcutil.Address{}
+
+	// Swaps contain a second contract
+	if m.Type() == protocol.CodeSwap {
+		addresses = append(addresses, itx.Outputs[0].Address)
+		addresses = append(addresses, itx.Outputs[1].Address)
+		return addresses
+	}
+
+	// Settlements may contain a second contract, although optional
+	if m.Type() == protocol.CodeSettlement {
+		addresses = append(addresses, itx.Inputs[0].Address)
+
+		if len(itx.Inputs) > 1 && itx.Inputs[1].Address.String() != itx.Inputs[0].Address.String() {
+			addresses = append(addresses, itx.Inputs[1].Address)
+		}
+
+		return addresses
+	}
+
+	// Some specific actions have the contract address as an input
+	switch m.Type() {
+	case protocol.CodeBallotCounted,
+		protocol.CodeFreeze,
+		protocol.CodeThaw,
+		protocol.CodeConfiscation,
+		protocol.CodeReconciliation,
+		protocol.CodeRejection:
+
+		addresses = append(addresses, itx.Inputs[0].Address)
+		return addresses
+	}
+
+	// Default behavior is contract as first output
+	addresses = append(addresses, itx.Outputs[0].Address)
+	return addresses
+}
+
+func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress btcutil.Address) []btcutil.Address {
 
 	addresses := []btcutil.Address{}
 
@@ -86,8 +124,7 @@ func GetProtocolAddresses(ctx context.Context, itx *Transaction, m protocol.OpRe
 		addresses = append(addresses, itx.Inputs[0].Address)
 
 		// is there an operator address?
-		if len(itx.Inputs) > 1 &&
-			itx.Inputs[1].Address.String() != itx.Inputs[0].Address.String() {
+		if len(itx.Inputs) > 1 && itx.Inputs[1].Address.String() != itx.Inputs[0].Address.String() {
 
 			addresses = append(addresses, itx.Inputs[1].Address)
 		}

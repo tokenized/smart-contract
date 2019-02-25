@@ -6,22 +6,23 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 // API returns a handler for a set of routes for protocol actions.
-func API(log *log.Logger, config *node.Config, masterDB *db.DB) protomux.Handler {
+func API(log *log.Logger, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB) protomux.Handler {
 
-	app := node.New(log)
+	app := node.New(log, masterWallet)
 
 	// Register block based events.
 	c := Contract{}
 
-	app.Handle("SEE", protocol.CodeContractOffer, c.IssuerCreate)
-	app.Handle("SEE", protocol.CodeContractFormation, c.ContractUpdate)
-	app.Handle("SEE", protocol.CodeContractAmendment, c.IssuerUpdate)
-	// app.Handle("LOST", protocol.CodeContractAmendment, c.IssuerReorg)
-	// app.Handle("STOLE", protocol.CodeContractAmendment, c.IssuerDoubleSpend)
+	app.Handle("SEE", protocol.CodeContractOffer, c.Offer)
+	app.Handle("SEE", protocol.CodeContractFormation, c.Formation)
+	app.Handle("SEE", protocol.CodeContractAmendment, c.Amendment)
+	// app.Handle("LOST", protocol.CodeContractAmendment, c.AmendmentReorg)
+	// app.Handle("STOLE", protocol.CodeContractAmendment, c.AmendmentDoubleSpend)
 
 	return app
 }

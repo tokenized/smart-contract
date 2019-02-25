@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
@@ -122,6 +123,14 @@ func main() {
 	}
 
 	// -------------------------------------------------------------------------
+	// Wallet
+
+	masterWallet := wallet.New()
+	if err := masterWallet.Register(cfg.Contract.PrivateKey); err != nil {
+		panic(err)
+	}
+
+	// -------------------------------------------------------------------------
 	// Start Database / Storage
 
 	log.Println("main : Started : Initialize Database")
@@ -151,7 +160,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Register Hooks
 
-	appHandlers := handlers.API(log, appConfig, masterDB)
+	appHandlers := handlers.API(log, masterWallet, appConfig, masterDB)
 
 	node := listeners.Server{
 		RpcNode: rpcNode,

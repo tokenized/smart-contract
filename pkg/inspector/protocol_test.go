@@ -1,7 +1,6 @@
 package inspector
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
@@ -130,12 +129,10 @@ func TestGetQuantity(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	for _, tt := range testArr {
 		t.Run(tt.name, func(t *testing.T) {
 
-			balance := GetProtocolQuantity(ctx, tt.tx, tt.message, tt.address)
+			balance := GetProtocolQuantity(tt.tx, tt.message, tt.address)
 
 			if !reflect.DeepEqual(balance, tt.want) {
 				t.Errorf("got\n%+v\nwant\n%+v", balance, tt.want)

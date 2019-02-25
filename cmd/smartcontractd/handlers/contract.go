@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
@@ -13,7 +14,7 @@ import (
 
 type Contract struct{}
 
-func (c *Contract) IssuerCreate(ctx context.Context, log *log.Logger, itx *inspector.Transaction, m protocol.OpReturnMessage) error {
+func (c *Contract) Offer(ctx context.Context, log *log.Logger, itx *inspector.Transaction, rk *wallet.RootKey, m protocol.OpReturnMessage) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.IssuerCreate")
 	defer span.End()
 
@@ -29,13 +30,13 @@ func (c *Contract) IssuerCreate(ctx context.Context, log *log.Logger, itx *inspe
 	return nil
 }
 
-func (c *Contract) ContractUpdate(ctx context.Context, log *log.Logger, itx *inspector.Transaction, m protocol.OpReturnMessage) error {
+func (c *Contract) Formation(ctx context.Context, log *log.Logger, itx *inspector.Transaction, rk *wallet.RootKey, m protocol.OpReturnMessage) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.ContractUpdate")
 	defer span.End()
 	return nil
 }
 
-func (c *Contract) IssuerUpdate(ctx context.Context, log *log.Logger, itx *inspector.Transaction, m protocol.OpReturnMessage) error {
+func (c *Contract) Amendment(ctx context.Context, log *log.Logger, itx *inspector.Transaction, rk *wallet.RootKey, m protocol.OpReturnMessage) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.IssuerUpdate")
 	defer span.End()
 	return nil
