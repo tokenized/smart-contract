@@ -155,6 +155,7 @@ func main() {
 		Version:            cfg.Contract.Version,
 		FeeAddress:         cfg.Contract.FeeAddress,
 		FeeValue:           cfg.Contract.FeeAmount,
+		DustLimit:          546,
 	}
 
 	// -------------------------------------------------------------------------

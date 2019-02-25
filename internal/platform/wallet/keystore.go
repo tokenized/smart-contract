@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 )
 
 var (
@@ -11,9 +13,9 @@ var (
 )
 
 type RootKey struct {
-	PublicAddress string
-	PrivateKey    *btcec.PrivateKey
-	PublicKey     *btcec.PublicKey
+	Address    btcutil.Address
+	PrivateKey *btcec.PrivateKey
+	PublicKey  *btcec.PublicKey
 }
 
 type KeyStore struct {
@@ -27,10 +29,12 @@ func NewKeyStore() *KeyStore {
 }
 
 func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey) error {
+	addr, _ := btcutil.DecodeAddress(pkh, &chaincfg.MainNetParams)
+
 	k.Keys[pkh] = &RootKey{
-		PublicAddress: pkh,
-		PrivateKey:    privKey,
-		PublicKey:     pubKey,
+		Address:    addr,
+		PrivateKey: privKey,
+		PublicKey:  pubKey,
 	}
 
 	return nil

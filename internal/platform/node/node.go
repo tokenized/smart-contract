@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
 )
 
@@ -27,7 +26,7 @@ type Values struct {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-type Handler func(ctx context.Context, log *log.Logger, itx *inspector.Transaction, rk *wallet.RootKey, m protocol.OpReturnMessage) error
+type Handler func(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
@@ -45,6 +44,7 @@ type Config struct {
 	Version            string
 	FeeAddress         string
 	FeeValue           uint64
+	DustLimit          uint64
 }
 
 // New creates an App value that handle a set of routes for the application.
@@ -66,7 +66,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(itx *inspector.Transaction, pkhs []string, m protocol.OpReturnMessage) {
+	h := func(itx *inspector.Transaction, pkhs []string) {
 
 		// Start trace span.
 		ctx, span := trace.StartSpan(context.Background(), "internal.platform.node")
@@ -84,7 +84,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		for _, rootKey := range rootKeys {
 
 			// Call the wrapped handler functions.
-			if err := handler(ctx, a.log, itx, rootKey, m); err != nil {
+			if err := handler(ctx, a.log, a.ProtoMux, itx, rootKey); err != nil {
 				Error(ctx, a.log, a.ProtoMux, err)
 			}
 		}

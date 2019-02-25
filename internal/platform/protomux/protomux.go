@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -30,7 +29,7 @@ type Handler interface {
 }
 
 // A Handler is a type that handles a protocol messages
-type HandlerFunc func(itx *inspector.Transaction, pkhs []string, m protocol.OpReturnMessage)
+type HandlerFunc func(itx *inspector.Transaction, pkhs []string)
 
 // A ResponderFunc will handle responses
 type ResponderFunc func(ctx context.Context, tx *wire.MsgTx)
@@ -94,7 +93,7 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 
 	// Notify the listeners
 	for _, listener := range handlers {
-		listener(itx, pkhs, itx.MsgProto)
+		listener(itx, pkhs)
 	}
 
 	return nil

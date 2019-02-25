@@ -17,7 +17,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 )
@@ -25,7 +24,6 @@ import (
 type WalletInterface interface {
 	Get(string) (*RootKey, error)
 	List([]string) ([]*RootKey, error)
-	BuildTX(*btcec.PrivateKey, inspector.UTXOs, []txbuilder.TxOutput, btcutil.Address, protocol.OpReturnMessage) (*wire.MsgTx, error)
 }
 
 type Wallet struct {
@@ -90,7 +88,7 @@ func (w Wallet) Get(addr string) (*RootKey, error) {
 	return w.KeyStore.Get(addr)
 }
 
-func (w Wallet) BuildTX(key *btcec.PrivateKey, iutxos inspector.UTXOs, outs []txbuilder.TxOutput, changeAddress btcutil.Address, m protocol.OpReturnMessage) (*wire.MsgTx, error) {
+func BuildTX(key *RootKey, iutxos inspector.UTXOs, outs []txbuilder.TxOutput, changeAddress btcutil.Address, m protocol.OpReturnMessage) (*wire.MsgTx, error) {
 
 	// Convert inspector to txbuilder
 	utxos := txbuilder.UTXOs{}
@@ -104,19 +102,19 @@ func (w Wallet) BuildTX(key *btcec.PrivateKey, iutxos inspector.UTXOs, outs []tx
 		utxos = append(utxos, utxo)
 	}
 
-	outputs := w.buildOutputs(outs)
+	outputs := buildOutputs(outs)
 
 	payload := make([]byte, m.Len(), m.Len())
 	if _, err := m.Read(payload); err != nil {
 		return nil, err
 	}
 
-	builder := txbuilder.NewTxBuilder(key)
+	builder := txbuilder.NewTxBuilder(key.PrivateKey)
 
 	return builder.Build(utxos, outputs, changeAddress, payload)
 }
 
-func (w Wallet) buildOutputs(outs []txbuilder.TxOutput) []txbuilder.PayAddress {
+func buildOutputs(outs []txbuilder.TxOutput) []txbuilder.PayAddress {
 
 	// TODO is there a better place to do this? Do I need to do this?
 
