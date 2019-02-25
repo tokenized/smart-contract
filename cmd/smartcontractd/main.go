@@ -9,16 +9,13 @@ import (
 	"syscall"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/node"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/smart-contract/internal/platform/network"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spvnode"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -45,7 +42,7 @@ func main() {
 			OperatorName string `envconfig:"OPERATOR_NAME"`
 			Version      string `envconfig:"VERSION"`
 			FeeAddress   string `envconfig:"FEE_ADDRESS"`
-			FeeAmount    string `envconfig:"FEE_VALUE"` // TODO rename FEE_AMOUNT
+			FeeAmount    uint64 `envconfig:"FEE_VALUE"` // TODO rename FEE_AMOUNT
 		}
 		SpvNode struct {
 			Address   string `envconfig:"NODE_ADDRESS"`
@@ -93,7 +90,7 @@ func main() {
 	log.Printf("main : Config : %v\n", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
-	// Trusted Peer Node
+	// SPV Node
 
 	spvStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
 		cfg.NodeStorage.AccessKey,
@@ -113,41 +110,23 @@ func main() {
 	spvNode := spvnode.NewNode(spvConfig, spvStorage)
 
 	// -------------------------------------------------------------------------
-	// Network
+	// RPC Node
 
 	rpcConfig := rpcnode.NewConfig(cfg.RpcNode.Host,
 		cfg.RpcNode.Username,
 		cfg.RpcNode.Password)
 
-	network, err := network.NewNetwork(rpcConfig, spvNode)
+	rpcNode, err := rpcnode.NewNode(rpcConfig)
 	if err != nil {
 		panic(err)
 	}
-
-	// -------------------------------------------------------------------------
-	// Wallet
-
-	wallet, err := wallet.NewWallet(cfg.Contract.PrivateKey)
-	if err != nil {
-		panic(err)
-	}
-
-	// Always watch Contract address
-	// TODO Move this to app config, watch the address from the node instead
-	contractAddr, err := btcutil.DecodeAddress(string(wallet.PublicAddress), &chaincfg.MainNetParams)
-	if err != nil {
-		panic(err)
-	}
-	network.WatchAddress(ctx, contractAddr)
-
-	log.Printf("main : Running Contract %s", contractAddr)
 
 	// -------------------------------------------------------------------------
 	// Start Database / Storage
 
 	log.Println("main : Started : Initialize Database")
 
-	masterDB, err := db.New(nil, &db.StorageConfig{
+	masterDB, err := db.New(&db.StorageConfig{
 		Region:    cfg.Storage.Region,
 		AccessKey: cfg.Storage.AccessKey,
 		Secret:    cfg.Storage.Secret,
@@ -162,7 +141,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Node Config
 
-	nodeConfig := &node.Config{
+	appConfig := &node.Config{
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
 		FeeAddress:         cfg.Contract.FeeAddress,
@@ -172,7 +151,13 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Register Hooks
 
-	handlers.Register(spvNode, log, nodeConfig, masterDB)
+	appHandlers := handlers.API(log, appConfig, masterDB)
+
+	node := listeners.Server{
+		RpcNode: rpcNode,
+		SpvNode: &spvNode,
+		Handler: appHandlers,
+	}
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -184,7 +169,7 @@ func main() {
 	// Start the service listening for requests.
 	go func() {
 		log.Print("main : Node Running")
-		serverErrors <- spvNode.Start()
+		serverErrors <- node.Start()
 	}()
 
 	// -------------------------------------------------------------------------
@@ -207,7 +192,7 @@ func main() {
 		log.Println("main : Start shutdown...")
 
 		// Asking listener to shutdown and load shed.
-		if err := spvNode.Close(); err != nil {
+		if err := node.Close(); err != nil {
 			log.Fatalf("main : Could not stop spvnode server: %v", err)
 		}
 	}

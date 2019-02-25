@@ -1,8 +1,15 @@
-package node
+package protomux
 
 import (
 	"sync"
 )
+
+// To ensure multiple messages do not modify the same Contract in
+// parallel, use a mutex to prevent parallel access on a contract
+// address.
+// mtx := h.mapLock.get(h.Wallet.PublicAddress)
+// mtx.Lock()
+// defer mtx.Unlock()
 
 // mapLock is used to manage multiple locks for various keys.
 type mapLock struct {
