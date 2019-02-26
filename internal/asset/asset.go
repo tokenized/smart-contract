@@ -124,6 +124,15 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 		}
 	}
 
+	// Update holding statuses
+	if upd.NewHoldingStatus != nil {
+		for pkh, status := range upd.NewHoldingStatus {
+			holding := MakeHolding(ctx, a, pkh, now)
+			holding.HoldingStatus = status
+			a.Holdings[pkh] = *holding
+		}
+	}
+
 	if err := Save(ctx, dbConn, contractPKH, *a); err != nil {
 		return err
 	}
@@ -131,19 +140,30 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	return nil
 }
 
-// UpdateBalance will set the balance of a users holdings against the supplie asset.
-// New holdings are created for new users and expired holding statuses are cleared.
-func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH string, balance uint64, now time.Time) error {
+// MakeHolding will return a users holding or make one for them.
+func MakeHolding(ctx context.Context, asset *state.Asset, userPKH string, now time.Time) *state.Holding {
+
 	holding, ok := asset.Holdings[userPKH]
 
 	// New holding
 	if !ok {
 		holding = state.Holding{
 			Address:   userPKH,
-			Balance:   balance,
+			Balance:   0,
 			CreatedAt: now.UnixNano(),
 		}
 	}
+
+	return &holding
+}
+
+// UpdateBalance will set the balance of a users holdings against the supplied asset.
+// New holdings are created for new users and expired holding statuses are cleared.
+func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH string, balance uint64, now time.Time) error {
+
+	// Set balance
+	holding := MakeHolding(ctx, asset, userPKH, now)
+	holding.Balance = balance
 
 	// Clear expired holding status
 	if holding.HoldingStatus != nil && HoldingStatusExpired(ctx, holding.HoldingStatus, now) {
@@ -151,7 +171,7 @@ func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH string, bala
 	}
 
 	// Put the holding back on the asset
-	asset.Holdings[userPKH] = holding
+	asset.Holdings[userPKH] = *holding
 
 	return nil
 }

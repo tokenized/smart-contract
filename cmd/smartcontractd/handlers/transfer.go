@@ -297,7 +297,7 @@ func (t *Transfer) Settlement(ctx context.Context, log *log.Logger, mux protomux
 		party2PKH: msg.Party2TokenQty,
 	}
 
-	// Update balances
+	// Update asset
 	ua := asset.UpdateAsset{
 		NewBalances: newBalances,
 	}
