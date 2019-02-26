@@ -26,6 +26,7 @@ const (
 type Handler interface {
 	Respond(context.Context, wire.Message) error
 	Trigger(context.Context, string, *inspector.Transaction) error
+	SetResponder(ResponderFunc)
 }
 
 // A Handler is a type that handles a protocol messages
@@ -97,6 +98,11 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 	}
 
 	return nil
+}
+
+// SetResponder sets the function used for handling responses
+func (p *ProtoMux) SetResponder(responder ResponderFunc) {
+	p.Responder = responder
 }
 
 // Respond handles a response via the responder
