@@ -13,7 +13,6 @@ BINARY=smartcontractd
 
 # tools
 BINARY_CONTRACT_CLI=smartcontract
-BINARY_SPVNODE=spvnode
 
 all: clean prepare deps test dist
 
@@ -27,14 +26,10 @@ dist: dist-smartcontractd dist-tools
 dist-smartcontractd:
 	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/main.go
 
-dist-tools: dist-cli \
-	dist-spvnode
+dist-tools: dist-cli
 
 dist-cli:
 	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/main.go
-
-dist-spvnode:
-	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/main.go
 
 prepare:
 	mkdir -p dist tmp
@@ -48,9 +43,6 @@ run:
 
 run-sync:
 	go run cmd/$(BINARY_CONTRACT_CLI)/main.go sync
-
-run-spvnode:
-	go run cmd/$(BINARY_SPVNODE)/main.go
 
 lint: golint vet goimports
 

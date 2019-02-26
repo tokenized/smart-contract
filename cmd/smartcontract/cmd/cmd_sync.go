@@ -1,23 +1,19 @@
 package cmd
 
 import (
-	"strings"
+	"fmt"
+	"log"
+	"os"
 
-	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/logger"
-	"github.com/tokenized/smart-contract/internal/platform/network"
-	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
+	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
-	"github.com/tokenized/smart-contract/internal/rebuilder"
-	"github.com/tokenized/smart-contract/internal/request"
-	"github.com/tokenized/smart-contract/internal/response"
-	"github.com/tokenized/smart-contract/internal/validator"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
-	"github.com/tokenized/smart-contract/pkg/spvnode"
-	"github.com/tokenized/smart-contract/pkg/storage"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/spf13/cobra"
 )
@@ -32,14 +28,11 @@ var cmdSync = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		debugMode, _ := c.Flags().GetBool(FlagDebugMode)
 
-		// -------------------------------------------------------------------------
-		// Logging
-
-		ctx, log := logger.NewLoggerWithContext()
-
 		if debugMode {
-			log.Infof("Starting sync...")
+			fmt.Println("Debug mode enabled!")
 		}
+
+		ctx := Context()
 
 		// -------------------------------------------------------------------------
 		// Configuration
@@ -50,7 +43,7 @@ var cmdSync = &cobra.Command{
 				OperatorName string `envconfig:"OPERATOR_NAME"`
 				Version      string `envconfig:"VERSION"`
 				FeeAddress   string `envconfig:"FEE_ADDRESS"`
-				FeeAmount    string `envconfig:"FEE_VALUE"` // TODO rename FEE_AMOUNT
+				FeeAmount    uint64 `envconfig:"FEE_VALUE"` // TODO rename FEE_AMOUNT
 			}
 			SpvNode struct {
 				Address   string `envconfig:"NODE_ADDRESS"`
@@ -78,37 +71,17 @@ var cmdSync = &cobra.Command{
 		}
 
 		if err := envconfig.Process("API", &cfg); err != nil {
-			log.Fatalf("main : Parsing Config : %v", err)
+			fmt.Printf("main : Parsing Config : %v", err)
 		}
 
 		// -------------------------------------------------------------------------
-		// Trusted Peer Node
-
-		spvStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
-			cfg.NodeStorage.AccessKey,
-			cfg.NodeStorage.Secret,
-			cfg.NodeStorage.Bucket,
-			cfg.NodeStorage.Root)
-
-		var spvStorage storage.Storage
-		if strings.ToLower(spvStorageConfig.Bucket) == "standalone" {
-			spvStorage = storage.NewFilesystemStorage(spvStorageConfig)
-		} else {
-			spvStorage = storage.NewS3Storage(spvStorageConfig)
-		}
-
-		spvConfig := spvnode.NewConfig(cfg.SpvNode.Address, cfg.SpvNode.UserAgent)
-
-		spvNode := spvnode.NewNode(spvConfig, spvStorage)
-
-		// -------------------------------------------------------------------------
-		// Network
+		// RPC Node
 
 		rpcConfig := rpcnode.NewConfig(cfg.RpcNode.Host,
 			cfg.RpcNode.Username,
 			cfg.RpcNode.Password)
 
-		network, err := network.NewNetwork(rpcConfig, spvNode)
+		rpcNode, err := rpcnode.NewNode(rpcConfig)
 		if err != nil {
 			panic(err)
 		}
@@ -116,72 +89,89 @@ var cmdSync = &cobra.Command{
 		// -------------------------------------------------------------------------
 		// Wallet
 
-		wallet, err := wallet.NewWallet(cfg.Contract.PrivateKey)
-		if err != nil {
+		masterWallet := wallet.New()
+		if err := masterWallet.Register(cfg.Contract.PrivateKey); err != nil {
 			panic(err)
 		}
 
 		// -------------------------------------------------------------------------
-		// Contract Storage
+		// Start Database / Storage
 
-		contractStorageConfig := storage.NewConfig(cfg.Storage.Region,
-			cfg.Storage.AccessKey,
-			cfg.Storage.Secret,
-			cfg.Storage.Bucket,
-			cfg.Storage.Root)
+		fmt.Println("main : Started : Initialize Database")
 
-		var contractStorage storage.Storage
-		if strings.ToLower(contractStorageConfig.Bucket) == "standalone" {
-			contractStorage = storage.NewFilesystemStorage(contractStorageConfig)
-		} else {
-			contractStorage = storage.NewS3Storage(contractStorageConfig)
-		}
-
-		// -------------------------------------------------------------------------
-		// App Config
-
-		appConfig, err := config.NewConfig(cfg.Contract.OperatorName,
-			cfg.Contract.Version,
-			cfg.Contract.FeeAddress,
-			cfg.Contract.FeeAmount)
-
+		masterDB, err := db.New(&db.StorageConfig{
+			Region:    cfg.Storage.Region,
+			AccessKey: cfg.Storage.AccessKey,
+			Secret:    cfg.Storage.Secret,
+			Bucket:    cfg.Storage.Bucket,
+			Root:      cfg.Storage.Root,
+		})
 		if err != nil {
-			panic(err)
+			fmt.Printf("main : Register DB : %v", err)
+		}
+		defer masterDB.Close()
+
+		// -------------------------------------------------------------------------
+		// Node Config
+
+		appConfig := &node.Config{
+			ContractProviderID: cfg.Contract.OperatorName,
+			Version:            cfg.Contract.Version,
+			FeeAddress:         cfg.Contract.FeeAddress,
+			FeeValue:           cfg.Contract.FeeAmount,
+			DustLimit:          546,
 		}
 
 		// -------------------------------------------------------------------------
-		// Builder
+		// Register Hooks
 
-		state := state.NewStateService(contractStorage)
-		request := request.NewRequestService(*appConfig, wallet, state)
-		response := response.NewResponseService(*appConfig, wallet, state)
-		validator := validator.NewValidatorService(*appConfig, wallet, state)
+		log := log.New(os.Stdout, "CLI : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 
-		// -------------------------------------------------------------------------
-		// Rebuilder
+		txHandler := handlers.API(log, masterWallet, appConfig, masterDB)
 
-		reb := rebuilder.NewRebuilderService(network, request, response, validator, state)
-
-		// -------------------------------------------------------------------------
-		// Contract address
-
-		contractAddr, err := btcutil.DecodeAddress(string(wallet.PublicAddress), &chaincfg.MainNetParams)
+		// Oldest -> Newest
+		listResults, err := rpcNode.ListTransactions(ctx)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
-		// -------------------------------------------------------------------------
-		// Find or create state
+		for _, rtx := range listResults {
+			// now := time.Unix(rtx.Time, 0)
 
-		hard, soft, err := reb.FindState(ctx, contractAddr)
-		if err != nil {
-			panic(err)
+			hash, err := chainhash.NewHashFromStr(rtx.TxID)
+			if err != nil {
+				continue
+			}
+
+			fmt.Printf("Processing tx %v\n", hash)
+
+			// Get transaction
+			tx, err := rpcNode.GetTX(ctx, hash)
+			if err != nil {
+				continue
+			}
+
+			// Check if transaction relates to protocol
+			itx, err := inspector.NewTransactionFromWire(ctx, tx)
+			if err != nil {
+				continue
+			}
+
+			// Prefilter out non-protocol messages, responses only
+			if !itx.IsTokenized() || !itx.IsOutgoingMessageType() {
+				continue
+			}
+
+			// Promote TX
+			if err := itx.Promote(ctx, rpcNode); err != nil {
+				return err
+			}
+
+			// Trigger "see" event
+			if err := txHandler.Trigger(ctx, protomux.SEE, itx); err != nil {
+				return err
+			}
 		}
-
-		// -------------------------------------------------------------------------
-		// Sync
-
-		reb.Sync(ctx, soft, hard, contractAddr)
 
 		return nil
 	},

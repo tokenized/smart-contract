@@ -35,23 +35,6 @@ Navigate to the root directory and run:
 - `cmd/smartcontract` - Command line interface
 - `cmd/smartcontractd` - Smart Contract node daemon
 
-#### INTERNALS
-
-- `platform` - Internal kit (see blow)
-- `validator` - Validates incoming request actions using validation handlers. Prepares rejections for failed responses.
-- `request` - Handles incoming request actions using request handlers. Prepares a response action for the response component.
-- `response` - Handles outgoing response actions. Saves them to the contract state.
-- `rebuilder` - Responsible for rebuilding the contract state. Used when there is a reorg or when the node is cold started.
-- `broadcaster` - Broadcasts transactions. Currently a reserved component in preparation for robust broadcasting via multiple nodes.
-- `vote` - Logic specific to voting. TBA
-
-#### INTERNAL KIT
-
-- `platform/config` - Stores application config specific to the contract. Not to be confused with the bootstrap config found in cmd/main.go files.
-- `platform/network` - Our communication channel with the bitcoin network, peer nodes, trusted nodes, RPC activity.
-- `platform/state` - Contract state, responsible for hardening state and managing soft state. Provides contract "models" used across the app.
-- `platform/wallet` - Stores private keys, performs signing, builds transactions for signing.
-
 #### PUBLIC KIT
 
 - `pkg/protocol` - Tokenized protocol message definitions.
