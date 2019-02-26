@@ -35,7 +35,7 @@ type Asset struct {
 	Type               string             `json:"type"`
 	Revision           uint16             `json:"revision"`
 	AuthorizationFlags []byte             `json:"auth_flags"`
-	VotingSystem       byte               `json:"voting_system"`
+	VotingSystem       string             `json:"voting_system"`
 	VoteMultiplier     uint8              `json:"vote_multiplier"`
 	Qty                uint64             `json:"qty"`
 	TxnFeeType         byte               `json:"txn_fee_type"`

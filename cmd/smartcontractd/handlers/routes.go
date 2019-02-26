@@ -27,5 +27,15 @@ func API(log *log.Logger, masterWallet wallet.WalletInterface, config *node.Conf
 	// app.Handle("LOST", protocol.CodeContractAmendment, c.AmendmentReorg)
 	// app.Handle("STOLE", protocol.CodeContractAmendment, c.AmendmentDoubleSpend)
 
+	// Register asset based events.
+	a := Asset{
+		MasterDB: masterDB,
+		Config:   config,
+	}
+
+	app.Handle("SEE", protocol.CodeAssetDefinition, a.Definition)
+	app.Handle("SEE", protocol.CodeAssetCreation, a.Creation)
+	app.Handle("SEE", protocol.CodeAssetModification, a.Modification)
+
 	return app
 }

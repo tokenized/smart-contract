@@ -36,6 +36,48 @@ func Retrieve(ctx context.Context, dbConn *db.DB, address string) (*state.Contra
 	return c, nil
 }
 
+// Create the contract
+func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract, now time.Time) error {
+	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
+	defer span.End()
+
+	// Find contract
+	c, err := Fetch(ctx, dbConn, address)
+	if err != nil {
+		return ErrNotFound
+	}
+
+	c.ContractName = nu.ContractName
+	c.ContractFileHash = nu.ContractFileHash
+	c.GoverningLaw = nu.GoverningLaw
+	c.Jurisdiction = nu.Jurisdiction
+	c.ContractExpiration = nu.ContractExpiration
+	c.URI = nu.URI
+	c.Revision = 0
+	c.IssuerID = nu.IssuerID
+	c.ContractOperatorID = nu.ContractOperatorID
+	c.AuthorizationFlags = nu.AuthorizationFlags
+	c.InitiativeThreshold = nu.InitiativeThreshold
+	c.InitiativeThresholdCurrency = nu.InitiativeThresholdCurrency
+	c.Qty = nu.Qty
+	c.IssuerType = nu.IssuerType
+	c.VotingSystem = nu.VotingSystem
+
+	if nu.VotingSystem == string(0x0) {
+		c.VotingSystem = ""
+	}
+
+	if nu.IssuerType == string(0x0) {
+		c.IssuerType = ""
+	}
+
+	if err := Save(ctx, dbConn, *c); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Update the contract
 func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContract, now time.Time) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
@@ -78,4 +120,22 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	}
 
 	return nil
+}
+
+// CanHaveMoreAssets returns true if an Asset can be added to the Contract,
+// false otherwise.
+//
+// A "dynamic" contract is permitted to have unlimted assets if the
+// contract.Qty == 0.
+func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
+	if contract.Qty == 0 {
+		return true
+	}
+
+	// number of current assets
+	total := uint64(len(contract.Assets))
+
+	// more assets can be added if the current total is less than the limit
+	// imposed by the contract.
+	return total < contract.Qty
 }

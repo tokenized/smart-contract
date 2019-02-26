@@ -37,14 +37,15 @@ func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Hand
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, dbConn, rk.Address.String())
+	contractPKH := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
 	if err != nil {
 		return err
 	}
 
 	// The contract should not exist already
 	if ct != nil {
-		log.Printf("%s : Contract already exists: %+v\n", v.TraceID, rk.Address)
+		log.Printf("%s : Contract already exists: %+v\n", v.TraceID, contractPKH)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
@@ -72,7 +73,7 @@ func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Hand
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: rk.Address,
+		Address: contractPKH,
 		Value:   c.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -105,21 +106,22 @@ func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, dbConn, rk.Address.String())
+	contractPKH := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
 	if err != nil {
 		return err
 	}
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, rk.Address)
+		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractPKH)
 		return node.ErrNoResponse
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.Qty > 0 && int(msg.RestrictedQty) < len(ct.Assets) {
-		log.Printf("contract amendment : Cannot reduce allowable assets below existing number")
+		log.Printf("%s : Cannot reduce allowable assets below existing number: %+v\n", v.TraceID, contractPKH)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
@@ -150,7 +152,7 @@ func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: rk.Address,
+		Address: contractPKH,
 		Value:   c.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -183,39 +185,58 @@ func (c *Contract) Formation(ctx context.Context, log *log.Logger, mux protomux.
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, dbConn, rk.Address.String())
+	contractPKH := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
 	if err != nil {
 		return err
 	}
 
-	// Contract could not be found
+	// Create or update Contract
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, rk.Address)
-		return node.ErrNoResponse
-	}
+		// Prepare creation object
+		nc := contract.NewContract{
+			ContractName:                string(msg.ContractName),
+			ContractFileHash:            fmt.Sprintf("%x", msg.ContractFileHash),
+			GoverningLaw:                string(msg.GoverningLaw),
+			Jurisdiction:                string(msg.Jurisdiction),
+			ContractExpiration:          msg.ContractExpiration,
+			URI:                         string(msg.URI),
+			IssuerID:                    string(msg.IssuerID),
+			IssuerType:                  string(msg.IssuerType),
+			ContractOperatorID:          string(msg.ContractOperatorID),
+			AuthorizationFlags:          msg.AuthorizationFlags,
+			VotingSystem:                string(msg.VotingSystem),
+			InitiativeThreshold:         msg.InitiativeThreshold,
+			InitiativeThresholdCurrency: string(msg.InitiativeThresholdCurrency),
+			Qty:                         msg.RestrictedQty,
+		}
 
-	// Prepare update object
-	uc := contract.UpdateContract{
-		ContractName:                string(msg.ContractName),
-		ContractFileHash:            fmt.Sprintf("%x", msg.ContractFileHash),
-		GoverningLaw:                string(msg.GoverningLaw),
-		Jurisdiction:                string(msg.Jurisdiction),
-		ContractExpiration:          msg.ContractExpiration,
-		URI:                         string(msg.URI),
-		Revision:                    msg.ContractRevision,
-		IssuerID:                    string(msg.IssuerID),
-		IssuerType:                  string(msg.IssuerType),
-		ContractOperatorID:          string(msg.ContractOperatorID),
-		AuthorizationFlags:          msg.AuthorizationFlags,
-		VotingSystem:                string(msg.VotingSystem),
-		InitiativeThreshold:         msg.InitiativeThreshold,
-		InitiativeThresholdCurrency: string(msg.InitiativeThresholdCurrency),
-		Qty:                         msg.RestrictedQty,
-	}
+		if err := contract.Create(ctx, dbConn, contractPKH.String(), &nc, v.Now); err != nil {
+			return err
+		}
+	} else {
+		// Prepare update object
+		uc := contract.UpdateContract{
+			ContractName:                string(msg.ContractName),
+			ContractFileHash:            fmt.Sprintf("%x", msg.ContractFileHash),
+			GoverningLaw:                string(msg.GoverningLaw),
+			Jurisdiction:                string(msg.Jurisdiction),
+			ContractExpiration:          msg.ContractExpiration,
+			URI:                         string(msg.URI),
+			Revision:                    msg.ContractRevision,
+			IssuerID:                    string(msg.IssuerID),
+			IssuerType:                  string(msg.IssuerType),
+			ContractOperatorID:          string(msg.ContractOperatorID),
+			AuthorizationFlags:          msg.AuthorizationFlags,
+			VotingSystem:                string(msg.VotingSystem),
+			InitiativeThreshold:         msg.InitiativeThreshold,
+			InitiativeThresholdCurrency: string(msg.InitiativeThresholdCurrency),
+			Qty:                         msg.RestrictedQty,
+		}
 
-	// Update contract state
-	if err := contract.Update(ctx, dbConn, rk.Address.String(), &uc, v.Now); err != nil {
-		return err
+		if err := contract.Update(ctx, dbConn, contractPKH.String(), &uc, v.Now); err != nil {
+			return err
+		}
 	}
 
 	return nil
