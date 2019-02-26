@@ -32,36 +32,36 @@ Navigate to the root directory and run:
 
 #### COMMAND BINARIES
 
-`cmd/smartcontract` - Command line interface
-`cmd/smartcontractd` - Smart Contract node daemon
+- `cmd/smartcontract` - Command line interface
+- `cmd/smartcontractd` - Smart Contract node daemon
 
 #### INTERNALS
 
-`platform` - Internal kit (see blow)
-`validator` - Validates incoming request actions using validation handlers. Prepares rejections for failed responses.
-`request` - Handles incoming request actions using request handlers. Prepares a response action for the response component.
-`response` - Handles outgoing response actions. Saves them to the contract state.
-`rebuilder` - Responsible for rebuilding the contract state. Used when there is a reorg or when the node is cold started.
-`broadcaster` - Broadcasts transactions. Currently a reserved component in preparation for robust broadcasting via multiple nodes.
-`vote` - Logic specific to voting. TBA
+- `platform` - Internal kit (see blow)
+- `validator` - Validates incoming request actions using validation handlers. Prepares rejections for failed responses.
+- `request` - Handles incoming request actions using request handlers. Prepares a response action for the response component.
+- `response` - Handles outgoing response actions. Saves them to the contract state.
+- `rebuilder` - Responsible for rebuilding the contract state. Used when there is a reorg or when the node is cold started.
+- `broadcaster` - Broadcasts transactions. Currently a reserved component in preparation for robust broadcasting via multiple nodes.
+- `vote` - Logic specific to voting. TBA
 
 #### INTERNAL KIT
 
-`platform/config` - Stores application config specific to the contract. Not to be confused with the bootstrap config found in cmd/main.go files.
-`platform/network` - Our communication channel with the bitcoin network, peer nodes, trusted nodes, RPC activity.
-`platform/state` - Contract state, responsible for hardening state and managing soft state. Provides contract "models" used across the app.
-`platform/wallet` - Stores private keys, performs signing, builds transactions for signing.
+- `platform/config` - Stores application config specific to the contract. Not to be confused with the bootstrap config found in cmd/main.go files.
+- `platform/network` - Our communication channel with the bitcoin network, peer nodes, trusted nodes, RPC activity.
+- `platform/state` - Contract state, responsible for hardening state and managing soft state. Provides contract "models" used across the app.
+- `platform/wallet` - Stores private keys, performs signing, builds transactions for signing.
 
 #### PUBLIC KIT
 
-`pkg/protocol` - Tokenized protocol message definitions.
-`pkg/spvnode` - Connects to a trusted node as a peer via the public interface.
-`pkg/rpcnode` - Connects to a trusted node via the RPC interface.
-`platform/inspector` - Looks at transaction objects, converts them to a special transaction type (inspector.Transaction / itx) used throughout the app.
-`pkg/txbuilder` - Generic BCH library for performing bitcoin related tasks, mainly around tx building.
-`pkg/storage` - Storage engine, supporting S3 and local filesystem.
-`pkg/txscript` - Bitcoin signature library.
-`pkg/wire` - Bitcoin protocol message definitions.
+- `pkg/protocol` - Tokenized protocol message definitions.
+- `pkg/spvnode` - Connects to a trusted node as a peer via the public interface.
+- `pkg/rpcnode` - Connects to a trusted node via the RPC interface.
+- `platform/inspector` - Looks at transaction objects, converts them to a special transaction type (inspector.Transaction / itx) used throughout the app.
+- `pkg/txbuilder` - Generic BCH library for performing bitcoin related tasks, mainly around tx building.
+- `pkg/storage` - Storage engine, supporting S3 and local filesystem.
+- `pkg/txscript` - Bitcoin signature library.
+- `pkg/wire` - Bitcoin protocol message definitions.
 
 ## Configuration
 
