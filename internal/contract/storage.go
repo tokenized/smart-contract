@@ -41,6 +41,16 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string) (*state.Contract, err
 		return nil, err
 	}
 
+	// Initialize Asset map
+	if c.Assets == nil {
+		c.Assets = map[string]state.Asset{}
+	}
+
+	// Initialize Vote map
+	if c.Votes == nil {
+		c.Votes = map[string]state.Vote{}
+	}
+
 	return &c, nil
 }
 

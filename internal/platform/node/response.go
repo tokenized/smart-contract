@@ -62,7 +62,7 @@ func Error(ctx context.Context, log *log.Logger, mux protomux.Handler, err error
 }
 
 // RespondReject sends a rejection message
-func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) {
+func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
 
 	// Sender is the address that sent the message that we are rejecting.
 	sender := itx.Inputs[0].Address
@@ -72,14 +72,14 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 	if uint64(receiver.Value) < MinimumForResponse {
 		// Did not receive enough to fund the response
 		Error(ctx, log, mux, ErrInsufficientFunds)
-		return
+		return ErrNoResponse
 	}
 
 	// Find spendable UTXOs
 	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
 	if err != nil {
 		Error(ctx, log, mux, ErrInsufficientFunds)
-		return
+		return ErrNoResponse
 	}
 
 	// Build rejection
@@ -107,11 +107,12 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 	}
 
 	Respond(ctx, log, mux, newTx)
+	return ErrRejected
 }
 
 // RespondError sends JSON describing the error
 func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
-	msg protocol.OpReturnMessage, outs []Output) {
+	msg protocol.OpReturnMessage, outs []Output) error {
 
 	var change btcutil.Address
 
@@ -128,19 +129,25 @@ func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, 
 		}
 	}
 
+	// At least one change output is required
+	if change == nil {
+		return errors.New("Missing change output")
+	}
+
 	// Get spendable UTXO's received for the contract address
 	utxos, err := itx.UTXOs().ForAddress(rk.Address)
 	if err != nil {
-		Error(ctx, log, mux, err)
+		return err
 	}
 
 	// Build the new transaction
 	newTx, err := wallet.BuildTX(rk, utxos, buildOuts, change, msg)
 	if err != nil {
-		Error(ctx, log, mux, err)
+		return err
 	}
 
 	Respond(ctx, log, mux, newTx)
+	return nil
 }
 
 // Respond sends a TX to the network.

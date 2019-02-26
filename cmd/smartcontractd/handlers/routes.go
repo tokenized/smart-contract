@@ -15,7 +15,7 @@ func API(log *log.Logger, masterWallet wallet.WalletInterface, config *node.Conf
 
 	app := node.New(log, masterWallet)
 
-	// Register block based events.
+	// Register contract based events.
 	c := Contract{
 		MasterDB: masterDB,
 		Config:   config,

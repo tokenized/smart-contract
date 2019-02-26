@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -20,7 +21,7 @@ var (
 
 // Retrieve gets the specified contract from the database.
 func Retrieve(ctx context.Context, dbConn *db.DB, address string) (*state.Contract, error) {
-	ctx, span := trace.StartSpan(ctx, "internal.entity.Retrieve")
+	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
 	// Find contract in storage
@@ -33,4 +34,48 @@ func Retrieve(ctx context.Context, dbConn *db.DB, address string) (*state.Contra
 	}
 
 	return c, nil
+}
+
+// Update the contract
+func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContract, now time.Time) error {
+	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
+	defer span.End()
+
+	// Find contract
+	c, err := Fetch(ctx, dbConn, address)
+	if err != nil {
+		return ErrNotFound
+	}
+
+	// TODO(srg) New protocol spec - This double up in logic is reserved for using
+	// conditional pointers where only some fields are updated on the object.
+	c.ContractName = upd.ContractName
+	c.ContractFileHash = upd.ContractFileHash
+	c.GoverningLaw = upd.GoverningLaw
+	c.Jurisdiction = upd.Jurisdiction
+	c.ContractExpiration = upd.ContractExpiration
+	c.URI = upd.URI
+	c.Revision = upd.Revision
+	c.IssuerID = upd.IssuerID
+	c.ContractOperatorID = upd.ContractOperatorID
+	c.AuthorizationFlags = upd.AuthorizationFlags
+	c.InitiativeThreshold = upd.InitiativeThreshold
+	c.InitiativeThresholdCurrency = upd.InitiativeThresholdCurrency
+	c.Qty = upd.Qty
+	c.IssuerType = upd.IssuerType
+	c.VotingSystem = upd.VotingSystem
+
+	if upd.VotingSystem == string(0x0) {
+		c.VotingSystem = ""
+	}
+
+	if upd.IssuerType == string(0x0) {
+		c.IssuerType = ""
+	}
+
+	if err := Save(ctx, dbConn, *c); err != nil {
+		return err
+	}
+
+	return nil
 }
