@@ -16,32 +16,32 @@ type Governance struct {
 	Config   *node.Config
 }
 
-// Initiative handles an incoming Initiative request and prepares a BallotCounted response
-func (g *Governance) Initiative(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// InitiativeRequest handles an incoming Initiative request and prepares a BallotCounted response
+func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
-// Referendum handles an incoming Referendum request and prepares a BallotCounted response
-func (g *Governance) Referendum(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ReferendumRequest handles an incoming Referendum request and prepares a BallotCounted response
+func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
-// Vote handles an incoming Vote request and prepares a BallotCounted response
-func (g *Governance) Vote(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// VoteResponse handles an incoming Vote request and prepares a BallotCounted response
+func (g *Governance) VoteResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
-// BallotCast handles an incoming BallotCast request and prepares a BallotCounted response
-func (g *Governance) BallotCast(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// BallotCastRequest handles an incoming BallotCast request and prepares a BallotCounted response
+func (g *Governance) BallotCastRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
-// BallotCounted handles an outgoing BallotCounted action and writes it to the state
-func (g *Governance) BallotCounted(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// BallotCountedResponse handles an outgoing BallotCounted action and writes it to the state
+func (g *Governance) BallotCountedResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
-// Result handles an outgoing Result action and writes it to the state
-func (g *Governance) Result(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ResultResponse handles an outgoing Result action and writes it to the state
+func (g *Governance) ResultResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }

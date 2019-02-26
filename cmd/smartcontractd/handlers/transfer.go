@@ -23,8 +23,8 @@ type Transfer struct {
 	Config   *node.Config
 }
 
-// Send handles an incoming Send request and prepares a Settlement response
-func (t *Transfer) Send(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// SendRequest handles an incoming Send request and prepares a Settlement response
+func (t *Transfer) SendRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Send")
 	defer span.End()
 
@@ -122,8 +122,8 @@ func (t *Transfer) Send(ctx context.Context, log *log.Logger, mux protomux.Handl
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &settlement, outs)
 }
 
-// Exchange handles an incoming Exchange request and prepares a Settlement response
-func (t *Transfer) Exchange(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ExchangeRequest handles an incoming Exchange request and prepares a Settlement response
+func (t *Transfer) ExchangeRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Exchange")
 	defer span.End()
 
@@ -243,8 +243,8 @@ func (t *Transfer) Exchange(ctx context.Context, log *log.Logger, mux protomux.H
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &settlement, outs)
 }
 
-// Swap handles an incoming Swap request and prepares a Settlement response
-func (t *Transfer) Swap(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// SwapRequest handles an incoming Swap request and prepares a Settlement response
+func (t *Transfer) SwapRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Swap")
 	defer span.End()
 
@@ -253,8 +253,8 @@ func (t *Transfer) Swap(ctx context.Context, log *log.Logger, mux protomux.Handl
 	return nil
 }
 
-// Settlement handles an outgoing Settlement action and writes it to the state
-func (t *Transfer) Settlement(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// SettlementResponse handles an outgoing Settlement action and writes it to the state
+func (t *Transfer) SettlementResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Settlement")
 	defer span.End()
 

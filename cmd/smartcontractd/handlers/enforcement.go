@@ -23,8 +23,8 @@ type Enforcement struct {
 	Config   *node.Config
 }
 
-// Order handles an incoming Order request and prepares a Confiscation response
-func (e *Enforcement) Order(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// OrderRequest handles an incoming Order request and prepares a Confiscation response
+func (e *Enforcement) OrderRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Order")
 	defer span.End()
 
@@ -39,11 +39,11 @@ func (e *Enforcement) Order(ctx context.Context, log *log.Logger, mux protomux.H
 	var err error
 	switch msg.ComplianceAction {
 	case protocol.ComplianceActionFreeze:
-		err = e.OrderFreeze(ctx, log, mux, itx, rk)
+		err = e.OrderFreezeRequest(ctx, log, mux, itx, rk)
 	case protocol.ComplianceActionThaw:
-		err = e.OrderThaw(ctx, log, mux, itx, rk)
+		err = e.OrderThawRequest(ctx, log, mux, itx, rk)
 	case protocol.ComplianceActionConfiscation:
-		err = e.OrderConfiscate(ctx, log, mux, itx, rk)
+		err = e.OrderConfiscateRequest(ctx, log, mux, itx, rk)
 	default:
 		log.Printf("%s : Unknown enforcement: %+v\n", v.TraceID, msg.ComplianceAction)
 	}
@@ -51,9 +51,9 @@ func (e *Enforcement) Order(ctx context.Context, log *log.Logger, mux protomux.H
 	return err
 }
 
-// OrderFreeze is a helper of Order
-func (e *Enforcement) OrderFreeze(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderFreeze")
+// OrderFreezeRequest is a helper of Order
+func (e *Enforcement) OrderFreezeRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderFreezeRequest")
 	defer span.End()
 
 	msg, ok := itx.MsgProto.(*protocol.Order)
@@ -125,9 +125,9 @@ func (e *Enforcement) OrderFreeze(ctx context.Context, log *log.Logger, mux prot
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &freeze, outs)
 }
 
-// OrderThaw is a helper of Order
-func (e *Enforcement) OrderThaw(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderThaw")
+// OrderThawRequest is a helper of Order
+func (e *Enforcement) OrderThawRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderThawRequest")
 	defer span.End()
 
 	msg, ok := itx.MsgProto.(*protocol.Order)
@@ -198,9 +198,9 @@ func (e *Enforcement) OrderThaw(ctx context.Context, log *log.Logger, mux protom
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &thaw, outs)
 }
 
-// OrderConfiscate is a helper of Order
-func (e *Enforcement) OrderConfiscate(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderConfiscate")
+// OrderConfiscateRequest is a helper of Order
+func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderConfiscateRequest")
 	defer span.End()
 
 	msg, ok := itx.MsgProto.(*protocol.Order)
@@ -300,8 +300,8 @@ func (e *Enforcement) OrderConfiscate(ctx context.Context, log *log.Logger, mux 
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &confiscation, outs)
 }
 
-// Freeze handles an incoming Freeze request and prepares a Confiscation response
-func (e *Enforcement) Freeze(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// FreezeResponse handles an incoming Freeze request and prepares a Confiscation response
+func (e *Enforcement) FreezeResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Freeze")
 	defer span.End()
 
@@ -342,8 +342,8 @@ func (e *Enforcement) Freeze(ctx context.Context, log *log.Logger, mux protomux.
 	return nil
 }
 
-// Thaw handles an incoming Thaw request and prepares a Confiscation response
-func (e *Enforcement) Thaw(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ThawResponse handles an incoming Thaw request and prepares a Confiscation response
+func (e *Enforcement) ThawResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Thaw")
 	defer span.End()
 
@@ -379,8 +379,8 @@ func (e *Enforcement) Thaw(ctx context.Context, log *log.Logger, mux protomux.Ha
 	return nil
 }
 
-// Confiscation handles an outgoing Confiscation action and writes it to the state
-func (e *Enforcement) Confiscation(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ConfiscationResponse handles an outgoing Confiscation action and writes it to the state
+func (e *Enforcement) ConfiscationResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Confiscation")
 	defer span.End()
 
@@ -435,8 +435,8 @@ func (e *Enforcement) Confiscation(ctx context.Context, log *log.Logger, mux pro
 	return nil
 }
 
-// Reconciliation handles an outgoing Reconciliation action and writes it to the state
-func (e *Enforcement) Reconciliation(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ReconciliationResponse handles an outgoing Reconciliation action and writes it to the state
+func (e *Enforcement) ReconciliationResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Reconciliation")
 	defer span.End()
 

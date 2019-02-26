@@ -21,8 +21,8 @@ type Contract struct {
 	Config   *node.Config
 }
 
-// Offer handles an incoming Contract Offer and prepares a Formation response
-func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// OfferRequest handles an incoming Contract Offer and prepares a Formation response
+func (c *Contract) OfferRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Offer")
 	defer span.End()
 
@@ -90,8 +90,8 @@ func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Hand
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &cf, outs)
 }
 
-// Amendment handles an incoming Contract Amendment and prepares a Formation response
-func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
+func (c *Contract) AmendmentRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Amendment")
 	defer span.End()
 
@@ -169,8 +169,8 @@ func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &cf, outs)
 }
 
-// Formation handles an outgoing Contract Formation and writes it to the state
-func (c *Contract) Formation(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// FormationResponse handles an outgoing Contract Formation and writes it to the state
+func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Formation")
 	defer span.End()
 

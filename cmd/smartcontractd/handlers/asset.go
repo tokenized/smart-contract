@@ -21,8 +21,8 @@ type Asset struct {
 	Config   *node.Config
 }
 
-// Definition handles an incoming Asset Definition and prepares a Creation response
-func (a *Asset) Definition(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
+func (a *Asset) DefinitionRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -104,8 +104,8 @@ func (a *Asset) Definition(ctx context.Context, log *log.Logger, mux protomux.Ha
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &ac, outs)
 }
 
-// Modification handles an incoming Asset Modification and prepares a Creation response
-func (a *Asset) Modification(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// ModificationRequest handles an incoming Asset Modification and prepares a Creation response
+func (a *Asset) ModificationRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -185,8 +185,8 @@ func (a *Asset) Modification(ctx context.Context, log *log.Logger, mux protomux.
 	return node.RespondSuccess(ctx, log, mux, itx, rk, &ac, outs)
 }
 
-// Creation handles an outgoing Asset Creation and writes it to the state
-func (a *Asset) Creation(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+// CreationResponse handles an outgoing Asset Creation and writes it to the state
+func (a *Asset) CreationResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
