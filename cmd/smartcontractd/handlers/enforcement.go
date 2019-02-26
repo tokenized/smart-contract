@@ -441,4 +441,6 @@ func (e *Enforcement) Reconciliation(ctx context.Context, log *log.Logger, mux p
 	defer span.End()
 
 	// TODO(srg) - This feature is incomplete
+
+	return nil
 }
