@@ -37,34 +37,34 @@ func (a *Asset) Definition(ctx context.Context, log *log.Logger, mux protomux.Ha
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractPKH := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
+	contractAddr := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
 		return err
 	}
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractPKH)
+		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Locate Asset
 	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractPKH.String(), assetID)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
 	if err != nil {
 		return err
 	}
 
 	// The asset should not exist already
 	if as != nil {
-		log.Printf("%s : Asset already exists: %+v %+v\n", v.TraceID, contractPKH, assetID)
+		log.Printf("%s : Asset already exists: %+v %+v\n", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeDuplicateAssetID)
 	}
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		log.Printf("%s : Number of assets exceeds contract Qty: %+v %+v\n", v.TraceID, contractPKH, assetID)
+		log.Printf("%s : Number of assets exceeds contract Qty: %+v %+v\n", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
@@ -87,7 +87,7 @@ func (a *Asset) Definition(ctx context.Context, log *log.Logger, mux protomux.Ha
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractPKH,
+		Address: contractAddr,
 		Value:   a.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -120,22 +120,22 @@ func (a *Asset) Modification(ctx context.Context, log *log.Logger, mux protomux.
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
-	contractPKH := rk.Address
+	contractAddr := rk.Address
 	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractPKH.String(), assetID)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractPKH, assetID)
+		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		log.Printf("%s : Asset Revision does not match current: %+v %+v\n", v.TraceID, contractPKH, assetID)
+		log.Printf("%s : Asset Revision does not match current: %+v %+v\n", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
@@ -168,7 +168,7 @@ func (a *Asset) Modification(ctx context.Context, log *log.Logger, mux protomux.
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractPKH,
+		Address: contractAddr,
 		Value:   a.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -201,9 +201,9 @@ func (a *Asset) Creation(ctx context.Context, log *log.Logger, mux protomux.Hand
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
-	contractPKH := rk.Address
+	contractAddr := rk.Address
 	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractPKH.String(), assetID)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
 	if err != nil {
 		return err
 	}
@@ -212,27 +212,31 @@ func (a *Asset) Creation(ctx context.Context, log *log.Logger, mux protomux.Hand
 	if as == nil {
 		// Prepare creation object
 		na := asset.NewAsset{
-			ID:             string(msg.AssetID),
-			Type:           string(msg.AssetType),
-			VotingSystem:   string(msg.VotingSystem),
-			VoteMultiplier: msg.VoteMultiplier,
-			Qty:            msg.Qty,
+			ID:                 string(msg.AssetID),
+			Type:               string(msg.AssetType),
+			VotingSystem:       string(msg.VotingSystem),
+			VoteMultiplier:     msg.VoteMultiplier,
+			Qty:                msg.Qty,
+			AuthorizationFlags: msg.AuthorizationFlags,
 		}
-
-		if err := asset.Create(ctx, dbConn, contractPKH.String(), assetID, &na, v.Now); err != nil {
+		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
 			return err
 		}
 	} else {
+		// Required pointers
+		stringPointer := func(s string) *string { return &s }
+
 		// Prepare update object
 		ua := asset.UpdateAsset{
-			Type:           string(msg.AssetType),
-			Revision:       msg.AssetRevision,
-			VotingSystem:   string(msg.VotingSystem),
-			VoteMultiplier: msg.VoteMultiplier,
-			Qty:            msg.Qty,
+			Revision:           &msg.AssetRevision,
+			Type:               stringPointer(string(msg.AssetType)),
+			VotingSystem:       stringPointer(string(msg.VotingSystem)),
+			VoteMultiplier:     &msg.VoteMultiplier,
+			Qty:                &msg.Qty,
+			AuthorizationFlags: msg.AuthorizationFlags,
 		}
 
-		if err := asset.Update(ctx, dbConn, contractPKH.String(), assetID, &ua, v.Now); err != nil {
+		if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
 			return err
 		}
 	}

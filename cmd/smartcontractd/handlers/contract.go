@@ -37,15 +37,15 @@ func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Hand
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractPKH := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
+	contractAddr := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
 		return err
 	}
 
 	// The contract should not exist already
 	if ct != nil {
-		log.Printf("%s : Contract already exists: %+v\n", v.TraceID, contractPKH)
+		log.Printf("%s : Contract already exists: %+v\n", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
@@ -73,7 +73,7 @@ func (c *Contract) Offer(ctx context.Context, log *log.Logger, mux protomux.Hand
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractPKH,
+		Address: contractAddr,
 		Value:   c.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -106,22 +106,22 @@ func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractPKH := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
+	contractAddr := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
 		return err
 	}
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractPKH)
+		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.Qty > 0 && int(msg.RestrictedQty) < len(ct.Assets) {
-		log.Printf("%s : Cannot reduce allowable assets below existing number: %+v\n", v.TraceID, contractPKH)
+		log.Printf("%s : Cannot reduce allowable assets below existing number: %+v\n", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
@@ -152,7 +152,7 @@ func (c *Contract) Amendment(ctx context.Context, log *log.Logger, mux protomux.
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractPKH,
+		Address: contractAddr,
 		Value:   c.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -185,8 +185,8 @@ func (c *Contract) Formation(ctx context.Context, log *log.Logger, mux protomux.
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractPKH := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractPKH.String())
+	contractAddr := rk.Address
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
 		return err
 	}
@@ -211,30 +211,33 @@ func (c *Contract) Formation(ctx context.Context, log *log.Logger, mux protomux.
 			Qty:                         msg.RestrictedQty,
 		}
 
-		if err := contract.Create(ctx, dbConn, contractPKH.String(), &nc, v.Now); err != nil {
+		if err := contract.Create(ctx, dbConn, contractAddr.String(), &nc, v.Now); err != nil {
 			return err
 		}
 	} else {
+		// Required pointers
+		stringPointer := func(s string) *string { return &s }
+
 		// Prepare update object
 		uc := contract.UpdateContract{
-			ContractName:                string(msg.ContractName),
-			ContractFileHash:            fmt.Sprintf("%x", msg.ContractFileHash),
-			GoverningLaw:                string(msg.GoverningLaw),
-			Jurisdiction:                string(msg.Jurisdiction),
-			ContractExpiration:          msg.ContractExpiration,
-			URI:                         string(msg.URI),
-			Revision:                    msg.ContractRevision,
-			IssuerID:                    string(msg.IssuerID),
-			IssuerType:                  string(msg.IssuerType),
-			ContractOperatorID:          string(msg.ContractOperatorID),
+			ContractName:                stringPointer(string(msg.ContractName)),
+			ContractFileHash:            stringPointer(fmt.Sprintf("%x", msg.ContractFileHash)),
+			GoverningLaw:                stringPointer(string(msg.GoverningLaw)),
+			Jurisdiction:                stringPointer(string(msg.Jurisdiction)),
+			ContractExpiration:          &msg.ContractExpiration,
+			URI:                         stringPointer(string(msg.URI)),
+			Revision:                    &msg.ContractRevision,
+			IssuerID:                    stringPointer(string(msg.IssuerID)),
+			IssuerType:                  stringPointer(string(msg.IssuerType)),
+			ContractOperatorID:          stringPointer(string(msg.ContractOperatorID)),
 			AuthorizationFlags:          msg.AuthorizationFlags,
-			VotingSystem:                string(msg.VotingSystem),
-			InitiativeThreshold:         msg.InitiativeThreshold,
-			InitiativeThresholdCurrency: string(msg.InitiativeThresholdCurrency),
-			Qty:                         msg.RestrictedQty,
+			VotingSystem:                stringPointer(string(msg.VotingSystem)),
+			InitiativeThreshold:         &msg.InitiativeThreshold,
+			InitiativeThresholdCurrency: stringPointer(string(msg.InitiativeThresholdCurrency)),
+			Qty:                         &msg.RestrictedQty,
 		}
 
-		if err := contract.Update(ctx, dbConn, contractPKH.String(), &uc, v.Now); err != nil {
+		if err := contract.Update(ctx, dbConn, contractAddr.String(), &uc, v.Now); err != nil {
 			return err
 		}
 	}

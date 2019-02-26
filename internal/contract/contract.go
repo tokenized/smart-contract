@@ -63,6 +63,10 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 	c.IssuerType = nu.IssuerType
 	c.VotingSystem = nu.VotingSystem
 
+	if c.AuthorizationFlags == nil {
+		c.AuthorizationFlags = []byte{}
+	}
+
 	if nu.VotingSystem == string(0x0) {
 		c.VotingSystem = ""
 	}
@@ -89,30 +93,58 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 		return ErrNotFound
 	}
 
-	// TODO(srg) New protocol spec - This double up in logic is reserved for using
-	// conditional pointers where only some fields are updated on the object.
-	c.ContractName = upd.ContractName
-	c.ContractFileHash = upd.ContractFileHash
-	c.GoverningLaw = upd.GoverningLaw
-	c.Jurisdiction = upd.Jurisdiction
-	c.ContractExpiration = upd.ContractExpiration
-	c.URI = upd.URI
-	c.Revision = upd.Revision
-	c.IssuerID = upd.IssuerID
-	c.ContractOperatorID = upd.ContractOperatorID
-	c.AuthorizationFlags = upd.AuthorizationFlags
-	c.InitiativeThreshold = upd.InitiativeThreshold
-	c.InitiativeThresholdCurrency = upd.InitiativeThresholdCurrency
-	c.Qty = upd.Qty
-	c.IssuerType = upd.IssuerType
-	c.VotingSystem = upd.VotingSystem
-
-	if upd.VotingSystem == string(0x0) {
-		c.VotingSystem = ""
+	// Update fields
+	if upd.ContractName != nil {
+		c.ContractName = *upd.ContractName
+	}
+	if upd.ContractFileHash != nil {
+		c.ContractFileHash = *upd.ContractFileHash
+	}
+	if upd.GoverningLaw != nil {
+		c.GoverningLaw = *upd.GoverningLaw
+	}
+	if upd.Jurisdiction != nil {
+		c.Jurisdiction = *upd.Jurisdiction
+	}
+	if upd.ContractExpiration != nil {
+		c.ContractExpiration = *upd.ContractExpiration
+	}
+	if upd.URI != nil {
+		c.URI = *upd.URI
+	}
+	if upd.Revision != nil {
+		c.Revision = *upd.Revision
+	}
+	if upd.IssuerID != nil {
+		c.IssuerID = *upd.IssuerID
+	}
+	if upd.ContractOperatorID != nil {
+		c.ContractOperatorID = *upd.ContractOperatorID
+	}
+	if upd.AuthorizationFlags != nil {
+		c.AuthorizationFlags = upd.AuthorizationFlags
+	}
+	if upd.InitiativeThreshold != nil {
+		c.InitiativeThreshold = *upd.InitiativeThreshold
+	}
+	if upd.InitiativeThresholdCurrency != nil {
+		c.InitiativeThresholdCurrency = *upd.InitiativeThresholdCurrency
+	}
+	if upd.Qty != nil {
+		c.Qty = *upd.Qty
 	}
 
-	if upd.IssuerType == string(0x0) {
-		c.IssuerType = ""
+	if upd.IssuerType != nil {
+		c.IssuerType = *upd.IssuerType
+		if c.IssuerType == string(0x0) {
+			c.IssuerType = ""
+		}
+	}
+	if upd.VotingSystem != nil {
+		c.VotingSystem = *upd.VotingSystem
+		if c.IssuerType == string(0x0) {
+			c.VotingSystem = ""
+		}
 	}
 
 	if err := Save(ctx, dbConn, *c); err != nil {

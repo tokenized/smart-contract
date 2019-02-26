@@ -15,6 +15,9 @@ var (
 	// ErrNotFound abstracts the standard not found error.
 	ErrNotFound = errors.New("Asset not found")
 
+	// ErrNoHoldings occurs when an asset is corrupt.
+	ErrNoHoldings = errors.New("Asset has no holdings")
+
 	// ErrInvalidID occurs when an ID is not in a valid form.
 	ErrInvalidID = errors.New("ID is not in its proper form")
 )
@@ -25,7 +28,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, assetID string) (
 	defer span.End()
 
 	// Find asset in storage
-	c, err := Fetch(ctx, dbConn, contractPKH, assetID)
+	a, err := Fetch(ctx, dbConn, contractPKH, assetID)
 	if err != nil {
 		if err == ErrNotFound {
 			return nil, nil
@@ -33,7 +36,12 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, assetID string) (
 		return nil, err
 	}
 
-	return c, nil
+	// A valid asset should contain at least one holding
+	if a.Holdings == nil {
+		return nil, ErrNoHoldings
+	}
+
+	return a, nil
 }
 
 // Create the asset
@@ -89,16 +97,31 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 		return ErrNotFound
 	}
 
-	// TODO(srg) New protocol spec - This double up in logic is reserved for using
-	// conditional pointers where only some fields are updated on the object.
-	a.Type = upd.Type
-	a.Revision = upd.Revision
-	a.VotingSystem = upd.VotingSystem
-	a.VoteMultiplier = upd.VoteMultiplier
-	a.Qty = upd.Qty
+	// Update fields
+	if upd.Type != nil {
+		a.Type = *upd.Type
+	}
+	if upd.Revision != nil {
+		a.Revision = *upd.Revision
+	}
+	if upd.VotingSystem != nil {
+		a.VotingSystem = *upd.VotingSystem
+	}
+	if upd.VoteMultiplier != nil {
+		a.VoteMultiplier = *upd.VoteMultiplier
+	}
+	if upd.Qty != nil {
+		a.Qty = *upd.Qty
+	}
+	if upd.AuthorizationFlags != nil {
+		a.AuthorizationFlags = upd.AuthorizationFlags
+	}
 
-	if a.AuthorizationFlags == nil {
-		a.AuthorizationFlags = []byte{}
+	// Update balances
+	if upd.NewBalances != nil {
+		for pkh, balance := range upd.NewBalances {
+			UpdateBalance(ctx, a, pkh, balance, now)
+		}
 	}
 
 	if err := Save(ctx, dbConn, contractPKH, *a); err != nil {
@@ -106,4 +129,78 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	}
 
 	return nil
+}
+
+// UpdateBalance will set the balance of a users holdings against the supplie asset.
+// New holdings are created for new users and expired holding statuses are cleared.
+func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH string, balance uint64, now time.Time) error {
+	holding, ok := asset.Holdings[userPKH]
+
+	// New holding
+	if !ok {
+		holding = state.Holding{
+			Address:   userPKH,
+			Balance:   balance,
+			CreatedAt: now.UnixNano(),
+		}
+	}
+
+	// Clear expired holding status
+	if holding.HoldingStatus != nil && HoldingStatusExpired(ctx, holding.HoldingStatus, now) {
+		holding.HoldingStatus = nil
+	}
+
+	// Put the holding back on the asset
+	asset.Holdings[userPKH] = holding
+
+	return nil
+}
+
+// GetBalance returns the balance for a PKH holder
+func GetBalance(ctx context.Context, asset *state.Asset, userPKH string) uint64 {
+	holding, ok := asset.Holdings[userPKH]
+	if !ok {
+		return 0
+	}
+
+	return holding.Balance
+}
+
+// CheckBalance checks to see if the user has the specified balance available
+func CheckBalance(ctx context.Context, asset *state.Asset, userPKH string, amount uint64) bool {
+	holding, ok := asset.Holdings[userPKH]
+	if !ok {
+		return false
+	}
+
+	return holding.Balance >= amount
+}
+
+// CheckBalanceFrozen checks to see if the user has the specified unfrozen balance available
+// NB(srg): Amount remains as an argument because it will be a consideration in future
+func CheckBalanceFrozen(ctx context.Context, asset *state.Asset, userPKH string, amount uint64, now time.Time) bool {
+	holding, ok := asset.Holdings[userPKH]
+	if !ok {
+		return false
+	}
+
+	if holding.HoldingStatus != nil {
+		return HoldingStatusExpired(ctx, holding.HoldingStatus, now)
+	}
+
+	return true
+}
+
+// HoldingStatusExpired checks to see if a holding status has expired
+func HoldingStatusExpired(ctx context.Context, hs *state.HoldingStatus, now time.Time) bool {
+	if hs.Expires == 0 {
+		return false
+	}
+
+	// Current time is after expiry, so this order has expired.
+	if now.Unix() > int64(hs.Expires) {
+		return true
+	}
+
+	return false
 }
