@@ -118,6 +118,7 @@ func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	initial := true
 	for {
+		node.mutex.Lock()
 		if initial {
 			logger.Log(ctx, logger.Verbose, "Connecting to %s", node.config.NodeAddress)
 		} else {
@@ -126,11 +127,11 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 		if err := node.connect(); err != nil {
 			logger.Log(ctx, logger.Verbose, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
+			node.mutex.Unlock()
 			return err
 		}
 		initial = false
 
-		node.mutex.Lock()
 		if !node.outgoingOpen {
 			// Recreate outgoing message channel
 			node.outgoing = make(chan wire.Message, 100)

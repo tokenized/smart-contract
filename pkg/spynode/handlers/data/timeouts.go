@@ -13,7 +13,7 @@ const (
 	blockTimeout     = 600
 
 	// Maximum number of restarts allowed in a minute before stopping
-	maxRestarts = 10
+	maxRestarts = 5 // TODO This needs to stop the node
 )
 
 func (state *State) LogRestart() {

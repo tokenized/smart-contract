@@ -6,6 +6,7 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -50,6 +51,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 
 	if len(message.Headers) == 0 {
 		// We must be in sync. This shouldn't happen since we request headers from one back from the top.
+		logger.Log(ctx, logger.Verbose, "In sync at height %d", handler.blocks.LastHeight())
 		handler.state.IsInSync = true
 		handler.state.HeadersRequested = nil
 		handler.blocks.Save(ctx) // Save when we get in sync
@@ -57,6 +59,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	}
 
 	if len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash {
+		logger.Log(ctx, logger.Verbose, "In sync at height %d", handler.blocks.LastHeight())
 		handler.state.IsInSync = true // We are in sync
 		handler.state.HeadersRequested = nil
 		handler.blocks.Save(ctx) // Save when we get in sync
@@ -189,6 +192,7 @@ func (handler HeadersHandler) addHeader(ctx context.Context, hash *chainhash.Has
 		// Check if it is the start block
 		if handler.config.StartHash == *hash {
 			handler.state.StartHeight = handler.blocks.LastHeight() + 1
+			logger.Log(ctx, logger.Verbose, "Found start block at height %d", handler.state.StartHeight)
 		} else {
 			err := handler.blocks.Add(ctx, *hash) // Just add hashes before the start block
 			if err != nil {

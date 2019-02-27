@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -74,6 +75,9 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 			return errors.Wrap(err, fmt.Sprintf("Failed to open block file : %s",
 				repo.buildPath(repo.height)))
 		}
+		if len(hashes) == 0 {
+			break
+		}
 
 		if previousFileSize != -1 && previousFileSize != blocksPerKey {
 			return errors.New(fmt.Sprintf("Invalid block file (count %d) : %s", previousFileSize,
@@ -106,6 +110,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 		repo.lastHashes = append(repo.lastHashes, *hash)
 		repo.height = 0
 		repo.heights[*hash] = repo.height
+		logger.Log(ctx, logger.Verbose, "Added genesis block")
 	}
 
 	return nil

@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/data"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/spynode"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -105,7 +107,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Node
 
-	node := spynode.NewNode(nodeConfig, store, listeners)
+	node := spynode.NewNode(nodeConfig, store)
 
 	logListener := LogListener{ctx: ctx}
 	node.RegisterListener(&logListener)
@@ -127,8 +129,42 @@ func main() {
 		panic(err)
 	}
 
-	if err := node.Run(ctx); err != nil {
-		panic(err)
+	// -------------------------------------------------------------------------
+	// Start Node Service
+
+	// Make a channel to listen for errors coming from the listener. Use a
+	// buffered channel so the goroutine can exit if we don't collect this error.
+	serverErrors := make(chan error, 1)
+
+	// Start the service listening for requests.
+	go func() {
+		logger.Log(ctx, logger.Info, "main : Node Running")
+		serverErrors <- node.Run(ctx)
+	}()
+
+	// -------------------------------------------------------------------------
+	// Shutdown
+
+	// Make a channel to listen for an interrupt or terminate signal from the OS.
+	// Use a buffered channel because the signal package requires it.
+	osSignals := make(chan os.Signal, 1)
+	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
+
+	// -------------------------------------------------------------------------
+	// Stop API Service
+
+	// Blocking main and waiting for shutdown.
+	select {
+	case err := <-serverErrors:
+		logger.Log(ctx, logger.Fatal, "main : Error starting server: %v", err)
+
+	case <-osSignals:
+		logger.Log(ctx, logger.Info, "main : Start shutdown...")
+
+		// Asking listener to shutdown and load shed.
+		if err := node.Stop(ctx); err != nil {
+			logger.Log(ctx, logger.Fatal, "main : Could not stop spvnode server: %v", err)
+		}
 	}
 }
 
