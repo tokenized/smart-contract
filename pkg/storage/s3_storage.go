@@ -109,6 +109,11 @@ func (s S3Storage) Remove(ctx context.Context, key string) error {
 	_, err := svc.DeleteObject(do)
 
 	if err != nil {
+		if strings.HasPrefix(err.Error(), "NoSuchKey") {
+			// specifically handle the "not found" case
+			return ErrNotFound
+		}
+
 		return fmt.Errorf("Failed to delete object at %v : %v", key, err)
 	}
 

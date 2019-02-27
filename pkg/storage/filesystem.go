@@ -74,7 +74,11 @@ func (f FilesystemStorage) Read(ctx context.Context,
 func (f FilesystemStorage) Remove(ctx context.Context, key string) error {
 	filename := f.buildPath(key)
 
-	return os.Remove(filename)
+	err := os.Remove(filename)
+	if os.IsNotExist(err) {
+		return ErrNotFound
+	}
+	return err
 }
 
 // All returns all objects in the store, from a given path.
