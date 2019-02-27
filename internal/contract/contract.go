@@ -183,6 +183,11 @@ func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH string
 	return false
 }
 
+// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
+func IsOperator(ctx context.Context, contract *state.Contract, pkh string) bool {
+	return contract.IssuerAddress == pkh || contract.OperatorAddress == pkh
+}
+
 // IsVotingPermitted returns true if contract allows voting
 func IsVotingPermitted(ctx context.Context, contract *state.Contract) bool {
 	return contract.VotingSystem != "N"
