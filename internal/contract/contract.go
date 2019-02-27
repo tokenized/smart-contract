@@ -171,3 +171,19 @@ func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
 	// imposed by the contract.
 	return total < contract.Qty
 }
+
+// HasAnyBalance checks if the user has any balance of any token across the contract
+func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH string) bool {
+	for _, a := range contract.Assets {
+		if h, ok := a.Holdings[userPKH]; ok && h.Balance > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsVotingPermitted returns true if contract allows voting
+func IsVotingPermitted(ctx context.Context, contract *state.Contract) bool {
+	return contract.VotingSystem != "N"
+}

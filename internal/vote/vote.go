@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tokenized/smart-vote/internal/platform/db"
-	"github.com/tokenized/smart-vote/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 
 	"go.opencensus.io/trace"
 )
@@ -56,9 +56,22 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, voteID string, upd 
 	// 	v.IssuerType = ""
 	// }
 
-	if err := Save(ctx, dbConn, *v); err != nil {
+	if err := Save(ctx, dbConn, contractPKH, *v); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// ResultMaximum returns the maximum result
+func ResultMaximum(r state.Result) uint64 {
+	max := uint64(0)
+
+	for _, v := range r {
+		if v >= max {
+			max = v
+		}
+	}
+
+	return max
 }

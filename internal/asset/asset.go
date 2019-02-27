@@ -224,3 +224,8 @@ func HoldingStatusExpired(ctx context.Context, hs *state.HoldingStatus, now time
 
 	return false
 }
+
+// IsVotingPermitted returns true if asset allows voting
+func IsVotingPermitted(ctx context.Context, asset *state.Asset) bool {
+	return asset.VotingSystem != "N"
+}

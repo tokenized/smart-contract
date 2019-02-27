@@ -181,7 +181,7 @@ type PluralityVotingSystem struct {
 
 func (p PluralityVotingSystem) Winners(c state.Contract, vote state.Vote) ([]uint8, error) {
 	// Get the highest vote
-	max := vote.Result.Maximum()
+	max := ResultMaximum(*vote.Result)
 
 	winners := []uint8{}
 

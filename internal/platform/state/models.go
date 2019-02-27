@@ -59,30 +59,31 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Address              string         `json:"address"`
-	AssetType            string         `json:"asset_type"`
-	AssetID              string         `json:"asset_id"`
-	VoteType             byte           `json:"vote_type"`
-	VoteOptions          []byte         `json:"vote_options"`
-	VoteMax              uint8          `json:"vote_max"`
-	VoteLogic            byte           `json:"vote_logic"`
-	ProposalDescription  string         `json:"proposal_description"`
-	ProposalDocumentHash string         `json:"proposal_document_hash"`
-	VoteCutOffTimestamp  int64          `json:"vote_cut_off_timestamp"`
-	RefTxnIDHash         string         `json:"ref_txn_id_hash"`
-	Ballots              []Ballot       `json:"ballots"`
-	Result               *BallotResult  `json:"result,omitempty"`
-	UTXO                 inspector.UTXO `json:"utxo"`
-	CreatedAt            int64          `json:"created_at"`
+	Address              string            `json:"address"`
+	AssetType            string            `json:"asset_type"`
+	AssetID              string            `json:"asset_id"`
+	VoteType             byte              `json:"vote_type"`
+	VoteOptions          []uint8           `json:"vote_options"`
+	VoteMax              uint8             `json:"vote_max"`
+	VoteLogic            byte              `json:"vote_logic"`
+	ProposalDescription  string            `json:"proposal_description"`
+	ProposalDocumentHash string            `json:"proposal_document_hash"`
+	VoteCutOffTimestamp  int64             `json:"vote_cut_off_timestamp"`
+	RefTxnIDHash         string            `json:"ref_txn_id_hash"`
+	Ballots              map[string]Ballot `json:"ballots"`
+	UTXO                 inspector.UTXO    `json:"utxo"`
+	Result               *Result           `json:"result,omitempty"`
+	UsedBy               string            `json:"used_by,omit_empty"`
+	CreatedAt            int64             `json:"created_at"`
 }
 
 type Ballot struct {
-	Address   string `json:"address"`
-	AssetType string `json:"asset_type"`
-	AssetID   string `json:"asset_id"`
-	VoteTxnID string `json:"vote_txn_id"`
-	Vote      []byte `json:"vote"`
-	CreatedAt int64  `json:"created_at"`
+	Address   string  `json:"address"`
+	AssetType string  `json:"asset_type"`
+	AssetID   string  `json:"asset_id"`
+	VoteTxnID string  `json:"vote_txn_id"`
+	Vote      []uint8 `json:"vote"`
+	CreatedAt int64   `json:"created_at"`
 }
 
-type BallotResult map[uint8]uint64
+type Result map[uint8]uint64

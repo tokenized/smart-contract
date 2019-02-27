@@ -110,9 +110,23 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 	return ErrRejected
 }
 
-// RespondError sends JSON describing the error
+// RespondSuccess broadcasts a successful message
 func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
 	msg protocol.OpReturnMessage, outs []Output) error {
+
+	// Get spendable UTXO's received for the contract address
+	utxos, err := itx.UTXOs().ForAddress(rk.Address)
+	if err != nil {
+		return err
+	}
+
+	RespondUTXO(ctx, log, mux, itx, rk, msg, outs, utxos)
+	return nil
+}
+
+// RespondUTXO broadcasts a successful message using a specific UTXO
+func RespondUTXO(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
+	msg protocol.OpReturnMessage, outs []Output, utxos []inspector.UTXO) error {
 
 	var change btcutil.Address
 
@@ -132,12 +146,6 @@ func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, 
 	// At least one change output is required
 	if change == nil {
 		return errors.New("Missing change output")
-	}
-
-	// Get spendable UTXO's received for the contract address
-	utxos, err := itx.UTXOs().ForAddress(rk.Address)
-	if err != nil {
-		return err
 	}
 
 	// Build the new transaction

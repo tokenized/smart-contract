@@ -23,13 +23,13 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, v state.Vote) error {
 			err = ErrNotFound
 		}
 
-		return nil, err
+		return err
 	}
 
 	// Prepare the contract object
 	c := state.Contract{}
 	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Initialize Vote map
@@ -38,7 +38,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, v state.Vote) error {
 	}
 
 	// Update the vote
-	c.Votes[a.ID] = a
+	c.Votes[v.RefTxnIDHash] = v
 
 	// Save the contract
 	sb, err := json.Marshal(c)
