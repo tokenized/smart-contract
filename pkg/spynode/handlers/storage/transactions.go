@@ -98,6 +98,7 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 		return make([]chainhash.Hash, 0), nil
 	}
 	if err != nil {
+		repo.mutex.Unlock()
 		return nil, err
 	}
 
@@ -106,10 +107,12 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 	endOffset := len(data)
 	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
 		if offset+chainhash.HashSize > endOffset {
+			repo.mutex.Unlock()
 			return make([]chainhash.Hash, 0), errors.New(fmt.Sprintf("TX file %08x has invalid size : %d", height, len(data)))
 		}
 		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
 		if err != nil {
+			repo.mutex.Unlock()
 			return hashes, err
 		}
 		hashes = append(hashes, *newhash)
@@ -121,18 +124,71 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 // Rewrites all "relevant" tx ids in a specified block and unconfirmed
 // Must only be called after GetBlock
 // Height of -1 means unconfirmed
-func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chainhash.Hash, txids []chainhash.Hash, height int) error {
-	if err := repo.writeBlock(ctx, txids, height); err != nil {
-		repo.mutex.Unlock()
-		return err
+func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chainhash.Hash, updateUnconfirmed bool, txids []chainhash.Hash, height int) error {
+	defer repo.mutex.Unlock()
+
+	if len(txids) > 0 {
+		if err := repo.writeBlock(ctx, txids, height); err != nil {
+			return err
+		}
+	} else {
+		if err := repo.store.Remove(ctx, repo.buildPath(height)); err != nil && err != storage.ErrNotFound {
+			return err
+		}
 	}
 
-	if err := repo.writeBlock(ctx, unconfirmed, -1); err != nil {
-		repo.mutex.Unlock()
-		return err
+	if updateUnconfirmed {
+		if len(unconfirmed) > 0 {
+			if err := repo.writeBlock(ctx, unconfirmed, -1); err != nil {
+				return err
+			}
+		} else {
+			if err := repo.store.Remove(ctx, repo.buildPath(-1)); err != nil && err != storage.ErrNotFound {
+				return err
+			}
+		}
 	}
 
+	return nil
+}
+
+// Removes all "relevant" tx ids in a specified block and releases lock
+// Must only be called after GetBlock
+// Height of -1 means unconfirmed
+func (repo *TxRepository) RemoveBlock(ctx context.Context, height int) error {
+	defer repo.mutex.Unlock()
+
+	err := repo.store.Remove(ctx, repo.buildPath(height))
+	if err == storage.ErrNotFound {
+		return nil
+	}
+	return err
+}
+
+// Releases lock
+// Must only be called after GetBlock
+// Height of -1 means unconfirmed
+func (repo *TxRepository) ReleaseBlock(ctx context.Context, height int) error {
 	repo.mutex.Unlock()
+	return nil
+}
+
+// Sets tx ids in a specified block
+// Height of -1 means unconfirmed
+func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, height int) error {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	if len(txids) > 0 {
+		if err := repo.writeBlock(ctx, txids, height); err != nil {
+			return err
+		}
+	} else {
+		if err := repo.store.Remove(ctx, repo.buildPath(height)); err != nil && err != storage.ErrNotFound {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -147,30 +203,17 @@ func (repo *TxRepository) writeBlock(ctx context.Context, txids []chainhash.Hash
 	return repo.store.Write(ctx, repo.buildPath(height), data, nil)
 }
 
-// Removes all "relevant" tx ids in a specified block and releases lock
-// Must only be called after GetBlock
-// Height of -1 means unconfirmed
-func (repo *TxRepository) RemoveBlock(ctx context.Context, height int) error {
-	err := repo.store.Remove(ctx, repo.buildPath(height))
-	repo.mutex.Unlock()
-	return err
-}
-
-// Releases lock
-// Must only be called after GetBlock
-// Height of -1 means unconfirmed
-func (repo *TxRepository) ReleaseBlock(ctx context.Context, height int) error {
-	repo.mutex.Unlock()
-	return nil
-}
-
 // Clears all "relevant" tx ids in a specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) ClearBlock(ctx context.Context, height int) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
-	return repo.store.Remove(ctx, repo.buildPath(height))
+	err := repo.store.Remove(ctx, repo.buildPath(height))
+	if err == storage.ErrNotFound {
+		return nil
+	}
+	return err
 }
 
 func (repo *TxRepository) buildPath(height int) string {

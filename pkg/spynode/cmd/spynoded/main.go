@@ -125,10 +125,6 @@ func main() {
 		}
 	}()
 
-	if err := node.Load(ctx); err != nil {
-		panic(err)
-	}
-
 	// -------------------------------------------------------------------------
 	// Start Node Service
 

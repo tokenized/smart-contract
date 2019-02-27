@@ -85,7 +85,7 @@ func (node *Node) AddTxFilter(filter handlers.TxFilter) {
 
 // Loads the data for the node.
 // Must be called after adding filter(s), but before Run()
-func (node *Node) Load(ctx context.Context) error {
+func (node *Node) load(ctx context.Context) error {
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 
@@ -116,6 +116,11 @@ func (node *Node) Load(ctx context.Context) error {
 // Doesn't stop until there is a failure or Stop() is called.
 func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+
+	if err := node.load(ctx); err != nil {
+		return err
+	}
+
 	initial := true
 	for {
 		node.mutex.Lock()
@@ -273,7 +278,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
-			logger.Log(ctx, logger.Warn, "Failed to handle message = %+v : %v", msg, err.Error())
+			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -459,7 +464,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	// Stop all
 	node.untrustedMutex.Lock()
 	for _, untrusted := range node.untrustedNodes {
-		untrusted.Stop()
+		untrusted.Stop(ctx)
 	}
 	node.untrustedMutex.Unlock()
 

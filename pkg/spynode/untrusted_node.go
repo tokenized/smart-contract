@@ -100,7 +100,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	return nil
 }
 
-func (node *UntrustedNode) Stop() error {
+func (node *UntrustedNode) Stop(ctx context.Context) error {
 	node.mutex.Lock()
 	defer node.mutex.Unlock()
 	node.stopping = true
@@ -167,7 +167,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 	for {
 		if err := node.check(ctx); err != nil {
 			logger.Log(ctx, logger.Warn, "Check failed : %s", err.Error())
-			node.Stop()
+			node.Stop(ctx)
 			break
 		}
 
@@ -175,21 +175,21 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		msg, _, err := wire.ReadMessage(node.conn, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Verbose, "Connection closed")
-			node.Stop()
+			logger.Log(ctx, logger.Debug, "Connection closed")
+			node.Stop(ctx)
 			break
 		}
 		if err != nil {
 			// Happens when the connection is closed
 			logger.Log(ctx, logger.Debug, "Failed to read message : %s", err.Error())
-			node.Stop()
+			node.Stop(ctx)
 			break
 		}
 
 		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
 			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
-			node.Stop()
+			node.Stop(ctx)
 			break
 		}
 	}
@@ -257,7 +257,7 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 		if err := node.state.CheckTimeouts(); err != nil {
 			logger.Log(ctx, logger.Warn, "Timed out : %s", err.Error())
 			node.peers.UpdateScore(ctx, node.address, -1)
-			node.Stop()
+			node.Stop(ctx)
 			break
 		}
 

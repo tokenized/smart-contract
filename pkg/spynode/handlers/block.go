@@ -6,6 +6,7 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -110,15 +111,18 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		response = append(response, getBlocks)
 	}
 
-	// Get unconfirmed "relevant" txs
-	unconfirmed, err := handler.txs.GetBlock(ctx, -1)
-	if err != nil {
-		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-		return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
+	var unconfirmed []chainhash.Hash
+	if handler.state.IsInSync {
+		// Get unconfirmed "relevant" txs
+		var err error
+		unconfirmed, err = handler.txs.GetBlock(ctx, -1)
+		if err != nil {
+			return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
+		}
 	}
 
 	// Send block notification
-	var removed bool
+	var removed bool = false
 	relevant := make([]chainhash.Hash, 0)
 	height := handler.blocks.LastHeight()
 	blockMessage := BlockMessage{Hash: hash, Height: height}
@@ -129,45 +133,50 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	// Notify Tx for block and tx listeners
 	hashes, err := msg.TxHashes()
 	if err != nil {
-		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+		if handler.state.IsInSync {
+			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+		}
 		return response, errors.Wrap(err, "Failed to get block tx hashes")
 	}
+	logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash.String())
 	for i, txHash := range hashes {
-		// Remove from unconfirmed. Only matching are in unconfirmed.
-		removed, unconfirmed = removeHash(&txHash, unconfirmed)
+		if handler.state.IsInSync {
+			// Remove from unconfirmed. Only matching are in unconfirmed.
+			removed, unconfirmed = removeHash(&txHash, unconfirmed)
+		}
+		matches := removed || matchesFilter(ctx, msg.Transactions[i], handler.txFilters)
 
-		for _, listener := range handler.listeners {
-			matches := removed || matchesFilter(ctx, msg.Transactions[i], handler.txFilters)
-
-			// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
-			// Or if it isn't in the mempool (not sent to listener yet).
-			if !handler.state.IsInSync {
-				if matches {
-					relevant = append(relevant, txHash)
-					if !removed {
-						listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i])
-					}
+		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
+		// Or if it isn't in the mempool (not sent to listener yet).
+		if matches {
+			if len(handler.listeners) == 0 {
+				logger.Log(ctx, logger.Verbose, "No listeners for tx : %s", txHash.String())
+			}
+			relevant = append(relevant, txHash)
+			if !removed { // Full tx hasn't been sent to listener yet
+				for _, listener := range handler.listeners {
+					listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i])
 				}
-			} else if !handler.memPool.RemoveTransaction(&txHash) {
-				if matches {
-					relevant = append(relevant, txHash)
-					if !removed {
-						listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i])
-					}
-				}
+			}
+		}
 
-				// Check for transaction in the mempool with conflicting inputs (double spends).
-				if conflicting := handler.memPool.Conflicting(msg.Transactions[i]); len(conflicting) > 0 {
-					for _, hash := range conflicting {
-						if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
+		if handler.state.IsInSync && !handler.memPool.RemoveTransaction(&txHash) {
+			// Transaction wasn't in the mempool.
+			// Check for transactions in the mempool with conflicting inputs (double spends).
+			if conflicting := handler.memPool.Conflicting(msg.Transactions[i]); len(conflicting) > 0 {
+				for _, hash := range conflicting {
+					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
+						for _, listener := range handler.listeners {
 							listener.Handle(ctx, ListenerMsgTxCancel, *hash)
 						}
 					}
 				}
 			}
+		}
 
-			if matches {
-				// Notify of confirm
+		if matches {
+			// Notify of confirm
+			for _, listener := range handler.listeners {
 				listener.Handle(ctx, ListenerMsgTxConfirm, txHash)
 			}
 		}
@@ -176,11 +185,17 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	// Perform any block cleanup
 	err = handler.blockProcessor.ProcessBlock(ctx, msg)
 	if err != nil {
-		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+		if handler.state.IsInSync {
+			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+		}
 		return response, err
 	}
 
-	return response, handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height)
+	if handler.state.IsInSync {
+		return response, handler.txs.FinalizeBlock(ctx, unconfirmed, handler.state.IsInSync, relevant, height)
+	} else {
+		return response, handler.txs.SetBlock(ctx, relevant, height)
+	}
 }
 
 func containsHash(hash *chainhash.Hash, list []chainhash.Hash) bool {
