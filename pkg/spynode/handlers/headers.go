@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/data"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"

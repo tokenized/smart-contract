@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"net"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/storage"
-	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 var (

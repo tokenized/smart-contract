@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/data"
-	handlerstorage "bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/storage"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/logger"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )

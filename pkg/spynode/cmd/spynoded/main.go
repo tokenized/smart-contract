@@ -104,9 +104,11 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Node
-	logListener := LogListener{ctx: ctx}
-	listeners := []handlers.Listener{&logListener}
+
 	node := spynode.NewNode(nodeConfig, store, listeners)
+
+	logListener := LogListener{ctx: ctx}
+	node.RegisterListener(&logListener)
 
 	node.AddTxFilter(TokenizedFilter{})
 	node.AddTxFilter(OPReturnFilter{})

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 

@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 

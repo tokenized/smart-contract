@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/storage"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestTransactions(test *testing.T) {

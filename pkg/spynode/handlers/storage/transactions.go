@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/pkg/errors"
 )
 
 // TxRepository is used for managing which txs for each block are "relevant" and which have been

@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/storage"
+
+	"github.com/pkg/errors"
 )
 
 const (

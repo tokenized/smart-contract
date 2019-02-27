@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/data"
-	handlerstorage "bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers/storage"
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/logger"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
@@ -49,7 +49,7 @@ type Node struct {
 }
 
 // See handlers/handlers.go for the listener interface definitions.
-func NewNode(config data.Config, store storage.Storage, listeners []handlers.Listener) *Node {
+func NewNode(config data.Config, store storage.Storage) *Node {
 	result := Node{
 		config:         config,
 		state:          data.NewState(),
@@ -61,7 +61,7 @@ func NewNode(config data.Config, store storage.Storage, listeners []handlers.Lis
 		memPool:        data.NewMemPool(),
 		outgoing:       make(chan wire.Message, 100),
 		outgoingOpen:   true,
-		listeners:      listeners,
+		listeners:      make([]handlers.Listener, 0),
 		txFilters:      make([]handlers.TxFilter, 0),
 		untrustedNodes: make([]*UntrustedNode, 0),
 		addresses:      make(map[string]time.Time),
@@ -69,6 +69,10 @@ func NewNode(config data.Config, store storage.Storage, listeners []handlers.Lis
 		stopping:       false,
 	}
 	return &result
+}
+
+func (node *Node) RegisterListener(listener handlers.Listener) {
+	node.listeners = append(node.listeners, listener)
 }
 
 // Adds a tx filter.

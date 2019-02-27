@@ -3,7 +3,7 @@ package spynode
 import (
 	"context"
 
-	"bitbucket.org/tokenized/nexus-api/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 

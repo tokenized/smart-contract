@@ -4,8 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // MemPool is used for managing announced transactions that haven't confirmed yet.
