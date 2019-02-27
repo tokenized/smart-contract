@@ -5,16 +5,16 @@ import (
 )
 
 type Config struct {
-	Host string
+	Host     string
 	Username string
 	Password string
 }
 
 func NewConfig(host, username, password string) Config {
 	return Config{
-		Host:        host,
-		Username:    username,
-		Password:    password,
+		Host:     host,
+		Username: username,
+		Password: password,
 	}
 }
 
