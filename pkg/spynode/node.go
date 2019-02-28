@@ -224,6 +224,15 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
+// Handle a tx as if it came from the network.
+// Used to feed "response" txs directly back through spynode.
+// TODO Figure out how to handle this if it gets called while a block is being processed and the
+//   mempool or tx repo are locked.
+func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
+	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash().String())
+	return handleMessage(ctx, node.handlers, tx, node.outgoing)
+}
+
 func (node *Node) connect() error {
 	node.disconnect()
 

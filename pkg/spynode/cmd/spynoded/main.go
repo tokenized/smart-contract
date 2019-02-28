@@ -63,7 +63,7 @@ func main() {
 	}
 
 	logger.Log(ctx, logger.Info, "Started : Application Initializing")
-	defer log.Println("main : Completed")
+	defer log.Println("Completed")
 
 	cfgJSON, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
@@ -134,7 +134,7 @@ func main() {
 
 	// Start the service listening for requests.
 	go func() {
-		logger.Log(ctx, logger.Info, "main : Node Running")
+		logger.Log(ctx, logger.Info, "Node Running")
 		serverErrors <- node.Run(ctx)
 	}()
 
@@ -152,14 +152,14 @@ func main() {
 	// Blocking main and waiting for shutdown.
 	select {
 	case err := <-serverErrors:
-		logger.Log(ctx, logger.Fatal, "main : Error starting server: %v", err)
+		logger.Log(ctx, logger.Fatal, "Error starting server: %v", err)
 
 	case <-osSignals:
-		logger.Log(ctx, logger.Info, "main : Start shutdown...")
+		logger.Log(ctx, logger.Info, "Start shutdown...")
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Log(ctx, logger.Fatal, "main : Could not stop spvnode server: %v", err)
+			logger.Log(ctx, logger.Fatal, "Could not stop spvnode server: %v", err)
 		}
 	}
 }
