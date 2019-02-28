@@ -5,36 +5,36 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
-	"github.com/tokenized/smart-contract/pkg/spvnode"
+	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Server struct {
 	RpcNode *rpcnode.RPCNode
-	SpvNode *spvnode.Node
+	SpyNode *spynode.Node
 	Handler protomux.Handler
 }
 
-func (s *Server) Start() error {
+func (s *Server) Run(ctx context.Context) error {
 
 	// Set responder
 	s.Handler.SetResponder(s.respondTx)
 
 	// Register listeners
-	txListener := &TXListener{Handler: s.Handler, Node: s.RpcNode}
-	s.SpvNode.RegisterListener(spvnode.ListenerTX, txListener)
+	listener := Listener{Handler: s.Handler, Node: s.RpcNode}
+	s.SpyNode.RegisterListener(&listener)
 
-	if err := s.SpvNode.Start(); err != nil {
+	if err := s.SpyNode.Run(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Server) Close() error {
+func (s *Server) Stop(ctx context.Context) error {
 	// TODO: This action should unregister listeners
 
-	if err := s.SpvNode.Close(); err != nil {
+	if err := s.SpyNode.Stop(ctx); err != nil {
 		return err
 	}
 
@@ -45,4 +45,5 @@ func (s *Server) Close() error {
 // The method signatures are the same but we keep repeat for clarify
 func (s *Server) respondTx(ctx context.Context, tx *wire.MsgTx) {
 	s.RpcNode.SendTX(ctx, tx)
+	s.SpyNode.BroadcastTx(ctx, tx)
 }

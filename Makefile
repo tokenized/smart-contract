@@ -34,6 +34,16 @@ dist-cli:
 prepare:
 	mkdir -p dist tmp
 
+prepare-win:
+	mkdir dist | echo dist exists
+	mkdir tmp | echo tmp exists
+
+# build a version suitable for running locally
+build-smartcontractd-win:
+	go build -o dist\$(BINARY) cmd\$(BINARY)\main.go
+
+build-win: prepare-win build-smartcontractd-win
+
 tools:
 	go get golang.org/x/tools/cmd/goimports
 	go get github.com/golang/lint/golint

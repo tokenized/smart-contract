@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -14,8 +19,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
-	"github.com/tokenized/smart-contract/pkg/spvnode"
+	"github.com/tokenized/smart-contract/pkg/spynode"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/kelseyhightower/envconfig"
 )
@@ -29,8 +37,27 @@ var (
 // Smart Contract Daemon
 //
 func main() {
+	ctx := context.Background()
+
 	// -------------------------------------------------------------------------
 	// Logging
+
+	logFileName := filepath.FromSlash("tmp/main.log")
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	if err != nil {
+		log.Fatalf("main : Failed to open log file : %v", err)
+		return
+	}
+	defer logFile.Close()
+
+	logConfig := logger.NewDevelopmentConfig()
+	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
+	logConfig.Main.Format |= logger.IncludeSystem
+	logConfig.EnableSubSystem(spynode.SubSystem)
+	ctx = logger.ContextWithLogConfig(ctx, logConfig)
+
+	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 
 	log := log.New(os.Stdout, "Node : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 
@@ -43,11 +70,13 @@ func main() {
 			OperatorName string `envconfig:"OPERATOR_NAME"`
 			Version      string `envconfig:"VERSION"`
 			FeeAddress   string `envconfig:"FEE_ADDRESS"`
-			FeeAmount    uint64 `envconfig:"FEE_VALUE"` // TODO rename FEE_AMOUNT
+			FeeAmount    uint64 `envconfig:"FEE_AMOUNT"`
 		}
-		SpvNode struct {
-			Address   string `envconfig:"NODE_ADDRESS"`
-			UserAgent string `envconfig:"NODE_USER_AGENT"`
+		SpyNode struct {
+			Address        string `default:"127.0.0.1:8333" envconfig:"NODE_ADDRESS"`
+			UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
+			StartHash      string `envconfig:"START_HASH"`
+			UntrustedNodes string `default:"8" envconfig:"UNTRUSTED_NODES"`
 		}
 		RpcNode struct {
 			Host     string `envconfig:"RPC_HOST"`
@@ -80,39 +109,59 @@ func main() {
 	log.Println("main : Started : Application Initializing")
 	defer log.Println("main : Completed")
 
-	cfgJSON, err := json.MarshalIndent(cfg, "", "    ")
+	log.Printf("main : Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
+
+	// Mask sensitive values
+	cfgSafe := cfg
+	if len(cfgSafe.Contract.PrivateKey) > 0 {
+		cfgSafe.Contract.PrivateKey = "*** Masked ***"
+	}
+	if len(cfgSafe.RpcNode.Password) > 0 {
+		cfgSafe.RpcNode.Password = "*** Masked ***"
+	}
+	if len(cfgSafe.NodeStorage.Secret) > 0 {
+		cfgSafe.NodeStorage.Secret = "*** Masked ***"
+	}
+	if len(cfgSafe.Storage.Secret) > 0 {
+		cfgSafe.Storage.Secret = "*** Masked ***"
+	}
+	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
 	if err != nil {
 		log.Fatalf("main : Marshalling Config to JSON : %v", err)
 	}
-
-	log.Printf("main : Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
-
-	// TODO: Mask sensitive values
 	log.Printf("main : Config : %v\n", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
-	// SPV Node
-
-	spvStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
+	// SPY Node
+	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
 		cfg.NodeStorage.AccessKey,
 		cfg.NodeStorage.Secret,
 		cfg.NodeStorage.Bucket,
 		cfg.NodeStorage.Root)
 
-	var spvStorage storage.Storage
-	if strings.ToLower(spvStorageConfig.Bucket) == "standalone" {
-		spvStorage = storage.NewFilesystemStorage(spvStorageConfig)
+	var spyStorage storage.Storage
+	if strings.ToLower(spyStorageConfig.Bucket) == "standalone" {
+		spyStorage = storage.NewFilesystemStorage(spyStorageConfig)
 	} else {
-		spvStorage = storage.NewS3Storage(spvStorageConfig)
+		spyStorage = storage.NewS3Storage(spyStorageConfig)
+	}
+	untrustedNodes, err := strconv.Atoi(cfg.SpyNode.UntrustedNodes)
+	if err != nil {
+		log.Fatalf("Invalid untrusted nodes count %s : %v\n", cfg.SpyNode.UntrustedNodes, err)
+		return
 	}
 
-	spvConfig := spvnode.NewConfig(cfg.SpvNode.Address, cfg.SpvNode.UserAgent)
+	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash, untrustedNodes)
+	if err != nil {
+		log.Fatalf("Failed to create spynode config : %v\n", err)
+		return
+	}
 
-	spvNode := spvnode.NewNode(spvConfig, spvStorage)
+	spyNode := spynode.NewNode(spyConfig, spyStorage)
+	spyNode.AddTxFilter(TokenizedFilter{})
 
 	// -------------------------------------------------------------------------
 	// RPC Node
-
 	rpcConfig := rpcnode.NewConfig(cfg.RpcNode.Host,
 		cfg.RpcNode.Username,
 		cfg.RpcNode.Password)
@@ -165,7 +214,7 @@ func main() {
 
 	node := listeners.Server{
 		RpcNode: rpcNode,
-		SpvNode: &spvNode,
+		SpyNode: spyNode,
 		Handler: appHandlers,
 	}
 
@@ -179,7 +228,7 @@ func main() {
 	// Start the service listening for requests.
 	go func() {
 		log.Print("main : Node Running")
-		serverErrors <- node.Start()
+		serverErrors <- node.Run(ctx)
 	}()
 
 	// -------------------------------------------------------------------------
@@ -202,8 +251,61 @@ func main() {
 		log.Println("main : Start shutdown...")
 
 		// Asking listener to shutdown and load shed.
-		if err := node.Close(); err != nil {
+		if err := node.Stop(ctx); err != nil {
 			log.Fatalf("main : Could not stop spvnode server: %v", err)
 		}
 	}
+}
+
+var (
+	// Tokenized.com OP_RETURN script signature
+	// 0x6a <OP_RETURN>
+	// 0x0d <Push next 13 bytes>
+	// 0x746f6b656e697a65642e636f6d <"tokenized.com">
+	tokenizedSignature = []byte{0x6a, 0x0d, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x69, 0x7a, 0x65, 0x64, 0x2e, 0x63, 0x6f, 0x6d}
+
+	// old targetVersion Protocol prefix
+	oldTokenizedTargetVersion = []byte{0x0, 0x0, 0x0, 0x20}
+)
+
+// Filters for transactions with tokenized.com op return scripts.
+type TokenizedFilter struct{}
+
+func (filter TokenizedFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+	for _, output := range tx.TxOut {
+		if IsTokenizedOpReturn(output.PkScript) || IsOldTokenizedOpReturn(output.PkScript) {
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+				"Matches TokenizedFilter : %s", tx.TxHash().String())
+			return true
+		}
+	}
+	return false
+}
+
+// Checks if a script carries the tokenized.com protocol signature
+func IsTokenizedOpReturn(pkScript []byte) bool {
+	if len(pkScript) < len(tokenizedSignature) {
+		return false
+	}
+	return bytes.Equal(pkScript[:len(tokenizedSignature)], tokenizedSignature)
+}
+
+func IsOldTokenizedOpReturn(pkScript []byte) bool {
+	if len(pkScript) < 20 {
+		return false // This isn't long enough to be a sane message
+	}
+	if pkScript[0] != 0x6a {
+		return false // This isn't an OP_RETURN
+	}
+
+	version := make([]byte, 4)
+
+	// Get the version. Where that is, depends on the message structure.
+	if pkScript[1] < 0x4c { // single byte push op code
+		version = pkScript[2:6]
+	} else { // assume no more than two byte push op code
+		version = pkScript[3:7]
+	}
+
+	return bytes.Equal(version, oldTokenizedTargetVersion)
 }
