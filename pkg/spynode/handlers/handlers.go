@@ -44,6 +44,10 @@ const (
 	//   seen.
 	// If a confirm is later seen for one of these tx, then it can be assumed reliable.
 	ListenerMsgTxUnsafe = 7 // msgValue is chainhash.Hash
+
+	// This message means that the node is current with the network.
+	// All data from this point forward is live.
+	ListenerMsgInSync = 8 // msgValue is nil
 )
 
 type Listener interface {

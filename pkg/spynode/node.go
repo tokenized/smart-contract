@@ -369,6 +369,12 @@ func (node *Node) check(ctx context.Context) error {
 			mempool := wire.NewMsgMemPool()
 			node.outgoing <- mempool
 			node.state.MemPoolRequested = true
+		} else if !node.state.NotifiedSync {
+			// TODO Add method to wait for mempool to sync
+			for _, listener := range node.listeners {
+				listener.Handle(ctx, handlers.ListenerMsgInSync, nil)
+			}
+			node.state.NotifiedSync = true
 		}
 
 		responses, err := node.txTracker.Check(ctx, node.memPool)
@@ -379,17 +385,15 @@ func (node *Node) check(ctx context.Context) error {
 		for _, response := range responses {
 			node.outgoing <- response
 		}
-	} else {
-		// Check if we need to request headers
-		if !node.state.PendingSync && node.state.HeadersRequested == nil && node.state.BlocksRequestedCount() < 5 {
-			msg, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
-			if err != nil {
-				return err
-			}
-			node.outgoing <- msg
-			now := time.Now()
-			node.state.HeadersRequested = &now
+	} else if node.state.HeadersRequested == nil && node.state.BlocksRequestedCount() < 5 {
+		// Request more headers
+		msg, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
+		if err != nil {
+			return err
 		}
+		node.outgoing <- msg
+		now := time.Now()
+		node.state.HeadersRequested = &now
 	}
 
 	return nil

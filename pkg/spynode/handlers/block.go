@@ -149,9 +149,6 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
 		// Or if it isn't in the mempool (not sent to listener yet).
 		if matches {
-			if len(handler.listeners) == 0 {
-				logger.Log(ctx, logger.Verbose, "No listeners for tx : %s", txHash.String())
-			}
 			relevant = append(relevant, txHash)
 			if !removed { // Full tx hasn't been sent to listener yet
 				for _, listener := range handler.listeners {
@@ -194,6 +191,10 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	if handler.state.IsInSync {
 		return response, handler.txs.FinalizeBlock(ctx, unconfirmed, handler.state.IsInSync, relevant, height)
 	} else {
+		if handler.state.PendingSync && handler.state.BlockRequestsEmpty() {
+			handler.state.IsInSync = true
+			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
+		}
 		return response, handler.txs.SetBlock(ctx, relevant, height)
 	}
 }

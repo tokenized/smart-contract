@@ -4,52 +4,100 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spynode"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Server struct {
-	RpcNode *rpcnode.RPCNode
-	SpyNode *spynode.Node
-	Handler protomux.Handler
+	RpcNode          *rpcnode.RPCNode
+	SpyNode          *spynode.Node
+	Handler          protomux.Handler
+	pendingResponses []*wire.MsgTx
+	blockHeight      int // track current block height for confirm messages
+	inSync           bool
 }
 
-func (s *Server) Run(ctx context.Context) error {
+func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler) *Server {
+	result := Server{
+		RpcNode:          rpcNode,
+		SpyNode:          spyNode,
+		Handler:          handler,
+		pendingResponses: make([]*wire.MsgTx, 0),
+		blockHeight:      0,
+		inSync:           false,
+	}
+
+	return &result
+}
+
+func (server *Server) Run(ctx context.Context) error {
 
 	// Set responder
-	s.Handler.SetResponder(s.respondTx)
+	server.Handler.SetResponder(server.respondTx)
 
 	// Register listeners
-	listener := Listener{Handler: s.Handler, Node: s.RpcNode}
-	s.SpyNode.RegisterListener(&listener)
+	server.SpyNode.RegisterListener(server)
 
-	if err := s.SpyNode.Run(ctx); err != nil {
+	if err := server.SpyNode.Run(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Server) Stop(ctx context.Context) error {
+func (server *Server) Stop(ctx context.Context) error {
 	// TODO: This action should unregister listeners
 
-	if err := s.SpyNode.Stop(ctx); err != nil {
+	if err := server.SpyNode.Stop(ctx); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
+	server.RpcNode.SendTX(ctx, tx)
+	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
+		return err
+	}
+	if err := server.SpyNode.HandleTx(ctx, tx); err != nil {
+		return err
+	}
 	return nil
 }
 
 // respondTx is an internal method used as a the responder
 // The method signatures are the same but we keep repeat for clarify
-func (s *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
-	s.RpcNode.SendTX(ctx, tx)
-	if err := s.SpyNode.BroadcastTx(ctx, tx); err != nil {
-		return err
+func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
+	if server.inSync {
+		return server.sendTx(ctx, tx)
 	}
-	if err := s.SpyNode.HandleTx(ctx, tx); err != nil {
-		return err
+
+	// Append to pending so it can be monitored
+	logger.Log(ctx, logger.Info, "Saving pending response tx : %s", tx.TxHash().String())
+	server.pendingResponses = append(server.pendingResponses, tx)
+	return nil
+}
+
+// Remove any pending that are conflicting with this tx.
+// Contract responses use the tx output from the request to the contract as a tx input in the response tx.
+// So if that contract request output is spent by another tx, then the contract has already responded.
+func (server *Server) removeConflictingPending(ctx context.Context, itx *inspector.Transaction) error {
+	for i, pendingTx := range server.pendingResponses {
+		for _, pendingInput := range pendingTx.TxIn {
+			for _, input := range itx.Inputs {
+				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
+					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
+					logger.Log(ctx, logger.Info, "Pending tx removed : %s", pendingTx.TxHash().String())
+					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
+					return nil
+				}
+			}
+		}
 	}
+
 	return nil
 }

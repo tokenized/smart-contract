@@ -36,8 +36,6 @@ func (a *Asset) DefinitionRequest(ctx context.Context, log *log.Logger, mux prot
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	logger.Log(ctx, logger.Verbose, "%s : Asset definition request\n", v.TraceID)
-
 	// Locate Contract
 	contractAddr := rk.Address
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
@@ -71,7 +69,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, log *log.Logger, mux prot
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
-	logger.Log(ctx, logger.Verbose, "%s : Accepting asset request : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+	logger.Log(ctx, logger.Verbose, "%s : Accepting asset creation request : %s %s\n", v.TraceID, contractAddr.String(), assetID)
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.NewAssetCreation()

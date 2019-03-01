@@ -16,6 +16,7 @@ type State struct {
 	HandshakeComplete  bool             // Handshake negotiation is complete
 	SentSendHeaders    bool             // The sendheaders message has been sent
 	IsInSync           bool             // We have all the blocks our peer does and we are just monitoring new data
+	NotifiedSync       bool             // Sync message has been sent to listeners
 	AddressesRequested bool             // Peer addresses have been requested
 	MemPoolRequested   bool             // Mempool has bee requested
 	HeadersRequested   *time.Time       // Time that headers were last requested
@@ -35,6 +36,7 @@ func NewState() *State {
 		HandshakeComplete:  false,
 		SentSendHeaders:    false,
 		IsInSync:           false,
+		NotifiedSync:       false,
 		AddressesRequested: false,
 		MemPoolRequested:   false,
 		HeadersRequested:   nil,

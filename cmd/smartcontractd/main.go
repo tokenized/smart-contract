@@ -226,11 +226,7 @@ func main() {
 
 	appHandlers := handlers.API(log, masterWallet, appConfig, masterDB)
 
-	node := listeners.Server{
-		RpcNode: rpcNode,
-		SpyNode: spyNode,
-		Handler: appHandlers,
-	}
+	node := listeners.NewServer(rpcNode, spyNode, appHandlers)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

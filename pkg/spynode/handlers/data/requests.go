@@ -98,6 +98,13 @@ func (state *State) BlocksRequestedCount() int {
 	return len(state.blocksRequested)
 }
 
+func (state *State) BlockRequestsEmpty() bool {
+	state.mutex.Lock()
+	defer state.mutex.Unlock()
+
+	return len(state.blocksToRequest) == 0 && len(state.blocksRequested) == 0
+}
+
 func (state *State) LastHash() *chainhash.Hash {
 	state.mutex.Lock()
 	defer state.mutex.Unlock()

@@ -49,18 +49,16 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		lastHash = handler.blocks.LastHash()
 	}
 
-	if len(message.Headers) == 0 {
-		// We must be in sync. This shouldn't happen since we request headers from one back from the top.
-		logger.Log(ctx, logger.Verbose, "In sync at height %d", handler.blocks.LastHeight())
-		handler.state.IsInSync = true
-		handler.state.HeadersRequested = nil
-		handler.blocks.Save(ctx) // Save when we get in sync
-		return response, nil
-	}
-
-	if len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash {
-		logger.Log(ctx, logger.Verbose, "In sync at height %d", handler.blocks.LastHeight())
-		handler.state.IsInSync = true // We are in sync
+	if len(message.Headers) == 0 || len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash {
+		logger.Log(ctx, logger.Info, "Headers in sync at height %d", handler.blocks.LastHeight())
+		handler.state.PendingSync = true // We are in sync
+		if handler.state.StartHeight == -1 {
+			handler.state.IsInSync = true
+			logger.Log(ctx, logger.Error, "Headers in sync before start block found")
+		} else if handler.state.BlockRequestsEmpty() {
+			handler.state.IsInSync = true
+			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
+		}
 		handler.state.HeadersRequested = nil
 		handler.blocks.Save(ctx) // Save when we get in sync
 		return response, nil
