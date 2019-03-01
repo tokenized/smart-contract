@@ -62,7 +62,6 @@ func (w Wallet) Register(secret string) error {
 
 	// Put in key store
 	w.KeyStore.Put(pubaddr, priv, pub)
-
 	return nil
 }
 

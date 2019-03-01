@@ -43,7 +43,13 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // respondTx is an internal method used as a the responder
 // The method signatures are the same but we keep repeat for clarify
-func (s *Server) respondTx(ctx context.Context, tx *wire.MsgTx) {
+func (s *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	s.RpcNode.SendTX(ctx, tx)
-	s.SpyNode.BroadcastTx(ctx, tx)
+	if err := s.SpyNode.BroadcastTx(ctx, tx); err != nil {
+		return err
+	}
+	if err := s.SpyNode.HandleTx(ctx, tx); err != nil {
+		return err
+	}
+	return nil
 }

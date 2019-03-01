@@ -49,12 +49,6 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, nu 
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
-	// Find asset
-	a, err := Fetch(ctx, dbConn, contractPKH, assetID)
-	if err != nil {
-		return ErrNotFound
-	}
-
 	// Set up holdings
 	holding := state.Holding{
 		Address:   nu.IssuerAddress,
@@ -67,6 +61,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, nu 
 	}
 
 	// Set up asset
+	var a state.Asset
 	a.ID = nu.ID
 	a.Type = nu.Type
 	a.VotingSystem = nu.VotingSystem
@@ -79,7 +74,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, nu 
 		a.AuthorizationFlags = []byte{}
 	}
 
-	if err := Save(ctx, dbConn, contractPKH, *a); err != nil {
+	if err := Save(ctx, dbConn, contractPKH, a); err != nil {
 		return err
 	}
 

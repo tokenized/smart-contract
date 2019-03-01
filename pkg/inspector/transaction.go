@@ -188,12 +188,12 @@ func (itx *Transaction) IsOutgoingMessageType() bool {
 	return ok
 }
 
-// UTXOs returns all the unspent transactions
+// UTXOs returns all the unspent transaction outputs created by this tx
 func (itx *Transaction) UTXOs() UTXOs {
 	utxos := UTXOs{}
 
-	for _, input := range itx.Inputs {
-		utxos = append(utxos, input.UTXO)
+	for _, output := range itx.Outputs {
+		utxos = append(utxos, output.UTXO)
 	}
 
 	return utxos

@@ -13,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"go.opencensus.io/trace"
 )
 
@@ -32,7 +33,6 @@ func (c *Contract) OfferRequest(ctx context.Context, log *log.Logger, mux protom
 	}
 
 	dbConn := c.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -45,9 +45,11 @@ func (c *Contract) OfferRequest(ctx context.Context, log *log.Logger, mux protom
 
 	// The contract should not exist already
 	if ct != nil {
-		log.Printf("%s : Contract already exists: %+v\n", v.TraceID, contractAddr)
+		logger.Log(ctx, logger.Warn, "%s : Contract already exists: %s\n", v.TraceID, contractAddr.String())
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractExists)
 	}
+
+	logger.Log(ctx, logger.Verbose, "%s : Accepting contract offer (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.NewContractFormation()
@@ -101,7 +103,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, log *log.Logger, mux pr
 	}
 
 	dbConn := c.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -114,14 +115,14 @@ func (c *Contract) AmendmentRequest(ctx context.Context, log *log.Logger, mux pr
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractAddr)
+		logger.Log(ctx, logger.Warn, "%s : Contract not found: %s\n", v.TraceID, contractAddr.String())
 		return node.ErrNoResponse
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.Qty > 0 && int(msg.RestrictedQty) < len(ct.Assets) {
-		log.Printf("%s : Cannot reduce allowable assets below existing number: %+v\n", v.TraceID, contractAddr)
+		logger.Log(ctx, logger.Warn, "%s : Cannot reduce allowable assets below existing number: %s\n", v.TraceID, contractAddr.String())
 		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
@@ -180,7 +181,6 @@ func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux p
 	}
 
 	dbConn := c.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -188,6 +188,7 @@ func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux p
 	contractAddr := rk.Address
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
+		logger.Log(ctx, logger.Warn, "%s : Failed to retrieve contract (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
 		return err
 	}
 
@@ -212,8 +213,10 @@ func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux p
 		}
 
 		if err := contract.Create(ctx, dbConn, contractAddr.String(), &nc, v.Now); err != nil {
+			logger.Log(ctx, logger.Warn, "%s : Failed to create contract (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
+		logger.Log(ctx, logger.Verbose, "%s : Created contract (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -238,8 +241,10 @@ func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux p
 		}
 
 		if err := contract.Update(ctx, dbConn, contractAddr.String(), &uc, v.Now); err != nil {
+			logger.Log(ctx, logger.Warn, "%s : Failed contract update (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
+		logger.Log(ctx, logger.Verbose, "%s : Updated contract (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
 	}
 
 	return nil

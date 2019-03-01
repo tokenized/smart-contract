@@ -106,7 +106,9 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 		Error(ctx, log, mux, err)
 	}
 
-	Respond(ctx, log, mux, newTx)
+	if err := Respond(ctx, log, mux, newTx); err != nil {
+		return err
+	}
 	return ErrRejected
 }
 
@@ -120,8 +122,7 @@ func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, 
 		return err
 	}
 
-	RespondUTXO(ctx, log, mux, itx, rk, msg, outs, utxos)
-	return nil
+	return RespondUTXO(ctx, log, mux, itx, rk, msg, outs, utxos)
 }
 
 // RespondUTXO broadcasts a successful message using a specific UTXO
@@ -154,11 +155,10 @@ func RespondUTXO(ctx context.Context, log *log.Logger, mux protomux.Handler, itx
 		return err
 	}
 
-	Respond(ctx, log, mux, newTx)
-	return nil
+	return Respond(ctx, log, mux, newTx)
 }
 
 // Respond sends a TX to the network.
-func Respond(ctx context.Context, log *log.Logger, mux protomux.Handler, tx *wire.MsgTx) {
-	mux.Respond(ctx, tx)
+func Respond(ctx context.Context, log *log.Logger, mux protomux.Handler, tx *wire.MsgTx) error {
+	return mux.Respond(ctx, tx)
 }

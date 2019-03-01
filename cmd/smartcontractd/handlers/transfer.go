@@ -34,7 +34,6 @@ func (t *Transfer) SendRequest(ctx context.Context, log *log.Logger, mux protomu
 	}
 
 	dbConn := t.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -133,7 +132,6 @@ func (t *Transfer) ExchangeRequest(ctx context.Context, log *log.Logger, mux pro
 	}
 
 	dbConn := t.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -264,7 +262,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, log *log.Logger, mux 
 	}
 
 	dbConn := t.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 

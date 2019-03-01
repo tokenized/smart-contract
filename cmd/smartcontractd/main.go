@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -23,6 +24,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/kelseyhightower/envconfig"
@@ -158,7 +160,6 @@ func main() {
 	}
 
 	spyNode := spynode.NewNode(spyConfig, spyStorage)
-	spyNode.AddTxFilter(TokenizedFilter{})
 
 	// -------------------------------------------------------------------------
 	// RPC Node
@@ -178,6 +179,19 @@ func main() {
 	if err := masterWallet.Register(cfg.Contract.PrivateKey); err != nil {
 		panic(err)
 	}
+
+	// -------------------------------------------------------------------------
+	// Tx Filter
+
+	rawPKHs, err := masterWallet.KeyStore.GetRawPubKeyHashes()
+	if err != nil {
+		panic(err)
+	}
+	if len(rawPKHs) != 1 {
+		panic("More than one key in wallet")
+	}
+	txFilter := TxFilter{chainParams: &chaincfg.MainNetParams, contractPKH: rawPKHs[0]}
+	spyNode.AddTxFilter(&txFilter)
 
 	// -------------------------------------------------------------------------
 	// Start Database / Storage
@@ -269,17 +283,45 @@ var (
 )
 
 // Filters for transactions with tokenized.com op return scripts.
-type TokenizedFilter struct{}
+type TxFilter struct {
+	chainParams *chaincfg.Params
+	contractPKH []byte
+}
 
-func (filter TokenizedFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+	containsTokenized := false
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) || IsOldTokenizedOpReturn(output.PkScript) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
 				"Matches TokenizedFilter : %s", tx.TxHash().String())
+			containsTokenized = true
+			break
+		}
+	}
+
+	if !containsTokenized {
+		return false
+	}
+
+	// Check if relevant to contract
+	for _, output := range tx.TxOut {
+		// TODO Remove extra logic in this. Should only check if P2PKH and get raw 20 bytes for PKH
+		class, addresses, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, filter.chainParams)
+		if err != nil {
+			continue
+		}
+		if class == txscript.PubKeyHashTy && bytes.Equal(addresses[0].ScriptAddress(), filter.contractPKH) {
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true
 		}
 	}
-	return false
+
+	// Check if txin is from contract
+	// for _, input := range tx.TxIn {
+	// }
+
+	return true
 }
 
 // Checks if a script carries the tokenized.com protocol signature

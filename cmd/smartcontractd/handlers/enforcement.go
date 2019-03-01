@@ -62,7 +62,6 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, log *log.Logger, m
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -136,7 +135,6 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, log *log.Logger, mux
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -209,7 +207,6 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, log *log.Logge
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -311,7 +308,6 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, log *log.Logger, mux p
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -353,7 +349,6 @@ func (e *Enforcement) ThawResponse(ctx context.Context, log *log.Logger, mux pro
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -390,7 +385,6 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, log *log.Logger,
 	}
 
 	dbConn := e.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 

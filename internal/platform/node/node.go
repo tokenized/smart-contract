@@ -66,10 +66,10 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(itx *inspector.Transaction, pkhs []string) {
+	h := func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error {
 
 		// Start trace span.
-		ctx, span := trace.StartSpan(context.Background(), "internal.platform.node")
+		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
 		// Set the context with the required values to
 		// process the event.
@@ -82,12 +82,13 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		// For each address controlled by this wallet
 		rootKeys, _ := a.wallet.List(pkhs)
 		for _, rootKey := range rootKeys {
-
 			// Call the wrapped handler functions.
 			if err := handler(ctx, a.log, a.ProtoMux, itx, rootKey); err != nil {
-				Error(ctx, a.log, a.ProtoMux, err)
+				return err
 			}
 		}
+
+		return nil
 	}
 
 	// Add this handler for the specified verb and event.

@@ -49,3 +49,12 @@ func (k KeyStore) Get(address string) (*RootKey, error) {
 
 	return key, nil
 }
+
+// Returns pub key hashes in raw byte format
+func (k KeyStore) GetRawPubKeyHashes() ([][]byte, error) {
+	result := make([][]byte, 0, len(k.Keys))
+	for _, rootKey := range k.Keys {
+		result = append(result, rootKey.Address.ScriptAddress())
+	}
+	return result, nil
+}

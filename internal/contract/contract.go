@@ -42,11 +42,9 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, address)
-	if err != nil {
-		return ErrNotFound
-	}
+	var c state.Contract
 
+	c.ID = address
 	c.ContractName = nu.ContractName
 	c.ContractFileHash = nu.ContractFileHash
 	c.GoverningLaw = nu.GoverningLaw
@@ -75,7 +73,7 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 		c.IssuerType = ""
 	}
 
-	if err := Save(ctx, dbConn, *c); err != nil {
+	if err := Save(ctx, dbConn, c); err != nil {
 		return err
 	}
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 )
 
@@ -187,6 +188,7 @@ func New(b []byte) (OpReturnMessage, error) {
 	}
 
 	if _, err := t.Write(b); err != nil {
+		log.Printf("Failed to write message %s : %s", code, err.Error())
 		return nil, err
 	}
 

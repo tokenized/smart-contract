@@ -166,7 +166,7 @@ func (node *UntrustedNode) disconnect() error {
 func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 	for {
 		if err := node.check(ctx); err != nil {
-			logger.Log(ctx, logger.Warn, "Check failed : %s", err.Error())
+			logger.Log(ctx, logger.Debug, "Check failed : %s", err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -188,7 +188,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
+			logger.Log(ctx, logger.Debug, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -255,7 +255,7 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 		sleepUntilStop(10, &node.stopping) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
-			logger.Log(ctx, logger.Warn, "Timed out : %s", err.Error())
+			logger.Log(ctx, logger.Debug, "Timed out : %s", err.Error())
 			node.peers.UpdateScore(ctx, node.address, -1)
 			node.Stop(ctx)
 			break

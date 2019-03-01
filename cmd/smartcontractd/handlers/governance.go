@@ -36,7 +36,6 @@ func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux
 	}
 
 	dbConn := g.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -160,7 +159,6 @@ func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux
 	}
 
 	dbConn := g.MasterDB
-	defer dbConn.Close()
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 

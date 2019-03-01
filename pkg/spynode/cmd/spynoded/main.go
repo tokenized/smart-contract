@@ -221,6 +221,14 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 			return nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", value.String())
+
+	case handlers.ListenerMsgTxUnsafe:
+		value, ok := msgValue.(chainhash.Hash)
+		if !ok {
+			logger.Log(listener.ctx, logger.Error, "TxUnsafe : Could not assert as chainhash.Hash")
+			return nil
+		}
+		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", value.String())
 	}
 	return nil
 }

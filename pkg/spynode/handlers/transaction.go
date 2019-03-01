@@ -32,6 +32,10 @@ func NewTXHandler(ready StateReady, memPool *data.MemPool, txs *storage.TxReposi
 	return &result
 }
 
+type TxKey int
+
+var DirectTxKey TxKey = 1 // Used in context to flag when a tx is from the system
+
 func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
 	msg, ok := m.(*wire.MsgTx)
 	if !ok {
@@ -39,7 +43,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 	}
 
 	// Only notify of transactions when in sync or they might be duplicated
-	if !handler.ready.IsReady() {
+	if !handler.ready.IsReady() && ctx.Value(DirectTxKey) == nil {
 		return nil, nil
 	}
 

@@ -30,10 +30,10 @@ type Handler interface {
 }
 
 // A Handler is a type that handles a protocol messages
-type HandlerFunc func(itx *inspector.Transaction, pkhs []string)
+type HandlerFunc func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error
 
 // A ResponderFunc will handle responses
-type ResponderFunc func(ctx context.Context, tx *wire.MsgTx)
+type ResponderFunc func(ctx context.Context, tx *wire.MsgTx) error
 
 type ProtoMux struct {
 	Responder     ResponderFunc
@@ -94,7 +94,9 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 
 	// Notify the listeners
 	for _, listener := range handlers {
-		listener(itx, pkhs)
+		if err := listener(ctx, itx, pkhs); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -112,7 +114,5 @@ func (p *ProtoMux) Respond(ctx context.Context, m wire.Message) error {
 		return errors.New("Could not assert as *wire.MsgTx")
 	}
 
-	p.Responder(ctx, tx)
-
-	return nil
+	return p.Responder(ctx, tx)
 }

@@ -204,6 +204,7 @@ func (node *Node) Stop(ctx context.Context) error {
 
 // Broadcast a tx to the network
 func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash().String())
 
 	// Send to trusted node
@@ -229,8 +230,14 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 // TODO Figure out how to handle this if it gets called while a block is being processed and the
 //   mempool or tx repo are locked.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	ctx = context.WithValue(ctx, handlers.DirectTxKey, true)
 	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash().String())
-	return handleMessage(ctx, node.handlers, tx, node.outgoing)
+	err := handleMessage(ctx, node.handlers, tx, node.outgoing)
+	if err != nil {
+		logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
+	}
+	return err
 }
 
 func (node *Node) connect() error {
@@ -295,6 +302,9 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 }
 
 func (node *Node) restart(ctx context.Context) {
+	if node.stopping {
+		return
+	}
 	node.needsRestart = true
 	node.Stop(ctx)
 }
