@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -78,7 +77,7 @@ func main() {
 			Address        string `default:"127.0.0.1:8333" envconfig:"NODE_ADDRESS"`
 			UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
 			StartHash      string `envconfig:"START_HASH"`
-			UntrustedNodes string `default:"8" envconfig:"UNTRUSTED_NODES"`
+			UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
 		}
 		RpcNode struct {
 			Host     string `envconfig:"RPC_HOST"`
@@ -147,13 +146,8 @@ func main() {
 	} else {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
-	untrustedNodes, err := strconv.Atoi(cfg.SpyNode.UntrustedNodes)
-	if err != nil {
-		log.Fatalf("Invalid untrusted nodes count %s : %v\n", cfg.SpyNode.UntrustedNodes, err)
-		return
-	}
 
-	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash, untrustedNodes)
+	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes)
 	if err != nil {
 		log.Fatalf("Failed to create spynode config : %v\n", err)
 		return
