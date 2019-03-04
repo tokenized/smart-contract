@@ -115,6 +115,8 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	if handler.state.IsInSync {
 		// Get unconfirmed "relevant" txs
 		var err error
+		// This locks the tx repo so that propagated txs don't interfere while a block is being
+		//   processed.
 		unconfirmed, err = handler.txs.GetBlock(ctx, -1)
 		if err != nil {
 			return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")

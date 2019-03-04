@@ -74,7 +74,7 @@ func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool) ([]wire.M
 			delete(tracker.txids, txid) // Remove since we have received tx
 		} else {
 			if shouldRequest {
-				logger.Log(ctx, logger.Verbose, "Requesting tx : %s", newTxId.String())
+				logger.Log(ctx, logger.Verbose, "Re-Requesting tx : %s", newTxId.String())
 				item := wire.NewInvVect(wire.InvTypeTx, &newTxId)
 				// Request
 				if err := invRequest.AddInvVect(item); err != nil {

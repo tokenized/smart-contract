@@ -44,6 +44,7 @@ type Node struct {
 	addresses      map[string]time.Time
 	needsRestart   bool
 	stopping       bool
+	stopped        bool
 	mutex          sync.Mutex
 	untrustedMutex sync.Mutex
 }
@@ -67,6 +68,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		addresses:      make(map[string]time.Time),
 		needsRestart:   false,
 		stopping:       false,
+		stopped:        false,
 	}
 	return &result
 }
@@ -93,7 +95,7 @@ func (node *Node) load(ctx context.Context) error {
 	if err := node.peers.Load(ctx); err != nil {
 		return err
 	}
-	logger.Log(ctx, logger.Info, "Loaded %d peers", node.peers.Count())
+	logger.Log(ctx, logger.Verbose, "Loaded %d peers", node.peers.Count())
 
 	if err := node.blocks.Load(ctx); err != nil {
 		return err
@@ -107,6 +109,10 @@ func (node *Node) load(ctx context.Context) error {
 		logger.Log(ctx, logger.Info, "Start block not found yet")
 	}
 
+	if err := node.txs.Load(ctx); err != nil {
+		return err
+	}
+
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
 		node.blocks, node.txs, node.txTracker, node.memPool, node.listeners, node.txFilters, node)
 	return nil
@@ -117,7 +123,8 @@ func (node *Node) load(ctx context.Context) error {
 func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 
-	if err := node.load(ctx); err != nil {
+	var err error = nil
+	if err = node.load(ctx); err != nil {
 		return err
 	}
 
@@ -130,10 +137,10 @@ func (node *Node) Run(ctx context.Context) error {
 			logger.Log(ctx, logger.Verbose, "Re-connecting to %s", node.config.NodeAddress)
 			node.state.LogRestart()
 		}
-		if err := node.connect(); err != nil {
+		if err = node.connect(ctx); err != nil {
 			logger.Log(ctx, logger.Verbose, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
 			node.mutex.Unlock()
-			return err
+			break
 		}
 		initial = false
 
@@ -176,22 +183,34 @@ func (node *Node) Run(ctx context.Context) error {
 
 		// Save block repository
 		node.blocks.Save(ctx)
+		node.txs.Save(ctx)
 
 		if !node.needsRestart {
 			break
 		}
 
+		logger.Log(ctx, logger.Verbose, "Restarting")
 		node.needsRestart = false
 		node.stopping = false
 		node.state.Reset()
 	}
 
-	return nil
+	logger.Log(ctx, logger.Verbose, "Stopped")
+	node.stopped = true
+	return err
 }
 
 // Closes the connection and causes Run() to return.
 func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	err := node.requestStop(ctx)
+	for !node.stopped {
+		time.Sleep(1 * time.Millisecond)
+	}
+	return err
+}
+
+func (node *Node) requestStop(ctx context.Context) error {
 	node.stopping = true
 
 	if node.outgoingOpen {
@@ -199,7 +218,7 @@ func (node *Node) Stop(ctx context.Context) error {
 		node.outgoingOpen = false
 	}
 
-	return node.disconnect()
+	return node.disconnect(ctx)
 }
 
 // Broadcast a tx to the network
@@ -240,8 +259,8 @@ func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
 	return err
 }
 
-func (node *Node) connect() error {
-	node.disconnect()
+func (node *Node) connect(ctx context.Context) error {
+	node.disconnect(ctx)
 
 	conn, err := net.Dial("tcp", node.config.NodeAddress)
 	if err != nil {
@@ -254,7 +273,7 @@ func (node *Node) connect() error {
 	return nil
 }
 
-func (node *Node) disconnect() error {
+func (node *Node) disconnect(ctx context.Context) error {
 	if node.conn == nil {
 		return nil
 	}
@@ -274,7 +293,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 	for {
 		if err := node.check(ctx); err != nil {
 			logger.Log(ctx, logger.Warn, "Check failed : %v", err.Error())
-			node.Stop(ctx)
+			node.requestStop(ctx)
 			break
 		}
 
@@ -295,7 +314,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 
 		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
 			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
-			node.Stop(ctx)
+			node.requestStop(ctx)
 			break
 		}
 	}
@@ -306,7 +325,7 @@ func (node *Node) restart(ctx context.Context) {
 		return
 	}
 	node.needsRestart = true
-	node.Stop(ctx)
+	node.requestStop(ctx)
 }
 
 // This is called when a block is being processed.
@@ -491,6 +510,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	}
 	node.untrustedMutex.Unlock()
 
+	logger.Log(ctx, logger.Verbose, "Waiting for %d untrusted nodes to finish", len(node.untrustedNodes))
 	wg.Wait()
 }
 

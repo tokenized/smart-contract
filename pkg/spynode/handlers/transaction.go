@@ -73,7 +73,18 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		}
 	}
 
+	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
+	//   processing the same tx twice at the same time.
+	if added, err := handler.txs.Add(ctx, msg.TxHash(), -1); err != nil {
+		return nil, errors.Wrap(err, "Failed to add to tx repo")
+	} else if !added {
+		return nil, nil // Already seen
+	}
+
 	if !matchesFilter(ctx, msg, handler.txFilters) {
+		if _, err := handler.txs.Remove(ctx, msg.TxHash(), -1); err != nil {
+			return nil, errors.Wrap(err, "Failed to remove from tx repo")
+		}
 		return nil, nil // Filter out
 	}
 
@@ -90,14 +101,10 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		}
 	}
 
-	if marked {
+	if !marked {
 		// Add to tx repository as "relevant" unconfirmed tx
-		repoAdded, err := handler.txs.Add(ctx, msg.TxHash(), -1)
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to add to tx repo")
-		}
-		if !repoAdded { // Not added to tx repo, so already seen
-			return nil, nil
+		if _, err := handler.txs.Remove(ctx, msg.TxHash(), -1); err != nil {
+			return nil, errors.Wrap(err, "Failed to remove from tx repo")
 		}
 	}
 

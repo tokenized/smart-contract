@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -15,16 +16,29 @@ import (
 // TxRepository is used for managing which txs for each block are "relevant" and which have been
 //   sent to listeners.
 type TxRepository struct {
-	store storage.Storage
-	mutex sync.Mutex
+	store       storage.Storage
+	unconfirmed []chainhash.Hash
+	mutex       sync.Mutex
 }
 
 // NewTxRepository returns a new TxRepository.
 func NewTxRepository(store storage.Storage) *TxRepository {
 	result := TxRepository{
-		store: store,
+		store:       store,
+		unconfirmed: make([]chainhash.Hash, 0),
 	}
 	return &result
+}
+
+func (repo *TxRepository) Load(ctx context.Context) error {
+	var err error
+	repo.unconfirmed, err = repo.readBlock(ctx, -1)
+	return err
+}
+
+func (repo *TxRepository) Save(ctx context.Context) error {
+	logger.Log(ctx, logger.Verbose, "Saving %d unconfirmed txs", len(repo.unconfirmed))
+	return repo.writeBlock(ctx, repo.unconfirmed, -1)
 }
 
 // Adds a "relevant" tx id for a specified block
@@ -33,6 +47,16 @@ func NewTxRepository(store storage.Storage) *TxRepository {
 func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		for _, hash := range repo.unconfirmed {
+			if hash == txid {
+				return false, nil
+			}
+		}
+		repo.unconfirmed = append(repo.unconfirmed, txid)
+		return true, nil
+	}
 
 	path := repo.buildPath(height)
 
@@ -60,11 +84,59 @@ func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, height i
 	return true, repo.store.Write(ctx, path, newData, nil)
 }
 
+// Removes a "relevant" tx id for a specified block
+// Height of -1 means unconfirmed
+// Returns true if the txid was removed
+func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		for i, hash := range repo.unconfirmed {
+			if hash == txid {
+				repo.unconfirmed = append(repo.unconfirmed[:i], repo.unconfirmed[i+1:]...)
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	path := repo.buildPath(height)
+
+	// Get current tx data for block
+	data, err := repo.store.Read(ctx, path)
+	if err == storage.ErrNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Check for match to remove
+	for i := 0; i < len(data); i += chainhash.HashSize {
+		if bytes.Equal(data[i:i+chainhash.HashSize], txid[:]) {
+			data = append(data[:i], data[i+chainhash.HashSize:]...)
+			return true, repo.store.Write(ctx, path, data, nil)
+		}
+	}
+
+	return false, nil
+}
+
 // Returns true if the tx id is in the specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		for _, hash := range repo.unconfirmed {
+			if hash == txid {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 
 	path := repo.buildPath(height)
 
@@ -93,29 +165,14 @@ func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, hei
 func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
 	repo.mutex.Lock()
 
-	data, err := repo.store.Read(ctx, repo.buildPath(height))
-	if err == storage.ErrNotFound {
-		return make([]chainhash.Hash, 0), nil
+	if height == -1 {
+		return repo.unconfirmed, nil
 	}
+
+	hashes, err := repo.readBlock(ctx, height)
 	if err != nil {
 		repo.mutex.Unlock()
 		return nil, err
-	}
-
-	// Parse hashes from key
-	hashes := make([]chainhash.Hash, 0, 100)
-	endOffset := len(data)
-	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
-		if offset+chainhash.HashSize > endOffset {
-			repo.mutex.Unlock()
-			return make([]chainhash.Hash, 0), errors.New(fmt.Sprintf("TX file %08x has invalid size : %d", height, len(data)))
-		}
-		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
-		if err != nil {
-			repo.mutex.Unlock()
-			return hashes, err
-		}
-		hashes = append(hashes, *newhash)
 	}
 
 	return hashes, nil
@@ -138,6 +195,7 @@ func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chain
 	}
 
 	if updateUnconfirmed {
+		repo.unconfirmed = unconfirmed
 		if len(unconfirmed) > 0 {
 			if err := repo.writeBlock(ctx, unconfirmed, -1); err != nil {
 				return err
@@ -157,6 +215,10 @@ func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chain
 // Height of -1 means unconfirmed
 func (repo *TxRepository) RemoveBlock(ctx context.Context, height int) error {
 	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		repo.unconfirmed = make([]chainhash.Hash, 0)
+	}
 
 	err := repo.store.Remove(ctx, repo.buildPath(height))
 	if err == storage.ErrNotFound {
@@ -178,6 +240,10 @@ func (repo *TxRepository) ReleaseBlock(ctx context.Context, height int) error {
 func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, height int) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		repo.unconfirmed = txids
+	}
 
 	if len(txids) > 0 {
 		if err := repo.writeBlock(ctx, txids, height); err != nil {
@@ -203,11 +269,41 @@ func (repo *TxRepository) writeBlock(ctx context.Context, txids []chainhash.Hash
 	return repo.store.Write(ctx, repo.buildPath(height), data, nil)
 }
 
+func (repo *TxRepository) readBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
+	data, err := repo.store.Read(ctx, repo.buildPath(height))
+	if err == storage.ErrNotFound {
+		return make([]chainhash.Hash, 0), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse hashes from data
+	hashes := make([]chainhash.Hash, 0, 100)
+	endOffset := len(data)
+	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
+		if offset+chainhash.HashSize > endOffset {
+			return make([]chainhash.Hash, 0), errors.New(fmt.Sprintf("TX file %08x has invalid size : %d", height, len(data)))
+		}
+		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
+		if err != nil {
+			return hashes, err
+		}
+		hashes = append(hashes, *newhash)
+	}
+
+	return hashes, nil
+}
+
 // Clears all "relevant" tx ids in a specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) ClearBlock(ctx context.Context, height int) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
+
+	if height == -1 {
+		repo.unconfirmed = make([]chainhash.Hash, 0)
+	}
 
 	err := repo.store.Remove(ctx, repo.buildPath(height))
 	if err == storage.ErrNotFound {
