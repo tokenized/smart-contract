@@ -1,6 +1,7 @@
 package listeners
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -50,6 +51,13 @@ func (server *Server) Handle(ctx context.Context, msgType int, msgValue interfac
 		if err := server.removeConflictingPending(ctx, itx); err != nil {
 			logger.Log(ctx, logger.Warn, "Failed to remove conflicting pending : %s", err.Error())
 			return false, err
+		}
+
+		// Save tx to cache so it can be used to process the response
+		if bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), server.contractPKH) {
+			if err := server.RpcNode.AddTX(ctx, itx.MsgTx); err != nil {
+				return true, err
+			}
 		}
 
 		return true, server.Handler.Trigger(ctx, protomux.SEE, itx)

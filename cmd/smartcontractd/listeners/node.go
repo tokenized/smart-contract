@@ -12,19 +12,21 @@ import (
 )
 
 type Server struct {
-	RpcNode          *rpcnode.RPCNode
+	RpcNode          *rpcWithCache
 	SpyNode          *spynode.Node
 	Handler          protomux.Handler
+	contractPKH      []byte // Used to determine which txs will be needed again
 	pendingResponses []*wire.MsgTx
 	blockHeight      int // track current block height for confirm messages
 	inSync           bool
 }
 
-func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler) *Server {
+func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler, contractPKH []byte) *Server {
 	result := Server{
-		RpcNode:          rpcNode,
+		RpcNode:          newRPCWithCache(rpcNode),
 		SpyNode:          spyNode,
 		Handler:          handler,
+		contractPKH:      contractPKH,
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
@@ -59,7 +61,7 @@ func (server *Server) Stop(ctx context.Context) error {
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
-	server.RpcNode.SendTX(ctx, tx)
+	server.RpcNode.RPCNode.SendTX(ctx, tx)
 	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 		return err
 	}
@@ -91,7 +93,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 			for _, input := range itx.Inputs {
 				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
 					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
-					logger.Log(ctx, logger.Info, "Pending tx removed : %s", pendingTx.TxHash().String())
+					logger.Log(ctx, logger.Info, "Pending response tx removed : %s", pendingTx.TxHash().String())
 					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
 					return nil
 				}

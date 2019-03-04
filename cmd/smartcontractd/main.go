@@ -220,7 +220,7 @@ func main() {
 
 	appHandlers := handlers.API(log, masterWallet, appConfig, masterDB)
 
-	node := listeners.NewServer(rpcNode, spyNode, appHandlers)
+	node := listeners.NewServer(rpcNode, spyNode, appHandlers, rawPKHs[0])
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
