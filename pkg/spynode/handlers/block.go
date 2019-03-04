@@ -70,7 +70,9 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	}
 
 	// Validate
-	valid, err := validateMerkleHash(ctx, msg)
+	var err error
+	var valid bool
+	valid, err = validateMerkleHash(ctx, msg)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to validate merkle hash")
 	}
@@ -79,7 +81,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	}
 
 	// Add to repo
-	if err := handler.blocks.Add(ctx, hash); err != nil {
+	if err = handler.blocks.Add(ctx, hash); err != nil {
 		return nil, err
 	}
 
@@ -111,16 +113,13 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		response = append(response, getBlocks)
 	}
 
+	// Get unconfirmed "relevant" txs
 	var unconfirmed []chainhash.Hash
-	if handler.state.IsInSync {
-		// Get unconfirmed "relevant" txs
-		var err error
-		// This locks the tx repo so that propagated txs don't interfere while a block is being
-		//   processed.
-		unconfirmed, err = handler.txs.GetBlock(ctx, -1)
-		if err != nil {
-			return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
-		}
+	// This locks the tx repo so that propagated txs don't interfere while a block is being
+	//   processed.
+	unconfirmed, err = handler.txs.GetBlock(ctx, -1)
+	if err != nil {
+		return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
 	}
 
 	// Send block notification
@@ -129,25 +128,22 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	height := handler.blocks.LastHeight()
 	blockMessage := BlockMessage{Hash: hash, Height: height}
 	for _, listener := range handler.listeners {
-		if err := listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
+		if err = listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
 			return response, err
 		}
 	}
 
 	// Notify Tx for block and tx listeners
-	hashes, err := msg.TxHashes()
+	var hashes []chainhash.Hash
+	hashes, err = msg.TxHashes()
 	if err != nil {
-		if handler.state.IsInSync {
-			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-		}
+		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 		return response, errors.Wrap(err, "Failed to get block tx hashes")
 	}
 	logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash.String())
 	for i, txHash := range hashes {
-		if handler.state.IsInSync {
-			// Remove from unconfirmed. Only matching are in unconfirmed.
-			removed, unconfirmed = removeHash(&txHash, unconfirmed)
-		}
+		// Remove from unconfirmed. Only matching are in unconfirmed.
+		removed, unconfirmed = removeHash(&txHash, unconfirmed)
 
 		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
 		// Or if it isn't in the mempool (not sent to listener yet).
@@ -155,7 +151,6 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		if !removed { // Full tx hasn't been sent to listener yet
 			if matchesFilter(ctx, msg.Transactions[i], handler.txFilters) {
 				var mark bool
-				var err error
 				for _, listener := range handler.listeners {
 					if mark, err = listener.HandleTx(ctx, msg.Transactions[i]); err != nil {
 						return response, err
@@ -177,7 +172,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				for _, hash := range conflicting {
 					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
 						for _, listener := range handler.listeners {
-							if err := listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
+							if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
 								return response, err
 							}
 						}
@@ -186,10 +181,10 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			}
 		}
 
-		if marked {
+		if marked || removed {
 			// Notify of confirm
 			for _, listener := range handler.listeners {
-				if err := listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
+				if err = listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
 					return response, err
 				}
 			}
@@ -199,21 +194,17 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	// Perform any block cleanup
 	err = handler.blockProcessor.ProcessBlock(ctx, msg)
 	if err != nil {
-		if handler.state.IsInSync {
-			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-		}
+		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 		return response, err
 	}
 
-	if handler.state.IsInSync {
-		return response, handler.txs.FinalizeBlock(ctx, unconfirmed, handler.state.IsInSync, relevant, height)
-	} else {
+	if !handler.state.IsInSync {
 		if handler.state.PendingSync && handler.state.BlockRequestsEmpty() {
 			handler.state.IsInSync = true
 			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
 		}
-		return response, handler.txs.SetBlock(ctx, relevant, height)
 	}
+	return response, handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height)
 }
 
 func containsHash(hash *chainhash.Hash, list []chainhash.Hash) bool {

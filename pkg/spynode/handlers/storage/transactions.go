@@ -182,7 +182,7 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 // Rewrites all "relevant" tx ids in a specified block and unconfirmed
 // Must only be called after GetBlock
 // Height of -1 means unconfirmed
-func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chainhash.Hash, updateUnconfirmed bool, txids []chainhash.Hash, height int) error {
+func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chainhash.Hash, txids []chainhash.Hash, height int) error {
 	defer repo.mutex.Unlock()
 
 	if len(txids) > 0 {
@@ -195,16 +195,14 @@ func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chain
 		}
 	}
 
-	if updateUnconfirmed {
-		repo.unconfirmed = unconfirmed
-		if len(unconfirmed) > 0 {
-			if err := repo.writeBlock(ctx, unconfirmed, -1); err != nil {
-				return err
-			}
-		} else {
-			if err := repo.store.Remove(ctx, repo.buildPath(-1)); err != nil && err != storage.ErrNotFound {
-				return err
-			}
+	repo.unconfirmed = unconfirmed
+	if len(unconfirmed) > 0 {
+		if err := repo.writeBlock(ctx, unconfirmed, -1); err != nil {
+			return err
+		}
+	} else {
+		if err := repo.store.Remove(ctx, repo.buildPath(-1)); err != nil && err != storage.ErrNotFound {
+			return err
 		}
 	}
 
