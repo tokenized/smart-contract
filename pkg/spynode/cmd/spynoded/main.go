@@ -169,69 +169,60 @@ type LogListener struct {
 	mutex sync.Mutex
 }
 
-func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error) {
+func (listener LogListener) HandleBlock(ctx context.Context, msgType int, block *handlers.BlockMessage) error {
 	listener.mutex.Lock()
 	defer listener.mutex.Unlock()
 
+	ctx = logger.ContextWithOutLogSubSystem(ctx)
+
 	switch msgType {
-	case handlers.ListenerMsgTx:
-		value, ok := msgValue.(wire.MsgTx)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "Could not assert as wire.MsgTx")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Tx : %s", value.TxHash().String())
-		return true, nil
-
-	case handlers.ListenerMsgTxConfirm:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "TxConfirm : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", value.String())
-
 	case handlers.ListenerMsgBlock:
-		value, ok := msgValue.(handlers.BlockMessage)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "Block : Could not assert as handlers.BlockMessage")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", value.Height, value.Hash.String())
-
+		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", block.Height, block.Hash.String())
 	case handlers.ListenerMsgBlockRevert:
-		value, ok := msgValue.(handlers.BlockMessage)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "Block Revert : Could not assert as handlers.BlockMessage")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Revert Block (%d) : %s", value.Height, value.Hash.String())
-
-	case handlers.ListenerMsgTxRevert:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "TxRevert : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", value.String())
-
-	case handlers.ListenerMsgTxCancel:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "TxCancel : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", value.String())
-
-	case handlers.ListenerMsgTxUnsafe:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			logger.Log(listener.ctx, logger.Error, "TxUnsafe : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", value.String())
+		logger.Log(listener.ctx, logger.Info, "Reverted Block (%d) : %s", block.Height, block.Hash.String())
 	}
-	return false, nil
+
+	return nil
+}
+
+func (listener LogListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bool, error) {
+	listener.mutex.Lock()
+	defer listener.mutex.Unlock()
+
+	ctx = logger.ContextWithOutLogSubSystem(ctx)
+	logger.Log(ctx, logger.Info, "Tx : %s", msg.TxHash().String())
+
+	return true, nil
+}
+
+func (listener LogListener) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+	listener.mutex.Lock()
+	defer listener.mutex.Unlock()
+
+	ctx = logger.ContextWithOutLogSubSystem(ctx)
+
+	switch msgType {
+	case handlers.ListenerMsgTxStateConfirm:
+		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", txid.String())
+	case handlers.ListenerMsgTxStateRevert:
+		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", txid.String())
+	case handlers.ListenerMsgTxStateCancel:
+		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", txid.String())
+	case handlers.ListenerMsgTxStateUnsafe:
+		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", txid.String())
+	}
+
+	return nil
+}
+
+func (listener LogListener) HandleInSync(ctx context.Context) error {
+	listener.mutex.Lock()
+	defer listener.mutex.Unlock()
+
+	ctx = logger.ContextWithOutLogSubSystem(ctx)
+
+	logger.Log(listener.ctx, logger.Info, "In Sync")
+	return nil
 }
 
 var (

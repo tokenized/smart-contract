@@ -33,6 +33,7 @@ func NewTxRepository(store storage.Storage) *TxRepository {
 func (repo *TxRepository) Load(ctx context.Context) error {
 	var err error
 	repo.unconfirmed, err = repo.readBlock(ctx, -1)
+	logger.Log(ctx, logger.Verbose, "Loaded %d unconfirmed txs", len(repo.unconfirmed))
 	return err
 }
 

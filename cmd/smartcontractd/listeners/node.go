@@ -93,7 +93,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 			for _, input := range itx.Inputs {
 				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
 					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
-					logger.Log(ctx, logger.Info, "Pending response tx removed : %s", pendingTx.TxHash().String())
+					logger.Log(ctx, logger.Info, "Canceling pending response tx : %s", pendingTx.TxHash().String())
 					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
 					return nil
 				}

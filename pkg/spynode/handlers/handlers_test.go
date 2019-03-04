@@ -326,58 +326,38 @@ func (listener *TestListener) ProcessBlock(ctx context.Context, block *wire.MsgB
 	return nil
 }
 
-func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error) {
+func (listener *TestListener) HandleBlock(ctx context.Context, msgType int, block *BlockMessage) error {
 	switch msgType {
-	case ListenerMsgTx:
-		_, ok := msgValue.(wire.MsgTx)
-		if !ok {
-			listener.test.Errorf("Tx : Could not assert as wire.MsgTx")
-			return false, nil
-		}
-		// listener.test.Logf("Tx : %s", value.TxHash().String())
-		return true, nil
-
-	case ListenerMsgTxConfirm:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			listener.test.Errorf("TxConfirm : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		listener.test.Logf("Tx confirm in block %d : %s", listener.height, value.String())
-
 	case ListenerMsgBlock:
-		value, ok := msgValue.(BlockMessage)
-		if !ok {
-			listener.test.Errorf("Block : Could not assert as handlers.BlockMessage")
-			return false, nil
-		}
-		listener.height = value.Height
-		listener.test.Logf("New Block (%d) : %s", value.Height, value.Hash.String())
-
+		listener.test.Logf("New Block (%d) : %s", block.Height, block.Hash.String())
 	case ListenerMsgBlockRevert:
-		value, ok := msgValue.(BlockMessage)
-		if !ok {
-			listener.test.Errorf("Block Revert : Could not assert as handlers.BlockMessage")
-			return false, nil
-		}
-		listener.height = value.Height - 1
-		listener.test.Logf("Revert Block (%d) : %s", value.Height, value.Hash.String())
-
-	case ListenerMsgTxRevert:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			listener.test.Errorf("TxRevert : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		listener.test.Logf("Tx revert : %s", value.String())
-
-	case ListenerMsgTxCancel:
-		value, ok := msgValue.(chainhash.Hash)
-		if !ok {
-			listener.test.Errorf("TxCancel : Could not assert as chainhash.Hash")
-			return false, nil
-		}
-		listener.test.Logf("Tx cancel : %s", value.String())
+		listener.test.Logf("Reverted Block (%d) : %s", block.Height, block.Hash.String())
 	}
-	return false, nil
+
+	return nil
+}
+
+func (listener *TestListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bool, error) {
+	listener.test.Logf("Tx : %s", msg.TxHash().String())
+	return true, nil
+}
+
+func (listener *TestListener) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+	switch msgType {
+	case ListenerMsgTxStateConfirm:
+		listener.test.Logf("Tx confirm : %s", txid.String())
+	case ListenerMsgTxStateRevert:
+		listener.test.Logf("Tx revert : %s", txid.String())
+	case ListenerMsgTxStateCancel:
+		listener.test.Logf("Tx cancel : %s", txid.String())
+	case ListenerMsgTxStateUnsafe:
+		listener.test.Logf("Tx unsafe : %s", txid.String())
+	}
+
+	return nil
+}
+
+func (listener *TestListener) HandleInSync(ctx context.Context) error {
+	listener.test.Logf("In Sync")
+	return nil
 }

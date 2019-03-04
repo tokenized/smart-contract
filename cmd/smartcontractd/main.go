@@ -256,7 +256,7 @@ func main() {
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			log.Fatalf("main : Could not stop spvnode server: %v", err)
+			log.Fatalf("main : Could not stop server: %v", err)
 		}
 	}
 }

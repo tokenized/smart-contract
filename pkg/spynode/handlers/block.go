@@ -129,7 +129,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	height := handler.blocks.LastHeight()
 	blockMessage := BlockMessage{Hash: hash, Height: height}
 	for _, listener := range handler.listeners {
-		if _, err := listener.Handle(ctx, ListenerMsgBlock, blockMessage); err != nil {
+		if err := listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
 			return response, err
 		}
 	}
@@ -157,7 +157,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				var mark bool
 				var err error
 				for _, listener := range handler.listeners {
-					if mark, err = listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i]); err != nil {
+					if mark, err = listener.HandleTx(ctx, msg.Transactions[i]); err != nil {
 						return response, err
 					}
 					if mark {
@@ -177,7 +177,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				for _, hash := range conflicting {
 					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
 						for _, listener := range handler.listeners {
-							if _, err := listener.Handle(ctx, ListenerMsgTxCancel, *hash); err != nil {
+							if err := listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
 								return response, err
 							}
 						}
@@ -189,7 +189,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		if marked {
 			// Notify of confirm
 			for _, listener := range handler.listeners {
-				if _, err := listener.Handle(ctx, ListenerMsgTxConfirm, txHash); err != nil {
+				if err := listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
 					return response, err
 				}
 			}

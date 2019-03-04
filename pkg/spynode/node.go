@@ -391,7 +391,7 @@ func (node *Node) check(ctx context.Context) error {
 		} else if !node.state.NotifiedSync {
 			// TODO Add method to wait for mempool to sync
 			for _, listener := range node.listeners {
-				listener.Handle(ctx, handlers.ListenerMsgInSync, nil)
+				listener.HandleInSync(ctx)
 			}
 			node.state.NotifiedSync = true
 		}

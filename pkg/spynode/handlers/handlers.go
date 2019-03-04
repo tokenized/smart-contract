@@ -18,42 +18,45 @@ type BlockMessage struct {
 const (
 	// Listener message types (msgType parameter).
 
-	// Full message for a transaction broadcast on the network.
-	// The listener must return true for txs that are relevant to ensure spynode sends further
-	//   notifications for that tx.
-	ListenerMsgTx = 1 // msgValue is wire.MsgTx
-
 	// New block was mined.
-	ListenerMsgBlock = 2 // msgValue is handlers.BlockMessage
-
-	// Transaction is included the latest block.
-	ListenerMsgTxConfirm = 3 // msgValue is chainhash.Hash
+	ListenerMsgBlock = 1 // msgValue is handlers.BlockMessage
 
 	// Block reverted due to a reorg.
-	ListenerMsgBlockRevert = 4 // msgValue is handlers.BlockMessage
+	ListenerMsgBlockRevert = 2 // msgValue is handlers.BlockMessage
+
+	// Transaction is included the latest block.
+	ListenerMsgTxStateConfirm = 3 // msgValue is chainhash.Hash
 
 	// Transaction reverted due to a reorg.
 	// This will be for confirmed transactions.
-	ListenerMsgTxRevert = 5 // msgValue is chainhash.Hash
+	ListenerMsgTxStateRevert = 5 // msgValue is chainhash.Hash
 
 	// Transaction reverted due to a double spend.
 	// This will be for unconfirmed transactions.
 	// A conflicting transaction was mined.
-	ListenerMsgTxCancel = 6 // msgValue is chainhash.Hash
+	ListenerMsgTxStateCancel = 6 // msgValue is chainhash.Hash
 
 	// Transaction conflicts with another tx.
 	// These will come in at least sets of two when more than one tx spending the same input is
 	//   seen.
 	// If a confirm is later seen for one of these tx, then it can be assumed reliable.
-	ListenerMsgTxUnsafe = 7 // msgValue is chainhash.Hash
-
-	// This message means that the node is current with the network.
-	// All data from this point forward is live.
-	ListenerMsgInSync = 8 // msgValue is nil
+	ListenerMsgTxStateUnsafe = 7 // msgValue is chainhash.Hash
 )
 
 type Listener interface {
-	Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error)
+	// Block add and revert messages.
+	HandleBlock(ctx context.Context, msgType int, block *BlockMessage) error
+
+	// Full message for a transaction broadcast on the network.
+	// Return true for txs that are relevant to ensure spynode sends further notifications for
+	//   that tx.
+	HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error)
+
+	// Tx confirm, cancel, unsafe, and revert messages.
+	HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error
+
+	// When in sync with network
+	HandleInSync(ctx context.Context) error
 }
 
 // CommandHandler defines an interface for handing commands/messages received from

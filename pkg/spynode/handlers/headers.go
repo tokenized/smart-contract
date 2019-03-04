@@ -114,7 +114,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 					}
 					blockMessage := BlockMessage{Hash: *hash, Height: height}
 					for _, listener := range handler.listeners {
-						listener.Handle(ctx, ListenerMsgBlockRevert, blockMessage)
+						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}
 
 					// Notify of relevant txs in this block that are now reverted.
@@ -125,7 +125,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 					if len(revertTxs) > 0 {
 						for _, tx := range revertTxs {
 							for _, listener := range handler.listeners {
-								listener.Handle(ctx, ListenerMsgTxRevert, tx)
+								listener.HandleTxState(ctx, ListenerMsgTxStateRevert, tx)
 							}
 						}
 						if err := handler.txs.RemoveBlock(ctx, height); err != nil {
