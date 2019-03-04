@@ -127,7 +127,9 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	height := handler.blocks.LastHeight()
 	blockMessage := BlockMessage{Hash: hash, Height: height}
 	for _, listener := range handler.listeners {
-		listener.Handle(ctx, ListenerMsgBlock, blockMessage)
+		if _, err := listener.Handle(ctx, ListenerMsgBlock, blockMessage); err != nil {
+			return response, err
+		}
 	}
 
 	// Notify Tx for block and tx listeners
@@ -144,15 +146,24 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			// Remove from unconfirmed. Only matching are in unconfirmed.
 			removed, unconfirmed = removeHash(&txHash, unconfirmed)
 		}
-		matches := removed || matchesFilter(ctx, msg.Transactions[i], handler.txFilters)
 
 		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
 		// Or if it isn't in the mempool (not sent to listener yet).
-		if matches {
-			relevant = append(relevant, txHash)
-			if !removed { // Full tx hasn't been sent to listener yet
+		marked := false
+		if !removed { // Full tx hasn't been sent to listener yet
+			if matchesFilter(ctx, msg.Transactions[i], handler.txFilters) {
+				var mark bool
+				var err error
 				for _, listener := range handler.listeners {
-					listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i])
+					if mark, err = listener.Handle(ctx, ListenerMsgTx, *msg.Transactions[i]); err != nil {
+						return response, err
+					}
+					if mark {
+						marked = true
+					}
+				}
+				if marked {
+					relevant = append(relevant, txHash)
 				}
 			}
 		}
@@ -164,17 +175,21 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				for _, hash := range conflicting {
 					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
 						for _, listener := range handler.listeners {
-							listener.Handle(ctx, ListenerMsgTxCancel, *hash)
+							if _, err := listener.Handle(ctx, ListenerMsgTxCancel, *hash); err != nil {
+								return response, err
+							}
 						}
 					}
 				}
 			}
 		}
 
-		if matches {
+		if marked {
 			// Notify of confirm
 			for _, listener := range handler.listeners {
-				listener.Handle(ctx, ListenerMsgTxConfirm, txHash)
+				if _, err := listener.Handle(ctx, ListenerMsgTxConfirm, txHash); err != nil {
+					return response, err
+				}
 			}
 		}
 	}

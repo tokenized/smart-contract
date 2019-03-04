@@ -77,7 +77,7 @@ func (node *Node) RegisterListener(listener handlers.Listener) {
 
 // Adds a tx filter.
 // See handlers/filters.go for specification of a filter.
-// If no tx filters, then all txs are "relevant" and sent to listeners.
+// If no tx filters, then all txs are sent to listeners.
 // If any of the tx filters return true the tx will be sent to listeners.
 func (node *Node) AddTxFilter(filter handlers.TxFilter) {
 	node.txFilters = append(node.txFilters, filter)

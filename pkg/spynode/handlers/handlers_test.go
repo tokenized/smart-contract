@@ -326,21 +326,22 @@ func (listener *TestListener) ProcessBlock(ctx context.Context, block *wire.MsgB
 	return nil
 }
 
-func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue interface{}) error {
+func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error) {
 	switch msgType {
 	case ListenerMsgTx:
 		_, ok := msgValue.(wire.MsgTx)
 		if !ok {
 			listener.test.Errorf("Tx : Could not assert as wire.MsgTx")
-			return nil
+			return false, nil
 		}
 		// listener.test.Logf("Tx : %s", value.TxHash().String())
+		return true, nil
 
 	case ListenerMsgTxConfirm:
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			listener.test.Errorf("TxConfirm : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		listener.test.Logf("Tx confirm in block %d : %s", listener.height, value.String())
 
@@ -348,7 +349,7 @@ func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue 
 		value, ok := msgValue.(BlockMessage)
 		if !ok {
 			listener.test.Errorf("Block : Could not assert as handlers.BlockMessage")
-			return nil
+			return false, nil
 		}
 		listener.height = value.Height
 		listener.test.Logf("New Block (%d) : %s", value.Height, value.Hash.String())
@@ -357,7 +358,7 @@ func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue 
 		value, ok := msgValue.(BlockMessage)
 		if !ok {
 			listener.test.Errorf("Block Revert : Could not assert as handlers.BlockMessage")
-			return nil
+			return false, nil
 		}
 		listener.height = value.Height - 1
 		listener.test.Logf("Revert Block (%d) : %s", value.Height, value.Hash.String())
@@ -366,7 +367,7 @@ func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue 
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			listener.test.Errorf("TxRevert : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		listener.test.Logf("Tx revert : %s", value.String())
 
@@ -374,9 +375,9 @@ func (listener *TestListener) Handle(ctx context.Context, msgType int, msgValue 
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			listener.test.Errorf("TxCancel : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		listener.test.Logf("Tx cancel : %s", value.String())
 	}
-	return nil
+	return false, nil
 }

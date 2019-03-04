@@ -19,6 +19,8 @@ const (
 	// Listener message types (msgType parameter).
 
 	// Full message for a transaction broadcast on the network.
+	// The listener must return true for txs that are relevant to ensure spynode sends further
+	//   notifications for that tx.
 	ListenerMsgTx = 1 // msgValue is wire.MsgTx
 
 	// New block was mined.
@@ -51,7 +53,7 @@ const (
 )
 
 type Listener interface {
-	Handle(ctx context.Context, msgType int, msgValue interface{}) error
+	Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error)
 }
 
 // CommandHandler defines an interface for handing commands/messages received from

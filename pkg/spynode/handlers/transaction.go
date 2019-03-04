@@ -65,7 +65,9 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 			}
 			if contains { // Only send for txs that previously matched filters.
 				for _, listener := range handler.listeners {
-					listener.Handle(ctx, ListenerMsgTxUnsafe, *conflict)
+					if _, err := listener.Handle(ctx, ListenerMsgTxUnsafe, *conflict); err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -75,18 +77,29 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		return nil, nil // Filter out
 	}
 
-	// Add to tx repository as "relevant" unconfirmed tx
-	repoAdded, err := handler.txs.Add(ctx, msg.TxHash(), -1)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to add to tx repo")
-	}
-	if !repoAdded { // Not added to tx repo, so already seen
-		return nil, nil
+	// Notify of new tx
+	marked := false
+	var mark bool
+	var err error
+	for _, listener := range handler.listeners {
+		if mark, err = listener.Handle(ctx, ListenerMsgTx, *msg); err != nil {
+			return nil, err
+		}
+		if mark {
+			marked = true
+		}
 	}
 
-	// Notify of new tx
-	for _, listener := range handler.listeners {
-		listener.Handle(ctx, ListenerMsgTx, *msg)
+	if marked {
+		// Add to tx repository as "relevant" unconfirmed tx
+		repoAdded, err := handler.txs.Add(ctx, msg.TxHash(), -1)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to add to tx repo")
+		}
+		if !repoAdded { // Not added to tx repo, so already seen
+			return nil, nil
+		}
 	}
+
 	return nil, nil
 }

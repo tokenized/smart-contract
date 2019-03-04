@@ -169,7 +169,7 @@ type LogListener struct {
 	mutex sync.Mutex
 }
 
-func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue interface{}) error {
+func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue interface{}) (bool, error) {
 	listener.mutex.Lock()
 	defer listener.mutex.Unlock()
 
@@ -178,15 +178,16 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(wire.MsgTx)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "Could not assert as wire.MsgTx")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx : %s", value.TxHash().String())
+		return true, nil
 
 	case handlers.ListenerMsgTxConfirm:
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "TxConfirm : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", value.String())
 
@@ -194,7 +195,7 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(handlers.BlockMessage)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "Block : Could not assert as handlers.BlockMessage")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", value.Height, value.Hash.String())
 
@@ -202,7 +203,7 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(handlers.BlockMessage)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "Block Revert : Could not assert as handlers.BlockMessage")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Revert Block (%d) : %s", value.Height, value.Hash.String())
 
@@ -210,7 +211,7 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "TxRevert : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", value.String())
 
@@ -218,7 +219,7 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "TxCancel : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", value.String())
 
@@ -226,11 +227,11 @@ func (listener LogListener) Handle(ctx context.Context, msgType int, msgValue in
 		value, ok := msgValue.(chainhash.Hash)
 		if !ok {
 			logger.Log(listener.ctx, logger.Error, "TxUnsafe : Could not assert as chainhash.Hash")
-			return nil
+			return false, nil
 		}
 		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", value.String())
 	}
-	return nil
+	return false, nil
 }
 
 var (
