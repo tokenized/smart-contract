@@ -25,16 +25,16 @@ func buildHeaderRequest(ctx context.Context, protocol uint32, blocks *storage.Bl
 	getheaders.ProtocolVersion = protocol
 
 	// Add block hashes in reverse order
-	for ; delta < blocks.LastHeight(); delta *= 2 {
-		if blocks.LastHeight() <= delta {
-			break
-		}
+	for ; delta <= blocks.LastHeight(); delta *= 2 {
 		hash, err := blocks.Hash(ctx, blocks.LastHeight()-delta)
 		if err != nil {
 			return getheaders, err
 		}
 		getheaders.AddBlockLocatorHash(hash)
 		if len(getheaders.BlockLocatorHashes) > max {
+			break
+		}
+		if blocks.LastHeight() <= delta {
 			break
 		}
 	}
