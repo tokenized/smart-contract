@@ -50,6 +50,12 @@ func (a *Asset) DefinitionRequest(ctx context.Context, log *log.Logger, mux prot
 		return node.ErrNoResponse
 	}
 
+	// Verify issuer is sender of tx.
+	if itx.Inputs[0].Address.String() != ct.IssuerAddress {
+		logger.Log(ctx, logger.Warn, "%s : Only issuer can create assets: %s %s\n", v.TraceID, contractAddr.String(), string(msg.AssetID))
+		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeIssuerAddress)
+	}
+
 	// Locate Asset
 	assetID := string(msg.AssetID)
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
@@ -214,6 +220,7 @@ func (a *Asset) CreationResponse(ctx context.Context, log *log.Logger, mux proto
 	if as == nil {
 		// Prepare creation object
 		na := asset.NewAsset{
+			IssuerAddress:      itx.Outputs[1].Address.String(), // Second output of formation tx
 			ID:                 string(msg.AssetID),
 			Type:               string(msg.AssetType),
 			VotingSystem:       string(msg.VotingSystem),

@@ -45,6 +45,8 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 	var c state.Contract
 
 	c.ID = address
+	c.IssuerAddress = nu.IssuerAddress
+	c.OperatorAddress = nu.OperatorAddress
 	c.ContractName = nu.ContractName
 	c.ContractFileHash = nu.ContractFileHash
 	c.GoverningLaw = nu.GoverningLaw
@@ -92,6 +94,12 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	}
 
 	// Update fields
+	if upd.IssuerAddress != nil {
+		c.IssuerAddress = *upd.IssuerAddress
+	}
+	if upd.OperatorAddress != nil {
+		c.OperatorAddress = *upd.OperatorAddress
+	}
 	if upd.ContractName != nil {
 		c.ContractName = *upd.ContractName
 	}

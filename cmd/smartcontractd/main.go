@@ -311,7 +311,8 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	// for _, input := range tx.TxIn {
 	// }
 
-	return true
+	// TODO Not sure if all relevant txs will have output to contract or if some might only have input from contract
+	return false
 }
 
 // Checks if a script carries the tokenized.com protocol signature

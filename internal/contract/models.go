@@ -2,6 +2,8 @@ package contract
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
+	IssuerAddress               string  `json:"issuer_address"`
+	OperatorAddress             string  `json:"operator_address"`
 	ContractName                string  `json:"name"`
 	ContractFileHash            string  `json:"hash"`
 	GoverningLaw                string  `json:"law"`
@@ -25,6 +27,8 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
+	IssuerAddress               *string  `json:"issuer_address"`
+	OperatorAddress             *string  `json:"operator_address"`
 	ContractName                *string  `json:"name"`
 	ContractFileHash            *string  `json:"hash"`
 	GoverningLaw                *string  `json:"law"`

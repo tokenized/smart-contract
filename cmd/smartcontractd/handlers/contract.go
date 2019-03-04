@@ -196,6 +196,7 @@ func (c *Contract) FormationResponse(ctx context.Context, log *log.Logger, mux p
 	if ct == nil {
 		// Prepare creation object
 		nc := contract.NewContract{
+			IssuerAddress:               itx.Outputs[1].Address.String(), // Second output of formation tx
 			ContractName:                string(msg.ContractName),
 			ContractFileHash:            fmt.Sprintf("%x", msg.ContractFileHash),
 			GoverningLaw:                string(msg.GoverningLaw),
