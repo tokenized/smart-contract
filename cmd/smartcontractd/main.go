@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"hash"
 	"io"
 	"log"
 	"os"
@@ -12,7 +14,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -26,7 +27,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/kelseyhightower/envconfig"
+	"golang.org/x/crypto/ripemd160"
 )
 
 var (
@@ -184,8 +187,8 @@ func main() {
 	if len(rawPKHs) != 1 {
 		panic("More than one key in wallet")
 	}
-	txFilter := TxFilter{chainParams: &chaincfg.MainNetParams, contractPKH: rawPKHs[0]}
-	spyNode.AddTxFilter(&txFilter)
+	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0])
+	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
 	// Start Database / Storage
@@ -276,6 +279,19 @@ var (
 type TxFilter struct {
 	chainParams *chaincfg.Params
 	contractPKH []byte
+	hash256     hash.Hash
+	hash160     hash.Hash
+}
+
+func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
+	result := TxFilter{
+		chainParams: chainParams,
+		contractPKH: contractPKH,
+		hash256:     sha256.New(),
+		hash160:     ripemd160.New(),
+	}
+
+	return &result
 }
 
 func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
@@ -308,10 +324,30 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	}
 
 	// Check if txin is from contract
-	// for _, input := range tx.TxIn {
-	// }
+	// Reject responses don't go to the contract. They are from contract to request sender.
+	for _, input := range tx.TxIn {
+		pushes, err := txscript.PushedData(input.SignatureScript)
+		if err != nil {
+			continue
+		}
+		if len(pushes) != 2 {
+			continue
+		}
 
-	// TODO Not sure if all relevant txs will have output to contract or if some might only have input from contract
+		// Calculate RIPEMD160(SHA256(PublicKey))
+		filter.hash256.Reset()
+		filter.hash256.Write(pushes[1])
+		filter.hash160.Reset()
+		filter.hash160.Write(filter.hash256.Sum(nil))
+		pkh := filter.hash160.Sum(nil)
+
+		if bytes.Equal(pkh, filter.contractPKH) {
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+				"Matches PaymentFromContract : %s", tx.TxHash().String())
+			return true
+		}
+	}
+
 	return false
 }
 
