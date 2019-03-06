@@ -66,6 +66,11 @@ func (itx *Transaction) Promote(ctx context.Context, node NodeInterface) error {
 	return nil
 }
 
+// IsPromoted returns true if inputs and outputs are populated.
+func (itx *Transaction) IsPromoted(ctx context.Context) bool {
+	return len(itx.Inputs) > 0 && len(itx.Outputs) > 0
+}
+
 // ParseOutputs sets the Outputs property of the Transaction
 func (itx *Transaction) ParseOutputs(ctx context.Context) error {
 	outputs := []Output{}
@@ -159,6 +164,17 @@ func buildInput(tx *wire.MsgTx, n uint32) (*Input, error) {
 	}
 
 	return &input, nil
+}
+
+// Returns all the input hashes
+func (itx *Transaction) InputHashes() []chainhash.Hash {
+	hashes := []chainhash.Hash{}
+
+	for _, txin := range itx.MsgTx.TxIn {
+		hashes = append(hashes, txin.PreviousOutPoint.Hash)
+	}
+
+	return hashes
 }
 
 // IsTokenized determines if the inspected transaction is using the Tokenized protocol.
