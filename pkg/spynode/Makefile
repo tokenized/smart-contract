@@ -36,12 +36,14 @@ build-spynode:
 prepare-win:
 	mkdir dist | echo dist exists
 	mkdir tmp | echo tmp exists
+	set GOOS=windows
+	set GOARCH=amd64
 
 build-win: prepare-win build-spynode-win
 
 # build a version suitable for running locally
 build-spynode-win:
-	go build -o dist\$(BINARY) cmd\$(BINARY)\main.go
+	go build -o dist\$(BINARY).exe cmd\$(BINARY)\main.go
 
 tools:
 	go get golang.org/x/tools/cmd/goimports

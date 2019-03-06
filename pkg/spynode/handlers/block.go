@@ -24,13 +24,6 @@ type BlockHandler struct {
 	blockProcessor BlockProcessor
 }
 
-// Receives messages about blocks
-// The second parameter will either be a BlockMessage or a chainhash.Hash with the hash of a
-//   transaction contained in the previous Block.
-type BlockListener interface {
-	Handle(context.Context, interface{}) error
-}
-
 // NewBlockHandler returns a new BlockHandler with the given Config.
 func NewBlockHandler(state *data.State, memPool *data.MemPool, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) *BlockHandler {
 	result := BlockHandler{
@@ -45,10 +38,7 @@ func NewBlockHandler(state *data.State, memPool *data.MemPool, blockRepo *storag
 	return &result
 }
 
-// Handle implments the Handler interface.
-//
-// This function handles type conversion and delegates the the contrete
-// handler.
+// Handle implements the Handler interface for a block handler.
 func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
 	msg, ok := m.(*wire.MsgBlock)
 	if !ok {
@@ -61,7 +51,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	// If we already have this block, we don't need to ask for more
 	if handler.blocks.Contains(hash) {
 		height, _ := handler.blocks.Height(&hash)
-		return nil, errors.New(fmt.Sprintf("Already have block (%d) : %s", height, hash.String()))
+		return nil, errors.New(fmt.Sprintf("Already have block (%d) : %s", height, hash))
 	}
 
 	if msg.Header.PrevBlock != *handler.blocks.LastHash() {
@@ -77,7 +67,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		return nil, errors.Wrap(err, "Failed to validate merkle hash")
 	}
 	if !valid {
-		return nil, errors.New(fmt.Sprintf("Invalid merkle hash for block %s", hash.String()))
+		return nil, errors.New(fmt.Sprintf("Invalid merkle hash for block %s", hash))
 	}
 
 	// Add to repo
@@ -129,6 +119,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	blockMessage := BlockMessage{Hash: hash, Height: height}
 	for _, listener := range handler.listeners {
 		if err = listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
+			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 			return response, err
 		}
 	}
@@ -140,7 +131,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 		return response, errors.Wrap(err, "Failed to get block tx hashes")
 	}
-	logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash.String())
+	logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
 	for i, txHash := range hashes {
 		// Remove from unconfirmed. Only matching are in unconfirmed.
 		removed, unconfirmed = removeHash(&txHash, unconfirmed)
@@ -153,6 +144,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				var mark bool
 				for _, listener := range handler.listeners {
 					if mark, err = listener.HandleTx(ctx, msg.Transactions[i]); err != nil {
+						handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 						return response, err
 					}
 					if mark {
@@ -173,6 +165,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
 						for _, listener := range handler.listeners {
 							if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
+								handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 								return response, err
 							}
 						}
@@ -185,6 +178,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			// Notify of confirm
 			for _, listener := range handler.listeners {
 				if err = listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
+					handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 					return response, err
 				}
 			}
@@ -194,6 +188,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	// Perform any block cleanup
 	err = handler.blockProcessor.ProcessBlock(ctx, msg)
 	if err != nil {
+		logger.Log(ctx, logger.Debug, "Failed clean up after block : %s", hash)
 		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 		return response, err
 	}
@@ -204,6 +199,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
 		}
 	}
+	logger.Log(ctx, logger.Debug, "Finalizing block : %s", hash)
 	return response, handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height)
 }
 
@@ -225,7 +221,7 @@ func removeHash(hash *chainhash.Hash, list []chainhash.Hash) (bool, []chainhash.
 	return false, list
 }
 
-// Validate the merkle root hash against the transactions contained.
+// validateMerkleHash validates the merkle root hash against the transactions contained.
 // Returns true if the merkle root hash is valid.
 func validateMerkleHash(ctx context.Context, block *wire.MsgBlock) (bool, error) {
 	merkleHash, err := CalculateMerkleHash(ctx, block.Transactions)
@@ -235,7 +231,7 @@ func validateMerkleHash(ctx context.Context, block *wire.MsgBlock) (bool, error)
 	return *merkleHash == block.Header.MerkleRoot, nil
 }
 
-// Calculate a merkle tree root hash for a set of transactions
+// CalculateMerkleHash calculates a merkle tree root hash for a set of transactions
 func CalculateMerkleHash(ctx context.Context, txs []*wire.MsgTx) (*chainhash.Hash, error) {
 	if len(txs) == 0 {
 		// Zero hash
@@ -257,7 +253,7 @@ func CalculateMerkleHash(ctx context.Context, txs []*wire.MsgTx) (*chainhash.Has
 	return CalculateMerkleLevel(ctx, hashes), nil
 }
 
-// Calculate one level of the merkle tree
+// CalculateMerkleLevel calculates one level of the merkle tree
 func CalculateMerkleLevel(ctx context.Context, txids []*chainhash.Hash) *chainhash.Hash {
 	if len(txids) == 1 {
 		return combinedHash(ctx, txids[0], txids[0]) // Hash it with itself
@@ -288,7 +284,7 @@ func CalculateMerkleLevel(ctx context.Context, txids []*chainhash.Hash) *chainha
 	return CalculateMerkleLevel(ctx, nextLevel)
 }
 
-// Combine two hashes
+// combinedHash combines two hashes
 func combinedHash(ctx context.Context, hash1 *chainhash.Hash, hash2 *chainhash.Hash) *chainhash.Hash {
 	data := make([]byte, chainhash.HashSize*2)
 	copy(data[:chainhash.HashSize], hash1[:])

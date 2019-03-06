@@ -62,7 +62,7 @@ func TestHandlers(test *testing.T) {
 
 	// Setup config
 	startHash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
-	config, err := data.NewConfig("test", "Tokenized Test", startHash.String(), 8)
+	config, err := data.NewConfig("test", "Tokenized Test", startHash.String(), 8, 2000)
 	if err != nil {
 		test.Errorf("Failed to create config : %v", err)
 	}

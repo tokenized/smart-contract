@@ -19,28 +19,31 @@ const (
 	// Listener message types (msgType parameter).
 
 	// New block was mined.
-	ListenerMsgBlock = 1 // msgValue is handlers.BlockMessage
+	ListenerMsgBlock = 1
 
 	// Block reverted due to a reorg.
-	ListenerMsgBlockRevert = 2 // msgValue is handlers.BlockMessage
+	ListenerMsgBlockRevert = 2
 
-	// Transaction is included the latest block.
-	ListenerMsgTxStateConfirm = 3 // msgValue is chainhash.Hash
+	// Transaction has seen no conflicting tx for specified delay.
+	ListenerMsgTxStateSafe = 3
+
+	// Transaction is included in the latest block announced with ListenerMsgBlock.
+	ListenerMsgTxStateConfirm = 4
 
 	// Transaction reverted due to a reorg.
 	// This will be for confirmed transactions.
-	ListenerMsgTxStateRevert = 5 // msgValue is chainhash.Hash
+	ListenerMsgTxStateRevert = 5
 
 	// Transaction reverted due to a double spend.
 	// This will be for unconfirmed transactions.
 	// A conflicting transaction was mined.
-	ListenerMsgTxStateCancel = 6 // msgValue is chainhash.Hash
+	ListenerMsgTxStateCancel = 6
 
 	// Transaction conflicts with another tx.
 	// These will come in at least sets of two when more than one tx spending the same input is
 	//   seen.
 	// If a confirm is later seen for one of these tx, then it can be assumed reliable.
-	ListenerMsgTxStateUnsafe = 7 // msgValue is chainhash.Hash
+	ListenerMsgTxStateUnsafe = 7
 )
 
 type Listener interface {

@@ -81,6 +81,7 @@ func main() {
 			UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
 			StartHash      string `envconfig:"START_HASH"`
 			UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
+			SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
 		}
 		RpcNode struct {
 			Host     string `envconfig:"RPC_HOST"`
@@ -150,7 +151,8 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes)
+	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
+		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
 		log.Fatalf("Failed to create spynode config : %v\n", err)
 		return

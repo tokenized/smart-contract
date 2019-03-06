@@ -50,12 +50,10 @@ func (tracker *TxTracker) Remove(ctx context.Context, txids []chainhash.Hash) {
 	defer tracker.mutex.Unlock()
 
 	// Iterate tracker ids first since that list should be much smaller
-	for txid, _ := range tracker.txids {
-		for _, removeid := range txids {
-			if txid == removeid {
-				logger.Log(ctx, logger.Verbose, "Removing tracking for tx : %s", txid.String())
-				delete(tracker.txids, txid)
-			}
+	for _, removeid := range txids {
+		if _, exists := tracker.txids[removeid]; exists {
+			logger.Log(ctx, logger.Verbose, "Removing tracking for tx : %s", removeid.String())
+			delete(tracker.txids, removeid)
 		}
 	}
 }

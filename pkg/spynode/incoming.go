@@ -2,13 +2,14 @@ package spynode
 
 import (
 	"context"
+	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // Process an inbound message
-func handleMessage(ctx context.Context, msgHandlers map[string]handlers.CommandHandler, msg wire.Message, outgoing chan wire.Message) error {
+func handleMessage(ctx context.Context, msgHandlers map[string]handlers.CommandHandler, msg wire.Message, outgoingLock *sync.Mutex, outgoingOpen *bool, outgoing chan wire.Message) error {
 	h, ok := msgHandlers[msg.Command()]
 	if !ok {
 		// no handler for this command
@@ -22,7 +23,14 @@ func handleMessage(ctx context.Context, msgHandlers map[string]handlers.CommandH
 
 	// Queue messages to be sent in response
 	for _, response := range responses {
+		outgoingLock.Lock()
+		if !*outgoingOpen {
+
+			outgoingLock.Unlock()
+			break
+		}
 		outgoing <- response
+		outgoingLock.Unlock()
 	}
 
 	return nil

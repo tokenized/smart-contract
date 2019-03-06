@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -35,7 +34,8 @@ func main() {
 	// Logging
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.AddFile("./tmp/main.log")
-	logConfig.Main.Format |= logger.IncludeSystem
+	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
+	logConfig.Main.MinLevel = logger.Debug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	ctx := logger.ContextWithLogConfig(context.Background(), logConfig)
 
@@ -47,7 +47,8 @@ func main() {
 			Address        string `envconfig:"NODE_ADDRESS"`
 			UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
 			StartHash      string `envconfig:"START_HASH"`
-			UntrustedNodes string `default:"8" envconfig:"UNTRUSTED_NODES"`
+			UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
+			SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
 		}
 		NodeStorage struct {
 			Region    string `default:"ap-southeast-2" envconfig:"NODE_STORAGE_REGION"`
@@ -92,13 +93,8 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Node Config
-	untrustedNodes, err := strconv.Atoi(cfg.Node.UntrustedNodes)
-	if err != nil {
-		logger.Log(ctx, logger.Error, "Invalid untrusted nodes count %s : %v\n", cfg.Node.UntrustedNodes, err)
-		return
-	}
 	nodeConfig, err := data.NewConfig(cfg.Node.Address, cfg.Node.UserAgent,
-		cfg.Node.StartHash, untrustedNodes)
+		cfg.Node.StartHash, cfg.Node.UntrustedNodes, cfg.Node.SafeTxDelay)
 	if err != nil {
 		logger.Log(ctx, logger.Error, "Failed to create node config : %s\n", err)
 		return
@@ -118,9 +114,9 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	go func() {
 		signal := <-signals
-		logger.Log(ctx, logger.Info, "Received signal : %s\n", signal)
+		logger.Log(ctx, logger.Info, "Received signal : %s", signal)
 		if signal == os.Interrupt {
-			logger.Log(ctx, logger.Info, "Stopping node\n")
+			logger.Log(ctx, logger.Info, "Stopping node")
 			node.Stop(ctx)
 		}
 	}()
@@ -146,20 +142,19 @@ func main() {
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
 
-	// -------------------------------------------------------------------------
-	// Stop API Service
-
 	// Blocking main and waiting for shutdown.
 	select {
 	case err := <-serverErrors:
-		logger.Log(ctx, logger.Fatal, "Error starting server: %v", err)
+		if err != nil {
+			logger.Log(ctx, logger.Fatal, "Error starting server: %v", err)
+		}
 
 	case <-osSignals:
 		logger.Log(ctx, logger.Info, "Start shutdown...")
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Log(ctx, logger.Fatal, "Could not stop spvnode server: %v", err)
+			logger.Log(ctx, logger.Fatal, "Could not stop spynode server: %v", err)
 		}
 	}
 }
@@ -177,9 +172,9 @@ func (listener LogListener) HandleBlock(ctx context.Context, msgType int, block 
 
 	switch msgType {
 	case handlers.ListenerMsgBlock:
-		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", block.Height, block.Hash.String())
+		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", block.Height, block.Hash)
 	case handlers.ListenerMsgBlockRevert:
-		logger.Log(listener.ctx, logger.Info, "Reverted Block (%d) : %s", block.Height, block.Hash.String())
+		logger.Log(listener.ctx, logger.Info, "Reverted Block (%d) : %s", block.Height, block.Hash)
 	}
 
 	return nil
@@ -190,7 +185,7 @@ func (listener LogListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bool
 	defer listener.mutex.Unlock()
 
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
-	logger.Log(ctx, logger.Info, "Tx : %s", msg.TxHash().String())
+	logger.Log(ctx, logger.Info, "Tx : %s", msg.TxHash())
 
 	return true, nil
 }
@@ -203,13 +198,15 @@ func (listener LogListener) HandleTxState(ctx context.Context, msgType int, txid
 
 	switch msgType {
 	case handlers.ListenerMsgTxStateConfirm:
-		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", txid.String())
+		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", txid)
 	case handlers.ListenerMsgTxStateRevert:
-		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", txid.String())
+		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", txid)
 	case handlers.ListenerMsgTxStateCancel:
-		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", txid.String())
+		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", txid)
 	case handlers.ListenerMsgTxStateUnsafe:
-		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", txid.String())
+		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", txid)
+	case handlers.ListenerMsgTxStateSafe:
+		logger.Log(listener.ctx, logger.Info, "Tx safe : %s", txid)
 	}
 
 	return nil
@@ -240,7 +237,7 @@ func (filter TokenizedFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bo
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
-				"Matches TokenizedFilter : %s", tx.TxHash().String())
+				"Matches TokenizedFilter : %s", tx.TxHash())
 			return true
 		}
 	}
@@ -262,7 +259,7 @@ func (filter OPReturnFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) boo
 	for _, output := range tx.TxOut {
 		if IsOpReturn(output.PkScript) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
-				"Matches OPReturnFilter : %s", tx.TxHash().String())
+				"Matches OPReturnFilter : %s", tx.TxHash())
 			return true
 		}
 	}

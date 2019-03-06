@@ -94,6 +94,10 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			continue
 		}
 
+		if hash == *lastHash {
+			continue
+		}
+
 		// Check if we already have this block
 		if handler.blocks.Contains(hash) || handler.state.BlockIsRequested(&hash) ||
 			handler.state.BlockIsToBeRequested(&hash) {
@@ -103,6 +107,8 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		// Check for a reorg
 		reorgHeight, exists := handler.blocks.Height(&header.PrevBlock)
 		if exists {
+			logger.Log(ctx, logger.Info, "Reorging to height %d", reorgHeight)
+
 			// Call reorg listener for all blocks above reorg height.
 			for height := handler.blocks.LastHeight(); height > reorgHeight; height-- {
 				// Notify listeners
@@ -150,7 +156,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				lastHash = handler.blocks.LastHash()
 			}
 			if lastHash == nil || header.PrevBlock != *lastHash {
-				return response, errors.New(fmt.Sprintf("Revert failed to produce correct last hash : %s", lastHash.String()))
+				return response, errors.New(fmt.Sprintf("Revert failed to produce correct last hash : %s", lastHash))
 			}
 
 			// Add this header after the new top block
@@ -173,7 +179,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		}
 
 		// Ignore unknown blocks as they might happen when there is a reorg.
-		return nil, nil //errors.New(fmt.Sprintf("Unknown header : %s", hash.String()))
+		return nil, nil //errors.New(fmt.Sprintf("Unknown header : %s", hash))
 	}
 
 	// Add any non-full requests.

@@ -36,11 +36,15 @@ type TxKey int
 
 var DirectTxKey TxKey = 1 // Used in context to flag when a tx is from the system
 
+// Handle implements the handler interface for transaction handler.
 func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
 	msg, ok := m.(*wire.MsgTx)
 	if !ok {
 		return nil, errors.New("Could not assert as *wire.MsgTx")
 	}
+
+	hash := msg.TxHash()
+	logger.Log(ctx, logger.Debug, "Received tx : %s", hash)
 
 	// Only notify of transactions when in sync or they might be duplicated
 	if !handler.ready.IsReady() && ctx.Value(DirectTxKey) == nil {
@@ -56,14 +60,14 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 	}
 
 	if len(conflicts) > 0 {
-		logger.Log(ctx, logger.Warn, "Found %d conflicts with %s", len(conflicts), msg.TxHash().String())
+		logger.Log(ctx, logger.Warn, "Found %d conflicts with %s", len(conflicts), hash)
 		// Notify of attempted double spend
 		for _, conflict := range conflicts {
-			contains, err := handler.txs.Contains(ctx, *conflict, -1)
+			marked, err := handler.txs.MarkUnsafe(ctx, *conflict)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to check tx repo")
 			}
-			if contains { // Only send for txs that previously matched filters.
+			if marked { // Only send for txs that previously matched filters.
 				for _, listener := range handler.listeners {
 					if err := listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, *conflict); err != nil {
 						return nil, err
@@ -75,14 +79,14 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 
 	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
 	//   processing the same tx twice at the same time.
-	if added, err := handler.txs.Add(ctx, msg.TxHash(), -1); err != nil {
+	if added, err := handler.txs.Add(ctx, hash, -1); err != nil {
 		return nil, errors.Wrap(err, "Failed to add to tx repo")
 	} else if !added {
 		return nil, nil // Already seen
 	}
 
 	if !matchesFilter(ctx, msg, handler.txFilters) {
-		if _, err := handler.txs.Remove(ctx, msg.TxHash(), -1); err != nil {
+		if _, err := handler.txs.Remove(ctx, hash, -1); err != nil {
 			return nil, errors.Wrap(err, "Failed to remove from tx repo")
 		}
 		return nil, nil // Filter out
@@ -101,9 +105,19 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		}
 	}
 
-	if !marked {
-		// Add to tx repository as "relevant" unconfirmed tx
-		if _, err := handler.txs.Remove(ctx, msg.TxHash(), -1); err != nil {
+	if marked {
+		// Notify of conflicting txs
+		if len(conflicts) > 0 {
+			handler.txs.MarkUnsafe(ctx, hash)
+			for _, listener := range handler.listeners {
+				if err := listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, hash); err != nil {
+					return nil, err
+				}
+			}
+		}
+	} else {
+		// Remove from tx repository
+		if _, err := handler.txs.Remove(ctx, hash, -1); err != nil {
 			return nil, errors.Wrap(err, "Failed to remove from tx repo")
 		}
 	}

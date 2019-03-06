@@ -25,30 +25,32 @@ const (
 	SubSystem = "SpyNode" // For logger
 )
 
+// Node is the main object for spynode.
 type Node struct {
-	config         data.Config
-	state          *data.State
-	store          storage.Storage
-	peers          *handlerstorage.PeerRepository
-	blocks         *handlerstorage.BlockRepository
-	txs            *handlerstorage.TxRepository
-	txTracker      *data.TxTracker
-	memPool        *data.MemPool
-	handlers       map[string]handlers.CommandHandler
-	conn           net.Conn
-	outgoing       chan wire.Message
+	config         data.Config                        // Configuration
+	state          *data.State                        // Non-persistent data
+	store          storage.Storage                    // Persistent data
+	peers          *handlerstorage.PeerRepository     // Peer data
+	blocks         *handlerstorage.BlockRepository    // Block data
+	txs            *handlerstorage.TxRepository       // Tx data
+	txTracker      *data.TxTracker                    // Tracks tx requests to ensure all txs are received
+	memPool        *data.MemPool                      // Tracks which txs have been received and checked
+	handlers       map[string]handlers.CommandHandler // Handlers for messages from trusted node
+	conn           net.Conn                           // Connection to trusted node
+	outgoing       chan wire.Message                  // Channel for messages to send to trusted node
 	outgoingOpen   bool
-	listeners      []handlers.Listener
-	txFilters      []handlers.TxFilter
-	untrustedNodes []*UntrustedNode
-	addresses      map[string]time.Time
+	listeners      []handlers.Listener  // Receive data and notifications about transactions
+	txFilters      []handlers.TxFilter  // Determines if a tx should be seen by listeners
+	untrustedNodes []*UntrustedNode     // Randomized peer connections to monitor for double spends
+	addresses      map[string]time.Time // Recently used peer addresses
 	needsRestart   bool
 	stopping       bool
 	stopped        bool
-	mutex          sync.Mutex
+	outgoingLock   sync.Mutex
 	untrustedMutex sync.Mutex
 }
 
+// NewNode creates a new node.
 // See handlers/handlers.go for the listener interface definitions.
 func NewNode(config data.Config, store storage.Storage) *Node {
 	result := Node{
@@ -77,7 +79,7 @@ func (node *Node) RegisterListener(listener handlers.Listener) {
 	node.listeners = append(node.listeners, listener)
 }
 
-// Adds a tx filter.
+// AddTxFilter adds a tx filter.
 // See handlers/filters.go for specification of a filter.
 // If no tx filters, then all txs are sent to listeners.
 // If any of the tx filters return true the tx will be sent to listeners.
@@ -85,11 +87,11 @@ func (node *Node) AddTxFilter(filter handlers.TxFilter) {
 	node.txFilters = append(node.txFilters, filter)
 }
 
-// Loads the data for the node.
+// load loads the data for the node.
 // Must be called after adding filter(s), but before Run()
 func (node *Node) load(ctx context.Context) error {
-	node.mutex.Lock()
-	defer node.mutex.Unlock()
+	node.outgoingLock.Lock()
+	defer node.outgoingLock.Unlock()
 
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	if err := node.peers.Load(ctx); err != nil {
@@ -118,7 +120,7 @@ func (node *Node) load(ctx context.Context) error {
 	return nil
 }
 
-// Runs the node.
+// Run runs the node.
 // Doesn't stop until there is a failure or Stop() is called.
 func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
@@ -130,7 +132,6 @@ func (node *Node) Run(ctx context.Context) error {
 
 	initial := true
 	for {
-		node.mutex.Lock()
 		if initial {
 			logger.Log(ctx, logger.Verbose, "Connecting to %s", node.config.NodeAddress)
 		} else {
@@ -139,11 +140,11 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 		if err = node.connect(ctx); err != nil {
 			logger.Log(ctx, logger.Verbose, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
-			node.mutex.Unlock()
 			break
 		}
 		initial = false
 
+		node.outgoingLock.Lock()
 		if !node.outgoingOpen {
 			// Recreate outgoing message channel
 			node.outgoing = make(chan wire.Message, 100)
@@ -153,35 +154,46 @@ func (node *Node) Run(ctx context.Context) error {
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
-		node.mutex.Unlock()
+		node.outgoingLock.Unlock()
 
 		wg := sync.WaitGroup{}
-		wg.Add(4)
+		wg.Add(5)
 
 		go func() {
 			defer wg.Done()
 			node.monitorIncoming(ctx)
+			logger.Log(ctx, logger.Debug, "Monitor incoming finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.monitorRequestTimeouts(ctx)
+			logger.Log(ctx, logger.Debug, "Monitor request timeouts finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			sendOutgoing(ctx, node.conn, node.outgoing)
+			logger.Log(ctx, logger.Debug, "Send outgoing finished")
+		}()
+
+		go func() {
+			defer wg.Done()
+			node.checkTxDelays(ctx)
+			logger.Log(ctx, logger.Debug, "Check tx delays finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.monitorUntrustedNodes(ctx)
+			logger.Log(ctx, logger.Debug, "Monitor untrusted finished")
 		}()
 
 		// Block until goroutines finish as a result of Stop()
 		wg.Wait()
 
 		// Save block repository
+		logger.Log(ctx, logger.Verbose, "Saving")
 		node.blocks.Save(ctx)
 		node.txs.Save(ctx)
 
@@ -200,12 +212,12 @@ func (node *Node) Run(ctx context.Context) error {
 	return err
 }
 
-// Closes the connection and causes Run() to return.
+// Stop closes the connection and causes Run() to return.
 func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	err := node.requestStop(ctx)
 	for !node.stopped {
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	return err
 }
@@ -221,19 +233,19 @@ func (node *Node) requestStop(ctx context.Context) error {
 	return node.disconnect(ctx)
 }
 
-// Broadcast a tx to the network
+// BroadcastTx broadcasts a tx to the network.
 func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash().String())
+	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash())
 
 	// Send to trusted node
-	node.mutex.Lock()
+	node.outgoingLock.Lock()
 	if !node.outgoingOpen {
-		node.mutex.Unlock()
+		node.outgoingLock.Unlock()
 		return errors.New("Node inactive")
 	}
 	node.outgoing <- tx
-	node.mutex.Unlock()
+	node.outgoingLock.Unlock()
 
 	// Send to untrusted nodes
 	node.untrustedMutex.Lock()
@@ -244,19 +256,41 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
-// Handle a tx as if it came from the network.
+// HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 // TODO Figure out how to handle this if it gets called while a block is being processed and the
 //   mempool or tx repo are locked.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	ctx = context.WithValue(ctx, handlers.DirectTxKey, true)
-	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash().String())
-	err := handleMessage(ctx, node.handlers, tx, node.outgoing)
+	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash())
+	err := handleMessage(ctx, node.handlers, tx, &node.outgoingLock, &node.outgoingOpen, node.outgoing)
 	if err != nil {
 		logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
 	}
 	return err
+}
+
+// ProcessBlock is called when a block is being processed.
+// Implements handlers.BlockProcessor interface
+// It is responsible for any cleanup as a result of a block.
+func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error {
+	logger.Log(ctx, logger.Debug, "Cleaning up after block : %s", block.BlockHash())
+	txids, err := block.TxHashes()
+	if err != nil {
+		return err
+	}
+
+	node.txTracker.Remove(ctx, txids)
+
+	node.untrustedMutex.Lock()
+	defer node.untrustedMutex.Unlock()
+
+	for _, untrusted := range node.untrustedNodes {
+		untrusted.ProcessBlock(ctx, txids)
+	}
+
+	return nil
 }
 
 func (node *Node) connect(ctx context.Context) error {
@@ -285,7 +319,7 @@ func (node *Node) disconnect(ctx context.Context) error {
 	return nil
 }
 
-// Processes incoming messages.
+// monitorIncoming processes incoming messages.
 //
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
@@ -298,6 +332,9 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
+		if node.conn == nil {
+			break
+		}
 		msg, _, err := wire.ReadMessage(node.conn, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
@@ -312,7 +349,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 			break
 		}
 
-		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
+		if err := handleMessage(ctx, node.handlers, msg, &node.outgoingLock, &node.outgoingOpen, node.outgoing); err != nil {
 			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
@@ -328,29 +365,14 @@ func (node *Node) restart(ctx context.Context) {
 	node.requestStop(ctx)
 }
 
-// This is called when a block is being processed.
-// Implements handlers.BlockProcessor interface
-// It is responsible for any cleanup as a result of a block.
-func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error {
-	txids, err := block.TxHashes()
-	if err != nil {
-		return err
-	}
-
-	node.txTracker.Remove(ctx, txids)
-
-	node.untrustedMutex.Lock()
-	defer node.untrustedMutex.Unlock()
-
-	for _, untrusted := range node.untrustedNodes {
-		untrusted.ProcessBlock(ctx, txids)
-	}
-
-	return nil
-}
-
-// Check state
+// check checks the state of spynode and performs state related actions.
 func (node *Node) check(ctx context.Context) error {
+	node.outgoingLock.Lock()
+	defer node.outgoingLock.Unlock()
+	if !node.outgoingOpen {
+		return nil
+	}
+
 	if !node.state.VersionReceived {
 		return nil // Still performing handshake
 	}
@@ -418,9 +440,12 @@ func (node *Node) check(ctx context.Context) error {
 	return nil
 }
 
-// Monitor for request timeouts
+// monitorRequestTimeouts monitors for request timeouts.
+//
+// This is a blocking function that will run forever, so it should be run
+// in a goroutine.
 func (node *Node) monitorRequestTimeouts(ctx context.Context) {
-	for {
+	for !node.stopping {
 		sleepUntilStop(10, &node.stopping) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
@@ -428,20 +453,59 @@ func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 			node.restart(ctx)
 			break
 		}
-
-		if node.stopping {
-			break
-		}
 	}
 }
 
-// Monitor untrusted nodes.
+// checkTxDelays monitors txs for when they have passed the safe tx delay without seeing a
+//   conflicting tx.
+//
+// This is a blocking function that will run forever, so it should be run
+// in a goroutine.
+func (node *Node) checkTxDelays(ctx context.Context) error {
+	for !node.stopping {
+		time.Sleep(200 * time.Millisecond)
+
+		if !node.state.IsInSync {
+			continue
+		}
+
+		// Get newly safe txs
+		cutoffTime := time.Now().Add(time.Millisecond * -time.Duration(node.config.SafeTxDelay))
+		txids, err := node.txs.GetNewSafe(ctx, cutoffTime)
+		if err != nil {
+			logger.Log(ctx, logger.Warn, err.Error())
+			node.restart(ctx)
+			break
+		}
+
+		for _, txid := range txids {
+			for _, listener := range node.listeners {
+				err := listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
+				if err != nil {
+					logger.Log(ctx, logger.Warn, err.Error())
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// monitorUntrustedNodes monitors untrusted nodes.
 // Attempt to keep the specified number running.
 // Watch for when they become inactive and replace them.
+//
+// This is a blocking function that will run forever, so it should be run
+// in a goroutine.
 func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	for {
+	for !node.stopping {
 		node.untrustedMutex.Lock()
+
+		if !node.state.IsInSync {
+			node.untrustedMutex.Unlock()
+			sleepUntilStop(5, &node.stopping)
+			continue
+		}
 
 		// Check for inactive
 		for {
@@ -476,7 +540,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 		if count < node.config.UntrustedCount/2 {
 			// Try for peers with a good score
-			for count < node.config.UntrustedCount/2 {
+			for !node.stopping && count < node.config.UntrustedCount/2 {
 				if node.addUntrustedNode(ctx, &wg, 5) {
 					count++
 				} else {
@@ -486,7 +550,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		}
 
 		// Try for peers with a non-negative score
-		for count < node.config.UntrustedCount {
+		for !node.stopping && count < node.config.UntrustedCount {
 			if node.addUntrustedNode(ctx, &wg, 0) {
 				count++
 			} else {
@@ -514,7 +578,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	wg.Wait()
 }
 
-// Add a new untrusted node
+// addUntrustedNode adds a new untrusted node.
 // Returns true if a new node connection was attempted
 func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minScore int32) bool {
 	// Get new address
@@ -527,7 +591,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var address string
 	for {
-		if len(peers) == 0 {
+		if node.stopping || len(peers) == 0 {
 			return false
 		}
 
@@ -564,7 +628,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	return true
 }
 
-// Checks if an address was recently used
+// checkAddress checks if an address was recently used.
 func (node *Node) checkAddress(ctx context.Context, address string) bool {
 	lastUsed, exists := node.addresses[address]
 	if exists {
@@ -588,6 +652,6 @@ func sleepUntilStop(seconds int, stop *bool) {
 		if *stop {
 			break
 		}
-		time.Sleep(1 * time.Second) // Only check every 5 seconds
+		time.Sleep(1 * time.Second)
 	}
 }

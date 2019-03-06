@@ -55,6 +55,9 @@ func sendOutgoing(ctx context.Context, conn net.Conn, outgoing chan wire.Message
 			return ErrChannelClosed
 		}
 
+		if conn == nil {
+			break
+		}
 		if err := sendAsync(ctx, conn, msg); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
 		}

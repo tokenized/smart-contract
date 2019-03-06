@@ -1,6 +1,7 @@
 package listeners
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -16,6 +17,8 @@ type Server struct {
 	SpyNode          *spynode.Node
 	Handler          protomux.Handler
 	contractPKH      []byte // Used to determine which txs will be needed again
+	pendingRequests  []*inspector.Transaction
+	unsafeRequests   []*inspector.Transaction
 	pendingResponses []*wire.MsgTx
 	blockHeight      int // track current block height for confirm messages
 	inSync           bool
@@ -27,6 +30,8 @@ func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux
 		SpyNode:          spyNode,
 		Handler:          handler,
 		contractPKH:      contractPKH,
+		pendingRequests:  make([]*inspector.Transaction, 0),
+		unsafeRequests:   make([]*inspector.Transaction, 0),
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
@@ -102,4 +107,20 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 	}
 
 	return nil
+}
+
+func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction) error {
+	if err := server.removeConflictingPending(ctx, itx); err != nil {
+		logger.Log(ctx, logger.Warn, "Failed to remove conflicting pending : %s", err.Error())
+		return err
+	}
+
+	// Save tx to cache so it can be used to process the response
+	if bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), server.contractPKH) {
+		if err := server.RpcNode.AddTX(ctx, itx.MsgTx); err != nil {
+			return err
+		}
+	}
+
+	return server.Handler.Trigger(ctx, protomux.SEE, itx)
 }

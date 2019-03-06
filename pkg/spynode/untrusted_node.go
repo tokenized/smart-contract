@@ -30,11 +30,11 @@ type UntrustedNode struct {
 	conn         net.Conn
 	outgoing     chan wire.Message
 	outgoingOpen bool
+	outgoingLock sync.Mutex
 	listeners    []handlers.Listener
 	txFilters    []handlers.TxFilter
 	stopping     bool
 	Active       bool // Set to false when connection is closed
-	mutex        sync.Mutex
 }
 
 func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository, blocks *handlerstorage.BlockRepository, txs *handlerstorage.TxRepository, memPool *data.MemPool, listeners []handlers.Listener, txFilters []handlers.TxFilter) *UntrustedNode {
@@ -57,24 +57,23 @@ func NewUntrustedNode(address string, config data.Config, store storage.Storage,
 	return &result
 }
 
-// Runs the node.
+// Run the node
 // Doesn't stop until there is a failure or Stop() is called.
 func (node *UntrustedNode) Run(ctx context.Context) error {
-	node.mutex.Lock()
 	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.state, node.peers, node.blocks, node.txs, node.txTracker, node.memPool, node.listeners, node.txFilters)
 
 	if err := node.connect(); err != nil {
 		node.peers.UpdateScore(ctx, node.address, -1)
 		node.Active = false
 		logger.Log(ctx, logger.Debug, "Connection failed to %s : %s", node.address, err.Error())
-		node.mutex.Unlock()
 		return err
 	}
 
 	// Queue version message to start handshake
 	version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
+	node.outgoingLock.Lock()
 	node.outgoing <- version
-	node.mutex.Unlock()
+	node.outgoingLock.Unlock()
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
@@ -82,16 +81,19 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		node.monitorIncoming(ctx)
+		logger.Log(ctx, logger.Debug, "Untrusted monitor incoming finished")
 	}()
 
 	go func() {
 		defer wg.Done()
 		node.monitorRequestTimeouts(ctx)
+		logger.Log(ctx, logger.Debug, "Untrusted monitor request timeouts finished")
 	}()
 
 	go func() {
 		defer wg.Done()
 		sendOutgoing(ctx, node.conn, node.outgoing)
+		logger.Log(ctx, logger.Debug, "Untrusted send outgoing finished")
 	}()
 
 	// Block until goroutines finish as a result of Stop()
@@ -101,24 +103,24 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 }
 
 func (node *UntrustedNode) Stop(ctx context.Context) error {
-	node.mutex.Lock()
-	defer node.mutex.Unlock()
 	node.stopping = true
 
+	node.outgoingLock.Lock()
 	if node.outgoingOpen {
 		close(node.outgoing)
 		node.outgoingOpen = false
 	}
+	node.outgoingLock.Unlock()
 
 	return node.disconnect()
 }
 
 // Broadcast a tx to the peer
 func (node *UntrustedNode) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
-	node.mutex.Lock()
-	defer node.mutex.Unlock()
+	node.outgoingLock.Lock()
+	defer node.outgoingLock.Unlock()
 
-	if !node.outgoingOpen {
+	if node.stopping || !node.outgoingOpen {
 		return errors.New("Node inactive")
 	}
 
@@ -126,7 +128,7 @@ func (node *UntrustedNode) BroadcastTx(ctx context.Context, tx *wire.MsgTx) erro
 	return nil
 }
 
-// This is called when a block is being processed.
+// ProcessBlock is called when a block is being processed.
 // It is responsible for any cleanup as a result of a block.
 func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []chainhash.Hash) error {
 	node.txTracker.Remove(ctx, txids)
@@ -153,13 +155,13 @@ func (node *UntrustedNode) disconnect() error {
 	}
 
 	// close the connection, ignoring any errors
-	_ = node.conn.Close()
+	node.conn.Close()
 
 	node.conn = nil
 	return nil
 }
 
-// Processes incoming messages.
+// monitorIncoming monitors incoming messages.
 //
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
@@ -172,6 +174,9 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
+		if node.conn == nil {
+			break
+		}
 		msg, _, err := wire.ReadMessage(node.conn, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
@@ -186,7 +191,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 			break
 		}
 
-		if err := handleMessage(ctx, node.handlers, msg, node.outgoing); err != nil {
+		if err := handleMessage(ctx, node.handlers, msg, &node.outgoingLock, &node.outgoingOpen, node.outgoing); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
 			logger.Log(ctx, logger.Debug, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.Stop(ctx)
@@ -251,17 +256,13 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 
 // Monitor for request timeouts
 func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
-	for {
+	for !node.stopping {
 		sleepUntilStop(10, &node.stopping) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
 			logger.Log(ctx, logger.Debug, "Timed out : %s", err.Error())
 			node.peers.UpdateScore(ctx, node.address, -1)
 			node.Stop(ctx)
-			break
-		}
-
-		if node.stopping {
 			break
 		}
 	}

@@ -13,14 +13,16 @@ type Config struct {
 	UserAgent      string         // User agent to send to external node
 	StartHash      chainhash.Hash // Hash of first block to start processing on initial run
 	UntrustedCount int            // The number of untrusted nodes to run for double spend monitoring
+	SafeTxDelay    int            // Number of milliseconds without conflict before a tx is "safe"
 }
 
 // NewConfig returns a new Config populated from environment variables.
-func NewConfig(host, useragent, starthash string, untrustedNodes int) (Config, error) {
+func NewConfig(host, useragent, starthash string, untrustedNodes, safeDelay int) (Config, error) {
 	result := Config{
 		NodeAddress:    host,
 		UserAgent:      useragent,
 		UntrustedCount: untrustedNodes,
+		SafeTxDelay:    safeDelay,
 	}
 
 	hash, err := chainhash.NewHashFromStr(starthash)
@@ -39,6 +41,7 @@ func (c Config) String() string {
 		"NodeAddress": c.NodeAddress,
 		"UserAgent":   c.UserAgent,
 		"StartHash":   c.StartHash.String(),
+		"SafeTxDelay": fmt.Sprintf("%d ms", c.SafeTxDelay),
 	}
 
 	parts := []string{}
