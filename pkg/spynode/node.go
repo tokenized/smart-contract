@@ -2,6 +2,7 @@ package spynode
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -36,18 +37,18 @@ type Node struct {
 	txTracker      *data.TxTracker                    // Tracks tx requests to ensure all txs are received
 	memPool        *data.MemPool                      // Tracks which txs have been received and checked
 	handlers       map[string]handlers.CommandHandler // Handlers for messages from trusted node
-	conn           net.Conn                           // Connection to trusted node
+	connection     net.Conn                           // Connection to trusted node
 	outgoing       chan wire.Message                  // Channel for messages to send to trusted node
-	outgoingOpen   bool
-	listeners      []handlers.Listener  // Receive data and notifications about transactions
-	txFilters      []handlers.TxFilter  // Determines if a tx should be seen by listeners
-	untrustedNodes []*UntrustedNode     // Randomized peer connections to monitor for double spends
-	addresses      map[string]time.Time // Recently used peer addresses
+	listeners      []handlers.Listener                // Receive data and notifications about transactions
+	txFilters      []handlers.TxFilter                // Determines if a tx should be seen by listeners
+	untrustedNodes []*UntrustedNode                   // Randomized peer connections to monitor for double spends
+	addresses      map[string]time.Time               // Recently used peer addresses
 	needsRestart   bool
+	hardStop       bool
 	stopping       bool
 	stopped        bool
-	outgoingLock   sync.Mutex
-	untrustedMutex sync.Mutex
+	lock           sync.Mutex
+	untrustedLock  sync.Mutex
 }
 
 // NewNode creates a new node.
@@ -62,13 +63,13 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		txs:            handlerstorage.NewTxRepository(store),
 		txTracker:      data.NewTxTracker(),
 		memPool:        data.NewMemPool(),
-		outgoing:       make(chan wire.Message, 100),
-		outgoingOpen:   true,
+		outgoing:       nil,
 		listeners:      make([]handlers.Listener, 0),
 		txFilters:      make([]handlers.TxFilter, 0),
 		untrustedNodes: make([]*UntrustedNode, 0),
 		addresses:      make(map[string]time.Time),
 		needsRestart:   false,
+		hardStop:       false,
 		stopping:       false,
 		stopped:        false,
 	}
@@ -90,9 +91,6 @@ func (node *Node) AddTxFilter(filter handlers.TxFilter) {
 // load loads the data for the node.
 // Must be called after adding filter(s), but before Run()
 func (node *Node) load(ctx context.Context) error {
-	node.outgoingLock.Lock()
-	defer node.outgoingLock.Unlock()
-
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	if err := node.peers.Load(ctx); err != nil {
 		return err
@@ -125,6 +123,11 @@ func (node *Node) load(ctx context.Context) error {
 func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 
+	defer func() {
+		node.stopped = true
+		logger.Log(ctx, logger.Verbose, "Stopped")
+	}()
+
 	var err error = nil
 	if err = node.load(ctx); err != nil {
 		return err
@@ -144,17 +147,11 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 		initial = false
 
-		node.outgoingLock.Lock()
-		if !node.outgoingOpen {
-			// Recreate outgoing message channel
-			node.outgoing = make(chan wire.Message, 100)
-			node.outgoingOpen = true
-		}
+		node.outgoing = make(chan wire.Message, 100)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
-		node.outgoingLock.Unlock()
 
 		wg := sync.WaitGroup{}
 		wg.Add(5)
@@ -173,7 +170,7 @@ func (node *Node) Run(ctx context.Context) error {
 
 		go func() {
 			defer wg.Done()
-			sendOutgoing(ctx, node.conn, node.outgoing)
+			node.sendOutgoing(ctx)
 			logger.Log(ctx, logger.Debug, "Send outgoing finished")
 		}()
 
@@ -197,7 +194,7 @@ func (node *Node) Run(ctx context.Context) error {
 		node.blocks.Save(ctx)
 		node.txs.Save(ctx)
 
-		if !node.needsRestart {
+		if !node.needsRestart || node.hardStop {
 			break
 		}
 
@@ -207,14 +204,13 @@ func (node *Node) Run(ctx context.Context) error {
 		node.state.Reset()
 	}
 
-	logger.Log(ctx, logger.Verbose, "Stopped")
-	node.stopped = true
 	return err
 }
 
 // Stop closes the connection and causes Run() to return.
 func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	node.hardStop = true
 	err := node.requestStop(ctx)
 	for !node.stopped {
 		time.Sleep(100 * time.Millisecond)
@@ -223,14 +219,15 @@ func (node *Node) Stop(ctx context.Context) error {
 }
 
 func (node *Node) requestStop(ctx context.Context) error {
-	node.stopping = true
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
-	if node.outgoingOpen {
-		close(node.outgoing)
-		node.outgoingOpen = false
+	if node.stopping {
+		return nil
 	}
-
-	return node.disconnect(ctx)
+	node.stopping = true
+	close(node.outgoing)
+	return node.connection.Close()
 }
 
 // BroadcastTx broadcasts a tx to the network.
@@ -238,21 +235,21 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash())
 
-	// Send to trusted node
-	node.outgoingLock.Lock()
-	if !node.outgoingOpen {
-		node.outgoingLock.Unlock()
+	if node.stopping { // TODO Resolve issue when node is restarting
 		return errors.New("Node inactive")
 	}
-	node.outgoing <- tx
-	node.outgoingLock.Unlock()
+
+	// Send to trusted node
+	if !node.queueOutgoing(tx) {
+		return errors.New("Node inactive")
+	}
 
 	// Send to untrusted nodes
-	node.untrustedMutex.Lock()
+	node.untrustedLock.Lock()
 	for _, untrusted := range node.untrustedNodes {
 		untrusted.BroadcastTx(ctx, tx)
 	}
-	node.untrustedMutex.Unlock()
+	node.untrustedLock.Unlock()
 	return nil
 }
 
@@ -261,14 +258,69 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 // TODO Figure out how to handle this if it gets called while a block is being processed and the
 //   mempool or tx repo are locked.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	if node.stopping { // TODO Resolve issue when node is restarting
+		return errors.New("Node inactive")
+	}
+
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	ctx = context.WithValue(ctx, handlers.DirectTxKey, true)
 	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash())
-	err := handleMessage(ctx, node.handlers, tx, &node.outgoingLock, &node.outgoingOpen, node.outgoing)
+	err := node.handleMessage(ctx, tx)
 	if err != nil {
 		logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
 	}
 	return err
+}
+
+// sendOutgoing waits for and sends outgoing messages
+//
+// This is a blocking function that will run forever, so it should be run
+// in a goroutine.
+func (node *Node) sendOutgoing(ctx context.Context) error {
+	for !node.stopping {
+		// Wait for outgoing message on channel
+		msg, ok := <-node.outgoing
+
+		if !ok || node.stopping {
+			break
+		}
+
+		if err := sendAsync(ctx, node.connection, msg); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
+		}
+	}
+
+	return nil
+}
+
+// handleMessage Processes an incoming message
+func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
+	if node.stopping {
+		return nil
+	}
+
+	handler, ok := node.handlers[msg.Command()]
+	if !ok {
+		// no handler for this command
+		return nil
+	}
+
+	responses, err := handler.Handle(ctx, msg)
+	if err != nil {
+		return err
+	}
+
+	// Queue messages to be sent in response
+	for _, response := range responses {
+		if !node.queueOutgoing(response) {
+			break
+		}
+	}
+
+	return nil
 }
 
 // ProcessBlock is called when a block is being processed.
@@ -283,8 +335,8 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 
 	node.txTracker.Remove(ctx, txids)
 
-	node.untrustedMutex.Lock()
-	defer node.untrustedMutex.Unlock()
+	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
 
 	for _, untrusted := range node.untrustedNodes {
 		untrusted.ProcessBlock(ctx, txids)
@@ -294,28 +346,14 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 }
 
 func (node *Node) connect(ctx context.Context) error {
-	node.disconnect(ctx)
-
 	conn, err := net.Dial("tcp", node.config.NodeAddress)
 	if err != nil {
 		return err
 	}
 
-	node.conn = conn
+	node.connection = conn
 	now := time.Now()
 	node.state.ConnectedTime = &now
-	return nil
-}
-
-func (node *Node) disconnect(ctx context.Context) error {
-	if node.conn == nil {
-		return nil
-	}
-
-	// close the connection, ignoring any errors
-	_ = node.conn.Close()
-
-	node.conn = nil
 	return nil
 }
 
@@ -324,18 +362,18 @@ func (node *Node) disconnect(ctx context.Context) error {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) monitorIncoming(ctx context.Context) {
-	for {
+	for !node.stopping {
 		if err := node.check(ctx); err != nil {
-			logger.Log(ctx, logger.Warn, "Check failed : %v", err.Error())
+			logger.Log(ctx, logger.Warn, "Check failed : %s", err.Error())
 			node.requestStop(ctx)
 			break
 		}
 
 		// read new messages, blocking
-		if node.conn == nil {
+		if node.stopping {
 			break
 		}
-		msg, _, err := wire.ReadMessage(node.conn, wire.ProtocolVersion, MainNetBch)
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
 			logger.Log(ctx, logger.Verbose, "Connection closed")
@@ -344,12 +382,11 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 		if err != nil {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Warn, "Failed to read message : %v", err.Error())
-			node.restart(ctx)
-			break
+			logger.Log(ctx, logger.Warn, "Failed to read message : %s", err.Error())
+			continue
 		}
 
-		if err := handleMessage(ctx, node.handlers, msg, &node.outgoingLock, &node.outgoingOpen, node.outgoing); err != nil {
+		if err := node.handleMessage(ctx, msg); err != nil {
 			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
@@ -365,28 +402,35 @@ func (node *Node) restart(ctx context.Context) {
 	node.requestStop(ctx)
 }
 
+func (node *Node) queueOutgoing(msg wire.Message) bool {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+	if node.stopping {
+		return false
+	}
+	node.outgoing <- msg
+	return true
+}
+
 // check checks the state of spynode and performs state related actions.
 func (node *Node) check(ctx context.Context) error {
-	node.outgoingLock.Lock()
-	defer node.outgoingLock.Unlock()
-	if !node.outgoingOpen {
-		return nil
-	}
-
 	if !node.state.VersionReceived {
 		return nil // Still performing handshake
 	}
 
 	if !node.state.HandshakeComplete {
 		// Send header request to kick off sync
-		msg, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
+		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 0, 50)
 		if err != nil {
 			return err
 		}
-		node.outgoing <- msg
-		now := time.Now()
-		node.state.HeadersRequested = &now
-		node.state.HandshakeComplete = true
+
+		if node.queueOutgoing(headerRequest) {
+			logger.Log(ctx, logger.Debug, "Requesting headers")
+			now := time.Now()
+			node.state.HeadersRequested = &now
+			node.state.HandshakeComplete = true
+		}
 	}
 
 	// Check sync
@@ -394,22 +438,25 @@ func (node *Node) check(ctx context.Context) error {
 		if !node.state.SentSendHeaders {
 			// Send sendheaders message to get headers instead of block inventories.
 			sendheaders := wire.NewMsgSendHeaders()
-			node.outgoing <- sendheaders
-			node.state.SentSendHeaders = true
+			if node.queueOutgoing(sendheaders) {
+				node.state.SentSendHeaders = true
+			}
 		}
 
 		if !node.state.AddressesRequested {
 			addresses := wire.NewMsgGetAddr()
-			node.outgoing <- addresses
-			node.state.AddressesRequested = true
+			if node.queueOutgoing(addresses) {
+				node.state.AddressesRequested = true
+			}
 		}
 
 		if !node.state.MemPoolRequested {
 			// Send mempool request
 			// This tells the peer to send inventory of all tx in their mempool.
 			mempool := wire.NewMsgMemPool()
-			node.outgoing <- mempool
-			node.state.MemPoolRequested = true
+			if node.queueOutgoing(mempool) {
+				node.state.MemPoolRequested = true
+			}
 		} else if !node.state.NotifiedSync {
 			// TODO Add method to wait for mempool to sync
 			for _, listener := range node.listeners {
@@ -424,17 +471,22 @@ func (node *Node) check(ctx context.Context) error {
 		}
 		// Queue messages to be sent in response
 		for _, response := range responses {
-			node.outgoing <- response
+			if !node.queueOutgoing(response) {
+				break
+			}
 		}
-	} else if node.state.HeadersRequested == nil && node.state.BlocksRequestedCount() < 5 {
+	} else if node.state.HeadersRequested == nil && node.state.TotalBlockRequestCount() < 5 {
 		// Request more headers
-		msg, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
+		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
 		if err != nil {
 			return err
 		}
-		node.outgoing <- msg
-		now := time.Now()
-		node.state.HeadersRequested = &now
+
+		if !node.queueOutgoing(headerRequest) {
+			logger.Log(ctx, logger.Debug, "Requesting headers")
+			now := time.Now()
+			node.state.HeadersRequested = &now
+		}
 	}
 
 	return nil
@@ -499,10 +551,10 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	wg := sync.WaitGroup{}
 	for !node.stopping {
-		node.untrustedMutex.Lock()
+		node.untrustedLock.Lock()
 
 		if !node.state.IsInSync {
-			node.untrustedMutex.Unlock()
+			node.untrustedLock.Unlock()
 			sleepUntilStop(5, &node.stopping)
 			continue
 		}
@@ -532,7 +584,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			}
 		}
 
-		node.untrustedMutex.Unlock()
+		node.untrustedLock.Unlock()
 
 		if verifiedCount < node.config.UntrustedCount {
 			logger.Log(ctx, logger.Debug, "Untrusted connections : %d", verifiedCount)
@@ -568,11 +620,11 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	}
 
 	// Stop all
-	node.untrustedMutex.Lock()
+	node.untrustedLock.Lock()
 	for _, untrusted := range node.untrustedNodes {
 		untrusted.Stop(ctx)
 	}
-	node.untrustedMutex.Unlock()
+	node.untrustedLock.Unlock()
 
 	logger.Log(ctx, logger.Verbose, "Waiting for %d untrusted nodes to finish", len(node.untrustedNodes))
 	wg.Wait()
@@ -617,9 +669,9 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 
 	// Attempt connection
 	newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs, node.memPool, node.listeners, node.txFilters)
-	node.untrustedMutex.Lock()
+	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
-	node.untrustedMutex.Unlock()
+	node.untrustedLock.Unlock()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -652,6 +704,6 @@ func sleepUntilStop(seconds int, stop *bool) {
 		if *stop {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Second)
 	}
 }

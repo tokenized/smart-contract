@@ -40,15 +40,14 @@ func (state *State) CheckTimeouts() error {
 	}
 
 	for _, blockRequest := range state.blocksRequested {
-		if now.Sub(blockRequest.Time).Seconds() > blockTimeout {
+		if now.Sub(blockRequest.time).Seconds() > blockTimeout {
 			return errors.New(fmt.Sprintf("Block request took longer than %d seconds : %s",
-				blockTimeout, blockRequest.Hash.String()))
+				blockTimeout, blockRequest.hash))
 		}
 	}
 
 	if state.restartCount > 0 && now.Sub(*connected).Seconds() > 60 {
-		// Clear restart count
-		state.restartCount = 0
+		state.restartCount = 0 // Clear restart count
 	}
 
 	if state.restartCount > maxRestarts {

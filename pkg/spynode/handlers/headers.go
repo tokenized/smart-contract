@@ -43,13 +43,14 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	}
 
 	response := []wire.Message{}
+	logger.Log(ctx, logger.Debug, "Received %d headers", len(message.Headers))
 
 	lastHash := handler.state.LastHash()
 	if lastHash == nil {
 		lastHash = handler.blocks.LastHash()
 	}
 
-	if len(message.Headers) == 0 || len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash {
+	if !handler.state.IsInSync && (len(message.Headers) == 0 || (len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash)) {
 		logger.Log(ctx, logger.Info, "Headers in sync at height %d", handler.blocks.LastHeight())
 		handler.state.PendingSync = true // We are in sync
 		if handler.state.StartHeight == -1 {
@@ -80,7 +81,8 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 			if request {
 				// Request it if it isn't already requested.
-				if offset := handler.state.AddBlockRequest(&hash); offset != -1 {
+				if handler.state.AddBlockRequest(&hash) {
+					logger.Log(ctx, logger.Debug, "Requesting block : %s", hash)
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
@@ -166,7 +168,8 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 			if request {
 				// Request it if it isn't already requested.
-				if offset := handler.state.AddBlockRequest(&hash); offset != -1 {
+				if handler.state.AddBlockRequest(&hash) {
+					logger.Log(ctx, logger.Debug, "Requesting block : %s", hash)
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message

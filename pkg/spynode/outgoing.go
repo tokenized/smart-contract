@@ -42,30 +42,6 @@ func buildHeaderRequest(ctx context.Context, protocol uint32, blocks *storage.Bl
 	return getheaders, nil
 }
 
-// Send outgoing messages
-//
-// This is a blocking function that will run forever, so it should be run
-// in a goroutine.
-func sendOutgoing(ctx context.Context, conn net.Conn, outgoing chan wire.Message) error {
-	for {
-		// read from the channel
-		msg, ok := <-outgoing
-
-		if !ok {
-			return ErrChannelClosed
-		}
-
-		if conn == nil {
-			break
-		}
-		if err := sendAsync(ctx, conn, msg); err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
-		}
-	}
-
-	return nil
-}
-
 // sendAsync writes a message to a peer.
 func sendAsync(ctx context.Context, conn net.Conn, m wire.Message) error {
 	var buf bytes.Buffer

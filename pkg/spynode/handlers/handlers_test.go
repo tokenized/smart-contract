@@ -213,6 +213,7 @@ func TestHandlers(test *testing.T) {
 		blocks = append(blocks, hash)
 	}
 
+	test.Logf("Block count %d = %d", len(blocks), testBlockCount+1)
 	verify(ctx, test, blocks, blockRepo, testBlockCount+1)
 }
 
@@ -261,10 +262,9 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 
 	for i := 0; i < testBlockCount; i++ {
 		hash, err := blockRepo.Hash(ctx, i+1)
-		if err != nil {
+		if err != nil || hash == nil {
 			test.Errorf("Block repo hash failed at height %d", i+1)
-		}
-		if *hash != blocks[i].Header.BlockHash() {
+		} else if *hash != blocks[i].Header.BlockHash() {
 			test.Errorf("Block repo hash %d should : %s", i+1, blocks[i].Header.BlockHash().String())
 		}
 	}
@@ -297,10 +297,9 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 
 	for i := 0; i < testBlockCount; i++ {
 		hash, err := blockRepo.Hash(ctx, i+1)
-		if err != nil {
+		if err != nil || hash == nil {
 			test.Errorf("Block repo hash failed at height %d", i+1)
-		}
-		if *hash != blocks[i].Header.BlockHash() {
+		} else if *hash != blocks[i].Header.BlockHash() {
 			test.Errorf("Block repo hash %d should : %s", i+1, blocks[i].Header.BlockHash().String())
 		}
 	}

@@ -10,21 +10,21 @@ import (
 
 // State of node
 type State struct {
-	ConnectedTime      *time.Time       // Time of last connection
-	VersionReceived    bool             // Version message was received
-	ProtocolVersion    uint32           // Bitcoin protocol version
-	HandshakeComplete  bool             // Handshake negotiation is complete
-	SentSendHeaders    bool             // The sendheaders message has been sent
-	IsInSync           bool             // We have all the blocks our peer does and we are just monitoring new data
-	NotifiedSync       bool             // Sync message has been sent to listeners
-	AddressesRequested bool             // Peer addresses have been requested
-	MemPoolRequested   bool             // Mempool has bee requested
-	HeadersRequested   *time.Time       // Time that headers were last requested
-	StartHeight        int              // Height of start block (to start pulling full blocks)
-	blocksRequested    []RequestedBlock // Blocks that have been requested
-	blocksToRequest    []chainhash.Hash // Blocks that need to be requested
-	PendingSync        bool             // The peer has notified us of all blocks. Now we just have to process to catch up.
-	restartCount       int              // Number of restarts since last clear
+	ConnectedTime      *time.Time        // Time of last connection
+	VersionReceived    bool              // Version message was received
+	ProtocolVersion    uint32            // Bitcoin protocol version
+	HandshakeComplete  bool              // Handshake negotiation is complete
+	SentSendHeaders    bool              // The sendheaders message has been sent
+	IsInSync           bool              // We have all the blocks our peer does and we are just monitoring new data
+	NotifiedSync       bool              // Sync message has been sent to listeners
+	AddressesRequested bool              // Peer addresses have been requested
+	MemPoolRequested   bool              // Mempool has bee requested
+	HeadersRequested   *time.Time        // Time that headers were last requested
+	StartHeight        int               // Height of start block (to start pulling full blocks)
+	blocksRequested    []*requestedBlock // Blocks that have been requested
+	blocksToRequest    []chainhash.Hash  // Blocks that need to be requested
+	PendingSync        bool              // The peer has notified us of all blocks. Now we just have to process to catch up.
+	restartCount       int               // Number of restarts since last clear
 	mutex              sync.Mutex
 }
 
@@ -41,7 +41,7 @@ func NewState() *State {
 		MemPoolRequested:   false,
 		HeadersRequested:   nil,
 		StartHeight:        -1,
-		blocksRequested:    make([]RequestedBlock, 0, maxRequestedBlocks),
+		blocksRequested:    make([]*requestedBlock, 0, maxRequestedBlocks),
 		blocksToRequest:    make([]chainhash.Hash, 0, 2000),
 		PendingSync:        false,
 		restartCount:       0,

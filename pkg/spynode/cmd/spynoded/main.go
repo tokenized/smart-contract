@@ -35,7 +35,7 @@ func main() {
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.AddFile("./tmp/main.log")
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.Debug
+	//logConfig.Main.MinLevel = logger.Debug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	ctx := logger.ContextWithLogConfig(context.Background(), logConfig)
 
@@ -146,7 +146,7 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil {
-			logger.Log(ctx, logger.Fatal, "Error starting server: %v", err)
+			logger.Log(ctx, logger.Fatal, "Server failure : %s", err.Error())
 		}
 
 	case <-osSignals:
@@ -154,7 +154,7 @@ func main() {
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Log(ctx, logger.Fatal, "Could not stop spynode server: %v", err)
+			logger.Log(ctx, logger.Fatal, "Failed to stop spynode server: %s", err.Error())
 		}
 	}
 }

@@ -40,56 +40,183 @@ func NewBlockHandler(state *data.State, memPool *data.MemPool, blockRepo *storag
 
 // Handle implements the Handler interface for a block handler.
 func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
-	msg, ok := m.(*wire.MsgBlock)
+	message, ok := m.(*wire.MsgBlock)
 	if !ok {
 		return nil, errors.New("Could not assert as *wire.MsgBlock")
 	}
 
-	hash := msg.BlockHash()
-	handler.state.RemoveBlockRequest(&hash) // Remove from requested
-
-	// If we already have this block, we don't need to ask for more
-	if handler.blocks.Contains(hash) {
-		height, _ := handler.blocks.Height(&hash)
-		return nil, errors.New(fmt.Sprintf("Already have block (%d) : %s", height, hash))
+	receivedHash := message.BlockHash()
+	logger.Log(ctx, logger.Debug, "Received block : %s", receivedHash)
+	if !handler.state.AddBlock(&receivedHash, message) {
+		logger.Log(ctx, logger.Warn, "Block not requested : %s", receivedHash)
+		if message.Header.PrevBlock == *handler.blocks.LastHash() {
+			if !handler.state.AddNewBlock(&receivedHash, message) {
+				return nil, nil
+			}
+		} else {
+			return nil, nil
+		}
 	}
 
-	if msg.Header.PrevBlock != *handler.blocks.LastHash() {
-		// Ignore this as it can happen when there is a reorg.
-		return nil, nil // Unknown or out of order block
-	}
-
-	// Validate
 	var err error
 	var valid bool
-	valid, err = validateMerkleHash(ctx, msg)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to validate merkle hash")
-	}
-	if !valid {
-		return nil, errors.New(fmt.Sprintf("Invalid merkle hash for block %s", hash))
-	}
+	for {
+		block := handler.state.NextBlock()
 
-	// Add to repo
-	if err = handler.blocks.Add(ctx, hash); err != nil {
-		return nil, err
-	}
+		if block == nil {
+			break // No more blocks available to process
+		}
 
-	// If we are in sync we can save after every block
-	if handler.state.IsInSync {
-		handler.blocks.Save(ctx)
+		hash := block.BlockHash()
+
+		// If we already have this block, we don't need to ask for more
+		if handler.blocks.Contains(hash) {
+			height, _ := handler.blocks.Height(&hash)
+			logger.Log(ctx, logger.Warn, "Already have block (%d) : %s", height, hash)
+			return nil, nil
+		}
+
+		if block.Header.PrevBlock != *handler.blocks.LastHash() {
+			// Ignore this as it can happen when there is a reorg.
+			logger.Log(ctx, logger.Warn, "Not next block : %s", hash)
+			logger.Log(ctx, logger.Warn, "Previous hash : %s", block.Header.PrevBlock)
+			return nil, nil // Unknown or out of order block
+		}
+
+		// Validate
+		valid, err = validateMerkleHash(ctx, block)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to validate merkle hash")
+		}
+		if !valid {
+			return nil, errors.New(fmt.Sprintf("Invalid merkle hash for block %s", hash))
+		}
+
+		// Add to repo
+		if err = handler.blocks.Add(ctx, hash); err != nil {
+			return nil, err
+		}
+
+		// If we are in sync we can save after every block
+		if handler.state.IsInSync {
+			handler.blocks.Save(ctx)
+		}
+
+		// Get unconfirmed "relevant" txs
+		var unconfirmed []chainhash.Hash
+		// This locks the tx repo so that propagated txs don't interfere while a block is being
+		//   processed.
+		unconfirmed, err = handler.txs.GetBlock(ctx, -1)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
+		}
+
+		// Send block notification
+		var removed bool = false
+		relevant := make([]chainhash.Hash, 0)
+		height := handler.blocks.LastHeight()
+		blockMessage := BlockMessage{Hash: hash, Height: height}
+		for _, listener := range handler.listeners {
+			if err = listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
+				handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+				return nil, err
+			}
+		}
+
+		// Notify Tx for block and tx listeners
+		var hashes []chainhash.Hash
+		hashes, err = block.TxHashes()
+		if err != nil {
+			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+			return nil, errors.Wrap(err, "Failed to get block tx hashes")
+		}
+
+		logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
+		for i, txHash := range hashes {
+			// Remove from unconfirmed. Only matching are in unconfirmed.
+			removed, unconfirmed = removeHash(&txHash, unconfirmed)
+
+			// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
+			// Or if it isn't in the mempool (not sent to listener yet).
+			marked := false
+			if !removed { // Full tx hasn't been sent to listener yet
+				if matchesFilter(ctx, block.Transactions[i], handler.txFilters) {
+					var mark bool
+					for _, listener := range handler.listeners {
+						if mark, err = listener.HandleTx(ctx, block.Transactions[i]); err != nil {
+							handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+							return nil, err
+						}
+						if mark {
+							marked = true
+						}
+					}
+					if marked {
+						relevant = append(relevant, txHash)
+					}
+				}
+			}
+
+			if handler.state.IsInSync && !handler.memPool.RemoveTransaction(&txHash) {
+				// Transaction wasn't in the mempool.
+				// Check for transactions in the mempool with conflicting inputs (double spends).
+				if conflicting := handler.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
+					for _, hash := range conflicting {
+						if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
+							for _, listener := range handler.listeners {
+								if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
+									handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+									return nil, err
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if marked || removed {
+				// Notify of confirm
+				for _, listener := range handler.listeners {
+					if err = listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
+						handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+						return nil, err
+					}
+				}
+			}
+		}
+
+		// Perform any block cleanup
+		err = handler.blockProcessor.ProcessBlock(ctx, block)
+		if err != nil {
+			logger.Log(ctx, logger.Debug, "Failed clean up after block : %s", hash)
+			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+			return nil, err
+		}
+
+		if !handler.state.IsInSync {
+			if handler.state.PendingSync && handler.state.BlockRequestsEmpty() {
+				handler.state.IsInSync = true
+				logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
+			}
+		}
+
+		logger.Log(ctx, logger.Debug, "Finalizing block : %s", hash)
+		if err := handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height); err != nil {
+			return nil, err
+		}
 	}
 
 	// Request more blocks
 	response := []wire.Message{}
 	getBlocks := wire.NewMsgGetData() // Block request message
 
-	for { // This should probably never loop more than once
-		requestHash, _ := handler.state.GetNextBlockToRequest(&hash)
+	for {
+		requestHash, _ := handler.state.GetNextBlockToRequest()
 		if requestHash == nil {
 			break
 		}
 
+		logger.Log(ctx, logger.Debug, "Requesting block : %s", requestHash)
 		getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, requestHash))
 		if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 			// Start new get data (block request) message
@@ -103,104 +230,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		response = append(response, getBlocks)
 	}
 
-	// Get unconfirmed "relevant" txs
-	var unconfirmed []chainhash.Hash
-	// This locks the tx repo so that propagated txs don't interfere while a block is being
-	//   processed.
-	unconfirmed, err = handler.txs.GetBlock(ctx, -1)
-	if err != nil {
-		return response, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
-	}
-
-	// Send block notification
-	var removed bool = false
-	relevant := make([]chainhash.Hash, 0)
-	height := handler.blocks.LastHeight()
-	blockMessage := BlockMessage{Hash: hash, Height: height}
-	for _, listener := range handler.listeners {
-		if err = listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage); err != nil {
-			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-			return response, err
-		}
-	}
-
-	// Notify Tx for block and tx listeners
-	var hashes []chainhash.Hash
-	hashes, err = msg.TxHashes()
-	if err != nil {
-		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-		return response, errors.Wrap(err, "Failed to get block tx hashes")
-	}
-	logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
-	for i, txHash := range hashes {
-		// Remove from unconfirmed. Only matching are in unconfirmed.
-		removed, unconfirmed = removeHash(&txHash, unconfirmed)
-
-		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
-		// Or if it isn't in the mempool (not sent to listener yet).
-		marked := false
-		if !removed { // Full tx hasn't been sent to listener yet
-			if matchesFilter(ctx, msg.Transactions[i], handler.txFilters) {
-				var mark bool
-				for _, listener := range handler.listeners {
-					if mark, err = listener.HandleTx(ctx, msg.Transactions[i]); err != nil {
-						handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-						return response, err
-					}
-					if mark {
-						marked = true
-					}
-				}
-				if marked {
-					relevant = append(relevant, txHash)
-				}
-			}
-		}
-
-		if handler.state.IsInSync && !handler.memPool.RemoveTransaction(&txHash) {
-			// Transaction wasn't in the mempool.
-			// Check for transactions in the mempool with conflicting inputs (double spends).
-			if conflicting := handler.memPool.Conflicting(msg.Transactions[i]); len(conflicting) > 0 {
-				for _, hash := range conflicting {
-					if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
-						for _, listener := range handler.listeners {
-							if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
-								handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-								return response, err
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if marked || removed {
-			// Notify of confirm
-			for _, listener := range handler.listeners {
-				if err = listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
-					handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-					return response, err
-				}
-			}
-		}
-	}
-
-	// Perform any block cleanup
-	err = handler.blockProcessor.ProcessBlock(ctx, msg)
-	if err != nil {
-		logger.Log(ctx, logger.Debug, "Failed clean up after block : %s", hash)
-		handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
-		return response, err
-	}
-
-	if !handler.state.IsInSync {
-		if handler.state.PendingSync && handler.state.BlockRequestsEmpty() {
-			handler.state.IsInSync = true
-			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
-		}
-	}
-	logger.Log(ctx, logger.Debug, "Finalizing block : %s", hash)
-	return response, handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height)
+	return response, nil
 }
 
 func containsHash(hash *chainhash.Hash, list []chainhash.Hash) bool {
