@@ -98,7 +98,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// If we are in sync we can save after every block
-		if handler.state.IsInSync {
+		if handler.state.IsReady() {
 			handler.blocks.Save(ctx)
 		}
 
@@ -157,7 +157,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 				}
 			}
 
-			if handler.state.IsInSync && !handler.memPool.RemoveTransaction(&txHash) {
+			if handler.state.IsReady() && !handler.memPool.RemoveTransaction(&txHash) {
 				// Transaction wasn't in the mempool.
 				// Check for transactions in the mempool with conflicting inputs (double spends).
 				if conflicting := handler.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
@@ -193,9 +193,9 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			return nil, err
 		}
 
-		if !handler.state.IsInSync {
-			if handler.state.PendingSync && handler.state.BlockRequestsEmpty() {
-				handler.state.IsInSync = true
+		if !handler.state.IsReady() {
+			if handler.state.IsPendingSync() && handler.state.BlockRequestsEmpty() {
+				handler.state.SetInSync()
 				logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
 			}
 		}

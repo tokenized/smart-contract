@@ -103,8 +103,8 @@ func (node *Node) load(ctx context.Context) error {
 	logger.Log(ctx, logger.Info, "Loaded blocks to height %d", node.blocks.LastHeight())
 	startHeight, exists := node.blocks.Height(&node.config.StartHash)
 	if exists {
-		node.state.StartHeight = startHeight
-		logger.Log(ctx, logger.Info, "Start block height %d", node.state.StartHeight)
+		node.state.SetStartHeight(startHeight)
+		logger.Log(ctx, logger.Info, "Start block height %d", startHeight)
 	} else {
 		logger.Log(ctx, logger.Info, "Start block not found yet")
 	}
@@ -124,7 +124,9 @@ func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 
 	defer func() {
+		node.lock.Lock()
 		node.stopped = true
+		node.lock.Unlock()
 		logger.Log(ctx, logger.Verbose, "Stopped")
 	}()
 
@@ -200,11 +202,27 @@ func (node *Node) Run(ctx context.Context) error {
 
 		logger.Log(ctx, logger.Verbose, "Restarting")
 		node.needsRestart = false
+		node.lock.Lock()
 		node.stopping = false
+		node.lock.Unlock()
 		node.state.Reset()
 	}
 
 	return err
+}
+
+func (node *Node) isStopped() bool {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	return node.stopped
+}
+
+func (node *Node) isStopping() bool {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	return node.stopping
 }
 
 // Stop closes the connection and causes Run() to return.
@@ -212,7 +230,7 @@ func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	node.hardStop = true
 	err := node.requestStop(ctx)
-	for !node.stopped {
+	for !node.isStopped() {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return err
@@ -235,7 +253,7 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash())
 
-	if node.stopping { // TODO Resolve issue when node is restarting
+	if node.isStopping() { // TODO Resolve issue when node is restarting
 		return errors.New("Node inactive")
 	}
 
@@ -280,11 +298,11 @@ func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) sendOutgoing(ctx context.Context) error {
-	for !node.stopping {
+	for !node.isStopping() {
 		// Wait for outgoing message on channel
 		msg, ok := <-node.outgoing
 
-		if !ok || node.stopping {
+		if !ok || node.isStopping() {
 			break
 		}
 
@@ -298,7 +316,7 @@ func (node *Node) sendOutgoing(ctx context.Context) error {
 
 // handleMessage Processes an incoming message
 func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
-	if node.stopping {
+	if node.isStopping() {
 		return nil
 	}
 
@@ -352,8 +370,7 @@ func (node *Node) connect(ctx context.Context) error {
 	}
 
 	node.connection = conn
-	now := time.Now()
-	node.state.ConnectedTime = &now
+	node.state.MarkConnected()
 	return nil
 }
 
@@ -362,7 +379,7 @@ func (node *Node) connect(ctx context.Context) error {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) monitorIncoming(ctx context.Context) {
-	for !node.stopping {
+	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
 			logger.Log(ctx, logger.Warn, "Check failed : %s", err.Error())
 			node.requestStop(ctx)
@@ -370,7 +387,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		if node.stopping {
+		if node.isStopping() {
 			break
 		}
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, MainNetBch)
@@ -395,7 +412,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 }
 
 func (node *Node) restart(ctx context.Context) {
-	if node.stopping {
+	if node.isStopping() {
 		return
 	}
 	node.needsRestart = true
@@ -414,55 +431,54 @@ func (node *Node) queueOutgoing(msg wire.Message) bool {
 
 // check checks the state of spynode and performs state related actions.
 func (node *Node) check(ctx context.Context) error {
-	if !node.state.VersionReceived {
+	if !node.state.VersionReceived() {
 		return nil // Still performing handshake
 	}
 
-	if !node.state.HandshakeComplete {
+	if !node.state.HandshakeComplete() {
 		// Send header request to kick off sync
-		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 0, 50)
+		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion(), node.blocks, 0, 50)
 		if err != nil {
 			return err
 		}
 
 		if node.queueOutgoing(headerRequest) {
 			logger.Log(ctx, logger.Debug, "Requesting headers")
-			now := time.Now()
-			node.state.HeadersRequested = &now
-			node.state.HandshakeComplete = true
+			node.state.MarkHeadersRequested()
+			node.state.SetHandshakeComplete()
 		}
 	}
 
 	// Check sync
-	if node.state.IsInSync {
-		if !node.state.SentSendHeaders {
+	if node.state.IsReady() {
+		if !node.state.SentSendHeaders() {
 			// Send sendheaders message to get headers instead of block inventories.
 			sendheaders := wire.NewMsgSendHeaders()
 			if node.queueOutgoing(sendheaders) {
-				node.state.SentSendHeaders = true
+				node.state.SetSentSendHeaders()
 			}
 		}
 
-		if !node.state.AddressesRequested {
+		if !node.state.AddressesRequested() {
 			addresses := wire.NewMsgGetAddr()
 			if node.queueOutgoing(addresses) {
-				node.state.AddressesRequested = true
+				node.state.SetAddressesRequested()
 			}
 		}
 
-		if !node.state.MemPoolRequested {
+		if !node.state.MemPoolRequested() {
 			// Send mempool request
 			// This tells the peer to send inventory of all tx in their mempool.
 			mempool := wire.NewMsgMemPool()
 			if node.queueOutgoing(mempool) {
-				node.state.MemPoolRequested = true
+				node.state.SetMemPoolRequested()
 			}
-		} else if !node.state.NotifiedSync {
+		} else if !node.state.NotifiedSync() {
 			// TODO Add method to wait for mempool to sync
 			for _, listener := range node.listeners {
 				listener.HandleInSync(ctx)
 			}
-			node.state.NotifiedSync = true
+			node.state.SetNotifiedSync()
 		}
 
 		responses, err := node.txTracker.Check(ctx, node.memPool)
@@ -475,17 +491,16 @@ func (node *Node) check(ctx context.Context) error {
 				break
 			}
 		}
-	} else if node.state.HeadersRequested == nil && node.state.TotalBlockRequestCount() < 5 {
+	} else if node.state.HeadersRequested() == nil && node.state.TotalBlockRequestCount() < 5 {
 		// Request more headers
-		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, 1, 50)
+		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion(), node.blocks, 1, 50)
 		if err != nil {
 			return err
 		}
 
 		if !node.queueOutgoing(headerRequest) {
 			logger.Log(ctx, logger.Debug, "Requesting headers")
-			now := time.Now()
-			node.state.HeadersRequested = &now
+			node.state.MarkHeadersRequested()
 		}
 	}
 
@@ -497,8 +512,8 @@ func (node *Node) check(ctx context.Context) error {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) monitorRequestTimeouts(ctx context.Context) {
-	for !node.stopping {
-		sleepUntilStop(10, &node.stopping) // Only check every 10 seconds
+	for !node.isStopping() {
+		node.sleepUntilStop(10) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
 			logger.Log(ctx, logger.Warn, err.Error())
@@ -514,10 +529,10 @@ func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) checkTxDelays(ctx context.Context) error {
-	for !node.stopping {
+	for !node.isStopping() {
 		time.Sleep(200 * time.Millisecond)
 
-		if !node.state.IsInSync {
+		if !node.state.IsReady() {
 			continue
 		}
 
@@ -550,12 +565,12 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 // in a goroutine.
 func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	for !node.stopping {
+	for !node.isStopping() {
 		node.untrustedLock.Lock()
 
-		if !node.state.IsInSync {
+		if !node.state.IsReady() {
 			node.untrustedLock.Unlock()
-			sleepUntilStop(5, &node.stopping)
+			node.sleepUntilStop(5)
 			continue
 		}
 
@@ -563,7 +578,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		for {
 			removed := false
 			for i, untrusted := range node.untrustedNodes {
-				if !untrusted.Active {
+				if !untrusted.IsActive() {
 					// Remove
 					node.untrustedNodes = append(node.untrustedNodes[:i], node.untrustedNodes[i+1:]...)
 					removed = true
@@ -579,7 +594,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		count := len(node.untrustedNodes)
 		verifiedCount := 0
 		for _, untrusted := range node.untrustedNodes {
-			if untrusted.state.Verified {
+			if untrusted.state.IsReady() {
 				verifiedCount++
 			}
 		}
@@ -592,7 +607,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 		if count < node.config.UntrustedCount/2 {
 			// Try for peers with a good score
-			for !node.stopping && count < node.config.UntrustedCount/2 {
+			for !node.isStopping() && count < node.config.UntrustedCount/2 {
 				if node.addUntrustedNode(ctx, &wg, 5) {
 					count++
 				} else {
@@ -602,7 +617,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		}
 
 		// Try for peers with a non-negative score
-		for !node.stopping && count < node.config.UntrustedCount {
+		for !node.isStopping() && count < node.config.UntrustedCount {
 			if node.addUntrustedNode(ctx, &wg, 0) {
 				count++
 			} else {
@@ -612,11 +627,11 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 		node.peers.Save(ctx)
 
-		if node.stopping {
+		if node.isStopping() {
 			break
 		}
 
-		sleepUntilStop(5, &node.stopping) // Only check every 5 seconds
+		node.sleepUntilStop(5) // Only check every 5 seconds
 	}
 
 	// Stop all
@@ -643,7 +658,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var address string
 	for {
-		if node.stopping || len(peers) == 0 {
+		if node.isStopping() || len(peers) == 0 {
 			return false
 		}
 
@@ -699,9 +714,9 @@ func (node *Node) checkAddress(ctx context.Context, address string) bool {
 	return true
 }
 
-func sleepUntilStop(seconds int, stop *bool) {
+func (node *Node) sleepUntilStop(seconds int) {
 	for i := 0; i < seconds; i++ {
-		if *stop {
+		if node.isStopping() {
 			break
 		}
 		time.Sleep(time.Second)

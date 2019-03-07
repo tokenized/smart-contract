@@ -50,17 +50,17 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		lastHash = handler.blocks.LastHash()
 	}
 
-	if !handler.state.IsInSync && (len(message.Headers) == 0 || (len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash)) {
+	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash)) {
 		logger.Log(ctx, logger.Info, "Headers in sync at height %d", handler.blocks.LastHeight())
-		handler.state.PendingSync = true // We are in sync
-		if handler.state.StartHeight == -1 {
-			handler.state.IsInSync = true
+		handler.state.SetPendingSync() // We are in sync
+		if handler.state.StartHeight() == -1 {
+			handler.state.SetInSync()
 			logger.Log(ctx, logger.Error, "Headers in sync before start block found")
 		} else if handler.state.BlockRequestsEmpty() {
-			handler.state.IsInSync = true
+			handler.state.SetInSync()
 			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
 		}
-		handler.state.HeadersRequested = nil
+		handler.state.ClearHeadersRequested()
 		handler.blocks.Save(ctx) // Save when we get in sync
 		return response, nil
 	}
@@ -190,16 +190,18 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		response = append(response, getBlocks)
 	}
 
-	handler.state.HeadersRequested = nil
+	handler.state.ClearHeadersRequested()
 	return response, nil
 }
 
 func (handler HeadersHandler) addHeader(ctx context.Context, hash *chainhash.Hash) (bool, error) {
-	if handler.state.StartHeight == -1 {
+	startHeight := handler.state.StartHeight()
+	if startHeight == -1 {
 		// Check if it is the start block
 		if handler.config.StartHash == *hash {
-			handler.state.StartHeight = handler.blocks.LastHeight() + 1
-			logger.Log(ctx, logger.Verbose, "Found start block at height %d", handler.state.StartHeight)
+			startHeight = handler.blocks.LastHeight() + 1
+			handler.state.SetStartHeight(startHeight)
+			logger.Log(ctx, logger.Verbose, "Found start block at height %d", startHeight)
 		} else {
 			err := handler.blocks.Add(ctx, *hash) // Just add hashes before the start block
 			if err != nil {

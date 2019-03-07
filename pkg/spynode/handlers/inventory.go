@@ -34,7 +34,7 @@ func (handler *InvHandler) Handle(ctx context.Context, m wire.Message) ([]wire.M
 	}
 
 	// We don't care about tx announcments until we are in sync
-	if !handler.state.IsInSync {
+	if !handler.state.IsReady() {
 		return nil, nil
 	}
 

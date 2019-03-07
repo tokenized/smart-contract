@@ -16,26 +16,17 @@ const (
 	maxRestarts = 5 // TODO This needs to stop the node
 )
 
-func (state *State) LogRestart() {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
-
-	state.restartCount++
-}
-
 func (state *State) CheckTimeouts() error {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	now := time.Now()
 
-	connected := state.ConnectedTime // Copy because updates are outside of mutex
-	if !state.HandshakeComplete && connected != nil && now.Sub(*connected).Seconds() > handshakeTimeout {
+	if !state.handshakeComplete && state.connectedTime != nil && now.Sub(*state.connectedTime).Seconds() > handshakeTimeout {
 		return errors.New(fmt.Sprintf("Handshake took longer than %d seconds", handshakeTimeout))
 	}
 
-	headersRequested := state.HeadersRequested // Copy because updates are outside of mutex
-	if headersRequested != nil && now.Sub(*headersRequested).Seconds() > headerTimeout {
+	if state.headersRequested != nil && now.Sub(*state.headersRequested).Seconds() > headerTimeout {
 		return errors.New(fmt.Sprintf("Headers request took longer than %d seconds", headerTimeout))
 	}
 
@@ -46,7 +37,7 @@ func (state *State) CheckTimeouts() error {
 		}
 	}
 
-	if state.restartCount > 0 && now.Sub(*connected).Seconds() > 60 {
+	if state.restartCount > 0 && state.connectedTime != nil && now.Sub(*state.connectedTime).Seconds() > 60 {
 		state.restartCount = 0 // Clear restart count
 	}
 
@@ -58,18 +49,16 @@ func (state *State) CheckTimeouts() error {
 }
 
 func (state *UntrustedState) CheckTimeouts() error {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	now := time.Now()
 
-	connected := state.ConnectedTime // Copy because updates are outside of mutex
-	if !state.HandshakeComplete && connected != nil && now.Sub(*connected).Seconds() > handshakeTimeout {
+	if !state.handshakeComplete && state.connectedTime != nil && now.Sub(*state.connectedTime).Seconds() > handshakeTimeout {
 		return errors.New(fmt.Sprintf("Handshake took longer than %d seconds", handshakeTimeout))
 	}
 
-	headersRequested := state.HeadersRequested // Copy because updates are outside of mutex
-	if headersRequested != nil && now.Sub(*headersRequested).Seconds() > headerTimeout {
+	if state.headersRequested != nil && now.Sub(*state.headersRequested).Seconds() > headerTimeout {
 		return errors.New(fmt.Sprintf("Headers request took longer than %d seconds", headerTimeout))
 	}
 

@@ -39,7 +39,7 @@ func (handler *UntrustedHeadersHandler) Handle(ctx context.Context, m wire.Messa
 		return nil, errors.New("Could not assert as *wire.Msginv")
 	}
 
-	if handler.state.Verified {
+	if handler.state.IsReady() {
 		return nil, nil
 	}
 
@@ -71,7 +71,7 @@ func (handler *UntrustedHeadersHandler) Handle(ctx context.Context, m wire.Messa
 		previousHash = header.BlockHash()
 	}
 
-	handler.state.HeadersRequested = nil
-	handler.state.Verified = true
+	handler.state.ClearHeadersRequested()
+	handler.state.SetVerified()
 	return nil, nil
 }

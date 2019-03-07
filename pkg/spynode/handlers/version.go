@@ -26,7 +26,7 @@ func (handler *VersionHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		return nil, errors.New("Could not assert as *wire.MsgVersion")
 	}
 
-	handler.state.VersionReceived = true
+	handler.state.SetVersionReceived()
 
 	// Return a version acknowledge
 	// TODO Verify the version is compatible

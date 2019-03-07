@@ -34,7 +34,7 @@ func (handler *UntrustedInvHandler) Handle(ctx context.Context, m wire.Message) 
 	}
 
 	// We don't care about tx announcments until the peer is verified
-	if !handler.state.Verified {
+	if !handler.state.IsReady() {
 		return nil, nil
 	}
 

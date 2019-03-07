@@ -19,8 +19,8 @@ type requestedBlock struct {
 }
 
 func (state *State) BlockIsRequested(hash *chainhash.Hash) bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	for _, item := range state.blocksRequested {
 		if item.hash == *hash {
@@ -31,8 +31,8 @@ func (state *State) BlockIsRequested(hash *chainhash.Hash) bool {
 }
 
 func (state *State) BlockIsToBeRequested(hash *chainhash.Hash) bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	for _, item := range state.blocksToRequest {
 		if item == *hash {
@@ -46,8 +46,8 @@ func (state *State) BlockIsToBeRequested(hash *chainhash.Hash) bool {
 // Returns true if the request should be made now.
 // Returns false if the request is queued for later.
 func (state *State) AddBlockRequest(hash *chainhash.Hash) bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksRequested) >= maxRequestedBlocks {
 		state.blocksToRequest = append(state.blocksToRequest, *hash)
@@ -66,8 +66,8 @@ func (state *State) AddBlockRequest(hash *chainhash.Hash) bool {
 
 // AddBlock adds the block message to the queued block request for later processing.
 func (state *State) AddBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	for _, request := range state.blocksRequested {
 		if request.hash == *hash {
@@ -81,8 +81,8 @@ func (state *State) AddBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
 
 // AddNewBlock adds a new request with a block that was not requested.
 func (state *State) AddNewBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksRequested) > 0 || len(state.blocksRequested) > 0 {
 		return false
@@ -99,8 +99,8 @@ func (state *State) AddNewBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool
 }
 
 func (state *State) NextBlock() *wire.MsgBlock {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksRequested) == 0 || state.blocksRequested[0].block == nil {
 		return nil
@@ -112,8 +112,8 @@ func (state *State) NextBlock() *wire.MsgBlock {
 }
 
 func (state *State) GetNextBlockToRequest() (*chainhash.Hash, int) {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksToRequest) == 0 || len(state.blocksRequested) >= maxRequestedBlocks {
 		return nil, -1
@@ -131,8 +131,8 @@ func (state *State) GetNextBlockToRequest() (*chainhash.Hash, int) {
 }
 
 func (state *State) RemoveBlockRequest(hash *chainhash.Hash) {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksRequested) == 0 {
 		return
@@ -144,36 +144,36 @@ func (state *State) RemoveBlockRequest(hash *chainhash.Hash) {
 }
 
 func (state *State) BlocksRequestedCount() int {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	return len(state.blocksRequested)
 }
 
 func (state *State) BlocksToRequestCount() int {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	return len(state.blocksToRequest)
 }
 
 func (state *State) TotalBlockRequestCount() int {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	return len(state.blocksRequested) + len(state.blocksToRequest)
 }
 
 func (state *State) BlockRequestsEmpty() bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	return len(state.blocksToRequest) == 0 && len(state.blocksRequested) == 0
 }
 
 func (state *State) LastHash() *chainhash.Hash {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	if len(state.blocksToRequest) > 0 {
 		return &state.blocksToRequest[len(state.blocksToRequest)-1]

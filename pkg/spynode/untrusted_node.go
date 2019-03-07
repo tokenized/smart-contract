@@ -33,7 +33,7 @@ type UntrustedNode struct {
 	listeners  []handlers.Listener
 	txFilters  []handlers.TxFilter
 	stopping   bool
-	Active     bool // Set to false when connection is closed
+	active     bool // Set to false when connection is closed
 	lock       sync.Mutex
 }
 
@@ -51,7 +51,7 @@ func NewUntrustedNode(address string, config data.Config, store storage.Storage,
 		listeners: listeners,
 		txFilters: txFilters,
 		stopping:  false,
-		Active:    false,
+		active:    false,
 	}
 	return &result
 }
@@ -73,11 +73,14 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 		logger.Log(ctx, logger.Debug, "Connection failed to %s : %s", node.address, err.Error())
 		return err
 	}
+
+	node.active = true
 	node.lock.Unlock()
 
-	node.Active = true
 	defer func() {
-		node.Active = false
+		node.lock.Lock()
+		node.active = false
+		node.lock.Unlock()
 	}()
 
 	// Queue version message to start handshake
@@ -108,6 +111,20 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 	return nil
+}
+
+func (node *UntrustedNode) IsActive() bool {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	return node.active
+}
+
+func (node *UntrustedNode) isStopping() bool {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	return node.stopping
 }
 
 func (node *UntrustedNode) Stop(ctx context.Context) error {
@@ -148,8 +165,7 @@ func (node *UntrustedNode) connect() error {
 	}
 
 	node.connection = conn
-	now := time.Now()
-	node.state.ConnectedTime = &now
+	node.state.MarkConnected()
 	return nil
 }
 
@@ -158,14 +174,14 @@ func (node *UntrustedNode) connect() error {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
-	for !node.stopping {
+	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
 			logger.Log(ctx, logger.Debug, "Check failed : %s", err.Error())
 			node.Stop(ctx)
 			break
 		}
 
-		if node.stopping {
+		if node.isStopping() {
 			break
 		}
 
@@ -195,46 +211,45 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 // Check state
 func (node *UntrustedNode) check(ctx context.Context) error {
-	if !node.state.VersionReceived {
+	if !node.state.VersionReceived() {
 		return nil // Still performing handshake
 	}
 
-	if !node.state.HandshakeComplete {
+	if !node.state.HandshakeComplete() {
 		// Send header request to verify chain
-		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion, node.blocks, handlers.UntrustedHeaderDelta, 10)
+		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion(), node.blocks, handlers.UntrustedHeaderDelta, 10)
 		if err != nil {
 			return err
 		}
 		if node.queueOutgoing(headerRequest) {
-			now := time.Now()
-			node.state.HeadersRequested = &now
-			node.state.HandshakeComplete = true
+			node.state.MarkHeadersRequested()
+			node.state.SetHandshakeComplete()
 		}
 	}
 
 	// Check sync
-	if !node.state.Verified {
+	if !node.state.IsReady() {
 		return nil
 	}
 
-	if !node.state.ScoreUpdated {
+	if !node.state.ScoreUpdated() {
 		node.peers.UpdateScore(ctx, node.address, 5)
-		node.state.ScoreUpdated = true
+		node.state.SetScoreUpdated()
 	}
 
-	if !node.state.AddressesRequested {
+	if !node.state.AddressesRequested() {
 		addresses := wire.NewMsgGetAddr()
 		if node.queueOutgoing(addresses) {
-			node.state.AddressesRequested = true
+			node.state.SetAddressesRequested()
 		}
 	}
 
-	if !node.state.MemPoolRequested {
+	if !node.state.MemPoolRequested() {
 		// Send mempool request
 		// This tells the peer to send inventory of all tx in their mempool.
 		mempool := wire.NewMsgMemPool()
 		if node.queueOutgoing(mempool) {
-			node.state.MemPoolRequested = true
+			node.state.SetMemPoolRequested()
 		}
 	}
 
@@ -254,9 +269,9 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 
 // Monitor for request timeouts
 func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
-	for !node.stopping {
-		sleepUntilStop(10, &node.stopping) // Only check every 10 seconds
-		if node.stopping {
+	for !node.isStopping() {
+		node.sleepUntilStop(10) // Only check every 10 seconds
+		if node.isStopping() {
 			break
 		}
 
@@ -274,11 +289,11 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
-	for !node.stopping {
+	for !node.isStopping() {
 		// Wait for outgoing message on channel
 		msg, ok := <-node.outgoing
 
-		if !ok || node.stopping {
+		if !ok || node.isStopping() {
 			break
 		}
 
@@ -292,7 +307,7 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 
 // handleMessage Processes an incoming message
 func (node *UntrustedNode) handleMessage(ctx context.Context, msg wire.Message) error {
-	if node.stopping {
+	if node.isStopping() {
 		return nil
 	}
 
@@ -325,4 +340,13 @@ func (node *UntrustedNode) queueOutgoing(msg wire.Message) bool {
 	}
 	node.outgoing <- msg
 	return true
+}
+
+func (node *UntrustedNode) sleepUntilStop(seconds int) {
+	for i := 0; i < seconds; i++ {
+		if node.isStopping() {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 }

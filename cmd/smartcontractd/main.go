@@ -57,6 +57,7 @@ func main() {
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	logConfig.Main.Format |= logger.IncludeSystem
+	//logConfig.Main.MinLevel = logger.Debug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
 
