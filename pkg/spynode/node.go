@@ -9,13 +9,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -43,6 +44,7 @@ type Node struct {
 	txFilters      []handlers.TxFilter                // Determines if a tx should be seen by listeners
 	untrustedNodes []*UntrustedNode                   // Randomized peer connections to monitor for double spends
 	addresses      map[string]time.Time               // Recently used peer addresses
+	txChannel      chan *wire.MsgTx                   // Channel for directly handled txs so they don't lock the calling thread
 	needsRestart   bool
 	hardStop       bool
 	stopping       bool
@@ -72,6 +74,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		hardStop:       false,
 		stopping:       false,
 		stopped:        false,
+		txChannel:      nil,
 	}
 	return &result
 }
@@ -150,13 +153,14 @@ func (node *Node) Run(ctx context.Context) error {
 		initial = false
 
 		node.outgoing = make(chan wire.Message, 100)
+		node.txChannel = make(chan *wire.MsgTx, 100)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
 
 		wg := sync.WaitGroup{}
-		wg.Add(5)
+		wg.Add(6)
 
 		go func() {
 			defer wg.Done()
@@ -178,15 +182,26 @@ func (node *Node) Run(ctx context.Context) error {
 
 		go func() {
 			defer wg.Done()
-			node.checkTxDelays(ctx)
-			logger.Log(ctx, logger.Debug, "Check tx delays finished")
+			node.processTxs(ctx)
+			logger.Log(ctx, logger.Debug, "Process txs finished")
 		}()
 
 		go func() {
 			defer wg.Done()
-			node.monitorUntrustedNodes(ctx)
-			logger.Log(ctx, logger.Debug, "Monitor untrusted finished")
+			node.checkTxDelays(ctx)
+			logger.Log(ctx, logger.Debug, "Check tx delays finished")
 		}()
+
+		if node.config.UntrustedCount == 0 {
+			wg.Done()
+			logger.Log(ctx, logger.Debug, "Monitor untrusted not started")
+		} else {
+			go func() {
+				defer wg.Done()
+				node.monitorUntrustedNodes(ctx)
+				logger.Log(ctx, logger.Debug, "Monitor untrusted finished")
+			}()
+		}
 
 		// Block until goroutines finish as a result of Stop()
 		wg.Wait()
@@ -245,6 +260,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	}
 	node.stopping = true
 	close(node.outgoing)
+	close(node.txChannel)
 	return node.connection.Close()
 }
 
@@ -273,8 +289,6 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
-// TODO Figure out how to handle this if it gets called while a block is being processed and the
-//   mempool or tx repo are locked.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -283,14 +297,33 @@ func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
 		return errors.New("Node inactive")
 	}
 
-	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	node.txChannel <- tx
+
+	return nil
+}
+
+// ProcessTxs pulls txs from the tx channel and processes them.
+func (node *Node) processTxs(ctx context.Context) error {
 	ctx = context.WithValue(ctx, handlers.DirectTxKey, true)
-	logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash())
-	err := node.handleMessage(ctx, tx)
-	if err != nil {
-		logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
+	for !node.isStopping() {
+		for len(node.txChannel) > 0 {
+			tx, ok := <-node.txChannel
+			if !ok {
+				break
+			}
+			logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash())
+			if err := node.handleMessage(ctx, tx); err != nil {
+				logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
+			}
+		}
+
+		if node.isStopping() {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
-	return err
+
+	return nil
 }
 
 // sendOutgoing waits for and sends outgoing messages
