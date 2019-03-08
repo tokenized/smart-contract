@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"log"
-
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -11,9 +9,9 @@ import (
 )
 
 // API returns a handler for a set of routes for protocol actions.
-func API(log *log.Logger, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB) protomux.Handler {
+func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB) protomux.Handler {
 
-	app := node.New(log, masterWallet)
+	app := node.New(masterWallet)
 
 	// Register contract based events.
 	c := Contract{

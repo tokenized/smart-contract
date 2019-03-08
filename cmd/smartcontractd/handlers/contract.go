@@ -44,11 +44,11 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 
 	// The contract should not exist already
 	if ct != nil {
-		logger.Warn(ctx, "%s : Contract already exists: %s\n", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
-	logger.Verbose(ctx, "%s : Accepting contract offer (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
+	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.NewContractFormation()
@@ -114,16 +114,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 
 	// Contract could not be found
 	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s\n", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.Qty > 0 && int(msg.RestrictedQty) < len(ct.Assets) {
-		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s\n", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
+
+	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
 
 	// Bump the revision
 	newRevision := ct.Revision + 1
@@ -187,7 +189,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 	contractAddr := rk.Address
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
+		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 		return err
 	}
 
@@ -213,10 +215,10 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		}
 
 		if err := contract.Create(ctx, dbConn, contractAddr.String(), &nc, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
+			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
-		logger.Verbose(ctx, "%s : Created contract (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
+		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -241,10 +243,10 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		}
 
 		if err := contract.Update(ctx, dbConn, contractAddr.String(), &uc, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed contract update (%s) : %s\n", v.TraceID, msg.ContractName, err.Error())
+			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
-		logger.Verbose(ctx, "%s : Updated contract (%s) : %s\n", v.TraceID, msg.ContractName, contractAddr.String())
+		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
 	}
 
 	return nil

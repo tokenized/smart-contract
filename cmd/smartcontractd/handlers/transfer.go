@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
@@ -43,19 +42,19 @@ func (t *Transfer) SendRequest(ctx context.Context, mux protomux.Handler, itx *i
 	assetID := string(msg.AssetID)
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve asset : %s\n", v.TraceID, assetID)
+		logger.Warn(ctx, "%s : Failed to retrieve asset : %s", v.TraceID, assetID)
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Warn(ctx, "%s : Asset not found : %s\n", v.TraceID, assetID)
+		logger.Warn(ctx, "%s : Asset not found : %s", v.TraceID, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Validate transaction
 	if len(itx.Outputs) < 2 {
-		logger.Warn(ctx, "%s : Not enough outputs : %s\n", v.TraceID, assetID)
+		logger.Warn(ctx, "%s : Not enough outputs : %s", v.TraceID, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeReceiverUnspecified)
 	}
 
@@ -65,23 +64,23 @@ func (t *Transfer) SendRequest(ctx context.Context, mux protomux.Handler, itx *i
 
 	// Cannot transfer to self
 	if party1Addr.String() == party2Addr.String() {
-		logger.Warn(ctx, "%s : Cannot transfer to self : party=%s asset=%s\n", v.TraceID, party1Addr, assetID)
+		logger.Warn(ctx, "%s : Cannot transfer to self : party=%s asset=%s", v.TraceID, party1Addr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeTransferSelf)
 	}
 
 	// Check available balance
 	if !asset.CheckBalance(ctx, as, party1Addr.String(), msg.TokenQty) {
-		logger.Warn(ctx, "%s : Insufficient funds %d : party=%s asset=%s\n", v.TraceID, msg.TokenQty, party1Addr, assetID)
+		logger.Warn(ctx, "%s : Insufficient funds %d : party=%s asset=%s", v.TraceID, msg.TokenQty, party1Addr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
 
 	// Check available unfrozen balance
 	if !asset.CheckBalanceFrozen(ctx, as, party1Addr.String(), msg.TokenQty, v.Now) {
-		logger.Warn(ctx, "%s : Frozen funds %d : party=%s asset=%s\n", v.TraceID, msg.TokenQty, party1Addr, assetID)
+		logger.Warn(ctx, "%s : Frozen funds %d : party=%s asset=%s", v.TraceID, msg.TokenQty, party1Addr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeFrozen)
 	}
 
-	logger.Info(ctx, "%s : Sending %d : %s %s\n", v.TraceID, msg.TokenQty, contractAddr.String(), string(msg.AssetID))
+	logger.Info(ctx, "%s : Sending tokens %d : %s %s", v.TraceID, msg.TokenQty, contractAddr.String(), string(msg.AssetID))
 
 	// Find balances
 	party1Balance := asset.GetBalance(ctx, as, party1Addr.String())
@@ -149,18 +148,18 @@ func (t *Transfer) ExchangeRequest(ctx context.Context, mux protomux.Handler, it
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Validate transaction
 	if len(itx.Inputs) < 2 {
-		log.Printf("%s : Not enough inputs: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Not enough inputs: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeReceiverUnspecified)
 	}
 
 	if len(itx.Outputs) < 3 {
-		log.Printf("%s : Not enough outputs: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Not enough outputs: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeReceiverUnspecified)
 	}
 
@@ -170,21 +169,23 @@ func (t *Transfer) ExchangeRequest(ctx context.Context, mux protomux.Handler, it
 
 	// Cannot transfer to self
 	if party1Addr.String() == party2Addr.String() {
-		log.Printf("%s : Cannot transfer to own self : contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, party1Addr)
+		logger.Warn(ctx, "%s : Cannot transfer to own self : contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, party1Addr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeTransferSelf)
 	}
 
 	// Check available balance
 	if !asset.CheckBalance(ctx, as, party1Addr.String(), msg.Party1TokenQty) {
-		log.Printf("%s : Insufficient funds: contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, party1Addr)
+		logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, party1Addr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
 
 	// Check available unfrozen balance
 	if !asset.CheckBalanceFrozen(ctx, as, party1Addr.String(), msg.Party1TokenQty, v.Now) {
-		log.Printf("%s : Frozen funds: contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, party1Addr)
+		logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, party1Addr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeFrozen)
 	}
+
+	logger.Info(ctx, "%s : Accepting exchange request : %s %s %d tokens\n", v.TraceID, contractAddr, assetID, msg.Party1TokenQty)
 
 	// Find balances
 	party1Balance := asset.GetBalance(ctx, as, party1Addr.String())
@@ -279,13 +280,13 @@ func (t *Transfer) SettlementResponse(ctx context.Context, mux protomux.Handler,
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s\n", v.TraceID, contractAddr, assetID)
 		return node.ErrNoResponse
 	}
 
 	// Validate transaction
 	if len(itx.Outputs) < 2 {
-		log.Printf("%s : Not enough outputs: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Not enough outputs: %s %s\n", v.TraceID, contractAddr, assetID)
 		return node.ErrNoResponse
 	}
 

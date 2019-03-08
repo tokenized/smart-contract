@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
@@ -14,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
 )
@@ -45,9 +45,10 @@ func (e *Enforcement) OrderRequest(ctx context.Context, mux protomux.Handler, it
 	case protocol.ComplianceActionConfiscation:
 		err = e.OrderConfiscateRequest(ctx, mux, itx, rk)
 	default:
-		log.Printf("%s : Unknown enforcement: %+v\n", v.TraceID, msg.ComplianceAction)
+		logger.Warn(ctx, "%s : Unknown enforcement: %s", v.TraceID, string(msg.ComplianceAction))
 	}
 
+	logger.Info(ctx, "%s : Order request %s", v.TraceID, string(msg.ComplianceAction))
 	return err
 }
 
@@ -75,23 +76,25 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, mux protomux.Handl
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Validate target address
 	targetAddr, err := btcutil.DecodeAddress(string(msg.TargetAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid target address: %+v %+v %+v\n", v.TraceID, contractAddr, assetID, msg.TargetAddress)
+		logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, msg.TargetAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Holdings check
 	_, ok = as.Holdings[targetAddr.String()]
 	if !ok {
-		log.Printf("%s : Holding not found: contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, targetAddr)
+		logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, targetAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
+
+	logger.Info(ctx, "%s : Freeze order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
 
 	// Freeze <- Order
 	freeze := protocol.NewFreeze()
@@ -148,23 +151,25 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, mux protomux.Handler
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Validate target address
 	targetAddr, err := btcutil.DecodeAddress(string(msg.TargetAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid target address: %+v %+v %+v\n", v.TraceID, contractAddr, assetID, msg.TargetAddress)
+		logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, msg.TargetAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Holdings check
 	_, ok = as.Holdings[targetAddr.String()]
 	if !ok {
-		log.Printf("%s : Holding not found: contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, targetAddr)
+		logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, targetAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
+
+	logger.Info(ctx, "%s : Thaw order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
 
 	// Thaw <- Order
 	thaw := protocol.NewThaw()
@@ -220,30 +225,32 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, mux protomux.H
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Validate target address
 	targetAddr, err := btcutil.DecodeAddress(string(msg.TargetAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid target address: %+v %+v %+v\n", v.TraceID, contractAddr, assetID, msg.TargetAddress)
+		logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, msg.TargetAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Validate deposit address
 	depositAddr, err := btcutil.DecodeAddress(string(msg.DepositAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid deposit address: %+v %+v %+v\n", v.TraceID, contractAddr, assetID, msg.TargetAddress)
+		logger.Warn(ctx, "%s : Invalid deposit address: %s %s %s", v.TraceID, contractAddr, assetID, msg.TargetAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Holdings check
 	_, ok = as.Holdings[targetAddr.String()]
 	if !ok {
-		log.Printf("%s : Holding not found: contract=%+v asset=%+v party=%+v\n", v.TraceID, contractAddr, assetID, targetAddr)
+		logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, assetID, targetAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
+
+	logger.Info(ctx, "%s : Confiscation order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
 
 	// Find balances
 	targetBalance := asset.GetBalance(ctx, as, targetAddr.String())
@@ -332,9 +339,11 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, mux protomux.Handler, 
 	}
 
 	if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
+		logger.Warn(ctx, "%s : Failed to update freeze : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 		return err
 	}
 
+	logger.Info(ctx, "%s : Froze : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 	return nil
 }
 
@@ -368,9 +377,11 @@ func (e *Enforcement) ThawResponse(ctx context.Context, mux protomux.Handler, it
 	}
 
 	if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
+		logger.Warn(ctx, "%s : Failed to update thaw : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 		return err
 	}
 
+	logger.Info(ctx, "%s : Thawed : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 	return nil
 }
 
@@ -398,13 +409,13 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, mux protomux.Han
 
 	// Asset could not be found
 	if as == nil {
-		log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.ErrNoResponse
 	}
 
 	// Validate transaction
 	if len(itx.Outputs) < 2 {
-		log.Printf("%s : Not enough outputs: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Not enough outputs: %s %s", v.TraceID, contractAddr, assetID)
 		return node.ErrNoResponse
 	}
 
@@ -423,9 +434,11 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, mux protomux.Han
 	}
 
 	if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
+		logger.Warn(ctx, "%s : Failed to update confiscation : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 		return err
 	}
 
+	logger.Info(ctx, "%s : Confiscated : %s %s %s", v.TraceID, contractAddr, assetID, party1PKH)
 	return nil
 }
 

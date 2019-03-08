@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
@@ -24,7 +25,10 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/pkg/rpcnode/logger"
+)
+
+const (
+	SubSystem = "RPCNode" // For logger
 )
 
 type RPCNode struct {
@@ -135,7 +139,8 @@ func (r RPCNode) SendRawTransaction(ctx context.Context,
 func (r RPCNode) GetTX(ctx context.Context,
 	id *chainhash.Hash) (*wire.MsgTx, error) {
 
-	defer logger.Elapsed(ctx, time.Now(), "RPCNode.GetTX")
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	defer logger.Elapsed(ctx, time.Now(), "GetTX")
 
 	raw, err := r.client.GetRawTransactionVerbose(id)
 	if err != nil {
@@ -160,15 +165,15 @@ func (r RPCNode) GetTX(ctx context.Context,
 func (r RPCNode) SendTX(ctx context.Context,
 	tx *wire.MsgTx) (*chainhash.Hash, error) {
 
-	defer logger.Elapsed(ctx, time.Now(), "RPCNode.SendTX")
-	logger := logger.NewLoggerFromContext(ctx).Sugar()
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	defer logger.Elapsed(ctx, time.Now(), "SendTX")
 
 	nx, err := r.txToBtcdTX(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Infof("Sending tx payload : %s", r.getRawPayload(nx))
+	logger.Debug(ctx, "Sending tx payload : %s", r.getRawPayload(nx))
 
 	return r.client.SendRawTransaction(nx, false)
 }

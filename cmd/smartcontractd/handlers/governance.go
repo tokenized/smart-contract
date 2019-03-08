@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -16,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
 )
@@ -48,33 +48,33 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
-		log.Printf("%s : Contract does not allow voting: %+v\n", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract does not allow voting: %s", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 	}
 
 	// Validate issuer address
 	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid issuer address: %+v %+v\n", v.TraceID, contractAddr, ct.IssuerAddress)
+		logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Sender must hold balance of at least one asset
 	senderAddr := itx.Inputs[0].Address
 	if !contract.HasAnyBalance(ctx, ct, senderAddr.String()) {
-		log.Printf("%s : Sender holds no assets: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
+		logger.Warn(ctx, "%s : Sender holds no assets: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
 
 	// Validate messages values
 	if !vote.ValidateInitiative(msg) {
-		log.Printf("%s : Initiative validation failed: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
+		logger.Warn(ctx, "%s : Initiative validation failed: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
 	}
 
@@ -90,22 +90,24 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 
 		// Asset could not be found
 		if as == nil {
-			log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		if !asset.IsVotingPermitted(ctx, as) {
-			log.Printf("%s : Asset does not allow voting: %+v %+v\n", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 		}
 
 		// Sender does not have any balance of the asset
 		if asset.GetBalance(ctx, as, senderAddr.String()) < 1 {
-			log.Printf("%s : Insufficient funds: %+v %+v\n", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Insufficient funds: %s %s", v.TraceID, contractAddr, assetID)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 	}
+
+	logger.Info(ctx, "%s : Initiative Request : %s %s", v.TraceID, contractAddr, assetID)
 
 	// TODO(srg) auth flags
 
@@ -171,33 +173,33 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 
 	// Contract could not be found
 	if ct == nil {
-		log.Printf("%s : Contract not found: %+v\n", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
-		log.Printf("%s : Contract does not allow voting: %+v\n", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract does not allow voting: %s", v.TraceID, contractAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 	}
 
 	// Validate issuer address
 	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
 	if err != nil {
-		log.Printf("%s : Invalid issuer address: %+v %+v\n", v.TraceID, contractAddr, ct.IssuerAddress)
+		logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Sender must be a contract operator
 	senderAddr := itx.Inputs[0].Address
 	if !contract.IsOperator(ctx, ct, senderAddr.String()) {
-		log.Printf("%s : Sender is not an operator: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
+		logger.Warn(ctx, "%s : Sender is not an operator: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Validate messages values
 	if !vote.ValidateReferendum(msg) {
-		log.Printf("%s : Initiative validation failed: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
+		logger.Warn(ctx, "%s : Initiative validation failed: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
 	}
 
@@ -213,16 +215,18 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 
 		// Asset could not be found
 		if as == nil {
-			log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		if !asset.IsVotingPermitted(ctx, as) {
-			log.Printf("%s : Asset does not allow voting: %+v %+v\n", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 		}
 	}
+
+	logger.Info(ctx, "%s : Referendum Request : %s %s", v.TraceID, contractAddr, assetID)
 
 	// TODO(srg) auth flags
 

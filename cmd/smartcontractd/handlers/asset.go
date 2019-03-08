@@ -39,19 +39,19 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	contractAddr := rk.Address
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract : %s\n", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Failed to retrieve contract : %s", v.TraceID, contractAddr)
 		return err
 	}
 
 	// Contract could not be found
 	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s\n", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr)
 		return node.ErrNoResponse
 	}
 
 	// Verify issuer is sender of tx.
 	if itx.Inputs[0].Address.String() != ct.IssuerAddress {
-		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s\n", v.TraceID, contractAddr.String(), string(msg.AssetID))
+		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr, string(msg.AssetID))
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
 
@@ -64,17 +64,17 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 
 	// The asset should not exist already
 	if as != nil {
-		logger.Warn(ctx, "%s : Asset already exists: %s %s\n", v.TraceID, contractAddr.String(), assetID)
+		logger.Warn(ctx, "%s : Asset already exists: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeDuplicateAssetID)
 	}
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %s\n", v.TraceID, contractAddr.String(), assetID)
+		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
-	logger.Verbose(ctx, "%s : Accepting asset creation request : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr, assetID)
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.NewAssetCreation()
@@ -136,13 +136,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 
 	// Asset could not be found
 	if as == nil {
-		logger.Verbose(ctx, "%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		logger.Verbose(ctx, "%s : Asset Revision does not match current: %+v %+v\n", v.TraceID, contractAddr, assetID)
+		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractAddr, assetID)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
@@ -211,7 +211,7 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 	assetID := string(msg.AssetID)
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s", v.TraceID, contractAddr, assetID)
 		return err
 	}
 
@@ -228,10 +228,10 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			AuthorizationFlags: msg.AuthorizationFlags,
 		}
 		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to create asset : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, assetID)
 			return err
 		}
-		logger.Verbose(ctx, "%s : Created asset : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractAddr, assetID)
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -247,10 +247,10 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 		}
 
 		if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to update asset : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractAddr, assetID)
 			return err
 		}
-		logger.Verbose(ctx, "%s : Updated asset : %s %s\n", v.TraceID, contractAddr.String(), assetID)
+		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractAddr, assetID)
 	}
 
 	return nil

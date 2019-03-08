@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -33,7 +32,6 @@ type Handler func(ctx context.Context, mux protomux.Handler, itx *inspector.Tran
 // data/logic on this App struct
 type App struct {
 	*protomux.ProtoMux
-	log    *log.Logger
 	mw     []Middleware
 	wallet wallet.WalletInterface
 }
@@ -48,10 +46,9 @@ type Config struct {
 }
 
 // New creates an App value that handle a set of routes for the application.
-func New(log *log.Logger, wallet wallet.WalletInterface, mw ...Middleware) *App {
+func New(wallet wallet.WalletInterface, mw ...Middleware) *App {
 	return &App{
 		ProtoMux: protomux.New(),
-		log:      log,
 		mw:       mw,
 		wallet:   wallet,
 	}

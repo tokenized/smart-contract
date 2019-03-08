@@ -5,9 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"hash"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -49,22 +49,18 @@ func main() {
 	logFileName := filepath.FromSlash("tmp/main.log")
 	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
 	if err != nil {
-		log.Fatalf("main : Failed to open log file : %v", err)
+		fmt.Printf("Failed to open log file : %v\n", err)
 		return
 	}
 	defer logFile.Close()
 
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
-	logConfig.Main.Format |= logger.IncludeSystem
-	// logConfig.Main.MinLevel = logger.LevelDebug
+	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
+	logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)
+	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
-
-	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
-
-	log := log.New(os.Stdout, "Node : ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
 
 	// -------------------------------------------------------------------------
 	// Config
@@ -106,16 +102,16 @@ func main() {
 	}
 
 	if err := envconfig.Process("API", &cfg); err != nil {
-		log.Fatalf("main : Parsing Config : %v", err)
+		logger.Fatal(ctx, "Parsing Config : %s", err)
 	}
 
 	// -------------------------------------------------------------------------
 	// App Starting
 
-	log.Println("main : Started : Application Initializing")
-	defer log.Println("main : Completed")
+	logger.Info(ctx, "Started : Application Initializing")
+	defer logger.Info(ctx, "Completed")
 
-	log.Printf("main : Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
+	logger.Info(ctx, "Build %v (%v on %v)", buildVersion, buildUser, buildDate)
 
 	// Mask sensitive values
 	cfgSafe := cfg
@@ -133,9 +129,9 @@ func main() {
 	}
 	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
 	if err != nil {
-		log.Fatalf("main : Marshalling Config to JSON : %v", err)
+		logger.Fatal(ctx, "Marshalling Config to JSON : %s", err)
 	}
-	log.Printf("main : Config : %v\n", string(cfgJSON))
+	logger.Info(ctx, "Config : %v", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
 	// SPY Node
@@ -155,7 +151,7 @@ func main() {
 	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
 		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
-		log.Fatalf("Failed to create spynode config : %v\n", err)
+		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
 		return
 	}
 
@@ -196,7 +192,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Start Database / Storage
 
-	log.Println("main : Started : Initialize Database")
+	logger.Info(ctx, "Started : Initialize Database")
 
 	masterDB, err := db.New(&db.StorageConfig{
 		Region:    cfg.Storage.Region,
@@ -206,7 +202,7 @@ func main() {
 		Root:      cfg.Storage.Root,
 	})
 	if err != nil {
-		log.Fatalf("main : Register DB : %v", err)
+		logger.Fatal(ctx, "Register DB : %s", err)
 	}
 	defer masterDB.Close()
 
@@ -224,7 +220,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Register Hooks
 
-	appHandlers := handlers.API(log, masterWallet, appConfig, masterDB)
+	appHandlers := handlers.API(masterWallet, appConfig, masterDB)
 
 	node := listeners.NewServer(rpcNode, spyNode, appHandlers, rawPKHs[0])
 
@@ -237,7 +233,7 @@ func main() {
 
 	// Start the service listening for requests.
 	go func() {
-		log.Print("main : Node Running")
+		logger.Info(ctx, "Node Running")
 		serverErrors <- node.Run(ctx)
 	}()
 
@@ -255,14 +251,14 @@ func main() {
 	// Blocking main and waiting for shutdown.
 	select {
 	case err := <-serverErrors:
-		log.Fatalf("main : Error starting server: %v", err)
+		logger.Fatal(ctx, "Error starting server: %s", err)
 
 	case <-osSignals:
-		log.Println("main : Start shutdown...")
+		logger.Info(ctx, "Shutting down")
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			log.Fatalf("main : Could not stop server: %v", err)
+			logger.Fatal(ctx, "Could not stop server: %s", err)
 		}
 	}
 }
