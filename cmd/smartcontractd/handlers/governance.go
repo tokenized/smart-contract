@@ -26,7 +26,7 @@ type Governance struct {
 }
 
 // InitiativeRequest handles an incoming Initiative request and prepares a BallotCounted response
-func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.InitiativeRequest")
 	defer span.End()
 
@@ -55,27 +55,27 @@ func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
 		log.Printf("%s : Contract does not allow voting: %+v\n", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 	}
 
 	// Validate issuer address
 	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
 	if err != nil {
 		log.Printf("%s : Invalid issuer address: %+v %+v\n", v.TraceID, contractAddr, ct.IssuerAddress)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Sender must hold balance of at least one asset
 	senderAddr := itx.Inputs[0].Address
 	if !contract.HasAnyBalance(ctx, ct, senderAddr.String()) {
 		log.Printf("%s : Sender holds no assets: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
 
 	// Validate messages values
 	if !vote.ValidateInitiative(msg) {
 		log.Printf("%s : Initiative validation failed: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeInvalidValue)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
 	}
 
 	// If an asset is specified
@@ -91,19 +91,19 @@ func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux
 		// Asset could not be found
 		if as == nil {
 			log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
+			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		if !asset.IsVotingPermitted(ctx, as) {
 			log.Printf("%s : Asset does not allow voting: %+v %+v\n", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 		}
 
 		// Sender does not have any balance of the asset
 		if asset.GetBalance(ctx, as, senderAddr.String()) < 1 {
 			log.Printf("%s : Insufficient funds: %+v %+v\n", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
+			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 	}
 
@@ -136,7 +136,7 @@ func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux
 	}}
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, log, g.Config); fee != nil {
+	if fee := node.OutputFee(ctx, g.Config); fee != nil {
 		outs = append(outs, *fee)
 	}
 
@@ -145,11 +145,11 @@ func (g *Governance) InitiativeRequest(ctx context.Context, log *log.Logger, mux
 	utxos := inspector.UTXOs{itxUtxos[0]}
 
 	// Respond with a vote action
-	return node.RespondUTXO(ctx, log, mux, itx, rk, &vote, outs, utxos)
+	return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
 }
 
 // ReferendumRequest handles an incoming Referendum request and prepares a BallotCounted response
-func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ReferendumRequest")
 	defer span.End()
 
@@ -178,27 +178,27 @@ func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
 		log.Printf("%s : Contract does not allow voting: %+v\n", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 	}
 
 	// Validate issuer address
 	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
 	if err != nil {
 		log.Printf("%s : Invalid issuer address: %+v %+v\n", v.TraceID, contractAddr, ct.IssuerAddress)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Sender must be a contract operator
 	senderAddr := itx.Inputs[0].Address
 	if !contract.IsOperator(ctx, ct, senderAddr.String()) {
 		log.Printf("%s : Sender is not an operator: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
 	// Validate messages values
 	if !vote.ValidateReferendum(msg) {
 		log.Printf("%s : Initiative validation failed: %+v %+v\n", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeInvalidValue)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
 	}
 
 	// If an asset is specified
@@ -214,13 +214,13 @@ func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux
 		// Asset could not be found
 		if as == nil {
 			log.Printf("%s : Asset ID not found: %+v %+v\n", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
+			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		if !asset.IsVotingPermitted(ctx, as) {
 			log.Printf("%s : Asset does not allow voting: %+v %+v\n", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, log, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
 		}
 	}
 
@@ -253,7 +253,7 @@ func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux
 	}}
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, log, g.Config); fee != nil {
+	if fee := node.OutputFee(ctx, g.Config); fee != nil {
 		outs = append(outs, *fee)
 	}
 
@@ -262,11 +262,11 @@ func (g *Governance) ReferendumRequest(ctx context.Context, log *log.Logger, mux
 	utxos := inspector.UTXOs{itxUtxos[0]}
 
 	// Respond with a vote action
-	return node.RespondUTXO(ctx, log, mux, itx, rk, &vote, outs, utxos)
+	return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
 }
 
 // VoteResponse handles an incoming Vote request and prepares a BallotCounted response
-func (g *Governance) VoteResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) VoteResponse(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.VoteResponse")
 	defer span.End()
 
@@ -282,16 +282,16 @@ func (g *Governance) VoteResponse(ctx context.Context, log *log.Logger, mux prot
 }
 
 // BallotCastRequest handles an incoming BallotCast request and prepares a BallotCounted response
-func (g *Governance) BallotCastRequest(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) BallotCastRequest(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
 // BallotCountedResponse handles an outgoing BallotCounted action and writes it to the state
-func (g *Governance) BallotCountedResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) BallotCountedResponse(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }
 
 // ResultResponse handles an outgoing Result action and writes it to the state
-func (g *Governance) ResultResponse(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) ResultResponse(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return nil
 }

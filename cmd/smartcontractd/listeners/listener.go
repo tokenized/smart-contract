@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -17,9 +17,9 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 	switch msgType {
 	case handlers.ListenerMsgBlock:
-		logger.Log(ctx, logger.Info, "New Block (%d) : %s", block.Height, block.Hash.String())
+		logger.Info(ctx, "New Block (%d) : %s", block.Height, block.Hash.String())
 	case handlers.ListenerMsgBlockRevert:
-		logger.Log(ctx, logger.Info, "Reverted Block (%d) : %s", block.Height, block.Hash.String())
+		logger.Info(ctx, "Reverted Block (%d) : %s", block.Height, block.Hash.String())
 	}
 	return nil
 }
@@ -27,24 +27,24 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
-	logger.Log(ctx, logger.Info, "Tx : %s", tx.TxHash().String())
+	logger.Info(ctx, "Tx : %s", tx.TxHash().String())
 
 	// Check if transaction relates to protocol
 	itx, err := inspector.NewTransactionFromWire(ctx, tx)
 	if err != nil {
-		logger.Log(ctx, logger.Warn, "Failed to create inspector tx : %s", err.Error())
+		logger.Warn(ctx, "Failed to create inspector tx : %s", err.Error())
 		return false, err
 	}
 
 	// Prefilter out non-protocol messages
 	if !itx.IsTokenized() {
-		logger.Log(ctx, logger.Verbose, "Not tokenized tx : %s", tx.TxHash().String())
+		logger.Verbose(ctx, "Not tokenized tx : %s", tx.TxHash().String())
 		return false, nil
 	}
 
 	// Promote TX
 	if err := itx.Promote(ctx, server.RpcNode); err != nil {
-		logger.Log(ctx, logger.Fatal, "Failed to promote inspector tx : %s", err.Error())
+		logger.Fatal(ctx, "Failed to promote inspector tx : %s", err.Error())
 		return false, err
 	}
 
@@ -56,7 +56,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
-		logger.Log(ctx, logger.Info, "Tx safe : %s", txid.String())
+		logger.Info(ctx, "Tx safe : %s", txid.String())
 		for i, itx := range server.pendingRequests {
 			if itx.Hash == txid {
 				// Remove from pending
@@ -66,11 +66,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		logger.Log(ctx, logger.Verbose, "Tx safe not found : %s", txid.String())
+		logger.Verbose(ctx, "Tx safe not found : %s", txid.String())
 		return nil
 
 	case handlers.ListenerMsgTxStateConfirm:
-		logger.Log(ctx, logger.Info, "Tx confirm : %s", txid.String())
+		logger.Info(ctx, "Tx confirm : %s", txid.String())
 		for i, itx := range server.pendingRequests {
 			if itx.Hash == txid {
 				// Remove from pending
@@ -89,11 +89,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		logger.Log(ctx, logger.Verbose, "Tx confirm not found : %s", txid.String())
+		logger.Verbose(ctx, "Tx confirm not found : %s", txid.String())
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
-		logger.Log(ctx, logger.Info, "Tx cancel : %s", txid.String())
+		logger.Info(ctx, "Tx cancel : %s", txid.String())
 		for i, itx := range server.pendingRequests {
 			if itx.Hash == txid {
 				// Remove from pending
@@ -103,10 +103,10 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 		}
 
 		// TODO We have to manually undo or revert action
-		logger.Log(ctx, logger.Error, "Tx cancel not found : %s", txid.String())
+		logger.Error(ctx, "Tx cancel not found : %s", txid.String())
 
 	case handlers.ListenerMsgTxStateUnsafe:
-		logger.Log(ctx, logger.Info, "Tx unsafe : %s", txid.String())
+		logger.Info(ctx, "Tx unsafe : %s", txid.String())
 		for i, itx := range server.pendingRequests {
 			if itx.Hash == txid {
 				// Add to unsafe
@@ -120,17 +120,17 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 		}
 
 		// TODO We have to manually undo or revert action
-		logger.Log(ctx, logger.Error, "Tx unsafe not found : %s", txid.String())
+		logger.Error(ctx, "Tx unsafe not found : %s", txid.String())
 
 	case handlers.ListenerMsgTxStateRevert:
-		logger.Log(ctx, logger.Info, "Tx revert : %s", txid.String())
+		logger.Info(ctx, "Tx revert : %s", txid.String())
 	}
 	return nil
 }
 
 func (server *Server) HandleInSync(ctx context.Context) error {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
-	logger.Log(ctx, logger.Info, "Node is in sync")
+	logger.Info(ctx, "Node is in sync")
 
 	// Send pending responses
 	server.inSync = true
@@ -138,7 +138,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	server.pendingResponses = nil
 
 	for _, pendingTx := range pending {
-		logger.Log(ctx, logger.Info, "Sending pending response: %s", pendingTx.TxHash().String())
+		logger.Info(ctx, "Sending pending response: %s", pendingTx.TxHash().String())
 		if err := server.sendTx(ctx, pendingTx); err != nil {
 			return err // TODO Probably a fatal error
 		}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -25,6 +25,6 @@ func (handler *RejectHandler) Handle(ctx context.Context, m wire.Message) ([]wir
 		return nil, errors.New("Could not assert as *wire.MsgReject")
 	}
 
-	logger.Log(ctx, logger.Info, "Reject %s (%s) : %s - %s", msg.Cmd, msg.Code.String(), msg.Reason, msg.Hash.String())
+	logger.Info(ctx, "Reject %s (%s) : %s - %s", msg.Cmd, msg.Code.String(), msg.Reason, msg.Hash.String())
 	return nil, nil
 }

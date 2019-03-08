@@ -28,13 +28,13 @@ import (
 type Level int
 
 const (
-	Debug   Level = -2
-	Verbose Level = -1
-	Info    Level = 0
-	Warn    Level = 1
-	Error   Level = 2
-	Fatal   Level = 3 // Calls exit
-	Panic   Level = 4 // Calls panic
+	LevelDebug   Level = -2
+	LevelVerbose Level = -1
+	LevelInfo    Level = 0
+	LevelWarn    Level = 1
+	LevelError   Level = 2
+	LevelFatal   Level = 3 // Calls exit
+	LevelPanic   Level = 4 // Calls panic
 )
 
 // Log entry formatting (which prefix fields to include)
@@ -62,13 +62,48 @@ func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 	return context.WithValue(ctx, subSystemKey, nil)
 }
 
-// Logs an entry to the main Outputs if:
+// Log an entry to the main Outputs if:
 //   There is no subsystem specified or if the current subsystem is included in the attached
 //     Config.IncludedSubSystems.
 //   And the level is equal to or above the specified minimum logging level.
 // Logs to the Config.SubSystems if the level is above minimum.
 func Log(ctx context.Context, level Level, format string, values ...interface{}) error {
 	return LogDepth(ctx, level, 1, format, values...)
+}
+
+// Debug adds a debug level entry to the log.
+func Debug(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelDebug, 1, format, values...)
+}
+
+// Verbose adds a verbose level entry to the log.
+func Verbose(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelVerbose, 1, format, values...)
+}
+
+// Info adds a info level entry to the log.
+func Info(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelInfo, 1, format, values...)
+}
+
+// Warn adds a warn level entry to the log.
+func Warn(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelWarn, 1, format, values...)
+}
+
+// Error adds a error level entry to the log.
+func Error(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelError, 1, format, values...)
+}
+
+// Fatal adds a fatal level entry to the log and then calls os.Exit(1).
+func Fatal(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelFatal, 1, format, values...)
+}
+
+// Panic adds a panic level entry to the log and then calls panic().
+func Panic(ctx context.Context, format string, values ...interface{}) error {
+	return LogDepth(ctx, LevelPanic, 1, format, values...)
 }
 
 // Same as Log, but the number of levels above the current call in the stack from which to get the

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -46,9 +46,9 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	}
 
 	receivedHash := message.BlockHash()
-	logger.Log(ctx, logger.Debug, "Received block : %s", receivedHash)
+	logger.Debug(ctx, "Received block : %s", receivedHash)
 	if !handler.state.AddBlock(&receivedHash, message) {
-		logger.Log(ctx, logger.Warn, "Block not requested : %s", receivedHash)
+		logger.Warn(ctx, "Block not requested : %s", receivedHash)
 		if message.Header.PrevBlock == *handler.blocks.LastHash() {
 			if !handler.state.AddNewBlock(&receivedHash, message) {
 				return nil, nil
@@ -72,14 +72,14 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		// If we already have this block, we don't need to ask for more
 		if handler.blocks.Contains(hash) {
 			height, _ := handler.blocks.Height(&hash)
-			logger.Log(ctx, logger.Warn, "Already have block (%d) : %s", height, hash)
+			logger.Warn(ctx, "Already have block (%d) : %s", height, hash)
 			return nil, nil
 		}
 
 		if block.Header.PrevBlock != *handler.blocks.LastHash() {
 			// Ignore this as it can happen when there is a reorg.
-			logger.Log(ctx, logger.Warn, "Not next block : %s", hash)
-			logger.Log(ctx, logger.Warn, "Previous hash : %s", block.Header.PrevBlock)
+			logger.Warn(ctx, "Not next block : %s", hash)
+			logger.Warn(ctx, "Previous hash : %s", block.Header.PrevBlock)
 			return nil, nil // Unknown or out of order block
 		}
 
@@ -131,7 +131,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			return nil, errors.Wrap(err, "Failed to get block tx hashes")
 		}
 
-		logger.Log(ctx, logger.Debug, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
+		logger.Debug(ctx, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
 		for i, txHash := range hashes {
 			// Remove from unconfirmed. Only matching are in unconfirmed.
 			removed, unconfirmed = removeHash(&txHash, unconfirmed)
@@ -188,7 +188,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		// Perform any block cleanup
 		err = handler.blockProcessor.ProcessBlock(ctx, block)
 		if err != nil {
-			logger.Log(ctx, logger.Debug, "Failed clean up after block : %s", hash)
+			logger.Debug(ctx, "Failed clean up after block : %s", hash)
 			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
 			return nil, err
 		}
@@ -196,11 +196,11 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		if !handler.state.IsReady() {
 			if handler.state.IsPendingSync() && handler.state.BlockRequestsEmpty() {
 				handler.state.SetInSync()
-				logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
+				logger.Info(ctx, "Blocks in sync at height %d", handler.blocks.LastHeight())
 			}
 		}
 
-		logger.Log(ctx, logger.Debug, "Finalizing block : %s", hash)
+		logger.Debug(ctx, "Finalizing block : %s", hash)
 		if err := handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height); err != nil {
 			return nil, err
 		}
@@ -216,7 +216,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			break
 		}
 
-		logger.Log(ctx, logger.Debug, "Requesting block : %s", requestHash)
+		logger.Debug(ctx, "Requesting block : %s", requestHash)
 		getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, requestHash))
 		if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 			// Start new get data (block request) message

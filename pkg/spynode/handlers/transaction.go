@@ -3,9 +3,9 @@ package handlers
 import (
 	"context"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/pkg/errors"
@@ -44,7 +44,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 	}
 
 	hash := msg.TxHash()
-	logger.Log(ctx, logger.Debug, "Received tx : %s", hash)
+	logger.Debug(ctx, "Received tx : %s", hash)
 
 	// Only notify of transactions when in sync or they might be duplicated
 	if !handler.ready.IsReady() && ctx.Value(DirectTxKey) == nil {
@@ -60,7 +60,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 	}
 
 	if len(conflicts) > 0 {
-		logger.Log(ctx, logger.Warn, "Found %d conflicts with %s", len(conflicts), hash)
+		logger.Warn(ctx, "Found %d conflicts with %s", len(conflicts), hash)
 		// Notify of attempted double spend
 		for _, conflict := range conflicts {
 			marked, err := handler.txs.MarkUnsafe(ctx, *conflict)

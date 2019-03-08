@@ -6,9 +6,9 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spynode"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -84,7 +84,7 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	}
 
 	// Append to pending so it can be monitored
-	logger.Log(ctx, logger.Info, "Saving pending response tx : %s", tx.TxHash().String())
+	logger.Info(ctx, "Saving pending response tx : %s", tx.TxHash().String())
 	server.pendingResponses = append(server.pendingResponses, tx)
 	return nil
 }
@@ -98,7 +98,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 			for _, input := range itx.Inputs {
 				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
 					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
-					logger.Log(ctx, logger.Info, "Canceling pending response tx : %s", pendingTx.TxHash().String())
+					logger.Info(ctx, "Canceling pending response tx : %s", pendingTx.TxHash().String())
 					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
 					return nil
 				}
@@ -111,7 +111,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 
 func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction) error {
 	if err := server.removeConflictingPending(ctx, itx); err != nil {
-		logger.Log(ctx, logger.Warn, "Failed to remove conflicting pending : %s", err.Error())
+		logger.Warn(ctx, "Failed to remove conflicting pending : %s", err.Error())
 		return err
 	}
 

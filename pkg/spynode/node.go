@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -98,18 +98,18 @@ func (node *Node) load(ctx context.Context) error {
 	if err := node.peers.Load(ctx); err != nil {
 		return err
 	}
-	logger.Log(ctx, logger.Verbose, "Loaded %d peers", node.peers.Count())
+	logger.Verbose(ctx, "Loaded %d peers", node.peers.Count())
 
 	if err := node.blocks.Load(ctx); err != nil {
 		return err
 	}
-	logger.Log(ctx, logger.Info, "Loaded blocks to height %d", node.blocks.LastHeight())
+	logger.Info(ctx, "Loaded blocks to height %d", node.blocks.LastHeight())
 	startHeight, exists := node.blocks.Height(&node.config.StartHash)
 	if exists {
 		node.state.SetStartHeight(startHeight)
-		logger.Log(ctx, logger.Info, "Start block height %d", startHeight)
+		logger.Info(ctx, "Start block height %d", startHeight)
 	} else {
-		logger.Log(ctx, logger.Info, "Start block not found yet")
+		logger.Info(ctx, "Start block not found yet")
 	}
 
 	if err := node.txs.Load(ctx); err != nil {
@@ -130,7 +130,7 @@ func (node *Node) Run(ctx context.Context) error {
 		node.lock.Lock()
 		node.stopped = true
 		node.lock.Unlock()
-		logger.Log(ctx, logger.Verbose, "Stopped")
+		logger.Verbose(ctx, "Stopped")
 	}()
 
 	var err error = nil
@@ -141,13 +141,13 @@ func (node *Node) Run(ctx context.Context) error {
 	initial := true
 	for {
 		if initial {
-			logger.Log(ctx, logger.Verbose, "Connecting to %s", node.config.NodeAddress)
+			logger.Verbose(ctx, "Connecting to %s", node.config.NodeAddress)
 		} else {
-			logger.Log(ctx, logger.Verbose, "Re-connecting to %s", node.config.NodeAddress)
+			logger.Verbose(ctx, "Re-connecting to %s", node.config.NodeAddress)
 			node.state.LogRestart()
 		}
 		if err = node.connect(ctx); err != nil {
-			logger.Log(ctx, logger.Verbose, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
+			logger.Verbose(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
 			break
 		}
 		initial = false
@@ -165,41 +165,41 @@ func (node *Node) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			node.monitorIncoming(ctx)
-			logger.Log(ctx, logger.Debug, "Monitor incoming finished")
+			logger.Debug(ctx, "Monitor incoming finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.monitorRequestTimeouts(ctx)
-			logger.Log(ctx, logger.Debug, "Monitor request timeouts finished")
+			logger.Debug(ctx, "Monitor request timeouts finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.sendOutgoing(ctx)
-			logger.Log(ctx, logger.Debug, "Send outgoing finished")
+			logger.Debug(ctx, "Send outgoing finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.processTxs(ctx)
-			logger.Log(ctx, logger.Debug, "Process txs finished")
+			logger.Debug(ctx, "Process txs finished")
 		}()
 
 		go func() {
 			defer wg.Done()
 			node.checkTxDelays(ctx)
-			logger.Log(ctx, logger.Debug, "Check tx delays finished")
+			logger.Debug(ctx, "Check tx delays finished")
 		}()
 
 		if node.config.UntrustedCount == 0 {
 			wg.Done()
-			logger.Log(ctx, logger.Debug, "Monitor untrusted not started")
+			logger.Debug(ctx, "Monitor untrusted not started")
 		} else {
 			go func() {
 				defer wg.Done()
 				node.monitorUntrustedNodes(ctx)
-				logger.Log(ctx, logger.Debug, "Monitor untrusted finished")
+				logger.Debug(ctx, "Monitor untrusted finished")
 			}()
 		}
 
@@ -207,7 +207,7 @@ func (node *Node) Run(ctx context.Context) error {
 		wg.Wait()
 
 		// Save block repository
-		logger.Log(ctx, logger.Verbose, "Saving")
+		logger.Verbose(ctx, "Saving")
 		node.blocks.Save(ctx)
 		node.txs.Save(ctx)
 
@@ -215,7 +215,7 @@ func (node *Node) Run(ctx context.Context) error {
 			break
 		}
 
-		logger.Log(ctx, logger.Verbose, "Restarting")
+		logger.Verbose(ctx, "Restarting")
 		node.needsRestart = false
 		node.lock.Lock()
 		node.stopping = false
@@ -267,7 +267,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 // BroadcastTx broadcasts a tx to the network.
 func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Log(ctx, logger.Info, "Broadcasting tx : %s", tx.TxHash())
+	logger.Info(ctx, "Broadcasting tx : %s", tx.TxHash())
 
 	if node.isStopping() { // TODO Resolve issue when node is restarting
 		return errors.New("Node inactive")
@@ -311,9 +311,9 @@ func (node *Node) processTxs(ctx context.Context) error {
 			if !ok {
 				break
 			}
-			logger.Log(ctx, logger.Info, "Directly handling tx : %s", tx.TxHash())
+			logger.Info(ctx, "Directly handling tx : %s", tx.TxHash())
 			if err := node.handleMessage(ctx, tx); err != nil {
-				logger.Log(ctx, logger.Info, "Failed to directly handle tx : %s", err.Error())
+				logger.Info(ctx, "Failed to directly handle tx : %s", err.Error())
 			}
 		}
 
@@ -378,7 +378,7 @@ func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
 // Implements handlers.BlockProcessor interface
 // It is responsible for any cleanup as a result of a block.
 func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error {
-	logger.Log(ctx, logger.Debug, "Cleaning up after block : %s", block.BlockHash())
+	logger.Debug(ctx, "Cleaning up after block : %s", block.BlockHash())
 	txids, err := block.TxHashes()
 	if err != nil {
 		return err
@@ -414,7 +414,7 @@ func (node *Node) connect(ctx context.Context) error {
 func (node *Node) monitorIncoming(ctx context.Context) {
 	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
-			logger.Log(ctx, logger.Warn, "Check failed : %s", err.Error())
+			logger.Warn(ctx, "Check failed : %s", err.Error())
 			node.requestStop(ctx)
 			break
 		}
@@ -426,18 +426,18 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Verbose, "Connection closed")
+			logger.Verbose(ctx, "Connection closed")
 			node.restart(ctx)
 			break
 		}
 		if err != nil {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Warn, "Failed to read message : %s", err.Error())
+			logger.Warn(ctx, "Failed to read message : %s", err.Error())
 			continue
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			logger.Log(ctx, logger.Warn, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
+			logger.Warn(ctx, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
 		}
@@ -476,7 +476,7 @@ func (node *Node) check(ctx context.Context) error {
 		}
 
 		if node.queueOutgoing(headerRequest) {
-			logger.Log(ctx, logger.Debug, "Requesting headers")
+			logger.Debug(ctx, "Requesting headers")
 			node.state.MarkHeadersRequested()
 			node.state.SetHandshakeComplete()
 		}
@@ -532,7 +532,7 @@ func (node *Node) check(ctx context.Context) error {
 		}
 
 		if !node.queueOutgoing(headerRequest) {
-			logger.Log(ctx, logger.Debug, "Requesting headers")
+			logger.Debug(ctx, "Requesting headers")
 			node.state.MarkHeadersRequested()
 		}
 	}
@@ -549,7 +549,7 @@ func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 		node.sleepUntilStop(10) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
-			logger.Log(ctx, logger.Warn, err.Error())
+			logger.Warn(ctx, err.Error())
 			node.restart(ctx)
 			break
 		}
@@ -573,7 +573,7 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 		cutoffTime := time.Now().Add(time.Millisecond * -time.Duration(node.config.SafeTxDelay))
 		txids, err := node.txs.GetNewSafe(ctx, cutoffTime)
 		if err != nil {
-			logger.Log(ctx, logger.Warn, err.Error())
+			logger.Warn(ctx, err.Error())
 			node.restart(ctx)
 			break
 		}
@@ -582,7 +582,7 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 			for _, listener := range node.listeners {
 				err := listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
 				if err != nil {
-					logger.Log(ctx, logger.Warn, err.Error())
+					logger.Warn(ctx, err.Error())
 				}
 			}
 		}
@@ -635,7 +635,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		node.untrustedLock.Unlock()
 
 		if verifiedCount < node.config.UntrustedCount {
-			logger.Log(ctx, logger.Debug, "Untrusted connections : %d", verifiedCount)
+			logger.Debug(ctx, "Untrusted connections : %d", verifiedCount)
 		}
 
 		if count < node.config.UntrustedCount/2 {
@@ -674,7 +674,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	}
 	node.untrustedLock.Unlock()
 
-	logger.Log(ctx, logger.Verbose, "Waiting for %d untrusted nodes to finish", len(node.untrustedNodes))
+	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", len(node.untrustedNodes))
 	wg.Wait()
 }
 

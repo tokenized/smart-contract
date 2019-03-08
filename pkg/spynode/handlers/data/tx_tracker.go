@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -52,7 +52,7 @@ func (tracker *TxTracker) Remove(ctx context.Context, txids []chainhash.Hash) {
 	// Iterate tracker ids first since that list should be much smaller
 	for _, removeid := range txids {
 		if _, exists := tracker.txids[removeid]; exists {
-			logger.Log(ctx, logger.Verbose, "Removing tracking for tx : %s", removeid.String())
+			logger.Verbose(ctx, "Removing tracking for tx : %s", removeid.String())
 			delete(tracker.txids, removeid)
 		}
 	}
@@ -72,7 +72,7 @@ func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool) ([]wire.M
 			delete(tracker.txids, txid) // Remove since we have received tx
 		} else {
 			if shouldRequest {
-				logger.Log(ctx, logger.Verbose, "Re-Requesting tx : %s", newTxId.String())
+				logger.Verbose(ctx, "Re-Requesting tx : %s", newTxId.String())
 				item := wire.NewInvVect(wire.InvTypeTx, &newTxId)
 				// Request
 				if err := invRequest.AddInvVect(item); err != nil {

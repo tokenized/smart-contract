@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"errors"
-	"log"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
@@ -41,7 +40,7 @@ type Output struct {
 }
 
 // OutputFee prepares a special fee output based on node configuration
-func OutputFee(ctx context.Context, log *log.Logger, config *Config) *Output {
+func OutputFee(ctx context.Context, config *Config) *Output {
 	if config.FeeValue > 0 {
 		feeAddr, _ := btcutil.DecodeAddress(config.FeeAddress, &chaincfg.MainNetParams)
 		return &Output{
@@ -54,7 +53,7 @@ func OutputFee(ctx context.Context, log *log.Logger, config *Config) *Output {
 }
 
 // Error handles all error responses for the API.
-func Error(ctx context.Context, log *log.Logger, mux protomux.Handler, err error) {
+func Error(ctx context.Context, mux protomux.Handler, err error) {
 	// switch errors.Cause(err) {
 	// }
 
@@ -62,7 +61,7 @@ func Error(ctx context.Context, log *log.Logger, mux protomux.Handler, err error
 }
 
 // RespondReject sends a rejection message
-func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
+func RespondReject(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
 
 	// Sender is the address that sent the message that we are rejecting.
 	sender := itx.Inputs[0].Address
@@ -71,14 +70,14 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 	receiver := itx.Outputs[0]
 	if uint64(receiver.Value) < MinimumForResponse {
 		// Did not receive enough to fund the response
-		Error(ctx, log, mux, ErrInsufficientFunds)
+		Error(ctx, mux, ErrInsufficientFunds)
 		return ErrNoResponse
 	}
 
 	// Find spendable UTXOs
 	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
 	if err != nil {
-		Error(ctx, log, mux, ErrInsufficientFunds)
+		Error(ctx, mux, ErrInsufficientFunds)
 		return ErrNoResponse
 	}
 
@@ -103,17 +102,17 @@ func RespondReject(ctx context.Context, log *log.Logger, mux protomux.Handler, i
 	// Build the new transaction
 	newTx, err := wallet.BuildTX(rk, utxos, outs, changeAddress, &rejection)
 	if err != nil {
-		Error(ctx, log, mux, err)
+		Error(ctx, mux, err)
 	}
 
-	if err := Respond(ctx, log, mux, newTx); err != nil {
+	if err := Respond(ctx, mux, newTx); err != nil {
 		return err
 	}
 	return ErrRejected
 }
 
 // RespondSuccess broadcasts a successful message
-func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
+func RespondSuccess(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
 	msg protocol.OpReturnMessage, outs []Output) error {
 
 	// Get spendable UTXO's received for the contract address
@@ -122,11 +121,11 @@ func RespondSuccess(ctx context.Context, log *log.Logger, mux protomux.Handler, 
 		return err
 	}
 
-	return RespondUTXO(ctx, log, mux, itx, rk, msg, outs, utxos)
+	return RespondUTXO(ctx, mux, itx, rk, msg, outs, utxos)
 }
 
 // RespondUTXO broadcasts a successful message using a specific UTXO
-func RespondUTXO(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
+func RespondUTXO(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey,
 	msg protocol.OpReturnMessage, outs []Output, utxos []inspector.UTXO) error {
 
 	var change btcutil.Address
@@ -155,10 +154,10 @@ func RespondUTXO(ctx context.Context, log *log.Logger, mux protomux.Handler, itx
 		return err
 	}
 
-	return Respond(ctx, log, mux, newTx)
+	return Respond(ctx, mux, newTx)
 }
 
 // Respond sends a TX to the network.
-func Respond(ctx context.Context, log *log.Logger, mux protomux.Handler, tx *wire.MsgTx) error {
+func Respond(ctx context.Context, mux protomux.Handler, tx *wire.MsgTx) error {
 	return mux.Respond(ctx, tx)
 }

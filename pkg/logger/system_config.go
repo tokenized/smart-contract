@@ -21,7 +21,7 @@ type SystemConfig struct {
 func NewProductionSystemConfig() *SystemConfig {
 	result := SystemConfig{
 		Output:   os.Stderr,
-		MinLevel: Info,
+		MinLevel: LevelInfo,
 		Format:   IncludeDate | IncludeTime | IncludeFile | IncludeLevel,
 	}
 	return &result
@@ -32,7 +32,7 @@ func NewProductionSystemConfig() *SystemConfig {
 func NewDevelopmentSystemConfig() *SystemConfig {
 	result := SystemConfig{
 		Output:   os.Stderr,
-		MinLevel: Verbose,
+		MinLevel: LevelVerbose,
 		Format:   IncludeDate | IncludeTime | IncludeFile | IncludeLevel,
 	}
 	return &result
@@ -133,19 +133,19 @@ func (config *SystemConfig) log(system string, level Level, depth int, format st
 	// Append Level
 	if config.Format&IncludeLevel != 0 {
 		switch level {
-		case Debug:
+		case LevelDebug:
 			entry = append(entry, []byte("Debug - ")...)
-		case Verbose:
+		case LevelVerbose:
 			entry = append(entry, []byte("Verbose - ")...)
-		case Info:
+		case LevelInfo:
 			entry = append(entry, []byte("Info - ")...)
-		case Warn:
+		case LevelWarn:
 			entry = append(entry, []byte("Warn - ")...)
-		case Error:
+		case LevelError:
 			entry = append(entry, []byte("Error - ")...)
-		case Fatal:
+		case LevelFatal:
 			entry = append(entry, []byte("Fatal - ")...)
-		case Panic:
+		case LevelPanic:
 			entry = append(entry, []byte("Panic - ")...)
 		}
 	}
@@ -161,10 +161,10 @@ func (config *SystemConfig) log(system string, level Level, depth int, format st
 	// Write to output
 	_, err := config.Output.Write(entry)
 
-	if level == Fatal {
+	if level == LevelFatal {
 		os.Exit(1)
 	}
-	if level == Panic {
+	if level == LevelPanic {
 		panic(entry)
 	}
 	return err

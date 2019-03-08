@@ -10,10 +10,10 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
@@ -70,7 +70,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	if err := node.connect(); err != nil {
 		node.lock.Unlock()
 		node.peers.UpdateScore(ctx, node.address, -1)
-		logger.Log(ctx, logger.Debug, "Connection failed to %s : %s", node.address, err.Error())
+		logger.Debug(ctx, "Connection failed to %s : %s", node.address, err.Error())
 		return err
 	}
 
@@ -93,19 +93,19 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		node.monitorIncoming(ctx)
-		logger.Log(ctx, logger.Debug, "Untrusted monitor incoming finished")
+		logger.Debug(ctx, "Untrusted monitor incoming finished")
 	}()
 
 	go func() {
 		defer wg.Done()
 		node.monitorRequestTimeouts(ctx)
-		logger.Log(ctx, logger.Debug, "Untrusted monitor request timeouts finished")
+		logger.Debug(ctx, "Untrusted monitor request timeouts finished")
 	}()
 
 	go func() {
 		defer wg.Done()
 		node.sendOutgoing(ctx)
-		logger.Log(ctx, logger.Debug, "Untrusted send outgoing finished")
+		logger.Debug(ctx, "Untrusted send outgoing finished")
 	}()
 
 	// Block until goroutines finish as a result of Stop()
@@ -176,7 +176,7 @@ func (node *UntrustedNode) connect() error {
 func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
-			logger.Log(ctx, logger.Debug, "Check failed : %s", err.Error())
+			logger.Debug(ctx, "Check failed : %s", err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -189,20 +189,20 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, MainNetBch)
 		if err == io.EOF {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Debug, "Connection closed")
+			logger.Debug(ctx, "Connection closed")
 			node.Stop(ctx)
 			break
 		}
 		if err != nil {
 			// Happens when the connection is closed
-			logger.Log(ctx, logger.Debug, "Failed to read message : %s", err.Error())
+			logger.Debug(ctx, "Failed to read message : %s", err.Error())
 			node.Stop(ctx)
 			break
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Log(ctx, logger.Debug, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
+			logger.Debug(ctx, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -276,7 +276,7 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 		}
 
 		if err := node.state.CheckTimeouts(); err != nil {
-			logger.Log(ctx, logger.Debug, "Timed out : %s", err.Error())
+			logger.Debug(ctx, "Timed out : %s", err.Error())
 			node.peers.UpdateScore(ctx, node.address, -1)
 			node.Stop(ctx)
 			break

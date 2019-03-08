@@ -19,10 +19,10 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -57,7 +57,7 @@ func main() {
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	logConfig.Main.Format |= logger.IncludeSystem
-	//logConfig.Main.MinLevel = logger.Debug
+	// logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
 
@@ -301,7 +301,7 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	containsTokenized := false
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) || IsOldTokenizedOpReturn(output.PkScript) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches TokenizedFilter : %s", tx.TxHash().String())
 			containsTokenized = true
 			break
@@ -320,7 +320,7 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 			continue
 		}
 		if class == txscript.PubKeyHashTy && bytes.Equal(addresses[0].ScriptAddress(), filter.contractPKH) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true
 		}
@@ -345,7 +345,7 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 		pkh := filter.hash160.Sum(nil)
 
 		if bytes.Equal(pkh, filter.contractPKH) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentFromContract : %s", tx.TxHash().String())
 			return true
 		}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -43,7 +43,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	}
 
 	response := []wire.Message{}
-	logger.Log(ctx, logger.Debug, "Received %d headers", len(message.Headers))
+	logger.Debug(ctx, "Received %d headers", len(message.Headers))
 
 	lastHash := handler.state.LastHash()
 	if lastHash == nil {
@@ -51,14 +51,14 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	}
 
 	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash)) {
-		logger.Log(ctx, logger.Info, "Headers in sync at height %d", handler.blocks.LastHeight())
+		logger.Info(ctx, "Headers in sync at height %d", handler.blocks.LastHeight())
 		handler.state.SetPendingSync() // We are in sync
 		if handler.state.StartHeight() == -1 {
 			handler.state.SetInSync()
-			logger.Log(ctx, logger.Error, "Headers in sync before start block found")
+			logger.Error(ctx, "Headers in sync before start block found")
 		} else if handler.state.BlockRequestsEmpty() {
 			handler.state.SetInSync()
-			logger.Log(ctx, logger.Info, "Blocks in sync at height %d", handler.blocks.LastHeight())
+			logger.Info(ctx, "Blocks in sync at height %d", handler.blocks.LastHeight())
 		}
 		handler.state.ClearHeadersRequested()
 		handler.blocks.Save(ctx) // Save when we get in sync
@@ -82,7 +82,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			if request {
 				// Request it if it isn't already requested.
 				if handler.state.AddBlockRequest(&hash) {
-					logger.Log(ctx, logger.Debug, "Requesting block : %s", hash)
+					logger.Debug(ctx, "Requesting block : %s", hash)
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
@@ -109,7 +109,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		// Check for a reorg
 		reorgHeight, exists := handler.blocks.Height(&header.PrevBlock)
 		if exists {
-			logger.Log(ctx, logger.Info, "Reorging to height %d", reorgHeight)
+			logger.Info(ctx, "Reorging to height %d", reorgHeight)
 
 			// Call reorg listener for all blocks above reorg height.
 			for height := handler.blocks.LastHeight(); height > reorgHeight; height-- {
@@ -169,7 +169,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			if request {
 				// Request it if it isn't already requested.
 				if handler.state.AddBlockRequest(&hash) {
-					logger.Log(ctx, logger.Debug, "Requesting block : %s", hash)
+					logger.Debug(ctx, "Requesting block : %s", hash)
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
@@ -201,7 +201,7 @@ func (handler HeadersHandler) addHeader(ctx context.Context, hash *chainhash.Has
 		if handler.config.StartHash == *hash {
 			startHeight = handler.blocks.LastHeight() + 1
 			handler.state.SetStartHeight(startHeight)
-			logger.Log(ctx, logger.Verbose, "Found start block at height %d", startHeight)
+			logger.Verbose(ctx, "Found start block at height %d", startHeight)
 		} else {
 			err := handler.blocks.Add(ctx, *hash) // Just add hashes before the start block
 			if err != nil {

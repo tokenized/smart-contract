@@ -11,10 +11,10 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -35,7 +35,7 @@ func main() {
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.AddFile("./tmp/main.log")
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	//logConfig.Main.MinLevel = logger.Debug
+	//logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	ctx := logger.ContextWithLogConfig(context.Background(), logConfig)
 
@@ -60,21 +60,21 @@ func main() {
 	}
 
 	if err := envconfig.Process("Node", &cfg); err != nil {
-		logger.Log(ctx, logger.Info, "Parsing Config : %v", err)
+		logger.Info(ctx, "Parsing Config : %v", err)
 	}
 
-	logger.Log(ctx, logger.Info, "Started : Application Initializing")
+	logger.Info(ctx, "Started : Application Initializing")
 	defer log.Println("Completed")
 
 	cfgJSON, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
-		logger.Log(ctx, logger.Fatal, "Marshalling Config to JSON : %v", err)
+		logger.Fatal(ctx, "Marshalling Config to JSON : %v", err)
 	}
 
-	logger.Log(ctx, logger.Info, "Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
+	logger.Info(ctx, "Build %v (%v on %v)\n", buildVersion, buildUser, buildDate)
 
 	// TODO: Mask sensitive values
-	logger.Log(ctx, logger.Info, "Config : %v\n", string(cfgJSON))
+	logger.Info(ctx, "Config : %v\n", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
 	// Storage
@@ -96,7 +96,7 @@ func main() {
 	nodeConfig, err := data.NewConfig(cfg.Node.Address, cfg.Node.UserAgent,
 		cfg.Node.StartHash, cfg.Node.UntrustedNodes, cfg.Node.SafeTxDelay)
 	if err != nil {
-		logger.Log(ctx, logger.Error, "Failed to create node config : %s\n", err)
+		logger.Error(ctx, "Failed to create node config : %s\n", err)
 		return
 	}
 
@@ -114,9 +114,9 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	go func() {
 		signal := <-signals
-		logger.Log(ctx, logger.Info, "Received signal : %s", signal)
+		logger.Info(ctx, "Received signal : %s", signal)
 		if signal == os.Interrupt {
-			logger.Log(ctx, logger.Info, "Stopping node")
+			logger.Info(ctx, "Stopping node")
 			node.Stop(ctx)
 		}
 	}()
@@ -130,7 +130,7 @@ func main() {
 
 	// Start the service listening for requests.
 	go func() {
-		logger.Log(ctx, logger.Info, "Node Running")
+		logger.Info(ctx, "Node Running")
 		serverErrors <- node.Run(ctx)
 	}()
 
@@ -146,15 +146,15 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil {
-			logger.Log(ctx, logger.Fatal, "Server failure : %s", err.Error())
+			logger.Fatal(ctx, "Server failure : %s", err.Error())
 		}
 
 	case <-osSignals:
-		logger.Log(ctx, logger.Info, "Start shutdown...")
+		logger.Info(ctx, "Start shutdown...")
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Log(ctx, logger.Fatal, "Failed to stop spynode server: %s", err.Error())
+			logger.Fatal(ctx, "Failed to stop spynode server: %s", err.Error())
 		}
 	}
 }
@@ -172,9 +172,9 @@ func (listener LogListener) HandleBlock(ctx context.Context, msgType int, block 
 
 	switch msgType {
 	case handlers.ListenerMsgBlock:
-		logger.Log(listener.ctx, logger.Info, "New Block (%d) : %s", block.Height, block.Hash)
+		logger.Info(listener.ctx, "New Block (%d) : %s", block.Height, block.Hash)
 	case handlers.ListenerMsgBlockRevert:
-		logger.Log(listener.ctx, logger.Info, "Reverted Block (%d) : %s", block.Height, block.Hash)
+		logger.Info(listener.ctx, "Reverted Block (%d) : %s", block.Height, block.Hash)
 	}
 
 	return nil
@@ -185,7 +185,7 @@ func (listener LogListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bool
 	defer listener.mutex.Unlock()
 
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
-	logger.Log(ctx, logger.Info, "Tx : %s", msg.TxHash())
+	logger.Info(ctx, "Tx : %s", msg.TxHash())
 
 	return true, nil
 }
@@ -198,15 +198,15 @@ func (listener LogListener) HandleTxState(ctx context.Context, msgType int, txid
 
 	switch msgType {
 	case handlers.ListenerMsgTxStateConfirm:
-		logger.Log(listener.ctx, logger.Info, "Tx confirm : %s", txid)
+		logger.Info(listener.ctx, "Tx confirm : %s", txid)
 	case handlers.ListenerMsgTxStateRevert:
-		logger.Log(listener.ctx, logger.Info, "Tx revert : %s", txid)
+		logger.Info(listener.ctx, "Tx revert : %s", txid)
 	case handlers.ListenerMsgTxStateCancel:
-		logger.Log(listener.ctx, logger.Info, "Tx cancel : %s", txid)
+		logger.Info(listener.ctx, "Tx cancel : %s", txid)
 	case handlers.ListenerMsgTxStateUnsafe:
-		logger.Log(listener.ctx, logger.Info, "Tx unsafe : %s", txid)
+		logger.Info(listener.ctx, "Tx unsafe : %s", txid)
 	case handlers.ListenerMsgTxStateSafe:
-		logger.Log(listener.ctx, logger.Info, "Tx safe : %s", txid)
+		logger.Info(listener.ctx, "Tx safe : %s", txid)
 	}
 
 	return nil
@@ -218,7 +218,7 @@ func (listener LogListener) HandleInSync(ctx context.Context) error {
 
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
-	logger.Log(listener.ctx, logger.Info, "In Sync")
+	logger.Info(listener.ctx, "In Sync")
 	return nil
 }
 
@@ -236,7 +236,7 @@ type TokenizedFilter struct{}
 func (filter TokenizedFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches TokenizedFilter : %s", tx.TxHash())
 			return true
 		}
@@ -258,7 +258,7 @@ type OPReturnFilter struct{}
 func (filter OPReturnFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
 		if IsOpReturn(output.PkScript) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.Info, 3,
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches OPReturnFilter : %s", tx.TxHash())
 			return true
 		}

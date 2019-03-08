@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -110,7 +110,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 		repo.lastHashes = append(repo.lastHashes, *hash)
 		repo.height = 0
 		repo.heights[*hash] = repo.height
-		logger.Log(ctx, logger.Verbose, "Added genesis block")
+		logger.Verbose(ctx, "Added genesis block")
 	}
 
 	return nil

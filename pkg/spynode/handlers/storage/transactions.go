@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/tokenized/smart-contract/pkg/spynode/logger"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -40,14 +40,14 @@ func (repo *TxRepository) Load(ctx context.Context) error {
 
 	data, err := repo.store.Read(ctx, unconfirmedPath)
 	if err == storage.ErrNotFound {
-		logger.Log(ctx, logger.Verbose, "No unconfirmed txs to load")
+		logger.Verbose(ctx, "No unconfirmed txs to load")
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	if len(data) == 0 {
-		logger.Log(ctx, logger.Verbose, "No unconfirmed txs to load")
+		logger.Verbose(ctx, "No unconfirmed txs to load")
 		return nil // Empty
 	}
 
@@ -63,12 +63,12 @@ func (repo *TxRepository) Load(ctx context.Context) error {
 		repo.unconfirmed[txid] = tx
 	}
 
-	logger.Log(ctx, logger.Verbose, "Loaded %d unconfirmed txs", len(repo.unconfirmed))
+	logger.Verbose(ctx, "Loaded %d unconfirmed txs", len(repo.unconfirmed))
 	return nil
 }
 
 func (repo *TxRepository) Save(ctx context.Context) error {
-	logger.Log(ctx, logger.Verbose, "Saving %d unconfirmed txs", len(repo.unconfirmed))
+	logger.Verbose(ctx, "Saving %d unconfirmed txs", len(repo.unconfirmed))
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 	return repo.save(ctx)

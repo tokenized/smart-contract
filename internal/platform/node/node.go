@@ -26,7 +26,7 @@ type Values struct {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-type Handler func(ctx context.Context, log *log.Logger, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
+type Handler func(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
@@ -83,7 +83,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		rootKeys, _ := a.wallet.List(pkhs)
 		for _, rootKey := range rootKeys {
 			// Call the wrapped handler functions.
-			if err := handler(ctx, a.log, a.ProtoMux, itx, rootKey); err != nil {
+			if err := handler(ctx, a.ProtoMux, itx, rootKey); err != nil {
 				return err
 			}
 		}

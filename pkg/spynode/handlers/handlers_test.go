@@ -69,7 +69,7 @@ func TestHandlers(test *testing.T) {
 
 	// Setup state
 	state := data.NewState()
-	state.StartHeight = 1
+	state.SetStartHeight(1)
 
 	// Create peer repo
 	peerRepo := handlerStorage.NewPeerRepository(store)
