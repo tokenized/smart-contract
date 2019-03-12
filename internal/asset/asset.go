@@ -1,8 +1,10 @@
 package asset
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -40,7 +42,6 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, assetID string) (
 	if a.Holdings == nil {
 		return nil, ErrNoHoldings
 	}
-
 	return a, nil
 }
 
@@ -49,35 +50,52 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, nu 
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
-	// Set up holdings
-	holding := state.Holding{
-		Address:   nu.IssuerAddress,
-		Balance:   nu.Qty,
-		CreatedAt: now.UnixNano(),
-	}
-
-	holdings := map[string]state.Holding{
-		holding.Address: holding,
-	}
-
 	// Set up asset
 	var a state.Asset
-	a.ID = nu.ID
-	a.Type = nu.Type
-	a.VotingSystem = nu.VotingSystem
-	a.VoteMultiplier = nu.VoteMultiplier
-	a.Qty = nu.Qty
-	a.Holdings = holdings
-	a.CreatedAt = now.UnixNano()
 
-	if a.AuthorizationFlags == nil {
-		a.AuthorizationFlags = []byte{}
+	a.ID = assetID
+	a.Revision = 0
+	a.CreatedAt = uint64(time.Now().UnixNano())
+	a.UpdatedAt = a.CreatedAt
+
+	a.AssetType = nu.AssetType
+	a.AssetAuthFlags = nu.AssetAuthFlags
+	a.TransfersPermitted = nu.TransfersPermitted
+	a.TradeRestrictions = nu.TradeRestrictions
+	a.EnforcementOrdersPermitted = nu.EnforcementOrdersPermitted
+	a.VoteMultiplier = nu.VoteMultiplier
+	a.ReferendumProposal = nu.ReferendumProposal
+	a.InitiativeProposal = nu.InitiativeProposal
+	a.AssetModificationGovernance = nu.AssetModificationGovernance
+	a.TokenQty = nu.TokenQty
+	a.ContractFeeCurrency = nu.ContractFeeCurrency
+	a.ContractFeeVar = nu.ContractFeeVar
+	a.ContractFeeFixed = nu.ContractFeeFixed
+	a.AssetPayload = nu.AssetPayload
+
+	a.Holdings = make(map[string]state.Holding, 1)
+	a.Holdings[nu.IssuerAddress] = state.Holding{
+		Address:   nu.IssuerAddress,
+		Balance:   nu.TokenQty,
+		CreatedAt: a.CreatedAt,
+	}
+
+	if a.AssetAuthFlags == nil {
+		a.AssetAuthFlags = []byte{}
+	}
+	if a.TradeRestrictions == nil {
+		a.TradeRestrictions = []byte{}
+	}
+	if a.ContractFeeCurrency == nil {
+		a.ContractFeeCurrency = []byte{}
+	}
+	if a.AssetPayload == nil {
+		a.AssetPayload = []byte{}
 	}
 
 	if err := Save(ctx, dbConn, contractPKH, a); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -93,23 +111,50 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	}
 
 	// Update fields
-	if upd.Type != nil {
-		a.Type = *upd.Type
-	}
 	if upd.Revision != nil {
 		a.Revision = *upd.Revision
 	}
-	if upd.VotingSystem != nil {
-		a.VotingSystem = *upd.VotingSystem
+	if upd.AssetType != nil {
+		a.AssetType = *upd.AssetType
+	}
+	if upd.AssetAuthFlags != nil {
+		a.AssetAuthFlags = *upd.AssetAuthFlags
+	}
+	if upd.TransfersPermitted != nil {
+		a.TransfersPermitted = *upd.TransfersPermitted
+	}
+	if upd.TradeRestrictions != nil {
+		a.TradeRestrictions = *upd.TradeRestrictions
+	}
+	if upd.EnforcementOrdersPermitted != nil {
+		a.EnforcementOrdersPermitted = *upd.EnforcementOrdersPermitted
 	}
 	if upd.VoteMultiplier != nil {
 		a.VoteMultiplier = *upd.VoteMultiplier
 	}
-	if upd.Qty != nil {
-		a.Qty = *upd.Qty
+	if upd.ReferendumProposal != nil {
+		a.ReferendumProposal = *upd.ReferendumProposal
 	}
-	if upd.AuthorizationFlags != nil {
-		a.AuthorizationFlags = upd.AuthorizationFlags
+	if upd.InitiativeProposal != nil {
+		a.InitiativeProposal = *upd.InitiativeProposal
+	}
+	if upd.AssetModificationGovernance != nil {
+		a.AssetModificationGovernance = *upd.AssetModificationGovernance
+	}
+	if upd.TokenQty != nil {
+		a.TokenQty = *upd.TokenQty
+	}
+	if upd.ContractFeeCurrency != nil {
+		a.ContractFeeCurrency = *upd.ContractFeeCurrency
+	}
+	if upd.ContractFeeVar != nil {
+		a.ContractFeeVar = *upd.ContractFeeVar
+	}
+	if upd.ContractFeeFixed != nil {
+		a.ContractFeeFixed = *upd.ContractFeeFixed
+	}
+	if upd.AssetPayload != nil {
+		a.AssetPayload = *upd.AssetPayload
 	}
 
 	// Update balances
@@ -120,24 +165,44 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	}
 
 	// Update holding statuses
-	if upd.NewHoldingStatus != nil {
-		for pkh, status := range upd.NewHoldingStatus {
+	if upd.NewHoldingStatuses != nil {
+		for pkh, status := range upd.NewHoldingStatuses {
 			holding := MakeHolding(ctx, a, pkh, now)
-			holding.HoldingStatus = status
+			holding.HoldingStatuses = append(holding.HoldingStatuses, *status)
 			a.Holdings[pkh] = *holding
 		}
 	}
 
+	// Clear holding statuses
+	if upd.ClearHoldingStatuses != nil {
+		for pkh, txid := range upd.ClearHoldingStatuses {
+			holding := MakeHolding(ctx, a, pkh, now)
+			found := false
+			for i, status := range holding.HoldingStatuses {
+				if bytes.Equal(status.TxId[:], txid[:]) {
+					// Remove holding status
+					holding.HoldingStatuses = append(holding.HoldingStatuses[:i], holding.HoldingStatuses[i+1:]...)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return errors.New(fmt.Sprintf("Matching hold not found : address %s txid %s", pkh, txid))
+			}
+			a.Holdings[pkh] = *holding
+		}
+	}
+
+	a.UpdatedAt = uint64(time.Now().UnixNano())
+
 	if err := Save(ctx, dbConn, contractPKH, *a); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 // MakeHolding will return a users holding or make one for them.
 func MakeHolding(ctx context.Context, asset *state.Asset, userPKH string, now time.Time) *state.Holding {
-
 	holding, ok := asset.Holdings[userPKH]
 
 	// New holding
@@ -145,7 +210,7 @@ func MakeHolding(ctx context.Context, asset *state.Asset, userPKH string, now ti
 		holding = state.Holding{
 			Address:   userPKH,
 			Balance:   0,
-			CreatedAt: now.UnixNano(),
+			CreatedAt: uint64(now.UnixNano()),
 		}
 	}
 
@@ -155,19 +220,28 @@ func MakeHolding(ctx context.Context, asset *state.Asset, userPKH string, now ti
 // UpdateBalance will set the balance of a users holdings against the supplied asset.
 // New holdings are created for new users and expired holding statuses are cleared.
 func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH string, balance uint64, now time.Time) error {
-
 	// Set balance
 	holding := MakeHolding(ctx, asset, userPKH, now)
 	holding.Balance = balance
 
 	// Clear expired holding status
-	if holding.HoldingStatus != nil && HoldingStatusExpired(ctx, holding.HoldingStatus, now) {
-		holding.HoldingStatus = nil
+	for {
+		removed := false
+		for i, status := range holding.HoldingStatuses {
+			if HoldingStatusExpired(ctx, &status, now) {
+				// Remove expired status
+				holding.HoldingStatuses = append(holding.HoldingStatuses[:i], holding.HoldingStatuses[i+1:]...)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			break
+		}
 	}
 
 	// Put the holding back on the asset
 	asset.Holdings[userPKH] = *holding
-
 	return nil
 }
 
@@ -177,7 +251,6 @@ func GetBalance(ctx context.Context, asset *state.Asset, userPKH string) uint64 
 	if !ok {
 		return 0
 	}
-
 	return holding.Balance
 }
 
@@ -187,7 +260,6 @@ func CheckBalance(ctx context.Context, asset *state.Asset, userPKH string, amoun
 	if !ok {
 		return false
 	}
-
 	return holding.Balance >= amount
 }
 
@@ -199,11 +271,17 @@ func CheckBalanceFrozen(ctx context.Context, asset *state.Asset, userPKH string,
 		return false
 	}
 
-	if holding.HoldingStatus != nil {
-		return HoldingStatusExpired(ctx, holding.HoldingStatus, now)
+	result := holding.Balance
+	for _, status := range holding.HoldingStatuses {
+		if HoldingStatusExpired(ctx, &status, now) {
+			continue
+		}
+		if status.Balance > result {
+			return false // Unfrozen balance is negative
+		}
+		result -= status.Balance
 	}
-
-	return true
+	return result >= amount
 }
 
 // HoldingStatusExpired checks to see if a holding status has expired
@@ -213,14 +291,8 @@ func HoldingStatusExpired(ctx context.Context, hs *state.HoldingStatus, now time
 	}
 
 	// Current time is after expiry, so this order has expired.
-	if now.Unix() > int64(hs.Expires) {
+	if now.UnixNano() > int64(hs.Expires) {
 		return true
 	}
-
 	return false
-}
-
-// IsVotingPermitted returns true if asset allows voting
-func IsVotingPermitted(ctx context.Context, asset *state.Asset) bool {
-	return asset.VotingSystem != "N"
 }

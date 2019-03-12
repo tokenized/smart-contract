@@ -21,28 +21,28 @@ var (
 
 // GetVotingSystemCode returns the most appropriate code for a VotingSystem
 // given the Contract and Vote.
-func GetVotingSystemCode(c state.Contract, v state.Vote) (*string, error) {
-	code := c.VotingSystem
+// func GetVotingSystemCode(c state.Contract, v state.Vote) (*string, error) {
+// code := c.VotingSystem
 
-	// This is not an asset vote, so we are using the Contract voting system
-	if len(v.AssetID) == 0 {
-		return &code, nil
-	}
+// // This is not an asset vote, so we are using the Contract voting system
+// if len(v.AssetID) == 0 {
+// return &code, nil
+// }
 
-	// This is an asset vote
-	asset, ok := c.Assets[v.AssetID]
-	if !ok {
-		return nil, errors.New("Asset not found")
-	}
+// // This is an asset vote
+// asset, ok := c.Assets[v.AssetID]
+// if !ok {
+// return nil, errors.New("Asset not found")
+// }
 
-	// The asset has a voting system, use it
-	if len(asset.VotingSystem) > 0 {
-		return &asset.VotingSystem, nil
-	}
+// // The asset has a voting system, use it
+// if len(asset.VotingSystem) > 0 {
+// return &asset.VotingSystem, nil
+// }
 
-	// Default to the contract voting system
-	return &code, nil
-}
+// // Default to the contract voting system
+// return &code, nil
+// }
 
 // VotingSystem defines the interface the various voting systems noted in
 // the whitepaper.

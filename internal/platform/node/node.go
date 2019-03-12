@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -43,6 +44,7 @@ type Config struct {
 	FeeAddress         string
 	FeeValue           uint64
 	DustLimit          uint64
+	ChainParams        chaincfg.Params
 }
 
 // New creates an App value that handle a set of routes for the application.

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -30,6 +32,10 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	if !ok {
 		return errors.New("Could not assert as *protocol.AssetDefinition")
 	}
+
+	// TODO Check action funding here
+	// Variable depending on the size of the payload.
+	// Fee rate * (response payload size + size of response inputs(average P2PKH input) + size of response outputs(average P2PKH output))
 
 	dbConn := a.MasterDB
 
@@ -81,14 +87,21 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	ac.AssetType = msg.AssetType
 	ac.AssetID = msg.AssetID
 	ac.AssetRevision = 0
-	ac.AuthorizationFlags = msg.AuthorizationFlags
-	ac.VotingSystem = msg.VotingSystem
+	ac.AssetAuthFlags = msg.AssetAuthFlags
+	ac.TransfersPermitted = msg.TransfersPermitted
+	ac.TradeRestrictions = msg.TradeRestrictions
+	ac.EnforcementOrdersPermitted = msg.EnforcementOrdersPermitted
 	ac.VoteMultiplier = msg.VoteMultiplier
-	ac.Qty = msg.Qty
+	ac.ReferendumProposal = msg.ReferendumProposal
+	ac.InitiativeProposal = msg.InitiativeProposal
+	ac.AssetModificationGovernance = msg.AssetModificationGovernance
+	ac.TokenQty = msg.TokenQty
 	ac.ContractFeeCurrency = msg.ContractFeeCurrency
 	ac.ContractFeeVar = msg.ContractFeeVar
 	ac.ContractFeeFixed = msg.ContractFeeFixed
-	ac.Payload = msg.Payload
+	ac.AssetPayloadLen = msg.AssetPayloadLen
+	ac.AssetPayload = msg.AssetPayload
+	ac.Timestamp = uint64(time.Now().UnixNano() / 1e6) // Milliseconds since unix epoch
 
 	// Build outputs
 	// 1 - Contract Address
@@ -98,7 +111,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 		Address: contractAddr,
 		Value:   a.Config.DustLimit,
 	}, {
-		Address: itx.Inputs[0].Address,
+		Address: itx.Inputs[0].Address, // Request must come from issuer
 		Value:   a.Config.DustLimit,
 		Change:  true,
 	}}
@@ -153,22 +166,28 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// @TODO: Likewise when the asset quantity is increased, the amount
 	// must be added to the issuers holding balance.
 
-	// Bump the revision
-	newRevision := as.Revision + 1
-
 	// Asset Creation <- Asset Modification
 	ac := protocol.NewAssetCreation()
-	ac.AssetType = msg.AssetType
-	ac.AssetID = msg.AssetID
-	ac.AssetRevision = newRevision
-	ac.AuthorizationFlags = msg.AuthorizationFlags
-	ac.VotingSystem = msg.VotingSystem
-	ac.VoteMultiplier = msg.VoteMultiplier
-	ac.Qty = msg.Qty
-	ac.ContractFeeCurrency = msg.ContractFeeCurrency
-	ac.ContractFeeVar = msg.ContractFeeVar
-	ac.ContractFeeFixed = msg.ContractFeeFixed
-	ac.Payload = msg.Payload
+
+	ac.AssetType = []byte(as.AssetType)
+	ac.AssetID = []byte(as.ID)
+	ac.AssetRevision = as.Revision + 1 // Bump the revision
+	ac.AssetAuthFlags = as.AssetAuthFlags
+	ac.TransfersPermitted = as.TransfersPermitted
+	ac.TradeRestrictions = as.TradeRestrictions
+	ac.EnforcementOrdersPermitted = as.EnforcementOrdersPermitted
+	ac.VoteMultiplier = as.VoteMultiplier
+	ac.ReferendumProposal = as.ReferendumProposal
+	ac.InitiativeProposal = as.InitiativeProposal
+	ac.AssetModificationGovernance = as.AssetModificationGovernance
+	ac.TokenQty = as.TokenQty
+	ac.ContractFeeCurrency = as.ContractFeeCurrency
+	ac.ContractFeeVar = as.ContractFeeVar
+	ac.ContractFeeFixed = as.ContractFeeFixed
+	ac.AssetPayload = as.AssetPayload
+
+	// Update counts
+	ac.AssetPayloadLen = uint16(len(ac.AssetPayload))
 
 	// Build outputs
 	// 1 - Contract Address
@@ -219,13 +238,21 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 	if as == nil {
 		// Prepare creation object
 		na := asset.NewAsset{
-			IssuerAddress:      itx.Outputs[1].Address.String(), // Second output of formation tx
-			ID:                 string(msg.AssetID),
-			Type:               string(msg.AssetType),
-			VotingSystem:       string(msg.VotingSystem),
-			VoteMultiplier:     msg.VoteMultiplier,
-			Qty:                msg.Qty,
-			AuthorizationFlags: msg.AuthorizationFlags,
+			IssuerAddress:               itx.Outputs[1].Address.String(), // Second output of formation tx
+			AssetType:                   string(msg.AssetType),
+			AssetAuthFlags:              msg.AssetAuthFlags,
+			TransfersPermitted:          msg.TransfersPermitted,
+			TradeRestrictions:           msg.TradeRestrictions,
+			EnforcementOrdersPermitted:  msg.EnforcementOrdersPermitted,
+			VoteMultiplier:              msg.VoteMultiplier,
+			ReferendumProposal:          msg.ReferendumProposal,
+			InitiativeProposal:          msg.InitiativeProposal,
+			AssetModificationGovernance: msg.AssetModificationGovernance,
+			TokenQty:                    msg.TokenQty,
+			ContractFeeCurrency:         msg.ContractFeeCurrency,
+			ContractFeeVar:              msg.ContractFeeVar,
+			ContractFeeFixed:            msg.ContractFeeFixed,
+			AssetPayload:                msg.AssetPayload,
 		}
 		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, assetID)
@@ -238,12 +265,64 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 
 		// Prepare update object
 		ua := asset.UpdateAsset{
-			Revision:           &msg.AssetRevision,
-			Type:               stringPointer(string(msg.AssetType)),
-			VotingSystem:       stringPointer(string(msg.VotingSystem)),
-			VoteMultiplier:     &msg.VoteMultiplier,
-			Qty:                &msg.Qty,
-			AuthorizationFlags: msg.AuthorizationFlags,
+			Revision: &msg.AssetRevision,
+		}
+
+		if as.AssetType != string(msg.AssetType) {
+			ua.AssetType = stringPointer(string(msg.AssetType))
+			logger.Info(ctx, "%s : Updating asset type (%s) : %s", v.TraceID, assetID, *ua.AssetType)
+		}
+		if !bytes.Equal(as.AssetAuthFlags, msg.AssetAuthFlags) {
+			ua.AssetAuthFlags = &msg.AssetAuthFlags
+			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %s", v.TraceID, assetID, *ua.AssetAuthFlags)
+		}
+		if as.TransfersPermitted != msg.TransfersPermitted {
+			ua.TransfersPermitted = &msg.TransfersPermitted
+			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, assetID, *ua.TransfersPermitted)
+		}
+		if !bytes.Equal(as.TradeRestrictions, msg.TradeRestrictions) {
+			ua.TradeRestrictions = &msg.TradeRestrictions
+			logger.Info(ctx, "%s : Updating asset trade restrictions (%s) : %s", v.TraceID, assetID, *ua.TradeRestrictions)
+		}
+		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
+			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
+			logger.Info(ctx, "%s : Updating asset enforcement orders permitted (%s) : %t", v.TraceID, assetID, *ua.EnforcementOrdersPermitted)
+		}
+		if as.VoteMultiplier != msg.VoteMultiplier {
+			ua.VoteMultiplier = &msg.VoteMultiplier
+			logger.Info(ctx, "%s : Updating asset vote multiplier (%s) : %02x", v.TraceID, assetID, *ua.VoteMultiplier)
+		}
+		if as.ReferendumProposal != msg.ReferendumProposal {
+			ua.ReferendumProposal = &msg.ReferendumProposal
+			logger.Info(ctx, "%s : Updating asset referendum proposal (%s) : %t", v.TraceID, assetID, *ua.ReferendumProposal)
+		}
+		if as.InitiativeProposal != msg.InitiativeProposal {
+			ua.InitiativeProposal = &msg.InitiativeProposal
+			logger.Info(ctx, "%s : Updating asset initiative proposal (%s) : %t", v.TraceID, assetID, *ua.InitiativeProposal)
+		}
+		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
+			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
+			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %t", v.TraceID, assetID, *ua.AssetModificationGovernance)
+		}
+		if as.TokenQty != msg.TokenQty {
+			ua.TokenQty = &msg.TokenQty
+			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, assetID, *ua.TokenQty)
+		}
+		if !bytes.Equal(as.ContractFeeCurrency, msg.ContractFeeCurrency) {
+			ua.ContractFeeCurrency = &msg.ContractFeeCurrency
+			logger.Info(ctx, "%s : Updating asset contract fee currency (%s) : %s", v.TraceID, assetID, *ua.ContractFeeCurrency)
+		}
+		if as.ContractFeeVar != msg.ContractFeeVar {
+			ua.ContractFeeVar = &msg.ContractFeeVar
+			logger.Info(ctx, "%s : Updating asset contract fee variable (%s) : %f", v.TraceID, assetID, *ua.ContractFeeVar)
+		}
+		if as.ContractFeeFixed != msg.ContractFeeFixed {
+			ua.ContractFeeFixed = &msg.ContractFeeFixed
+			logger.Info(ctx, "%s : Updating asset contract fee fixed (%s) : %f", v.TraceID, assetID, *ua.ContractFeeFixed)
+		}
+		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
+			ua.AssetPayload = &msg.AssetPayload
+			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, assetID, *ua.AssetPayload)
 		}
 
 		if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {

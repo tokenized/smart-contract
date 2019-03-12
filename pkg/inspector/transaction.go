@@ -156,6 +156,7 @@ func buildInput(tx *wire.MsgTx, n uint32) (*Input, error) {
 		Index:   utxo.Index,
 		Value:   utxo.Value,
 		UTXO:    utxo,
+		FullTx:  tx,
 	}
 
 	return &input, nil

@@ -103,8 +103,8 @@ func BuildTX(key *RootKey, iutxos inspector.UTXOs, outs []txbuilder.TxOutput, ch
 
 	outputs := buildOutputs(outs)
 
-	payload := make([]byte, m.Len(), m.Len())
-	if _, err := m.Read(payload); err != nil {
+	payload, err := m.Serialize()
+	if err != nil {
 		return nil, err
 	}
 

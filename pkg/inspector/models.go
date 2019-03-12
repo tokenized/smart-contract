@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Input struct {
@@ -14,6 +15,7 @@ type Input struct {
 	Index   uint32
 	Value   int64
 	UTXO    UTXO
+	FullTx  *wire.MsgTx
 }
 
 type Output struct {

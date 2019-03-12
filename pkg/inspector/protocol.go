@@ -10,59 +10,59 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address btcutil.Address) Balance {
+// func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address btcutil.Address) Balance {
 
-	b := Balance{}
+// b := Balance{}
 
-	switch m.Type() {
-	case protocol.CodeAssetCreation:
-		o := m.(*protocol.AssetCreation)
-		b.Qty = o.Qty
+// switch m.Type() {
+// case protocol.CodeAssetCreation:
+// o := m.(*protocol.AssetCreation)
+// b.Qty = o.TokenQty
 
-	case protocol.CodeSettlement:
-		o := m.(*protocol.Settlement)
+// case protocol.CodeSettlement:
+// o := m.(*protocol.Settlement)
 
-		// which token balance do we want? is this address for party1 or
-		// party2?
-		if address.String() == itx.Outputs[0].Address.String() {
-			b.Qty = o.Party1TokenQty
-		} else {
-			b.Qty = o.Party2TokenQty
-		}
+// // which token balance do we want? is this address for party1 or
+// // party2?
+// if address.String() == itx.Outputs[0].Address.String() {
+// b.Qty = o.Party1TokenQty
+// } else {
+// b.Qty = o.Party2TokenQty
+// }
 
-	case protocol.CodeFreeze:
-		o := m.(*protocol.Freeze)
+// case protocol.CodeFreeze:
+// o := m.(*protocol.Freeze)
 
-		// this makes the assumption that the amount frozen is the amount
-		// that is held.
-		//
-		// See https://bitbucket.org/tokenized/contract/issues/55/review-freeze
-		b.Qty = o.Qty
-		b.Frozen = o.Qty
+// // this makes the assumption that the amount frozen is the amount
+// // that is held.
+// //
+// // See https://bitbucket.org/tokenized/contract/issues/55/review-freeze
+// b.Qty = o.Qty
+// b.Frozen = o.Qty
 
-	case protocol.CodeThaw:
-		o := m.(*protocol.Thaw)
+// case protocol.CodeThaw:
+// o := m.(*protocol.Thaw)
 
-		b.Qty = o.Qty
-		b.Frozen = 0
+// b.Qty = o.Qty
+// b.Frozen = 0
 
-	case protocol.CodeConfiscation:
-		o := m.(*protocol.Confiscation)
+// case protocol.CodeConfiscation:
+// o := m.(*protocol.Confiscation)
 
-		if address.String() == itx.Outputs[0].Address.String() {
-			b.Qty = o.TargetsQty
-		} else {
-			b.Qty = o.DepositsQty
-		}
+// if address.String() == itx.Outputs[0].Address.String() {
+// b.Qty = o.TargetsQty
+// } else {
+// b.Qty = o.DepositsQty
+// }
 
-	case protocol.CodeReconciliation:
-		o := m.(*protocol.Reconciliation)
-		b.Qty = o.TargetAddressQty
+// case protocol.CodeReconciliation:
+// o := m.(*protocol.Reconciliation)
+// b.Qty = o.TargetAddressQty
 
-	}
+// }
 
-	return b
-}
+// return b
+// }
 
 func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []btcutil.Address {
 

@@ -1,61 +1,89 @@
 package state
 
-import "github.com/tokenized/smart-contract/pkg/inspector"
+import (
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/inspector"
+)
 
 // Contract represents a Smart Contract.
 type Contract struct {
-	ID                          string           `json:"id"`
-	CreatedAt                   int64            `json:"created_at"`
-	UpdatedAt                   int64            `json:"updated_at"`
-	TxHeadCount                 int              `json:"tx_head_count"`
-	IssuerAddress               string           `json:"issuer_address"`
-	OperatorAddress             string           `json:"operator_address"`
-	Revision                    uint16           `json:"revision"`
-	ContractName                string           `json:"name"`
-	ContractFileHash            string           `json:"hash"`
-	GoverningLaw                string           `json:"law"`
-	Jurisdiction                string           `json:"jurisdiction"`
-	ContractExpiration          uint64           `json:"contract_expiration"`
-	URI                         string           `json:"uri"`
-	IssuerID                    string           `json:"issuer_id"`
-	IssuerType                  string           `json:"issuer_type"`
-	ContractOperatorID          string           `json:"tokenizer_id"`
-	AuthorizationFlags          []byte           `json:"authorization_flags"`
-	VotingSystem                string           `json:"voting_system"`
-	InitiativeThreshold         float32          `json:"initiative_threshold"`
-	InitiativeThresholdCurrency string           `json:"initiative_threshold_currency"`
-	Qty                         uint64           `json:"qty"`
-	Assets                      map[string]Asset `json:"assets"`
-	Votes                       map[string]Vote  `json:"votes"`
-	Hashes                      []string         `json:"hashes"`
+	ID              string
+	Revision        uint64
+	CreatedAt       uint64
+	UpdatedAt       uint64
+	IssuerAddress   string
+	OperatorAddress string
+
+	ContractName               string
+	ContractFileType           uint8
+	ContractFile               []byte
+	GoverningLaw               string
+	Jurisdiction               string
+	ContractExpiration         uint64
+	ContractURI                string
+	IssuerName                 string
+	IssuerType                 byte
+	IssuerLogoURL              string
+	ContractOperatorID         string
+	ContractAuthFlags          []byte
+	VotingSystems              []VotingSystem
+	RestrictedQtyAssets        uint64
+	ReferendumProposal         bool
+	InitiativeProposal         bool
+	Registries                 []Registry
+	IssuerAddressSpecified     bool
+	UnitNumber                 string
+	BuildingNumber             string
+	Street                     string
+	SuburbCity                 string
+	TerritoryStateProvinceCode string
+	CountryCode                string
+	PostalZIPCode              string
+	EmailAddress               string
+	PhoneNumber                string
+	KeyRoles                   []KeyRole
+	NotableRoles               []NotableRole
+
+	Assets map[string]Asset
+	Votes  map[string]Vote
 }
 
 type Asset struct {
-	ID                 string             `json:"id"`
-	Type               string             `json:"type"`
-	Revision           uint16             `json:"revision"`
-	AuthorizationFlags []byte             `json:"auth_flags"`
-	VotingSystem       string             `json:"voting_system"`
-	VoteMultiplier     uint8              `json:"vote_multiplier"`
-	Qty                uint64             `json:"qty"`
-	TxnFeeType         byte               `json:"txn_fee_type"`
-	TxnFeeCurrency     string             `json:"txn_fee_currency"`
-	TxnFeeVar          float32            `json:"txn_fee_var,omitempty"`
-	TxnFeeFixed        float32            `json:"txn_fee_fixed,omitempty"`
-	Holdings           map[string]Holding `json:"holdings"`
-	CreatedAt          int64              `json:"created_at"`
+	ID        string
+	Revision  uint64
+	CreatedAt uint64
+	UpdatedAt uint64
+
+	AssetType                   string
+	AssetAuthFlags              []byte
+	TransfersPermitted          bool
+	TradeRestrictions           []byte
+	EnforcementOrdersPermitted  bool
+	VoteMultiplier              uint8
+	ReferendumProposal          bool
+	InitiativeProposal          bool
+	AssetModificationGovernance bool
+	TokenQty                    uint64
+	ContractFeeCurrency         []byte
+	ContractFeeVar              float32
+	ContractFeeFixed            float32
+	AssetPayload                []byte
+
+	Holdings map[string]Holding
 }
 
 type Holding struct {
-	Address       string         `json:"address"`
-	Balance       uint64         `json:"balance"`
-	HoldingStatus *HoldingStatus `json:"order_status,omitempty"`
-	CreatedAt     int64          `json:"created_at"`
+	Address         string          `json:"address"`
+	Balance         uint64          `json:"balance"`
+	HoldingStatuses []HoldingStatus `json:"order_status,omitempty"`
+	CreatedAt       uint64          `json:"created_at"`
 }
 
 type HoldingStatus struct {
 	Code    string `json:"code"`
 	Expires uint64 `json:"expires,omitempty"`
+	Balance uint64 `json:"balance"`
+	TxId    chainhash.Hash
 }
 
 type Vote struct {
@@ -74,7 +102,7 @@ type Vote struct {
 	UTXO                 inspector.UTXO    `json:"utxo"`
 	Result               *Result           `json:"result,omitempty"`
 	UsedBy               string            `json:"used_by,omit_empty"`
-	CreatedAt            int64             `json:"created_at"`
+	CreatedAt            uint64            `json:"created_at"`
 }
 
 type Ballot struct {
@@ -83,7 +111,34 @@ type Ballot struct {
 	AssetID   string  `json:"asset_id"`
 	VoteTxnID string  `json:"vote_txn_id"`
 	Vote      []uint8 `json:"vote"`
-	CreatedAt int64   `json:"created_at"`
+	CreatedAt uint64  `json:"created_at"`
 }
 
 type Result map[uint8]uint64
+
+type VotingSystem struct {
+	Name                        string  `json:"name"`
+	System                      []byte  `json:"system"`
+	Method                      byte    `json:"method"`
+	Logic                       byte    `json:"logic"`
+	ThresholdPercentage         uint8   `json:"threshold_percent"`
+	VoteMultiplierPermitted     byte    `json:"multiplier_permitted"`
+	InitiativeThreshold         float32 `json:"threshold"`
+	InitiativeThresholdCurrency []byte  `json:"threshold_currency"`
+}
+
+type Registry struct {
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	PublicKey string `json:"public_key"`
+}
+
+type KeyRole struct {
+	Type byte   `json:"type"`
+	Name string `json:"name"`
+}
+
+type NotableRole struct {
+	Type byte   `json:"type"`
+	Name string `json:"name"`
+}

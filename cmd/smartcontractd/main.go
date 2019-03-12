@@ -215,7 +215,10 @@ func main() {
 		FeeAddress:         cfg.Contract.FeeAddress,
 		FeeValue:           cfg.Contract.FeeAmount,
 		DustLimit:          546,
+		ChainParams:        chaincfg.MainNetParams,
 	}
+
+	appConfig.ChainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
 
 	// -------------------------------------------------------------------------
 	// Register Hooks

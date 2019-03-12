@@ -45,34 +45,53 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 	var c state.Contract
 
 	c.ID = address
-	c.IssuerAddress = nu.IssuerAddress
-	c.OperatorAddress = nu.OperatorAddress
+	c.Revision = 0
+	c.CreatedAt = uint64(time.Now().UnixNano())
+	c.UpdatedAt = c.CreatedAt
+
 	c.ContractName = nu.ContractName
-	c.ContractFileHash = nu.ContractFileHash
+	c.ContractFileType = nu.ContractFileType
+	c.ContractFile = nu.ContractFile
 	c.GoverningLaw = nu.GoverningLaw
 	c.Jurisdiction = nu.Jurisdiction
 	c.ContractExpiration = nu.ContractExpiration
-	c.URI = nu.URI
-	c.Revision = 0
-	c.IssuerID = nu.IssuerID
-	c.ContractOperatorID = nu.ContractOperatorID
-	c.AuthorizationFlags = nu.AuthorizationFlags
-	c.InitiativeThreshold = nu.InitiativeThreshold
-	c.InitiativeThresholdCurrency = nu.InitiativeThresholdCurrency
-	c.Qty = nu.Qty
+	c.ContractURI = nu.ContractURI
+	c.IssuerName = nu.IssuerName
 	c.IssuerType = nu.IssuerType
-	c.VotingSystem = nu.VotingSystem
+	c.IssuerLogoURL = nu.IssuerLogoURL
+	c.ContractOperatorID = nu.ContractOperatorID
+	c.ContractAuthFlags = nu.ContractAuthFlags
+	c.VotingSystems = nu.VotingSystems
+	c.RestrictedQtyAssets = nu.RestrictedQtyAssets
+	c.ReferendumProposal = nu.ReferendumProposal
+	c.InitiativeProposal = nu.InitiativeProposal
+	c.Registries = nu.Registries
+	c.UnitNumber = nu.UnitNumber
+	c.BuildingNumber = nu.BuildingNumber
+	c.Street = nu.Street
+	c.SuburbCity = nu.SuburbCity
+	c.TerritoryStateProvinceCode = nu.TerritoryStateProvinceCode
+	c.CountryCode = nu.CountryCode
+	c.PostalZIPCode = nu.PostalZIPCode
+	c.EmailAddress = nu.EmailAddress
+	c.PhoneNumber = nu.PhoneNumber
+	c.KeyRoles = nu.KeyRoles
+	c.NotableRoles = nu.NotableRoles
 
-	if c.AuthorizationFlags == nil {
-		c.AuthorizationFlags = []byte{}
+	if c.ContractAuthFlags == nil {
+		c.ContractAuthFlags = []byte{}
 	}
-
-	if nu.VotingSystem == string(0x0) {
-		c.VotingSystem = ""
+	if c.VotingSystems == nil {
+		c.VotingSystems = []state.VotingSystem{}
 	}
-
-	if nu.IssuerType == string(0x0) {
-		c.IssuerType = ""
+	if c.Registries == nil {
+		c.Registries = []state.Registry{}
+	}
+	if c.KeyRoles == nil {
+		c.KeyRoles = []state.KeyRole{}
+	}
+	if c.NotableRoles == nil {
+		c.NotableRoles = []state.NotableRole{}
 	}
 
 	if err := Save(ctx, dbConn, c); err != nil {
@@ -100,11 +119,15 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	if upd.OperatorAddress != nil {
 		c.OperatorAddress = *upd.OperatorAddress
 	}
+
 	if upd.ContractName != nil {
 		c.ContractName = *upd.ContractName
 	}
-	if upd.ContractFileHash != nil {
-		c.ContractFileHash = *upd.ContractFileHash
+	if upd.ContractFileType != nil {
+		c.ContractFileType = *upd.ContractFileType
+	}
+	if upd.ContractFile != nil {
+		c.ContractFile = *upd.ContractFile
 	}
 	if upd.GoverningLaw != nil {
 		c.GoverningLaw = *upd.GoverningLaw
@@ -115,43 +138,89 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	if upd.ContractExpiration != nil {
 		c.ContractExpiration = *upd.ContractExpiration
 	}
-	if upd.URI != nil {
-		c.URI = *upd.URI
+	if upd.ContractURI != nil {
+		c.ContractURI = *upd.ContractURI
 	}
-	if upd.Revision != nil {
-		c.Revision = *upd.Revision
+	if upd.IssuerName != nil {
+		c.IssuerName = *upd.IssuerName
 	}
-	if upd.IssuerID != nil {
-		c.IssuerID = *upd.IssuerID
+	if upd.IssuerType != nil {
+		c.IssuerType = *upd.IssuerType
+	}
+	if upd.IssuerLogoURL != nil {
+		c.IssuerLogoURL = *upd.IssuerLogoURL
 	}
 	if upd.ContractOperatorID != nil {
 		c.ContractOperatorID = *upd.ContractOperatorID
 	}
-	if upd.AuthorizationFlags != nil {
-		c.AuthorizationFlags = upd.AuthorizationFlags
+	if upd.ContractAuthFlags != nil {
+		c.ContractAuthFlags = *upd.ContractAuthFlags
+		if c.ContractAuthFlags == nil {
+			c.ContractAuthFlags = []byte{}
+		}
 	}
-	if upd.InitiativeThreshold != nil {
-		c.InitiativeThreshold = *upd.InitiativeThreshold
+	if upd.VotingSystems != nil {
+		c.VotingSystems = *upd.VotingSystems
+		if c.VotingSystems == nil {
+			c.VotingSystems = []state.VotingSystem{}
+		}
 	}
-	if upd.InitiativeThresholdCurrency != nil {
-		c.InitiativeThresholdCurrency = *upd.InitiativeThresholdCurrency
+	if upd.RestrictedQtyAssets != nil {
+		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
 	}
-	if upd.Qty != nil {
-		c.Qty = *upd.Qty
+	if upd.ReferendumProposal != nil {
+		c.ReferendumProposal = *upd.ReferendumProposal
+	}
+	if upd.InitiativeProposal != nil {
+		c.InitiativeProposal = *upd.InitiativeProposal
+	}
+	if upd.Registries != nil {
+		c.Registries = *upd.Registries
+		if c.Registries == nil {
+			c.Registries = []state.Registry{}
+		}
+	}
+	if upd.UnitNumber != nil {
+		c.UnitNumber = *upd.UnitNumber
+	}
+	if upd.BuildingNumber != nil {
+		c.BuildingNumber = *upd.BuildingNumber
+	}
+	if upd.Street != nil {
+		c.Street = *upd.Street
+	}
+	if upd.SuburbCity != nil {
+		c.SuburbCity = *upd.SuburbCity
+	}
+	if upd.TerritoryStateProvinceCode != nil {
+		c.TerritoryStateProvinceCode = *upd.TerritoryStateProvinceCode
+	}
+	if upd.CountryCode != nil {
+		c.CountryCode = *upd.CountryCode
+	}
+	if upd.PostalZIPCode != nil {
+		c.PostalZIPCode = *upd.PostalZIPCode
+	}
+	if upd.EmailAddress != nil {
+		c.EmailAddress = *upd.EmailAddress
+	}
+	if upd.PhoneNumber != nil {
+		c.PhoneNumber = *upd.PhoneNumber
+	}
+	if upd.KeyRoles != nil {
+		c.KeyRoles = *upd.KeyRoles
+		if c.KeyRoles == nil {
+			c.KeyRoles = []state.KeyRole{}
+		}
+	}
+	if upd.NotableRoles != nil {
+		c.NotableRoles = *upd.NotableRoles
+		if c.NotableRoles == nil {
+			c.NotableRoles = []state.NotableRole{}
+		}
 	}
 
-	if upd.IssuerType != nil {
-		c.IssuerType = *upd.IssuerType
-		if c.IssuerType == string(0x0) {
-			c.IssuerType = ""
-		}
-	}
-	if upd.VotingSystem != nil {
-		c.VotingSystem = *upd.VotingSystem
-		if c.IssuerType == string(0x0) {
-			c.VotingSystem = ""
-		}
-	}
+	c.UpdatedAt = uint64(time.Now().UnixNano())
 
 	if err := Save(ctx, dbConn, *c); err != nil {
 		return err
@@ -163,10 +232,10 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 // CanHaveMoreAssets returns true if an Asset can be added to the Contract,
 // false otherwise.
 //
-// A "dynamic" contract is permitted to have unlimted assets if the
+// A "dynamic" contract is permitted to have unlimited assets if the
 // contract.Qty == 0.
 func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
-	if contract.Qty == 0 {
+	if contract.RestrictedQtyAssets == 0 {
 		return true
 	}
 
@@ -175,7 +244,7 @@ func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
 
 	// more assets can be added if the current total is less than the limit
 	// imposed by the contract.
-	return total < contract.Qty
+	return total < contract.RestrictedQtyAssets
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract
@@ -196,5 +265,5 @@ func IsOperator(ctx context.Context, contract *state.Contract, pkh string) bool 
 
 // IsVotingPermitted returns true if contract allows voting
 func IsVotingPermitted(ctx context.Context, contract *state.Contract) bool {
-	return contract.VotingSystem != "N"
+	return len(contract.VotingSystems) != 0
 }

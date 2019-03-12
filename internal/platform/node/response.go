@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	MinimumForResponse = protocol.LimitDefault
+	MinimumForResponse = protocol.LimitDefault // TODO This should be variable depending on the size of the payload. Fee rate * (payload size + response inputs and outputs)
 )
 
 // Output is an output address for a response
@@ -84,7 +84,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, itx *inspector.Tra
 	// Build rejection
 	rejection := protocol.NewRejection()
 	rejection.RejectionType = code
-	rejection.Message = protocol.RejectionCodes[code]
+	rejection.MessagePayload.Set(protocol.RejectionCodes[code])
 
 	// Sending the message to the sender of the message being rejected
 	outs := []txbuilder.TxOutput{

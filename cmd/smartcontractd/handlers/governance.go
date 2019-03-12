@@ -55,14 +55,14 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
 		logger.Warn(ctx, "%s : Contract does not allow voting: %s", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
 	}
 
 	// Validate issuer address
-	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
+	issuerAddress, err := btcutil.DecodeAddress(ct.IssuerAddress, &chaincfg.MainNetParams)
 	if err != nil {
 		logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
+		return err
 	}
 
 	// Sender must hold balance of at least one asset
@@ -72,10 +72,10 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
 
-	// Validate messages values
+	// TODO Validate messages values
 	if !vote.ValidateInitiative(msg) {
 		logger.Warn(ctx, "%s : Initiative validation failed: %s %s", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidInitiative)
 	}
 
 	// If an asset is specified
