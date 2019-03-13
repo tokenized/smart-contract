@@ -26,11 +26,11 @@ type Output struct {
 }
 
 type UTXO struct {
-	AddressID string         `db:"address_id" json:"address_id"`
-	Hash      chainhash.Hash `db:"hash" json:"hash"`
-	PkScript  []byte         `db:"pkscript" json:"pkscript"`
-	Index     uint32         `db:"index" json:"index"`
-	Value     int64          `db:"value" json:"value"`
+	AddressID string
+	Hash      chainhash.Hash
+	PkScript  []byte
+	Index     uint32
+	Value     int64
 }
 
 func (u UTXO) ID() string {
