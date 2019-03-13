@@ -7,12 +7,12 @@ import (
 
 // Contract represents a Smart Contract.
 type Contract struct {
-	ID              string
-	Revision        uint64
-	CreatedAt       uint64
-	UpdatedAt       uint64
-	IssuerAddress   string
-	OperatorAddress string
+	ID        string
+	Revision  uint64
+	CreatedAt uint64
+	UpdatedAt uint64
+	Issuer    string
+	Operator  string
 
 	ContractName               string
 	ContractFileType           uint8
@@ -31,7 +31,7 @@ type Contract struct {
 	ReferendumProposal         bool
 	InitiativeProposal         bool
 	Registries                 []Registry
-	IssuerAddressSpecified     bool
+	IssuerAddress              bool
 	UnitNumber                 string
 	BuildingNumber             string
 	Street                     string

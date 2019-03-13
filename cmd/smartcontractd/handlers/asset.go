@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -56,7 +57,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	}
 
 	// Verify issuer is sender of tx.
-	if itx.Inputs[0].Address.String() != ct.IssuerAddress {
+	if itx.Inputs[0].Address.String() != ct.Issuer {
 		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr, string(msg.AssetID))
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
@@ -84,24 +85,13 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.NewAssetCreation()
-	ac.AssetType = msg.AssetType
-	ac.AssetID = msg.AssetID
-	ac.AssetRevision = 0
-	ac.AssetAuthFlags = msg.AssetAuthFlags
-	ac.TransfersPermitted = msg.TransfersPermitted
-	ac.TradeRestrictions = msg.TradeRestrictions
-	ac.EnforcementOrdersPermitted = msg.EnforcementOrdersPermitted
-	ac.VoteMultiplier = msg.VoteMultiplier
-	ac.ReferendumProposal = msg.ReferendumProposal
-	ac.InitiativeProposal = msg.InitiativeProposal
-	ac.AssetModificationGovernance = msg.AssetModificationGovernance
-	ac.TokenQty = msg.TokenQty
-	ac.ContractFeeCurrency = msg.ContractFeeCurrency
-	ac.ContractFeeVar = msg.ContractFeeVar
-	ac.ContractFeeFixed = msg.ContractFeeFixed
-	ac.AssetPayloadLen = msg.AssetPayloadLen
-	ac.AssetPayload = msg.AssetPayload
-	ac.Timestamp = uint64(time.Now().UnixNano() / 1e6) // Milliseconds since unix epoch
+
+	err = platform.Convert(msg, ac)
+	if err != nil {
+		return err
+	}
+
+	ac.Timestamp = uint64(time.Now().UnixNano())
 
 	// Build outputs
 	// 1 - Contract Address
@@ -169,25 +159,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// Asset Creation <- Asset Modification
 	ac := protocol.NewAssetCreation()
 
-	ac.AssetType = []byte(as.AssetType)
-	ac.AssetID = []byte(as.ID)
-	ac.AssetRevision = as.Revision + 1 // Bump the revision
-	ac.AssetAuthFlags = as.AssetAuthFlags
-	ac.TransfersPermitted = as.TransfersPermitted
-	ac.TradeRestrictions = as.TradeRestrictions
-	ac.EnforcementOrdersPermitted = as.EnforcementOrdersPermitted
-	ac.VoteMultiplier = as.VoteMultiplier
-	ac.ReferendumProposal = as.ReferendumProposal
-	ac.InitiativeProposal = as.InitiativeProposal
-	ac.AssetModificationGovernance = as.AssetModificationGovernance
-	ac.TokenQty = as.TokenQty
-	ac.ContractFeeCurrency = as.ContractFeeCurrency
-	ac.ContractFeeVar = as.ContractFeeVar
-	ac.ContractFeeFixed = as.ContractFeeFixed
-	ac.AssetPayload = as.AssetPayload
+	err = platform.Convert(msg, ac)
+	if err != nil {
+		return err
+	}
 
-	// Update counts
-	ac.AssetPayloadLen = uint16(len(ac.AssetPayload))
+	ac.AssetRevision = as.Revision + 1
+	ac.Timestamp = uint64(time.Now().UnixNano())
 
 	// Build outputs
 	// 1 - Contract Address
@@ -237,23 +215,15 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 	// Create or update Asset
 	if as == nil {
 		// Prepare creation object
-		na := asset.NewAsset{
-			IssuerAddress:               itx.Outputs[1].Address.String(), // Second output of formation tx
-			AssetType:                   string(msg.AssetType),
-			AssetAuthFlags:              msg.AssetAuthFlags,
-			TransfersPermitted:          msg.TransfersPermitted,
-			TradeRestrictions:           msg.TradeRestrictions,
-			EnforcementOrdersPermitted:  msg.EnforcementOrdersPermitted,
-			VoteMultiplier:              msg.VoteMultiplier,
-			ReferendumProposal:          msg.ReferendumProposal,
-			InitiativeProposal:          msg.InitiativeProposal,
-			AssetModificationGovernance: msg.AssetModificationGovernance,
-			TokenQty:                    msg.TokenQty,
-			ContractFeeCurrency:         msg.ContractFeeCurrency,
-			ContractFeeVar:              msg.ContractFeeVar,
-			ContractFeeFixed:            msg.ContractFeeFixed,
-			AssetPayload:                msg.AssetPayload,
+		na := asset.NewAsset{}
+
+		err = platform.Convert(msg, na)
+		if err != nil {
+			return err
 		}
+
+		na.IssuerAddress = itx.Outputs[1].Address.String() // Second output of formation tx
+
 		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, assetID)
 			return err

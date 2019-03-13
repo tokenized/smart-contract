@@ -113,11 +113,11 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	}
 
 	// Update fields
-	if upd.IssuerAddress != nil {
-		c.IssuerAddress = *upd.IssuerAddress
+	if upd.Issuer != nil {
+		c.Issuer = *upd.Issuer
 	}
-	if upd.OperatorAddress != nil {
-		c.OperatorAddress = *upd.OperatorAddress
+	if upd.Operator != nil {
+		c.Operator = *upd.Operator
 	}
 
 	if upd.ContractName != nil {
@@ -260,7 +260,7 @@ func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH string
 
 // IsOperator will check if the supplied pkh has operator permission (issuer or operator)
 func IsOperator(ctx context.Context, contract *state.Contract, pkh string) bool {
-	return contract.IssuerAddress == pkh || contract.OperatorAddress == pkh
+	return contract.Issuer == pkh || contract.Operator == pkh
 }
 
 // IsVotingPermitted returns true if contract allows voting

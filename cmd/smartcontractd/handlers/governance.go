@@ -5,8 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -59,11 +57,11 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	}
 
 	// Validate issuer address
-	issuerAddress, err := btcutil.DecodeAddress(ct.IssuerAddress, &chaincfg.MainNetParams)
-	if err != nil {
-		logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
-		return err
-	}
+	// issuerAddress, err := btcutil.DecodeAddress(ct.IssuerAddress, &chaincfg.MainNetParams)
+	// if err != nil {
+	// logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
+	// return err
+	// }
 
 	// Sender must hold balance of at least one asset
 	senderAddr := itx.Inputs[0].Address
@@ -95,10 +93,10 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 		}
 
 		// Asset does not allow voting
-		if !asset.IsVotingPermitted(ctx, as) {
-			logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
-		}
+		// if !asset.IsVotingPermitted(ctx, as) {
+		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
+		// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
+		// }
 
 		// Sender does not have any balance of the asset
 		if asset.GetBalance(ctx, as, senderAddr.String()) < 1 {
@@ -107,47 +105,49 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 		}
 	}
 
-	logger.Info(ctx, "%s : Initiative Request : %s %s", v.TraceID, contractAddr, assetID)
+	// logger.Info(ctx, "%s : Initiative Request : %s %s", v.TraceID, contractAddr, assetID)
+	logger.Warn(ctx, "%s : Initiative Request Not Implemented : %s %s", v.TraceID, contractAddr, assetID)
+	return errors.New("Initiative Request Not Implemented")
 
 	// TODO(srg) auth flags
 
 	// Vote <- Initiative
-	vote := protocol.NewVote()
-	vote.AssetType = msg.AssetType
-	vote.AssetID = msg.AssetID
-	vote.VoteType = msg.VoteType
-	vote.VoteOptions = msg.VoteOptions
-	vote.VoteMax = msg.VoteMax
-	vote.VoteLogic = msg.VoteLogic
-	vote.ProposalDescription = msg.ProposalDescription
-	vote.ProposalDocumentHash = msg.ProposalDocumentHash
-	vote.VoteCutOffTimestamp = msg.VoteCutOffTimestamp
-	vote.Timestamp = uint64(v.Now.Unix())
+	// vote := protocol.NewVote()
+	// vote.AssetType = msg.AssetType
+	// vote.AssetID = msg.AssetID
+	// vote.VoteType = msg.VoteType
+	// vote.VoteOptions = msg.VoteOptions
+	// vote.VoteMax = msg.VoteMax
+	// vote.VoteLogic = msg.VoteLogic
+	// vote.ProposalDescription = msg.ProposalDescription
+	// vote.ProposalDocumentHash = msg.ProposalDocumentHash
+	// vote.VoteCutOffTimestamp = msg.VoteCutOffTimestamp
+	// vote.Timestamp = uint64(v.Now.Unix())
 
-	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer Address (Change)
-	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddr,
-		Value:   g.Config.DustLimit,
-	}, {
-		Address: issuerAddress,
-		Value:   g.Config.DustLimit,
-		Change:  true,
-	}}
+	// // Build outputs
+	// // 1 - Contract Address
+	// // 2 - Issuer Address (Change)
+	// // 3 - Fee
+	// outs := []node.Output{{
+	// Address: contractAddr,
+	// Value:   g.Config.DustLimit,
+	// }, {
+	// Address: issuerAddress,
+	// Value:   g.Config.DustLimit,
+	// Change:  true,
+	// }}
 
-	// Add fee output
-	if fee := node.OutputFee(ctx, g.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	// // Add fee output
+	// if fee := node.OutputFee(ctx, g.Config); fee != nil {
+	// outs = append(outs, *fee)
+	// }
 
-	// Respond specifically using the first UTXO
-	itxUtxos := itx.UTXOs()
-	utxos := inspector.UTXOs{itxUtxos[0]}
+	// // Respond specifically using the first UTXO
+	// itxUtxos := itx.UTXOs()
+	// utxos := inspector.UTXOs{itxUtxos[0]}
 
-	// Respond with a vote action
-	return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
+	// // Respond with a vote action
+	// return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
 }
 
 // ReferendumRequest handles an incoming Referendum request and prepares a BallotCounted response
@@ -180,15 +180,15 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	// Contract does not allow voting
 	if !contract.IsVotingPermitted(ctx, ct) {
 		logger.Warn(ctx, "%s : Contract does not allow voting: %s", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
 	}
 
 	// Validate issuer address
-	issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
-	if err != nil {
-		logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
-	}
+	// issuerAddress, err := btcutil.DecodeAddress(string(ct.IssuerAddress), &chaincfg.MainNetParams)
+	// if err != nil {
+	// logger.Warn(ctx, "%s : Invalid issuer address: %s %s", v.TraceID, contractAddr, ct.IssuerAddress)
+	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
+	// }
 
 	// Sender must be a contract operator
 	senderAddr := itx.Inputs[0].Address
@@ -198,10 +198,10 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	}
 
 	// Validate messages values
-	if !vote.ValidateReferendum(msg) {
-		logger.Warn(ctx, "%s : Initiative validation failed: %s %s", v.TraceID, contractAddr, senderAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
-	}
+	// if !vote.ValidateReferendum(msg) {
+	// logger.Warn(ctx, "%s : Initiative validation failed: %s %s", v.TraceID, contractAddr, senderAddr)
+	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInvalidValue)
+	// }
 
 	// If an asset is specified
 	assetID := strings.Trim(string(msg.AssetID), "\x00")
@@ -220,53 +220,55 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 		}
 
 		// Asset does not allow voting
-		if !asset.IsVotingPermitted(ctx, as) {
-			logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
-			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAuthFlags)
-		}
+		// if !asset.IsVotingPermitted(ctx, as) {
+		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
+		// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
+		// }
 	}
 
-	logger.Info(ctx, "%s : Referendum Request : %s %s", v.TraceID, contractAddr, assetID)
+	// logger.Info(ctx, "%s : Referendum Request : %s %s", v.TraceID, contractAddr, assetID)
+	logger.Warn(ctx, "%s : Referendum Request Not Implemented : %s %s", v.TraceID, contractAddr, assetID)
+	return errors.New("Referendum Request Not Implemented")
 
 	// TODO(srg) auth flags
 
 	// Vote <- Referendum
-	vote := protocol.NewVote()
-	vote.AssetType = msg.AssetType
-	vote.AssetID = msg.AssetID
-	vote.VoteType = msg.VoteType
-	vote.VoteOptions = msg.VoteOptions
-	vote.VoteMax = msg.VoteMax
-	vote.VoteLogic = msg.VoteLogic
-	vote.ProposalDescription = msg.ProposalDescription
-	vote.ProposalDocumentHash = msg.ProposalDocumentHash
-	vote.VoteCutOffTimestamp = msg.VoteCutOffTimestamp
-	vote.Timestamp = uint64(v.Now.Unix())
+	// vote := protocol.NewVote()
+	// vote.AssetType = msg.AssetType
+	// vote.AssetID = msg.AssetID
+	// vote.VoteType = msg.VoteType
+	// vote.VoteOptions = msg.VoteOptions
+	// vote.VoteMax = msg.VoteMax
+	// vote.VoteLogic = msg.VoteLogic
+	// vote.ProposalDescription = msg.ProposalDescription
+	// vote.ProposalDocumentHash = msg.ProposalDocumentHash
+	// vote.VoteCutOffTimestamp = msg.VoteCutOffTimestamp
+	// vote.Timestamp = uint64(v.Now.Unix())
 
-	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer Address (Change)
-	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddr,
-		Value:   g.Config.DustLimit,
-	}, {
-		Address: issuerAddress,
-		Value:   g.Config.DustLimit,
-		Change:  true,
-	}}
+	// // Build outputs
+	// // 1 - Contract Address
+	// // 2 - Issuer Address (Change)
+	// // 3 - Fee
+	// outs := []node.Output{{
+	// Address: contractAddr,
+	// Value:   g.Config.DustLimit,
+	// }, {
+	// Address: issuerAddress,
+	// Value:   g.Config.DustLimit,
+	// Change:  true,
+	// }}
 
-	// Add fee output
-	if fee := node.OutputFee(ctx, g.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	// // Add fee output
+	// if fee := node.OutputFee(ctx, g.Config); fee != nil {
+	// outs = append(outs, *fee)
+	// }
 
-	// Respond specifically using the first UTXO
-	itxUtxos := itx.UTXOs()
-	utxos := inspector.UTXOs{itxUtxos[0]}
+	// // Respond specifically using the first UTXO
+	// itxUtxos := itx.UTXOs()
+	// utxos := inspector.UTXOs{itxUtxos[0]}
 
-	// Respond with a vote action
-	return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
+	// // Respond with a vote action
+	// return node.RespondUTXO(ctx, mux, itx, rk, &vote, outs, utxos)
 }
 
 // VoteResponse handles an incoming Vote request and prepares a BallotCounted response

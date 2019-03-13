@@ -4,8 +4,8 @@ import "github.com/tokenized/smart-contract/internal/platform/state"
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
-	IssuerAddress   string
-	OperatorAddress string
+	Issuer   string
+	Operator string
 
 	ContractName               string
 	ContractFileType           uint8
@@ -44,8 +44,8 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
-	IssuerAddress   *string
-	OperatorAddress *string
+	Issuer   *string
+	Operator *string
 
 	ContractName               *string
 	ContractFileType           *uint8

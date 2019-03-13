@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -54,43 +55,14 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.NewContractFormation()
+
+	err = platform.Convert(msg, cf)
+	if err != nil {
+		return err
+	}
+
 	cf.ContractRevision = 0
 	cf.Timestamp = uint64(time.Now().UnixNano())
-
-	cf.ContractName = msg.ContractName
-	cf.ContractFileType = msg.ContractFileType
-	cf.LenContractFile = msg.LenContractFile
-	cf.ContractFile = msg.ContractFile
-	cf.GoverningLaw = msg.GoverningLaw
-	cf.Jurisdiction = msg.Jurisdiction
-	cf.ContractExpiration = msg.ContractExpiration
-	cf.ContractURI = msg.ContractURI
-	cf.IssuerName = msg.IssuerName
-	cf.IssuerType = msg.IssuerType
-	cf.IssuerLogoURL = msg.IssuerLogoURL
-	cf.ContractOperatorID = msg.ContractOperatorID
-	cf.ContractAuthFlags = msg.ContractAuthFlags
-	cf.VotingSystemCount = msg.VotingSystemCount
-	cf.VotingSystems = msg.VotingSystems
-	cf.RestrictedQtyAssets = msg.RestrictedQtyAssets
-	cf.ReferendumProposal = msg.ReferendumProposal
-	cf.InitiativeProposal = msg.InitiativeProposal
-	cf.RegistryCount = msg.RegistryCount
-	cf.Registries = msg.Registries
-	cf.IssuerAddress = msg.IssuerAddress
-	cf.UnitNumber = msg.UnitNumber
-	cf.BuildingNumber = msg.BuildingNumber
-	cf.Street = msg.Street
-	cf.SuburbCity = msg.SuburbCity
-	cf.TerritoryStateProvinceCode = msg.TerritoryStateProvinceCode
-	cf.CountryCode = msg.CountryCode
-	cf.PostalZIPCode = msg.PostalZIPCode
-	cf.EmailAddress = msg.EmailAddress
-	cf.PhoneNumber = msg.PhoneNumber
-	cf.KeyRolesCount = msg.KeyRolesCount
-	cf.KeyRoles = msg.KeyRoles
-	cf.NotableRolesCount = msg.NotableRolesCount
-	cf.NotableRoles = msg.NotableRoles
 
 	// Build outputs
 	// 1 - Contract Address
@@ -161,6 +133,14 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 
 	// Contract Formation <- Contract Amendment
 	cf := protocol.NewContractFormation()
+
+	// Get current state
+	err = platform.Convert(ct, cf)
+	if err != nil {
+		return err
+	}
+
+	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = uint64(time.Now().UnixNano())
 
@@ -280,64 +260,25 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractAddr := rk.Address
+	contractName := msg.ContractName.String()
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, msg.ContractName.EncodedString(msg.TextEncoding), err.Error())
+		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, contractName, err.Error())
 		return err
 	}
 
 	// Create or update Contract
 	if ct == nil {
-		contractName := msg.ContractName.EncodedString(msg.TextEncoding)
-
 		// Prepare creation object
-		nc := contract.NewContract{
-			IssuerAddress:              itx.Outputs[1].Address.String(), // Second output of formation tx
-			ContractName:               msg.ContractName.EncodedString(msg.TextEncoding),
-			ContractFileType:           msg.ContractFileType,
-			ContractFile:               msg.ContractFile,
-			GoverningLaw:               string(msg.GoverningLaw),
-			Jurisdiction:               string(msg.Jurisdiction),
-			ContractExpiration:         msg.ContractExpiration,
-			ContractURI:                msg.ContractURI.EncodedString(msg.TextEncoding),
-			IssuerName:                 msg.IssuerName.EncodedString(msg.TextEncoding),
-			IssuerType:                 msg.IssuerType,
-			IssuerLogoURL:              msg.IssuerLogoURL.EncodedString(msg.TextEncoding),
-			ContractOperatorID:         msg.ContractOperatorID.EncodedString(msg.TextEncoding),
-			ContractAuthFlags:          msg.ContractAuthFlags,
-			VotingSystems:              make([]state.VotingSystem, 0, len(msg.VotingSystems)),
-			RestrictedQtyAssets:        msg.RestrictedQtyAssets,
-			ReferendumProposal:         msg.ReferendumProposal,
-			InitiativeProposal:         msg.InitiativeProposal,
-			Registries:                 make([]state.Registry, 0, len(msg.Registries)),
-			UnitNumber:                 msg.UnitNumber.EncodedString(msg.TextEncoding),
-			BuildingNumber:             msg.BuildingNumber.EncodedString(msg.TextEncoding),
-			Street:                     msg.Street.EncodedString(msg.TextEncoding),
-			SuburbCity:                 msg.SuburbCity.EncodedString(msg.TextEncoding),
-			TerritoryStateProvinceCode: string(msg.TerritoryStateProvinceCode),
-			CountryCode:                string(msg.CountryCode),
-			PostalZIPCode:              msg.PostalZIPCode.EncodedString(msg.TextEncoding),
-			EmailAddress:               msg.EmailAddress.EncodedString(msg.TextEncoding),
-			PhoneNumber:                msg.PhoneNumber.EncodedString(msg.TextEncoding),
-			KeyRoles:                   make([]state.KeyRole, 0, len(msg.KeyRoles)),
-			NotableRoles:               make([]state.NotableRole, 0, len(msg.NotableRoles)),
+		var nc contract.NewContract
+		err := platform.Convert(msg, &nc)
+		if err != nil {
+			logger.Warn(ctx, "%s : Failed to convert formation to new contract (%s) : %s", v.TraceID, contractName, err.Error())
+			return err
 		}
 
-		for _, votingSystem := range msg.VotingSystems {
-			nc.VotingSystems = append(nc.VotingSystems, state.NewVotingSystem(votingSystem, msg.TextEncoding))
-		}
-
-		for _, registry := range msg.Registries {
-			nc.Registries = append(nc.Registries, state.NewRegistry(registry, msg.TextEncoding))
-		}
-
-		for _, keyRole := range msg.KeyRoles {
-			nc.KeyRoles = append(nc.KeyRoles, state.NewKeyRole(keyRole, msg.TextEncoding))
-		}
-
-		for _, notableRole := range msg.NotableRoles {
-			nc.NotableRoles = append(nc.NotableRoles, state.NewNotableRole(notableRole, msg.TextEncoding))
-		}
+		nc.Issuer = itx.Outputs[1].Address.String() // Second output of formation tx
+		// nc.Operator =  // TODO How do we determine if an operator is specified?
 
 		if err := contract.Create(ctx, dbConn, contractAddr.String(), &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
@@ -351,15 +292,15 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		// Prepare update object
 		uc := contract.UpdateContract{}
 
-		if ct.IssuerAddress != itx.Outputs[1].Address.String() { // Second output of formation tx
-			uc.IssuerAddress = stringPointer(itx.Outputs[1].Address.String())
+		if ct.Issuer != itx.Outputs[1].Address.String() { // Second output of formation tx
+			uc.Issuer = stringPointer(itx.Outputs[1].Address.String())
 			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
 		}
 
 		// TODO Update operator address - OperatorAddress *string
 
-		if ct.ContractName != msg.ContractName.EncodedString(msg.TextEncoding) {
-			uc.ContractName = stringPointer(msg.ContractName.EncodedString(msg.TextEncoding))
+		if ct.ContractName != msg.ContractName.String() {
+			uc.ContractName = stringPointer(msg.ContractName.String())
 			logger.Info(ctx, "%s : Updating contract name (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractName)
 		}
 
@@ -389,13 +330,13 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			logger.Info(ctx, "%s : Updating contract expiration (%s) : %s", v.TraceID, ct.ContractName, newExpiration.Format(time.UnixDate))
 		}
 
-		if ct.ContractURI != msg.ContractURI.EncodedString(msg.TextEncoding) {
-			uc.ContractURI = stringPointer(msg.ContractURI.EncodedString(msg.TextEncoding))
+		if ct.ContractURI != msg.ContractURI.String() {
+			uc.ContractURI = stringPointer(msg.ContractURI.String())
 			logger.Info(ctx, "%s : Updating contract URI (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractURI)
 		}
 
-		if ct.IssuerName != msg.IssuerName.EncodedString(msg.TextEncoding) {
-			uc.IssuerName = stringPointer(msg.IssuerName.EncodedString(msg.TextEncoding))
+		if ct.IssuerName != msg.IssuerName.String() {
+			uc.IssuerName = stringPointer(msg.IssuerName.String())
 			logger.Info(ctx, "%s : Updating contract issuer name (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerName)
 		}
 
@@ -404,24 +345,19 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			logger.Info(ctx, "%s : Updating contract issuer type (%s) : %02x", v.TraceID, ct.ContractName, *uc.IssuerType)
 		}
 
-		if ct.IssuerLogoURL != msg.IssuerLogoURL.EncodedString(msg.TextEncoding) {
-			uc.IssuerLogoURL = stringPointer(msg.IssuerLogoURL.EncodedString(msg.TextEncoding))
+		if ct.IssuerLogoURL != msg.IssuerLogoURL.String() {
+			uc.IssuerLogoURL = stringPointer(msg.IssuerLogoURL.String())
 			logger.Info(ctx, "%s : Updating contract issuer logo URL (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerLogoURL)
 		}
 
-		if ct.ContractOperatorID != msg.ContractOperatorID.EncodedString(msg.TextEncoding) {
-			uc.ContractOperatorID = stringPointer(msg.ContractOperatorID.EncodedString(msg.TextEncoding))
+		if ct.ContractOperatorID != msg.ContractOperatorID.String() {
+			uc.ContractOperatorID = stringPointer(msg.ContractOperatorID.String())
 			logger.Info(ctx, "%s : Updating contract operator ID (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractOperatorID)
 		}
 
 		if !bytes.Equal(ct.ContractAuthFlags, msg.ContractAuthFlags) {
 			uc.ContractAuthFlags = &msg.ContractAuthFlags
 			logger.Info(ctx, "%s : Updating contract auth flags (%s) : %v", v.TraceID, ct.ContractName, *uc.ContractAuthFlags)
-		}
-
-		if ct.IssuerLogoURL != msg.IssuerLogoURL.EncodedString(msg.TextEncoding) {
-			uc.IssuerLogoURL = stringPointer(msg.IssuerLogoURL.EncodedString(msg.TextEncoding))
-			logger.Info(ctx, "%s : Updating contract issuer logo URL (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerLogoURL)
 		}
 
 		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
@@ -439,23 +375,23 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			logger.Info(ctx, "%s : Updating contract initiative proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.InitiativeProposal)
 		}
 
-		if ct.UnitNumber != msg.UnitNumber.EncodedString(msg.TextEncoding) {
-			uc.UnitNumber = stringPointer(msg.UnitNumber.EncodedString(msg.TextEncoding))
+		if ct.UnitNumber != msg.UnitNumber.String() {
+			uc.UnitNumber = stringPointer(msg.UnitNumber.String())
 			logger.Info(ctx, "%s : Updating contract unit number (%s) : %s", v.TraceID, ct.ContractName, *uc.UnitNumber)
 		}
 
-		if ct.BuildingNumber != msg.BuildingNumber.EncodedString(msg.TextEncoding) {
-			uc.BuildingNumber = stringPointer(msg.BuildingNumber.EncodedString(msg.TextEncoding))
+		if ct.BuildingNumber != msg.BuildingNumber.String() {
+			uc.BuildingNumber = stringPointer(msg.BuildingNumber.String())
 			logger.Info(ctx, "%s : Updating contract building number (%s) : %s", v.TraceID, ct.ContractName, *uc.BuildingNumber)
 		}
 
-		if ct.Street != msg.Street.EncodedString(msg.TextEncoding) {
-			uc.Street = stringPointer(msg.Street.EncodedString(msg.TextEncoding))
+		if ct.Street != msg.Street.String() {
+			uc.Street = stringPointer(msg.Street.String())
 			logger.Info(ctx, "%s : Updating contract street (%s) : %s", v.TraceID, ct.ContractName, *uc.Street)
 		}
 
-		if ct.SuburbCity != msg.SuburbCity.EncodedString(msg.TextEncoding) {
-			uc.SuburbCity = stringPointer(msg.SuburbCity.EncodedString(msg.TextEncoding))
+		if ct.SuburbCity != msg.SuburbCity.String() {
+			uc.SuburbCity = stringPointer(msg.SuburbCity.String())
 			logger.Info(ctx, "%s : Updating contract city (%s) : %s", v.TraceID, ct.ContractName, *uc.SuburbCity)
 		}
 
@@ -469,18 +405,18 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			logger.Info(ctx, "%s : Updating contract country (%s) : %s", v.TraceID, ct.ContractName, *uc.CountryCode)
 		}
 
-		if ct.PostalZIPCode != msg.PostalZIPCode.EncodedString(msg.TextEncoding) {
-			uc.PostalZIPCode = stringPointer(msg.PostalZIPCode.EncodedString(msg.TextEncoding))
+		if ct.PostalZIPCode != msg.PostalZIPCode.String() {
+			uc.PostalZIPCode = stringPointer(msg.PostalZIPCode.String())
 			logger.Info(ctx, "%s : Updating contract postal code (%s) : %s", v.TraceID, ct.ContractName, *uc.PostalZIPCode)
 		}
 
-		if ct.EmailAddress != msg.EmailAddress.EncodedString(msg.TextEncoding) {
-			uc.EmailAddress = stringPointer(msg.EmailAddress.EncodedString(msg.TextEncoding))
+		if ct.EmailAddress != msg.EmailAddress.String() {
+			uc.EmailAddress = stringPointer(msg.EmailAddress.String())
 			logger.Info(ctx, "%s : Updating contract email (%s) : %s", v.TraceID, ct.ContractName, *uc.EmailAddress)
 		}
 
-		if ct.PhoneNumber != msg.PhoneNumber.EncodedString(msg.TextEncoding) {
-			uc.PhoneNumber = stringPointer(msg.PhoneNumber.EncodedString(msg.TextEncoding))
+		if ct.PhoneNumber != msg.PhoneNumber.String() {
+			uc.PhoneNumber = stringPointer(msg.PhoneNumber.String())
 			logger.Info(ctx, "%s : Updating contract phone (%s) : %s", v.TraceID, ct.ContractName, *uc.PhoneNumber)
 		}
 
@@ -488,7 +424,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		different := len(ct.KeyRoles) != len(msg.KeyRoles)
 		if !different {
 			for i, keyRole := range ct.KeyRoles {
-				if keyRole.Type != msg.KeyRoles[i].Type || keyRole.Name != msg.KeyRoles[i].Name.EncodedString(msg.TextEncoding) {
+				if keyRole.Type != msg.KeyRoles[i].Type || keyRole.Name != msg.KeyRoles[i].Name.String() {
 					different = true
 					break
 				}
@@ -498,7 +434,12 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		if different {
 			newKeyRoles := make([]state.KeyRole, 0, len(msg.KeyRoles))
 			for _, keyRole := range msg.KeyRoles {
-				newKeyRoles = append(newKeyRoles, state.NewKeyRole(keyRole, msg.TextEncoding))
+				var newKeyRole state.KeyRole
+				err := platform.Convert(keyRole, &newKeyRole)
+				if err != nil {
+					return err
+				}
+				newKeyRoles = append(newKeyRoles, newKeyRole)
 			}
 			uc.KeyRoles = &newKeyRoles
 		}
@@ -507,7 +448,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		different = len(ct.NotableRoles) != len(msg.NotableRoles)
 		if !different {
 			for i, notableRole := range ct.NotableRoles {
-				if notableRole.Type != msg.NotableRoles[i].Type || notableRole.Name != msg.NotableRoles[i].Name.EncodedString(msg.TextEncoding) {
+				if notableRole.Type != msg.NotableRoles[i].Type || notableRole.Name != msg.NotableRoles[i].Name.String() {
 					different = true
 					break
 				}
@@ -517,7 +458,12 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		if different {
 			newNotableRoles := make([]state.NotableRole, 0, len(msg.NotableRoles))
 			for _, notableRole := range msg.NotableRoles {
-				newNotableRoles = append(newNotableRoles, state.NewNotableRole(notableRole, msg.TextEncoding))
+				var newNotableRole state.NotableRole
+				err := platform.Convert(notableRole, &newNotableRole)
+				if err != nil {
+					return err
+				}
+				newNotableRoles = append(newNotableRoles, newNotableRole)
 			}
 			uc.NotableRoles = &newNotableRoles
 		}
@@ -526,8 +472,9 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		different = len(ct.Registries) != len(msg.Registries)
 		if !different {
 			for i, registry := range ct.Registries {
-				if registry.Name != msg.Registries[i].Name.EncodedString(msg.TextEncoding) || registry.URL != msg.Registries[i].URL.EncodedString(msg.TextEncoding) ||
-					registry.PublicKey != msg.Registries[i].PublicKey.EncodedString(msg.TextEncoding) {
+				if registry.Name != msg.Registries[i].Name.String() ||
+					registry.URL != msg.Registries[i].URL.String() ||
+					registry.PublicKey != msg.Registries[i].PublicKey.String() {
 					different = true
 					break
 				}
@@ -537,7 +484,12 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		if different {
 			newRegistries := make([]state.Registry, 0, len(msg.Registries))
 			for _, registry := range msg.Registries {
-				newRegistries = append(newRegistries, state.NewRegistry(registry, msg.TextEncoding))
+				var newRegistry state.Registry
+				err := platform.Convert(registry, &newRegistry)
+				if err != nil {
+					return err
+				}
+				newRegistries = append(newRegistries, newRegistry)
 			}
 			uc.Registries = &newRegistries
 		}
@@ -546,7 +498,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		different = len(ct.VotingSystems) != len(msg.VotingSystems)
 		if !different {
 			for i, votingSystem := range ct.VotingSystems {
-				if votingSystem.Name != msg.VotingSystems[i].Name.EncodedString(msg.TextEncoding) {
+				if votingSystem.Name != msg.VotingSystems[i].Name.String() {
 					different = true
 					break
 				}
@@ -591,15 +543,10 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		if different {
 			newVotingSystems := make([]state.VotingSystem, 0, len(msg.VotingSystems))
 			for _, votingSystem := range msg.VotingSystems {
-				newVotingSystem := state.VotingSystem{
-					Name:                        votingSystem.Name.EncodedString(msg.TextEncoding),
-					System:                      votingSystem.System,
-					Method:                      votingSystem.Method,
-					Logic:                       votingSystem.Logic,
-					ThresholdPercentage:         votingSystem.ThresholdPercentage,
-					VoteMultiplierPermitted:     votingSystem.VoteMultiplierPermitted,
-					InitiativeThreshold:         votingSystem.InitiativeThreshold,
-					InitiativeThresholdCurrency: votingSystem.InitiativeThresholdCurrency,
+				var newVotingSystem state.VotingSystem
+				err := platform.Convert(votingSystem, &newVotingSystem)
+				if err != nil {
+					return err
 				}
 				newVotingSystems = append(newVotingSystems, newVotingSystem)
 			}
