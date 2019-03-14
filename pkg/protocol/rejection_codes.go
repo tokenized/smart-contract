@@ -21,7 +21,11 @@ var (
 		17: []byte("Receiver Unspecified"),
 		18: []byte("Unknown Address"),
 		19: []byte("Frozen"),
-		20: []byte("Contract Revision incorrect"),
-		21: []byte("Asset Revision incorrect"),
+		20: []byte("Contract Revision Incorrect"),
+		21: []byte("Asset Revision Incorrect"),
+		22: []byte("Contract Issuer Change Missing"),
+		23: []byte("Contract Malformed Update"),
+		24: []byte("Contract Malformed Update"),
+		25: []byte("Invalid Initiative"),
 	}
 )

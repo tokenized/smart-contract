@@ -12,15 +12,13 @@ import (
 
 func TestContract(t *testing.T) {
 	// Offer message
-	var offerData protocol.ContractOffer
+	offerData := protocol.ContractOffer{
+		ContractName: "Test Name",
+		KeyRoles: []protocol.KeyRole{
+			protocol.KeyRole{Type: 1, Name: "John Smith"},
+		},
+	}
 	offer := &offerData
-
-	offer.ContractName.Set([]byte("Test Name"))
-
-	var newKeyRole protocol.KeyRole = protocol.KeyRole{Type: 1}
-	newKeyRole.Name.Set([]byte("John Smith"))
-	offer.KeyRoles = append(offer.KeyRoles, newKeyRole)
-	offer.KeyRolesCount = uint8(len(offer.KeyRoles))
 
 	// Formation data
 	var formationData protocol.ContractFormation

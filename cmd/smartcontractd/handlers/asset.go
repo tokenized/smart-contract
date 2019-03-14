@@ -84,7 +84,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr, assetID)
 
 	// Asset Creation <- Asset Definition
-	ac := protocol.NewAssetCreation()
+	ac := protocol.AssetCreation{}
 
 	err = platform.Convert(msg, ac)
 	if err != nil {
@@ -157,7 +157,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// must be added to the issuers holding balance.
 
 	// Asset Creation <- Asset Modification
-	ac := protocol.NewAssetCreation()
+	ac := protocol.AssetCreation{}
 
 	err = platform.Convert(msg, ac)
 	if err != nil {
@@ -242,7 +242,7 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			ua.AssetType = stringPointer(string(msg.AssetType))
 			logger.Info(ctx, "%s : Updating asset type (%s) : %s", v.TraceID, assetID, *ua.AssetType)
 		}
-		if !bytes.Equal(as.AssetAuthFlags, msg.AssetAuthFlags) {
+		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
 			ua.AssetAuthFlags = &msg.AssetAuthFlags
 			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %s", v.TraceID, assetID, *ua.AssetAuthFlags)
 		}
@@ -250,7 +250,7 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			ua.TransfersPermitted = &msg.TransfersPermitted
 			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, assetID, *ua.TransfersPermitted)
 		}
-		if !bytes.Equal(as.TradeRestrictions, msg.TradeRestrictions) {
+		if as.TradeRestrictions != msg.TradeRestrictions {
 			ua.TradeRestrictions = &msg.TradeRestrictions
 			logger.Info(ctx, "%s : Updating asset trade restrictions (%s) : %s", v.TraceID, assetID, *ua.TradeRestrictions)
 		}
@@ -278,7 +278,7 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			ua.TokenQty = &msg.TokenQty
 			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, assetID, *ua.TokenQty)
 		}
-		if !bytes.Equal(as.ContractFeeCurrency, msg.ContractFeeCurrency) {
+		if as.ContractFeeCurrency != msg.ContractFeeCurrency {
 			ua.ContractFeeCurrency = &msg.ContractFeeCurrency
 			logger.Info(ctx, "%s : Updating asset contract fee currency (%s) : %s", v.TraceID, assetID, *ua.ContractFeeCurrency)
 		}

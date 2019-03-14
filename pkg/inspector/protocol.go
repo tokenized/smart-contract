@@ -69,11 +69,11 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 	addresses := []btcutil.Address{}
 
 	// Swaps contain a second contract
-	if m.Type() == protocol.CodeSwap {
-		addresses = append(addresses, itx.Outputs[0].Address)
-		addresses = append(addresses, itx.Outputs[1].Address)
-		return addresses
-	}
+	// if m.Type() == protocol.CodeSwap {
+	// addresses = append(addresses, itx.Outputs[0].Address)
+	// addresses = append(addresses, itx.Outputs[1].Address)
+	// return addresses
+	// }
 
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
@@ -132,12 +132,12 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		return addresses
 	}
 
-	if m.Type() == protocol.CodeSwap {
-		addresses = append(addresses, itx.Inputs[0].Address)
-		addresses = append(addresses, itx.Inputs[1].Address)
+	// if m.Type() == protocol.CodeSwap {
+	// addresses = append(addresses, itx.Inputs[0].Address)
+	// addresses = append(addresses, itx.Inputs[1].Address)
 
-		return addresses
-	}
+	// return addresses
+	// }
 
 	if m.Type() == protocol.CodeSettlement {
 		addresses = append(addresses, itx.Outputs[0].Address)
@@ -152,14 +152,13 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		protocol.CodeContractAmendment,
 		protocol.CodeAssetDefinition,
 		protocol.CodeAssetModification,
-		protocol.CodeSend,
-		protocol.CodeExchange,
+		protocol.CodeTransfer,
 		protocol.CodeInitiative,
 		protocol.CodeReferendum,
 		protocol.CodeBallotCast,
 		protocol.CodeOrder:
 
-		if m.Type() == protocol.CodeExchange || m.Type() == protocol.CodeSend {
+		if m.Type() == protocol.CodeTransfer {
 			addresses = append(addresses, itx.Outputs[1].Address)
 			addresses = append(addresses, itx.Outputs[2].Address)
 

@@ -4,37 +4,37 @@ import "github.com/tokenized/smart-contract/internal/platform/state"
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
-	Issuer   string
-	Operator string
+	Issuer   string `json:"issuer,omitempty"`
+	Operator string `json:"operator,omitempty"`
 
-	ContractName               string
-	ContractFileType           uint8
-	ContractFile               []byte
-	GoverningLaw               string
-	Jurisdiction               string
-	ContractExpiration         uint64
-	ContractURI                string
-	IssuerName                 string
-	IssuerType                 byte
-	IssuerLogoURL              string
-	ContractOperatorID         string
-	ContractAuthFlags          []byte
-	VotingSystems              []state.VotingSystem
-	RestrictedQtyAssets        uint64
-	ReferendumProposal         bool
-	InitiativeProposal         bool
-	Registries                 []state.Registry
-	UnitNumber                 string
-	BuildingNumber             string
-	Street                     string
-	SuburbCity                 string
-	TerritoryStateProvinceCode string
-	CountryCode                string
-	PostalZIPCode              string
-	EmailAddress               string
-	PhoneNumber                string
-	KeyRoles                   []state.KeyRole
-	NotableRoles               []state.NotableRole
+	ContractName               string               `json:"contract_name,omitempty"`
+	ContractFileType           uint8                `json:"contract_file_type,omitempty"`
+	ContractFile               []byte               `json:"contract_file,omitempty"`
+	GoverningLaw               string               `json:"governing_law,omitempty"`
+	Jurisdiction               string               `json:"jurisdiction,omitempty"`
+	ContractExpiration         uint64               `json:"contract_expiration,omitempty"`
+	ContractURI                string               `json:"contract_uri,omitempty"`
+	IssuerName                 string               `json:"issuer_name,omitempty"`
+	IssuerType                 byte                 `json:"issuer_type,omitempty"`
+	IssuerLogoURL              string               `json:"issuer_logo_url,omitempty"`
+	ContractOperatorID         string               `json:"contract_operator_id,omitempty"`
+	ContractAuthFlags          [16]byte             `json:"contract_auth_flags,omitempty"`
+	VotingSystems              []state.VotingSystem `json:"voting_systems,omitempty"`
+	RestrictedQtyAssets        uint64               `json:"restricted_qty_assets,omitempty"`
+	ReferendumProposal         bool                 `json:"referendum_proposal,omitempty"`
+	InitiativeProposal         bool                 `json:"initiative_proposal,omitempty"`
+	Registries                 []state.Registry     `json:"registries,omitempty"`
+	UnitNumber                 string               `json:"unit_number,omitempty"`
+	BuildingNumber             string               `json:"building_number,omitempty"`
+	Street                     string               `json:"street,omitempty"`
+	SuburbCity                 string               `json:"suburb_city,omitempty"`
+	TerritoryStateProvinceCode string               `json:"territory_state_province_code,omitempty"`
+	CountryCode                string               `json:"country_code,omitempty"`
+	PostalZIPCode              string               `json:"postal_zipcode,omitempty"`
+	EmailAddress               string               `json:"email_address,omitempty"`
+	PhoneNumber                string               `json:"phone_number,omitempty"`
+	KeyRoles                   []state.KeyRole      `json:"key_roles,omitempty"`
+	NotableRoles               []state.NotableRole  `json:"notable_roles,omitempty"`
 }
 
 // UpdateContract defines what information may be provided to modify an existing
@@ -44,35 +44,35 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
-	Issuer   *string
-	Operator *string
+	Issuer   *string `json:"issuer,omitempty"`
+	Operator *string `json:"operator,omitempty"`
 
-	ContractName               *string
-	ContractFileType           *uint8
-	ContractFile               *[]byte
-	GoverningLaw               *string
-	Jurisdiction               *string
-	ContractExpiration         *uint64
-	ContractURI                *string
-	IssuerName                 *string
-	IssuerType                 *byte
-	IssuerLogoURL              *string
-	ContractOperatorID         *string
-	ContractAuthFlags          *[]byte
-	VotingSystems              *[]state.VotingSystem
-	RestrictedQtyAssets        *uint64
-	ReferendumProposal         *bool
-	InitiativeProposal         *bool
-	Registries                 *[]state.Registry
-	UnitNumber                 *string
-	BuildingNumber             *string
-	Street                     *string
-	SuburbCity                 *string
-	TerritoryStateProvinceCode *string
-	CountryCode                *string
-	PostalZIPCode              *string
-	EmailAddress               *string
-	PhoneNumber                *string
-	KeyRoles                   *[]state.KeyRole
-	NotableRoles               *[]state.NotableRole
+	ContractName               *string               `json:"contract_name,omitempty"`
+	ContractFileType           *uint8                `json:"contract_file_type,omitempty"`
+	ContractFile               *[]byte               `json:"contract_file,omitempty"`
+	GoverningLaw               *string               `json:"governing_law,omitempty"`
+	Jurisdiction               *string               `json:"jurisdiction,omitempty"`
+	ContractExpiration         *uint64               `json:"contract_expiration,omitempty"`
+	ContractURI                *string               `json:"contract_uri,omitempty"`
+	IssuerName                 *string               `json:"issuer_name,omitempty"`
+	IssuerType                 *byte                 `json:"issuer_type,omitempty"`
+	IssuerLogoURL              *string               `json:"issuer_logo_url,omitempty"`
+	ContractOperatorID         *string               `json:"contract_operator_id,omitempty"`
+	ContractAuthFlags          *[16]byte             `json:"contract_auth_flags,omitempty"`
+	VotingSystems              *[]state.VotingSystem `json:"voting_systems,omitempty"`
+	RestrictedQtyAssets        *uint64               `json:"restricted_qty_assets,omitempty"`
+	ReferendumProposal         *bool                 `json:"referendum_proposal,omitempty"`
+	InitiativeProposal         *bool                 `json:"initiative_proposal,omitempty"`
+	Registries                 *[]state.Registry     `json:"registries,omitempty"`
+	UnitNumber                 *string               `json:"unit_number,omitempty"`
+	BuildingNumber             *string               `json:"building_number,omitempty"`
+	Street                     *string               `json:"street,omitempty"`
+	SuburbCity                 *string               `json:"suburb_city,omitempty"`
+	TerritoryStateProvinceCode *string               `json:"territory_state_province_code,omitempty"`
+	CountryCode                *string               `json:"country_code,omitempty"`
+	PostalZIPCode              *string               `json:"postal_zip_code,omitempty"`
+	EmailAddress               *string               `json:"email_address,omitempty"`
+	PhoneNumber                *string               `json:"phone_number,omitempty"`
+	KeyRoles                   *[]state.KeyRole      `json:"key_roles,omitempty"`
+	NotableRoles               *[]state.NotableRole  `json:"notable_roles,omitempty"`
 }

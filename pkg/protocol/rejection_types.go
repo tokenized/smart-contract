@@ -33,10 +33,10 @@ const (
 	// the number of assets below the number of assets the contract has.
 	RejectionCodeContractQtyReduction
 
-	// RejectionCodeAuthFlags is sent when a CA tries to change the
+	// RejectionCodeContractAuthFlags is sent when a CA tries to change the
 	// authorization flags, but the authorization flags do not permit the
 	// change.
-	RejectionCodeAuthFlags
+	RejectionCodeContractAuthFlags
 
 	// RejectionCodeContractExpiration is sent when a CA tries to modify the
 	// Contract, but the auth flags do not permit the update.
@@ -88,11 +88,11 @@ const (
 	// revision is sent.
 	RejectionCodeAssetRevision
 
-	// RejectionCodeInvalidValue is returned because the message contains
-	// invalid values.
-	RejectionCodeInvalidValue
+	// RejectionCodeMissingNewIssuer is returned when an issuer change was requested, but the new issuer was not provided.
+	RejectionCodeContractMissingNewIssuer
 
-	// RejectionCodeBallotExists is returned because the Vote has already
-	// received a Ballot from the address.
-	RejectionCodeBallotExists
+	// RejectionCodeMissingNewIssuer is returned when an amendment request is malformed.
+	RejectionCodeContractMalformedAmendment
+
+	RejectionCodeInvalidInitiative
 )

@@ -80,15 +80,6 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, nu 
 		CreatedAt: a.CreatedAt,
 	}
 
-	if a.AssetAuthFlags == nil {
-		a.AssetAuthFlags = []byte{}
-	}
-	if a.TradeRestrictions == nil {
-		a.TradeRestrictions = []byte{}
-	}
-	if a.ContractFeeCurrency == nil {
-		a.ContractFeeCurrency = []byte{}
-	}
 	if a.AssetPayload == nil {
 		a.AssetPayload = []byte{}
 	}
@@ -116,9 +107,6 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	}
 	if upd.AssetType != nil {
 		a.AssetType = *upd.AssetType
-	}
-	if upd.AssetAuthFlags != nil {
-		a.AssetAuthFlags = *upd.AssetAuthFlags
 	}
 	if upd.TransfersPermitted != nil {
 		a.TransfersPermitted = *upd.TransfersPermitted

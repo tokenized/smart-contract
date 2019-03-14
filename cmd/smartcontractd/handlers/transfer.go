@@ -17,8 +17,8 @@ type Transfer struct {
 }
 
 // SendRequest handles an incoming Send request and prepares a Settlement response
-func (t *Transfer) SendRequest(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	return errors.New("Send Request Not Implemented")
+func (t *Transfer) Transfer(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	return errors.New("Transfer Request Not Implemented")
 	// ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Send")
 	// defer span.End()
 

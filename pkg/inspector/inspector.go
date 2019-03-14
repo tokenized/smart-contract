@@ -107,7 +107,7 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, 
 			return nil, errors.Wrap(ErrInvalidProtocol, "parsing op return")
 		}
 
-		msg, _ = protocol.New(txOut.PkScript)
+		msg, _ = protocol.Deserialize(txOut.PkScript)
 	}
 
 	return &Transaction{

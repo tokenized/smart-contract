@@ -78,9 +78,6 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 	c.KeyRoles = nu.KeyRoles
 	c.NotableRoles = nu.NotableRoles
 
-	if c.ContractAuthFlags == nil {
-		c.ContractAuthFlags = []byte{}
-	}
 	if c.VotingSystems == nil {
 		c.VotingSystems = []state.VotingSystem{}
 	}
@@ -155,9 +152,6 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	}
 	if upd.ContractAuthFlags != nil {
 		c.ContractAuthFlags = *upd.ContractAuthFlags
-		if c.ContractAuthFlags == nil {
-			c.ContractAuthFlags = []byte{}
-		}
 	}
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems

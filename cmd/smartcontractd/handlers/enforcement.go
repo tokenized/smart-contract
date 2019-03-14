@@ -83,8 +83,9 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, mux protomux.Handl
 	}
 
 	// Freeze <- Order
-	freeze := protocol.NewFreeze()
-	freeze.Timestamp = uint64(time.Now().UnixNano())
+	freeze := protocol.Freeze{
+		Timestamp: uint64(time.Now().UnixNano()),
+	}
 
 	// Outputs
 	// 1..n - Target Addresses
@@ -94,7 +95,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, mux protomux.Handl
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
-		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH, &e.Config.ChainParams)
+		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH[:], &e.Config.ChainParams)
 		if err != nil {
 			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, target.Address.PKH)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
@@ -108,15 +109,13 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, mux protomux.Handl
 		}
 
 		logger.Info(ctx, "%s : Freeze order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
-		address := protocol.NewAddress()
-		address.PKH = targetAddr.ScriptAddress()
-		// TODO freeze.Addresses = append(freeze.Addresses, address)
+		address := protocol.Address{}
+		copy(address.PKH[:], targetAddr.ScriptAddress())
+		freeze.Addresses = append(freeze.Addresses, address)
 
 		// Notify target address
 		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
 	}
-
-	// TODO freeze.AddressCount = uint16(len(freeze.Addresses))
 
 	// Change from/back to contract
 	outs = append(outs, node.Output{Address: contractAddr, Value: e.Config.DustLimit, Change: true})
@@ -159,8 +158,9 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, mux protomux.Handler
 	}
 
 	// Thaw <- Order
-	thaw := protocol.NewThaw()
-	thaw.Timestamp = uint64(time.Now().UnixNano())
+	thaw := protocol.Thaw{
+		Timestamp: uint64(time.Now().UnixNano()),
+	}
 
 	// Outputs
 	// 1..n - Target Addresses
@@ -170,7 +170,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, mux protomux.Handler
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
-		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH, &e.Config.ChainParams)
+		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH[:], &e.Config.ChainParams)
 		if err != nil {
 			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, target.Address.PKH)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
@@ -184,15 +184,13 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, mux protomux.Handler
 		}
 
 		logger.Info(ctx, "%s : Thaw order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
-		address := protocol.NewAddress()
-		address.PKH = targetAddr.ScriptAddress()
-		// TODO thaw.Addresses = append(thaw.Addresses, address)
+		address := protocol.Address{}
+		copy(address.PKH[:], targetAddr.ScriptAddress())
+		thaw.Addresses = append(thaw.Addresses, address)
 
 		// Notify target address
 		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
 	}
-
-	// TODO thaw.AddressCount = uint16(len(thaw.Addresses))
 
 	// Change from/back to contract
 	outs = append(outs, node.Output{Address: contractAddr, Value: e.Config.DustLimit, Change: true})
@@ -235,9 +233,10 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, mux protomux.H
 	}
 
 	// Confiscation <- Order
-	confiscation := protocol.NewConfiscation()
-	confiscation.Timestamp = uint64(time.Now().UnixNano())
-	confiscation.DepositQty = 0
+	confiscation := protocol.Confiscation{
+		Timestamp:  uint64(time.Now().UnixNano()),
+		DepositQty: 0,
+	}
 
 	// Build outputs
 	// 1..n - Target Addresses
@@ -247,7 +246,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, mux protomux.H
 	outs := make([]node.Output, 0, len(msg.TargetAddresses)+3)
 
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
-	depositAddr, err := btcutil.NewAddressPubKeyHash(msg.DepositAddress.PKH, &e.Config.ChainParams)
+	depositAddr, err := btcutil.NewAddressPubKeyHash(msg.DepositAddress.PKH[:], &e.Config.ChainParams)
 	if err != nil {
 		logger.Warn(ctx, "%s : Invalid deposit address: %s %s %s", v.TraceID, contractAddr, assetID, msg.DepositAddress.PKH)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
@@ -263,7 +262,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, mux protomux.H
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
-		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH, &e.Config.ChainParams)
+		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.PKH[:], &e.Config.ChainParams)
 		if err != nil {
 			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, assetID, target.Address.PKH)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
@@ -279,15 +278,13 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, mux protomux.H
 		confiscation.DepositQty += holding.Balance
 
 		logger.Info(ctx, "%s : Confiscation order request : %s %s %s", v.TraceID, contractAddr, assetID, targetAddr)
-		address := protocol.NewAddress()
-		address.PKH = targetAddr.ScriptAddress()
-		// TODO confiscation.Addresses = append(confiscation.Addresses, address)
+		address := protocol.Address{}
+		copy(address.PKH[:], targetAddr.ScriptAddress())
+		confiscation.Addresses = append(confiscation.Addresses, address)
 
 		// Notify target address
 		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
 	}
-
-	// TODO confiscation.AddressCount = uint16(len(confiscation.Addresses))
 
 	// Notify deposit address
 	outs = append(outs, node.Output{Address: depositAddr, Value: e.Config.DustLimit})
