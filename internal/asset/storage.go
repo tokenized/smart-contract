@@ -50,7 +50,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, a state.Asset) error {
 }
 
 // Fetch a single asset from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh string, assetID string) (*state.Asset, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh string, assetID [32]byte) (*state.Asset, error) {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)

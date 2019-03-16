@@ -11,8 +11,10 @@ type Contract struct {
 	Revision  uint64 `json:"revision,omitempty"`
 	CreatedAt uint64 `json:"created_at,omitempty"`
 	UpdatedAt uint64 `json:"updated_at,omitempty"`
-	Issuer    string `json:"issuer,omitempty"`
-	Operator  string `json:"operator,omitempty"`
+	Timestamp uint64 `json:"timestamp,omitempty"`
+
+	Issuer   string `json:"issuer,omitempty"`
+	Operator string `json:"operator,omitempty"`
 
 	ContractName               string         `json:"contract_name,omitempty"`
 	ContractFileType           uint8          `json:"contract_file_type,omitempty"`
@@ -44,8 +46,8 @@ type Contract struct {
 	KeyRoles                   []KeyRole      `json:"key_roles,omitempty"`
 	NotableRoles               []NotableRole  `json:"notable_roles,omitempty"`
 
-	Assets map[string]Asset `json:"assets,omitempty"`
-	Votes  map[string]Vote  `json:"votes,omitempty"`
+	Assets map[[32]byte]Asset `json:"assets,omitempty"`
+	Votes  map[string]Vote    `json:"votes,omitempty"`
 }
 
 type Asset struct {
@@ -53,6 +55,7 @@ type Asset struct {
 	Revision  uint64 `json:"revision,omitempty"`
 	CreatedAt uint64 `json:"created_at,omitempty"`
 	UpdatedAt uint64 `json:"updated_at,omitempty"`
+	Timestamp uint64 `json:"timestamp,omitempty"`
 
 	AssetType                   string  `json:"asset_type,omitempty"`
 	AssetAuthFlags              [8]byte `json:"asset_auth_flags,omitempty"`

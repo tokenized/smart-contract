@@ -9,6 +9,8 @@ import (
 type NewAsset struct {
 	IssuerAddress string `json:"issuer_address,omitempty"`
 
+	Timestamp uint64 `json:"timestamp,omitempty"`
+
 	AssetType                   string  `json:"asset_type,omitempty"`
 	AssetAuthFlags              [8]byte `json:"asset_auth_flags,omitempty"`
 	TransfersPermitted          bool    `json:"transfers_permitted,omitempty"`
@@ -32,7 +34,8 @@ type NewAsset struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateAsset struct {
-	Revision *uint64 `json:"revision,omitempty"`
+	Revision  *uint64 `json:"revision,omitempty"`
+	Timestamp *uint64 `json:"timestamp,omitempty"`
 
 	AssetType                   *string  `json:"asset_type,omitempty"`
 	AssetAuthFlags              *[8]byte `json:"asset_auth_flags,omitempty"`

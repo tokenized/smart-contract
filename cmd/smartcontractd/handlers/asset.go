@@ -159,13 +159,29 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// Asset Creation <- Asset Modification
 	ac := protocol.AssetCreation{}
 
-	err = platform.Convert(msg, ac)
+	err = platform.Convert(as, ac)
 	if err != nil {
 		return err
 	}
 
 	ac.AssetRevision = as.Revision + 1
 	ac.Timestamp = uint64(time.Now().UnixNano())
+
+	// TODO Implement asset amendments
+	// type Amendment struct {
+	// FieldIndex    uint8
+	// Element       uint16
+	// SubfieldIndex uint8
+	// Operation     uint8
+	// Data          []byte
+	// }
+	// for _, amendment := range msg.Amendments {
+	// switch(amendment.FieldIndex) {
+	// default:
+	// logger.Warn(ctx, "%s : Incorrect asset amendment field offset (%s) : %d", v.TraceID, assetID, amendment.FieldIndex)
+	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetMalformedAmendment)
+	// }
+	// }
 
 	// Build outputs
 	// 1 - Contract Address
@@ -222,8 +238,6 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			return err
 		}
 
-		na.IssuerAddress = itx.Outputs[1].Address.String() // Second output of formation tx
-
 		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, assetID)
 			return err
@@ -235,7 +249,8 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 
 		// Prepare update object
 		ua := asset.UpdateAsset{
-			Revision: &msg.AssetRevision,
+			Revision:  &msg.AssetRevision,
+			Timestamp: &msg.Timestamp,
 		}
 
 		if as.AssetType != string(msg.AssetType) {

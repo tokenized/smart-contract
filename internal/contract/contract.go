@@ -110,6 +110,13 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 	}
 
 	// Update fields
+	if upd.Revision != nil {
+		c.Revision = *upd.Revision
+	}
+	if upd.Timestamp != nil {
+		c.Timestamp = *upd.Timestamp
+	}
+
 	if upd.Issuer != nil {
 		c.Issuer = *upd.Issuer
 	}

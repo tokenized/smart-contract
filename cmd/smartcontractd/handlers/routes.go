@@ -41,7 +41,7 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 		Config:   config,
 	}
 
-	app.Handle("SEE", protocol.CodeTransfer, t.Transfer)
+	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
 	app.Handle("SEE", protocol.CodeSettlement, t.SettlementResponse)
 
 	// Register enforcement based events.

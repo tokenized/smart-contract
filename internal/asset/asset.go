@@ -25,7 +25,7 @@ var (
 )
 
 // Retrieve gets the specified asset from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, assetID string) (*state.Asset, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, assetID [32]byte) (*state.Asset, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Retrieve")
 	defer span.End()
 
@@ -105,6 +105,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH, assetID string, upd
 	if upd.Revision != nil {
 		a.Revision = *upd.Revision
 	}
+	if upd.Timestamp != nil {
+		a.Timestamp = *upd.Timestamp
+	}
+
 	if upd.AssetType != nil {
 		a.AssetType = *upd.AssetType
 	}

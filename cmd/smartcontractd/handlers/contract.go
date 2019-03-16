@@ -149,45 +149,11 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	// FieldIndex    uint8
 	// Element       uint16
 	// SubfieldIndex uint8
-	// DeleteElement bool
+	// Operation     uint8
 	// Data          []byte
 	// }
 	// for _, amendment := range msg.Amendments {
 	// switch(amendment.FieldIndex) {
-	// case 0: // ContractName               Nvarchar8
-	// case 1: // ContractFileType           uint8
-	// case 2: // LenContractFile            uint32
-	// case 3: // ContractFile               []byte
-	// case 4: // GoverningLaw               []byte
-	// case 5: // Jurisdiction               []byte
-	// case 6: // ContractExpiration         uint64
-	// case 7: // ContractURI                Nvarchar8
-	// case 8: // IssuerName                 Nvarchar8
-	// case 9: // IssuerType                 byte
-	// case 10: // IssuerLogoURL              Nvarchar8
-	// case 11: // ContractOperatorID         Nvarchar8
-	// case 12: // ContractAuthFlags          []byte
-	// case 13: // VotingSystemCount          uint8
-	// case 14: // VotingSystems              []VotingSystem
-	// case 15: // RestrictedQtyAssets        uint64
-	// case 16: // ReferendumProposal         bool
-	// case 17: // InitiativeProposal         bool
-	// case 18: // RegistryCount              uint8
-	// case 19: // Registries                 []Registry
-	// case 20: // IssuerAddress              bool
-	// case 21: // UnitNumber                 Nvarchar8
-	// case 22: // BuildingNumber             Nvarchar8
-	// case 23: // Street                     Nvarchar16
-	// case 24: // SuburbCity                 Nvarchar8
-	// case 25: // TerritoryStateProvinceCode []byte
-	// case 26: // CountryCode                []byte
-	// case 27: // PostalZIPCode              Nvarchar8
-	// case 28: // EmailAddress               Nvarchar8
-	// case 29: // PhoneNumber                Nvarchar8
-	// case 30: // KeyRolesCount              uint8
-	// case 31: // KeyRoles                   []KeyRole
-	// case 32: // NotableRolesCount          uint8
-	// case 33: // NotableRoles               []NotableRole
 	// default:
 	// logger.Warn(ctx, "%s : Incorrect contract amendment field offset (%s) : %d", v.TraceID, ct.ContractName, amendment.FieldIndex)
 	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractMalformedAmendment)
@@ -283,9 +249,13 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 		stringPointer := func(s string) *string { return &s }
 
 		// Prepare update object
-		uc := contract.UpdateContract{}
+		uc := contract.UpdateContract{
+			Revision:  &msg.ContractRevision,
+			Timestamp: &msg.Timestamp,
+		}
 
 		if ct.Issuer != itx.Outputs[1].Address.String() { // Second output of formation tx
+			// TODO Should asset balances be moved from previous issuer to new issuer.
 			uc.Issuer = stringPointer(itx.Outputs[1].Address.String())
 			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
 		}

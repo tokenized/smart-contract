@@ -4,6 +4,8 @@ import "github.com/tokenized/smart-contract/internal/platform/state"
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
+	Timestamp uint64 `json:"timestamp,omitempty"`
+
 	Issuer   string `json:"issuer,omitempty"`
 	Operator string `json:"operator,omitempty"`
 
@@ -44,6 +46,9 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
+	Revision  *uint64 `json:"revision,omitempty"`
+	Timestamp *uint64 `json:"timestamp,omitempty"`
+
 	Issuer   *string `json:"issuer,omitempty"`
 	Operator *string `json:"operator,omitempty"`
 
