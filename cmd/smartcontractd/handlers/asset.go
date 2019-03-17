@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"time"
 
+	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform"
@@ -43,8 +43,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractAddr := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to retrieve contract : %s", v.TraceID, contractAddr)
 		return err
@@ -57,31 +57,30 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	}
 
 	// Verify issuer is sender of tx.
-	if itx.Inputs[0].Address.String() != ct.Issuer {
-		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr, string(msg.AssetID))
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.Issuer.Bytes()) {
+		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
 
 	// Locate Asset
-	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// The asset should not exist already
 	if as != nil {
-		logger.Warn(ctx, "%s : Asset already exists: %s %s", v.TraceID, contractAddr, assetID)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeDuplicateAssetID)
+		logger.Warn(ctx, "%s : Asset already exists: %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
 	}
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %s", v.TraceID, contractAddr, assetID)
+		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %x", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
-	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr, assetID)
+	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
@@ -91,14 +90,20 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 		return err
 	}
 
-	ac.Timestamp = uint64(time.Now().UnixNano())
+	ac.Timestamp = v.Now
+
+	// Convert to btcutil.Address
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &a.Config.ChainParams)
+	if err != nil {
+		return err
+	}
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractAddr,
+		Address: contractAddress,
 		Value:   a.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address, // Request must come from issuer
@@ -130,22 +135,21 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
-	contractAddr := rk.Address
-	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
+		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractAddr, assetID)
+		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
@@ -165,7 +169,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	}
 
 	ac.AssetRevision = as.Revision + 1
-	ac.Timestamp = uint64(time.Now().UnixNano())
+	ac.Timestamp = v.Now
 
 	// TODO Implement asset amendments
 	// type Amendment struct {
@@ -178,17 +182,23 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// for _, amendment := range msg.Amendments {
 	// switch(amendment.FieldIndex) {
 	// default:
-	// logger.Warn(ctx, "%s : Incorrect asset amendment field offset (%s) : %d", v.TraceID, assetID, amendment.FieldIndex)
+	// logger.Warn(ctx, "%s : Incorrect asset amendment field offset (%s) : %d", v.TraceID, assetCode, amendment.FieldIndex)
 	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetMalformedAmendment)
 	// }
 	// }
+
+	// Convert to btcutil.Address
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &a.Config.ChainParams)
+	if err != nil {
+		return err
+	}
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractAddr,
+		Address: contractAddress,
 		Value:   a.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -220,11 +230,10 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
-	contractAddr := rk.Address
-	assetID := string(msg.AssetID)
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s", v.TraceID, contractAddr, assetID)
+		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return err
 	}
 
@@ -238,11 +247,11 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 			return err
 		}
 
-		if err := asset.Create(ctx, dbConn, contractAddr.String(), assetID, &na, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, assetID)
+		if err := asset.Create(ctx, dbConn, contractAddr, msg.AssetCode, &na, v.Now); err != nil {
+			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 			return err
 		}
-		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractAddr, assetID)
+		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -255,66 +264,66 @@ func (a *Asset) CreationResponse(ctx context.Context, mux protomux.Handler, itx 
 
 		if as.AssetType != string(msg.AssetType) {
 			ua.AssetType = stringPointer(string(msg.AssetType))
-			logger.Info(ctx, "%s : Updating asset type (%s) : %s", v.TraceID, assetID, *ua.AssetType)
+			logger.Info(ctx, "%s : Updating asset type (%s) : %s", v.TraceID, msg.AssetCode, *ua.AssetType)
 		}
 		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
 			ua.AssetAuthFlags = &msg.AssetAuthFlags
-			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %s", v.TraceID, assetID, *ua.AssetAuthFlags)
+			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %s", v.TraceID, msg.AssetCode, *ua.AssetAuthFlags)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
-			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, assetID, *ua.TransfersPermitted)
+			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, msg.AssetCode, *ua.TransfersPermitted)
 		}
 		if as.TradeRestrictions != msg.TradeRestrictions {
 			ua.TradeRestrictions = &msg.TradeRestrictions
-			logger.Info(ctx, "%s : Updating asset trade restrictions (%s) : %s", v.TraceID, assetID, *ua.TradeRestrictions)
+			logger.Info(ctx, "%s : Updating asset trade restrictions (%s) : %s", v.TraceID, msg.AssetCode, *ua.TradeRestrictions)
 		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
-			logger.Info(ctx, "%s : Updating asset enforcement orders permitted (%s) : %t", v.TraceID, assetID, *ua.EnforcementOrdersPermitted)
+			logger.Info(ctx, "%s : Updating asset enforcement orders permitted (%s) : %t", v.TraceID, msg.AssetCode, *ua.EnforcementOrdersPermitted)
 		}
 		if as.VoteMultiplier != msg.VoteMultiplier {
 			ua.VoteMultiplier = &msg.VoteMultiplier
-			logger.Info(ctx, "%s : Updating asset vote multiplier (%s) : %02x", v.TraceID, assetID, *ua.VoteMultiplier)
+			logger.Info(ctx, "%s : Updating asset vote multiplier (%s) : %02x", v.TraceID, msg.AssetCode, *ua.VoteMultiplier)
 		}
 		if as.ReferendumProposal != msg.ReferendumProposal {
 			ua.ReferendumProposal = &msg.ReferendumProposal
-			logger.Info(ctx, "%s : Updating asset referendum proposal (%s) : %t", v.TraceID, assetID, *ua.ReferendumProposal)
+			logger.Info(ctx, "%s : Updating asset referendum proposal (%s) : %t", v.TraceID, msg.AssetCode, *ua.ReferendumProposal)
 		}
 		if as.InitiativeProposal != msg.InitiativeProposal {
 			ua.InitiativeProposal = &msg.InitiativeProposal
-			logger.Info(ctx, "%s : Updating asset initiative proposal (%s) : %t", v.TraceID, assetID, *ua.InitiativeProposal)
+			logger.Info(ctx, "%s : Updating asset initiative proposal (%s) : %t", v.TraceID, msg.AssetCode, *ua.InitiativeProposal)
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %t", v.TraceID, assetID, *ua.AssetModificationGovernance)
+			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %t", v.TraceID, msg.AssetCode, *ua.AssetModificationGovernance)
 		}
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
-			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, assetID, *ua.TokenQty)
+			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, msg.AssetCode, *ua.TokenQty)
 		}
 		if as.ContractFeeCurrency != msg.ContractFeeCurrency {
 			ua.ContractFeeCurrency = &msg.ContractFeeCurrency
-			logger.Info(ctx, "%s : Updating asset contract fee currency (%s) : %s", v.TraceID, assetID, *ua.ContractFeeCurrency)
+			logger.Info(ctx, "%s : Updating asset contract fee currency (%s) : %s", v.TraceID, msg.AssetCode, *ua.ContractFeeCurrency)
 		}
 		if as.ContractFeeVar != msg.ContractFeeVar {
 			ua.ContractFeeVar = &msg.ContractFeeVar
-			logger.Info(ctx, "%s : Updating asset contract fee variable (%s) : %f", v.TraceID, assetID, *ua.ContractFeeVar)
+			logger.Info(ctx, "%s : Updating asset contract fee variable (%s) : %f", v.TraceID, msg.AssetCode, *ua.ContractFeeVar)
 		}
 		if as.ContractFeeFixed != msg.ContractFeeFixed {
 			ua.ContractFeeFixed = &msg.ContractFeeFixed
-			logger.Info(ctx, "%s : Updating asset contract fee fixed (%s) : %f", v.TraceID, assetID, *ua.ContractFeeFixed)
+			logger.Info(ctx, "%s : Updating asset contract fee fixed (%s) : %f", v.TraceID, msg.AssetCode, *ua.ContractFeeFixed)
 		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
-			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, assetID, *ua.AssetPayload)
+			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, msg.AssetCode, *ua.AssetPayload)
 		}
 
-		if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractAddr, assetID)
+		if err := asset.Update(ctx, dbConn, contractAddr, msg.AssetCode, &ua, v.Now); err != nil {
+			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 			return err
 		}
-		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractAddr, assetID)
+		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 	}
 
 	return nil

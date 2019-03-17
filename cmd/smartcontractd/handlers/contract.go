@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -39,8 +40,8 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractAddr := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		return err
 	}
@@ -62,14 +63,20 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 	}
 
 	cf.ContractRevision = 0
-	cf.Timestamp = uint64(time.Now().UnixNano())
+	cf.Timestamp = v.Now
+
+	// Convert to btcutil.Address
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	if err != nil {
+		return err
+	}
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractAddr,
+		Address: contractAddress,
 		Value:   c.Config.DustLimit,
 	}, {
 		Address: itx.Inputs[0].Address,
@@ -101,8 +108,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractAddr := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		return err
 	}
@@ -142,7 +149,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 
 	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
-	cf.Timestamp = uint64(time.Now().UnixNano())
+	cf.Timestamp = v.Now
 
 	// TODO Implement contract amendments
 	// type Amendment struct {
@@ -160,12 +167,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	// }
 	// }
 
+	// Convert to btcutil.Address
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	if err != nil {
+		return err
+	}
+
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
 	outs := []node.Output{{
-		Address: contractAddr,
+		Address: contractAddress,
 		Value:   c.Config.DustLimit,
 	}}
 
@@ -218,9 +231,9 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
-	contractAddr := rk.Address
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, contractName, err.Error())
 		return err
@@ -236,10 +249,10 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			return err
 		}
 
-		nc.Issuer = itx.Outputs[1].Address.String() // Second output of formation tx
+		nc.Issuer = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress()) // Second output of formation tx
 		// nc.Operator =  // TODO How do we determine if an operator is specified?
 
-		if err := contract.Create(ctx, dbConn, contractAddr.String(), &nc, v.Now); err != nil {
+		if err := contract.Create(ctx, dbConn, contractAddr, &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
 		}
@@ -254,9 +267,10 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			Timestamp: &msg.Timestamp,
 		}
 
-		if ct.Issuer != itx.Outputs[1].Address.String() { // Second output of formation tx
+		if !bytes.Equal(ct.Issuer.Bytes(), itx.Outputs[1].Address.ScriptAddress()) { // Second output of formation tx
 			// TODO Should asset balances be moved from previous issuer to new issuer.
-			uc.Issuer = stringPointer(itx.Outputs[1].Address.String())
+			scriptAddress := protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
+			uc.Issuer = &scriptAddress
 			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
 		}
 
@@ -287,9 +301,9 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			logger.Info(ctx, "%s : Updating contract jurisdiction (%s) : %s", v.TraceID, ct.ContractName, *uc.Jurisdiction)
 		}
 
-		if ct.ContractExpiration != msg.ContractExpiration {
+		if ct.ContractExpiration.Nano() != msg.ContractExpiration.Nano() {
 			uc.ContractExpiration = &msg.ContractExpiration
-			newExpiration := time.Unix(int64(msg.ContractExpiration), 0)
+			newExpiration := time.Unix(int64(msg.ContractExpiration.Nano()), 0)
 			logger.Info(ctx, "%s : Updating contract expiration (%s) : %s", v.TraceID, ct.ContractName, newExpiration.Format(time.UnixDate))
 		}
 
@@ -437,7 +451,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			for i, registry := range ct.Registries {
 				if registry.Name != msg.Registries[i].Name ||
 					registry.URL != msg.Registries[i].URL ||
-					registry.PublicKey != msg.Registries[i].PublicKey {
+					!bytes.Equal(registry.PublicKey.Bytes(), msg.Registries[i].PublicKey.Bytes()) {
 					different = true
 					break
 				}
@@ -516,7 +530,7 @@ func (c *Contract) FormationResponse(ctx context.Context, mux protomux.Handler, 
 			uc.VotingSystems = &newVotingSystems
 		}
 
-		if err := contract.Update(ctx, dbConn, contractAddr.String(), &uc, v.Now); err != nil {
+		if err := contract.Update(ctx, dbConn, contractAddr, &uc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}

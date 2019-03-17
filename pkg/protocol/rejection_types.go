@@ -95,4 +95,10 @@ const (
 	RejectionCodeContractMalformedAmendment
 
 	RejectionCodeInvalidInitiative
+
+	RejectionCodeDuplicateAssetCode
+
+	RejectionCodeMalFormedTransfer
+
+	RejectionCodeMalFormedSettle
 )

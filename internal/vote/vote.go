@@ -3,10 +3,10 @@ package vote
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"go.opencensus.io/trace"
 )
@@ -20,7 +20,7 @@ var (
 )
 
 // Retrieve gets the specified vote from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, voteID string) (*state.Vote, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, voteID protocol.TxId) (*state.Vote, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Retrieve")
 	defer span.End()
 
@@ -37,7 +37,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH, voteID string) (*
 }
 
 // Update the vote
-func Update(ctx context.Context, dbConn *db.DB, contractPKH, voteID string, upd *UpdateVote, now time.Time) error {
+func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, voteID protocol.TxId, upd *UpdateVote, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Update")
 	defer span.End()
 

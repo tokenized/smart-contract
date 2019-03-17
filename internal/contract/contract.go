@@ -3,10 +3,11 @@ package contract
 import (
 	"context"
 	"errors"
-	"time"
 
+	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"go.opencensus.io/trace"
 )
@@ -20,7 +21,7 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, address string) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
@@ -37,46 +38,23 @@ func Retrieve(ctx context.Context, dbConn *db.DB, address string) (*state.Contra
 }
 
 // Create the contract
-func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract, now time.Time) error {
+func Create(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
 	// Find contract
 	var c state.Contract
 
+	// Get current state
+	err := platform.Convert(nu, c)
+	if err != nil {
+		return err
+	}
+
 	c.ID = address
 	c.Revision = 0
-	c.CreatedAt = uint64(time.Now().UnixNano())
-	c.UpdatedAt = c.CreatedAt
-
-	c.ContractName = nu.ContractName
-	c.ContractFileType = nu.ContractFileType
-	c.ContractFile = nu.ContractFile
-	c.GoverningLaw = nu.GoverningLaw
-	c.Jurisdiction = nu.Jurisdiction
-	c.ContractExpiration = nu.ContractExpiration
-	c.ContractURI = nu.ContractURI
-	c.IssuerName = nu.IssuerName
-	c.IssuerType = nu.IssuerType
-	c.IssuerLogoURL = nu.IssuerLogoURL
-	c.ContractOperatorID = nu.ContractOperatorID
-	c.ContractAuthFlags = nu.ContractAuthFlags
-	c.VotingSystems = nu.VotingSystems
-	c.RestrictedQtyAssets = nu.RestrictedQtyAssets
-	c.ReferendumProposal = nu.ReferendumProposal
-	c.InitiativeProposal = nu.InitiativeProposal
-	c.Registries = nu.Registries
-	c.UnitNumber = nu.UnitNumber
-	c.BuildingNumber = nu.BuildingNumber
-	c.Street = nu.Street
-	c.SuburbCity = nu.SuburbCity
-	c.TerritoryStateProvinceCode = nu.TerritoryStateProvinceCode
-	c.CountryCode = nu.CountryCode
-	c.PostalZIPCode = nu.PostalZIPCode
-	c.EmailAddress = nu.EmailAddress
-	c.PhoneNumber = nu.PhoneNumber
-	c.KeyRoles = nu.KeyRoles
-	c.NotableRoles = nu.NotableRoles
+	c.CreatedAt = now
+	c.UpdatedAt = now
 
 	if c.VotingSystems == nil {
 		c.VotingSystems = []state.VotingSystem{}
@@ -99,7 +77,7 @@ func Create(ctx context.Context, dbConn *db.DB, address string, nu *NewContract,
 }
 
 // Update the contract
-func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContract, now time.Time) error {
+func Update(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
@@ -221,7 +199,7 @@ func Update(ctx context.Context, dbConn *db.DB, address string, upd *UpdateContr
 		}
 	}
 
-	c.UpdatedAt = uint64(time.Now().UnixNano())
+	c.UpdatedAt = now
 
 	if err := Save(ctx, dbConn, *c); err != nil {
 		return err
@@ -249,7 +227,7 @@ func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract
-func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH string) bool {
+func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH protocol.PublicKeyHash) bool {
 	for _, a := range contract.Assets {
 		if h, ok := a.Holdings[userPKH]; ok && h.Balance > 0 {
 			return true
@@ -260,7 +238,7 @@ func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH string
 }
 
 // IsOperator will check if the supplied pkh has operator permission (issuer or operator)
-func IsOperator(ctx context.Context, contract *state.Contract, pkh string) bool {
+func IsOperator(ctx context.Context, contract *state.Contract, pkh protocol.PublicKeyHash) bool {
 	return contract.Issuer == pkh || contract.Operator == pkh
 }
 

@@ -25,12 +25,12 @@ var (
 // code := c.VotingSystem
 
 // // This is not an asset vote, so we are using the Contract voting system
-// if len(v.AssetID) == 0 {
+// if len(v.AssetCode) == 0 {
 // return &code, nil
 // }
 
 // // This is an asset vote
-// asset, ok := c.Assets[v.AssetID]
+// asset, ok := c.Assets[v.AssetCode]
 // if !ok {
 // return nil, errors.New("Asset not found")
 // }
@@ -130,12 +130,12 @@ func (a AbsoluteMajority) Winners(c state.Contract, v state.Vote) ([]uint8, erro
 	// Number of asset holders
 	tokenHolderCount := 0
 
-	if len(v.AssetID) == 0 {
+	if v.AssetCode.IsZero() {
 		for _, a := range c.Assets {
 			tokenHolderCount += len(a.Holdings)
 		}
 	} else {
-		a, ok := c.Assets[v.AssetID]
+		a, ok := c.Assets[v.AssetCode]
 		if !ok {
 			return nil, errors.New("Asset not found")
 		}
@@ -244,12 +244,12 @@ func (a AbsoluteSuperMajority) Winners(c state.Contract, v state.Vote) ([]uint8,
 	// Number of asset holders
 	tokenHolderCount := 0
 
-	if len(v.AssetID) == 0 {
+	if v.AssetCode.IsZero() {
 		for _, a := range c.Assets {
 			tokenHolderCount += len(a.Holdings)
 		}
 	} else {
-		a, ok := c.Assets[v.AssetID]
+		a, ok := c.Assets[v.AssetCode]
 		if !ok {
 			return nil, errors.New("Asset not found")
 		}

@@ -2,12 +2,12 @@ package node
 
 import (
 	"context"
-	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 	"go.opencensus.io/trace"
 )
 
@@ -20,7 +20,7 @@ const KeyValues ctxKey = 1
 // Values represent state for each event.
 type Values struct {
 	TraceID    string
-	Now        time.Time
+	Now        protocol.Timestamp
 	StatusCode int
 	Error      bool
 }
@@ -74,7 +74,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		// process the event.
 		v := Values{
 			TraceID: span.SpanContext().TraceID.String(),
-			Now:     time.Now(),
+			Now:     protocol.CurrentTimestamp(),
 		}
 		ctx = context.WithValue(ctx, KeyValues, &v)
 

@@ -29,13 +29,39 @@ const (
 	CodeTicketAdmission = "TIC"
 )
 
+// AssetTypeMapping holds a mapping of asset codes to asset types.
+func AssetTypeMapping(code string) PayloadMessage {
+	switch code {
+	case CodeCoupon:
+		result := Coupon{}
+		return &result
+	case CodeCurrency:
+		result := Currency{}
+		return &result
+	case CodeLoyaltyPoints:
+		result := LoyaltyPoints{}
+		return &result
+	case CodeMembership:
+		result := Membership{}
+		return &result
+	case CodeShareCommon:
+		result := ShareCommon{}
+		return &result
+	case CodeTicketAdmission:
+		result := TicketAdmission{}
+		return &result
+	default:
+		return nil
+	}
+}
+
 // Coupon asset type.
 type Coupon struct {
 	Version            uint8
 	TradingRestriction []byte
 	RedeemingEntity    string
-	IssueDate          uint64
-	ExpiryDate         uint64
+	IssueDate          Timestamp
+	ExpiryDate         Timestamp
 	Value              uint64
 	Currency           string
 	Description        string
@@ -53,8 +79,8 @@ func (m Coupon) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *Coupon) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *Coupon) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -66,7 +92,7 @@ func (m *Coupon) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *Coupon) serialize() ([]byte, error) {
+func (m *Coupon) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -84,12 +110,12 @@ func (m *Coupon) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// IssueDate (uint64)
+	// IssueDate (Timestamp)
 	if err := write(buf, m.IssueDate); err != nil {
 		return nil, err
 	}
 
-	// ExpiryDate (uint64)
+	// ExpiryDate (Timestamp)
 	if err := write(buf, m.ExpiryDate); err != nil {
 		return nil, err
 	}
@@ -111,8 +137,8 @@ func (m *Coupon) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in Coupon from the byte slice
-func (m *Coupon) write(b []byte) (int, error) {
+// Write populates the fields in Coupon from the byte slice
+func (m *Coupon) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -135,13 +161,13 @@ func (m *Coupon) write(b []byte) (int, error) {
 		}
 	}
 
-	// IssueDate (uint64)
-	if err := read(buf, &m.IssueDate); err != nil {
+	// IssueDate (Timestamp)
+	if err := m.IssueDate.Write(buf); err != nil {
 		return 0, err
 	}
 
-	// ExpiryDate (uint64)
-	if err := read(buf, &m.ExpiryDate); err != nil {
+	// ExpiryDate (Timestamp)
+	if err := m.ExpiryDate.Write(buf); err != nil {
 		return 0, err
 	}
 
@@ -176,8 +202,8 @@ func (m Coupon) String() string {
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
 	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
 	vals = append(vals, fmt.Sprintf("RedeemingEntity:%#+v", m.RedeemingEntity))
-	vals = append(vals, fmt.Sprintf("IssueDate:%v", m.IssueDate))
-	vals = append(vals, fmt.Sprintf("ExpiryDate:%v", m.ExpiryDate))
+	vals = append(vals, fmt.Sprintf("IssueDate:%#+v", m.IssueDate))
+	vals = append(vals, fmt.Sprintf("ExpiryDate:%#+v", m.ExpiryDate))
 	vals = append(vals, fmt.Sprintf("Value:%v", m.Value))
 	vals = append(vals, fmt.Sprintf("Currency:%#+v", m.Currency))
 	vals = append(vals, fmt.Sprintf("Description:%#+v", m.Description))
@@ -206,8 +232,8 @@ func (m Currency) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *Currency) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *Currency) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -219,7 +245,7 @@ func (m *Currency) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *Currency) serialize() ([]byte, error) {
+func (m *Currency) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -249,8 +275,8 @@ func (m *Currency) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in Currency from the byte slice
-func (m *Currency) write(b []byte) (int, error) {
+// Write populates the fields in Currency from the byte slice
+func (m *Currency) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -312,8 +338,8 @@ type LoyaltyPoints struct {
 	AgeRestriction      []byte
 	OfferType           byte
 	OfferName           string
-	ValidFrom           uint64
-	ExpirationTimestamp uint64
+	ValidFrom           Timestamp
+	ExpirationTimestamp Timestamp
 	Description         string
 }
 
@@ -329,8 +355,8 @@ func (m LoyaltyPoints) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *LoyaltyPoints) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *LoyaltyPoints) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -342,7 +368,7 @@ func (m *LoyaltyPoints) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *LoyaltyPoints) serialize() ([]byte, error) {
+func (m *LoyaltyPoints) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -370,12 +396,12 @@ func (m *LoyaltyPoints) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// ValidFrom (uint64)
+	// ValidFrom (Timestamp)
 	if err := write(buf, m.ValidFrom); err != nil {
 		return nil, err
 	}
 
-	// ExpirationTimestamp (uint64)
+	// ExpirationTimestamp (Timestamp)
 	if err := write(buf, m.ExpirationTimestamp); err != nil {
 		return nil, err
 	}
@@ -387,8 +413,8 @@ func (m *LoyaltyPoints) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in LoyaltyPoints from the byte slice
-func (m *LoyaltyPoints) write(b []byte) (int, error) {
+// Write populates the fields in LoyaltyPoints from the byte slice
+func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -422,13 +448,13 @@ func (m *LoyaltyPoints) write(b []byte) (int, error) {
 		}
 	}
 
-	// ValidFrom (uint64)
-	if err := read(buf, &m.ValidFrom); err != nil {
+	// ValidFrom (Timestamp)
+	if err := m.ValidFrom.Write(buf); err != nil {
 		return 0, err
 	}
 
-	// ExpirationTimestamp (uint64)
-	if err := read(buf, &m.ExpirationTimestamp); err != nil {
+	// ExpirationTimestamp (Timestamp)
+	if err := m.ExpirationTimestamp.Write(buf); err != nil {
 		return 0, err
 	}
 
@@ -463,8 +489,8 @@ type Membership struct {
 	Version             uint8
 	TradingRestriction  []byte
 	AgeRestriction      []byte
-	ValidFrom           uint64
-	ExpirationTimestamp uint64
+	ValidFrom           Timestamp
+	ExpirationTimestamp Timestamp
 	ID                  string
 	MembershipType      string
 	Description         string
@@ -482,8 +508,8 @@ func (m Membership) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *Membership) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *Membership) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -495,7 +521,7 @@ func (m *Membership) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *Membership) serialize() ([]byte, error) {
+func (m *Membership) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -513,12 +539,12 @@ func (m *Membership) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// ValidFrom (uint64)
+	// ValidFrom (Timestamp)
 	if err := write(buf, m.ValidFrom); err != nil {
 		return nil, err
 	}
 
-	// ExpirationTimestamp (uint64)
+	// ExpirationTimestamp (Timestamp)
 	if err := write(buf, m.ExpirationTimestamp); err != nil {
 		return nil, err
 	}
@@ -540,8 +566,8 @@ func (m *Membership) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in Membership from the byte slice
-func (m *Membership) write(b []byte) (int, error) {
+// Write populates the fields in Membership from the byte slice
+func (m *Membership) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -561,13 +587,13 @@ func (m *Membership) write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// ValidFrom (uint64)
-	if err := read(buf, &m.ValidFrom); err != nil {
+	// ValidFrom (Timestamp)
+	if err := m.ValidFrom.Write(buf); err != nil {
 		return 0, err
 	}
 
-	// ExpirationTimestamp (uint64)
-	if err := read(buf, &m.ExpirationTimestamp); err != nil {
+	// ExpirationTimestamp (Timestamp)
+	if err := m.ExpirationTimestamp.Write(buf); err != nil {
 		return 0, err
 	}
 
@@ -619,7 +645,7 @@ func (m Membership) String() string {
 type ShareCommon struct {
 	Version            uint8
 	TradingRestriction []byte
-	TransferLockout    uint64
+	TransferLockout    Timestamp
 	Ticker             string
 	ISIN               string
 	Description        string
@@ -637,8 +663,8 @@ func (m ShareCommon) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *ShareCommon) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *ShareCommon) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -650,7 +676,7 @@ func (m *ShareCommon) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *ShareCommon) serialize() ([]byte, error) {
+func (m *ShareCommon) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -663,7 +689,7 @@ func (m *ShareCommon) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TransferLockout (uint64)
+	// TransferLockout (Timestamp)
 	if err := write(buf, m.TransferLockout); err != nil {
 		return nil, err
 	}
@@ -685,8 +711,8 @@ func (m *ShareCommon) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in ShareCommon from the byte slice
-func (m *ShareCommon) write(b []byte) (int, error) {
+// Write populates the fields in ShareCommon from the byte slice
+func (m *ShareCommon) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -700,8 +726,8 @@ func (m *ShareCommon) write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// TransferLockout (uint64)
-	if err := read(buf, &m.TransferLockout); err != nil {
+	// TransferLockout (Timestamp)
+	if err := m.TransferLockout.Write(buf); err != nil {
 		return 0, err
 	}
 
@@ -757,9 +783,9 @@ type TicketAdmission struct {
 	Class               string
 	Area                string
 	Seat                string
-	StartTimeDate       uint64
-	ValidFrom           uint64
-	ExpirationTimestamp uint64
+	StartTimeDate       Timestamp
+	ValidFrom           Timestamp
+	ExpirationTimestamp Timestamp
 	Description         string
 }
 
@@ -775,8 +801,8 @@ func (m TicketAdmission) Len() int64 {
 
 // Read implements the io.Reader interface, writing the receiver to the
 // []byte.
-func (m *TicketAdmission) read(b []byte) (int, error) {
-	data, err := m.serialize()
+func (m *TicketAdmission) Read(b []byte) (int, error) {
+	data, err := m.Serialize()
 
 	if err != nil {
 		return 0, err
@@ -788,7 +814,7 @@ func (m *TicketAdmission) read(b []byte) (int, error) {
 }
 
 // Serialize returns the full OP_RETURN payload bytes.
-func (m *TicketAdmission) serialize() ([]byte, error) {
+func (m *TicketAdmission) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Version (uint8)
@@ -831,17 +857,17 @@ func (m *TicketAdmission) serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// StartTimeDate (uint64)
+	// StartTimeDate (Timestamp)
 	if err := write(buf, m.StartTimeDate); err != nil {
 		return nil, err
 	}
 
-	// ValidFrom (uint64)
+	// ValidFrom (Timestamp)
 	if err := write(buf, m.ValidFrom); err != nil {
 		return nil, err
 	}
 
-	// ExpirationTimestamp (uint64)
+	// ExpirationTimestamp (Timestamp)
 	if err := write(buf, m.ExpirationTimestamp); err != nil {
 		return nil, err
 	}
@@ -853,8 +879,8 @@ func (m *TicketAdmission) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// write populates the fields in TicketAdmission from the byte slice
-func (m *TicketAdmission) write(b []byte) (int, error) {
+// Write populates the fields in TicketAdmission from the byte slice
+func (m *TicketAdmission) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
@@ -919,18 +945,18 @@ func (m *TicketAdmission) write(b []byte) (int, error) {
 		}
 	}
 
-	// StartTimeDate (uint64)
-	if err := read(buf, &m.StartTimeDate); err != nil {
+	// StartTimeDate (Timestamp)
+	if err := m.StartTimeDate.Write(buf); err != nil {
 		return 0, err
 	}
 
-	// ValidFrom (uint64)
-	if err := read(buf, &m.ValidFrom); err != nil {
+	// ValidFrom (Timestamp)
+	if err := m.ValidFrom.Write(buf); err != nil {
 		return 0, err
 	}
 
-	// ExpirationTimestamp (uint64)
-	if err := read(buf, &m.ExpirationTimestamp); err != nil {
+	// ExpirationTimestamp (Timestamp)
+	if err := m.ExpirationTimestamp.Write(buf); err != nil {
 		return 0, err
 	}
 

@@ -1,15 +1,15 @@
 package asset
 
 import (
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 // NewAsset defines what we require when creating a Asset record.
 type NewAsset struct {
-	IssuerAddress string `json:"issuer_address,omitempty"`
+	IssuerAddress protocol.PublicKeyHash `json:"issuer_address,omitempty"`
 
-	Timestamp uint64 `json:"timestamp,omitempty"`
+	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   string  `json:"asset_type,omitempty"`
 	AssetAuthFlags              [8]byte `json:"asset_auth_flags,omitempty"`
@@ -34,8 +34,8 @@ type NewAsset struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateAsset struct {
-	Revision  *uint64 `json:"revision,omitempty"`
-	Timestamp *uint64 `json:"timestamp,omitempty"`
+	Revision  *uint64             `json:"revision,omitempty"`
+	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   *string  `json:"asset_type,omitempty"`
 	AssetAuthFlags              *[8]byte `json:"asset_auth_flags,omitempty"`
@@ -52,7 +52,7 @@ type UpdateAsset struct {
 	ContractFeeFixed            *float32 `json:"contract_fee_fixed,omitempty"`
 	AssetPayload                *[]byte  `json:"asset_payload,omitempty"`
 
-	NewBalances          map[string]uint64               `json:"new_balances,omitempty"`
-	NewHoldingStatuses   map[string]*state.HoldingStatus `json:"new_holding_statuses,omitempty"`
-	ClearHoldingStatuses map[string]*chainhash.Hash      `json:"clear_holding_statuses,omitempty"`
+	NewBalances          map[protocol.PublicKeyHash]uint64               `json:"new_balances,omitempty"`
+	NewHoldingStatuses   map[protocol.PublicKeyHash]*state.HoldingStatus `json:"new_holding_statuses,omitempty"`
+	ClearHoldingStatuses map[protocol.PublicKeyHash]*protocol.TxId       `json:"clear_holding_statuses,omitempty"`
 }

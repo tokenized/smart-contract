@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -38,8 +37,8 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractAddr := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		return err
 	}
@@ -64,8 +63,8 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	// }
 
 	// Sender must hold balance of at least one asset
-	senderAddr := itx.Inputs[0].Address
-	if !contract.HasAnyBalance(ctx, ct, senderAddr.String()) {
+	senderAddr := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	if !contract.HasAnyBalance(ctx, ct, senderAddr) {
 		logger.Warn(ctx, "%s : Sender holds no assets: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}
@@ -77,36 +76,34 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	}
 
 	// If an asset is specified
-	assetID := strings.Trim(string(msg.AssetID), "\x00")
-	if len(assetID) > 0 {
-
+	if !msg.AssetCode.IsZero() {
 		// Locate asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
 		if err != nil {
 			return err
 		}
 
 		// Asset could not be found
 		if as == nil {
-			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		// if !asset.IsVotingPermitted(ctx, as) {
-		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
+		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
 		// }
 
 		// Sender does not have any balance of the asset
-		if asset.GetBalance(ctx, as, senderAddr.String()) < 1 {
-			logger.Warn(ctx, "%s : Insufficient funds: %s %s", v.TraceID, contractAddr, assetID)
+		if asset.GetBalance(ctx, as, senderAddr) < 1 {
+			logger.Warn(ctx, "%s : Insufficient funds: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 	}
 
-	// logger.Info(ctx, "%s : Initiative Request : %s %s", v.TraceID, contractAddr, assetID)
-	logger.Warn(ctx, "%s : Initiative Request Not Implemented : %s %s", v.TraceID, contractAddr, assetID)
+	// logger.Info(ctx, "%s : Initiative Request : %s %s", v.TraceID, contractAddr, msg.AssetCode)
+	logger.Warn(ctx, "%s : Initiative Request Not Implemented : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 	return errors.New("Initiative Request Not Implemented")
 
 	// TODO(srg) auth flags
@@ -114,7 +111,7 @@ func (g *Governance) InitiativeRequest(ctx context.Context, mux protomux.Handler
 	// Vote <- Initiative
 	// vote := protocol.NewVote()
 	// vote.AssetType = msg.AssetType
-	// vote.AssetID = msg.AssetID
+	// vote.AssetCode = msg.AssetCode
 	// vote.VoteType = msg.VoteType
 	// vote.VoteOptions = msg.VoteOptions
 	// vote.VoteMax = msg.VoteMax
@@ -161,12 +158,11 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	}
 
 	dbConn := g.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract
-	contractAddr := rk.Address
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr.String())
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
 		return err
 	}
@@ -191,8 +187,8 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	// }
 
 	// Sender must be a contract operator
-	senderAddr := itx.Inputs[0].Address
-	if !contract.IsOperator(ctx, ct, senderAddr.String()) {
+	senderAddr := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	if !contract.IsOperator(ctx, ct, senderAddr) {
 		logger.Warn(ctx, "%s : Sender is not an operator: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
@@ -204,30 +200,28 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	// }
 
 	// If an asset is specified
-	assetID := strings.Trim(string(msg.AssetID), "\x00")
-	if len(assetID) > 0 {
-
+	if !msg.AssetCode.IsZero() {
 		// Locate asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
 		if err != nil {
 			return err
 		}
 
 		// Asset could not be found
 		if as == nil {
-			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetID)
+			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
 		}
 
 		// Asset does not allow voting
 		// if !asset.IsVotingPermitted(ctx, as) {
-		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, assetID)
+		// logger.Warn(ctx, "%s : Asset does not allow voting: %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractAuthFlags)
 		// }
 	}
 
-	// logger.Info(ctx, "%s : Referendum Request : %s %s", v.TraceID, contractAddr, assetID)
-	logger.Warn(ctx, "%s : Referendum Request Not Implemented : %s %s", v.TraceID, contractAddr, assetID)
+	// logger.Info(ctx, "%s : Referendum Request : %s %s", v.TraceID, contractAddr, msg.AssetCode)
+	logger.Warn(ctx, "%s : Referendum Request Not Implemented : %s %s", v.TraceID, contractAddr, msg.AssetCode)
 	return errors.New("Referendum Request Not Implemented")
 
 	// TODO(srg) auth flags
@@ -235,7 +229,7 @@ func (g *Governance) ReferendumRequest(ctx context.Context, mux protomux.Handler
 	// Vote <- Referendum
 	// vote := protocol.NewVote()
 	// vote.AssetType = msg.AssetType
-	// vote.AssetID = msg.AssetID
+	// vote.AssetCode = msg.AssetCode
 	// vote.VoteType = msg.VoteType
 	// vote.VoteOptions = msg.VoteOptions
 	// vote.VoteMax = msg.VoteMax

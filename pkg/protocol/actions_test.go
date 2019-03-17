@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestAssetDefinition(t *testing.T) {
@@ -19,14 +18,8 @@ func TestAssetDefinition(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// AssetAuthFlags (bin)
 	// bin test not setup
@@ -122,9 +115,9 @@ func TestAssetDefinition(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// AssetAuthFlags (bin)
@@ -185,14 +178,8 @@ func TestAssetCreation(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// AssetAuthFlags (bin)
 	// bin test not setup
@@ -251,8 +238,8 @@ func TestAssetCreation(t *testing.T) {
 	// AssetRevision (uint)
 	// uint test not setup
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -294,9 +281,9 @@ func TestAssetCreation(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// AssetAuthFlags (bin)
@@ -347,9 +334,9 @@ func TestAssetCreation(t *testing.T) {
 	// AssetRevision (uint)
 	// uint test compare not setup
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -365,14 +352,8 @@ func TestAssetModification(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// AssetRevision (uint)
 	// uint test not setup
@@ -425,9 +406,9 @@ func TestAssetModification(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// AssetRevision (uint)
@@ -475,8 +456,8 @@ func TestContractOffer(t *testing.T) {
 		initialMessage.Jurisdiction = string(text)
 	}
 
-	// ContractExpiration (time)
-	// time test not setup
+	// ContractExpiration (Timestamp)
+	initialMessage.ContractExpiration = Timestamp{}
 
 	// ContractURI (varchar)
 	initialMessage.ContractURI = "Text 6"
@@ -625,8 +606,10 @@ func TestContractOffer(t *testing.T) {
 		t.Errorf("Jurisdiction doesn't match : %s != %s", initialMessage.Jurisdiction, decodedMessage.Jurisdiction)
 	}
 
-	// ContractExpiration (time)
-	// time test compare not setup
+	// ContractExpiration (Timestamp)
+	if initialMessage.ContractExpiration != decodedMessage.ContractExpiration {
+		t.Errorf("ContractExpiration doesn't match : %v != %v", initialMessage.ContractExpiration, decodedMessage.ContractExpiration)
+	}
 
 	// ContractURI (varchar)
 	if initialMessage.ContractURI != decodedMessage.ContractURI {
@@ -765,8 +748,8 @@ func TestContractFormation(t *testing.T) {
 		initialMessage.Jurisdiction = string(text)
 	}
 
-	// ContractExpiration (time)
-	// time test not setup
+	// ContractExpiration (Timestamp)
+	initialMessage.ContractExpiration = Timestamp{}
 
 	// ContractURI (varchar)
 	initialMessage.ContractURI = "Text 6"
@@ -860,8 +843,8 @@ func TestContractFormation(t *testing.T) {
 	// ContractRevision (uint)
 	// uint test not setup
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -921,8 +904,10 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("Jurisdiction doesn't match : %s != %s", initialMessage.Jurisdiction, decodedMessage.Jurisdiction)
 	}
 
-	// ContractExpiration (time)
-	// time test compare not setup
+	// ContractExpiration (Timestamp)
+	if initialMessage.ContractExpiration != decodedMessage.ContractExpiration {
+		t.Errorf("ContractExpiration doesn't match : %v != %v", initialMessage.ContractExpiration, decodedMessage.ContractExpiration)
+	}
 
 	// ContractURI (varchar)
 	if initialMessage.ContractURI != decodedMessage.ContractURI {
@@ -1030,9 +1015,9 @@ func TestContractFormation(t *testing.T) {
 	// ContractRevision (uint)
 	// uint test compare not setup
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -1148,11 +1133,11 @@ func TestStaticContractFormation(t *testing.T) {
 		initialMessage.Jurisdiction = string(text)
 	}
 
-	// EffectiveDate (time)
-	// time test not setup
+	// EffectiveDate (Timestamp)
+	initialMessage.EffectiveDate = Timestamp{}
 
-	// ContractExpiration (time)
-	// time test not setup
+	// ContractExpiration (Timestamp)
+	initialMessage.ContractExpiration = Timestamp{}
 
 	// ContractURI (varchar)
 	initialMessage.ContractURI = "Text 9"
@@ -1231,11 +1216,15 @@ func TestStaticContractFormation(t *testing.T) {
 		t.Errorf("Jurisdiction doesn't match : %s != %s", initialMessage.Jurisdiction, decodedMessage.Jurisdiction)
 	}
 
-	// EffectiveDate (time)
-	// time test compare not setup
+	// EffectiveDate (Timestamp)
+	if initialMessage.EffectiveDate != decodedMessage.EffectiveDate {
+		t.Errorf("EffectiveDate doesn't match : %v != %v", initialMessage.EffectiveDate, decodedMessage.EffectiveDate)
+	}
 
-	// ContractExpiration (time)
-	// time test compare not setup
+	// ContractExpiration (Timestamp)
+	if initialMessage.ContractExpiration != decodedMessage.ContractExpiration {
+		t.Errorf("ContractExpiration doesn't match : %v != %v", initialMessage.ContractExpiration, decodedMessage.ContractExpiration)
+	}
 
 	// ContractURI (varchar)
 	if initialMessage.ContractURI != decodedMessage.ContractURI {
@@ -1263,14 +1252,8 @@ func TestOrder(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// ComplianceAction (fixedchar)
 	// fixedchar test not setup
@@ -1280,8 +1263,8 @@ func TestOrder(t *testing.T) {
 		initialMessage.TargetAddresses = append(initialMessage.TargetAddresses, TargetAddress{})
 	}
 
-	// DepositAddress (Address)
-	initialMessage.DepositAddress = Address{}
+	// DepositAddress (PublicKeyHash)
+	initialMessage.DepositAddress = PublicKeyHash{}
 
 	// AuthorityName (varchar)
 	initialMessage.AuthorityName = "Text 5"
@@ -1301,8 +1284,8 @@ func TestOrder(t *testing.T) {
 	// RefTxnID (sha256)
 	// sha256 test not setup
 
-	// FreezePeriod (time)
-	// time test not setup
+	// FreezePeriod (Timestamp)
+	initialMessage.FreezePeriod = Timestamp{}
 
 	// Message (varchar)
 	initialMessage.Message = "Text 12"
@@ -1347,9 +1330,9 @@ func TestOrder(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// ComplianceAction (fixedchar)
@@ -1360,7 +1343,7 @@ func TestOrder(t *testing.T) {
 		t.Errorf("TargetAddresses lengths don't match : %d != %d", len(initialMessage.TargetAddresses), len(decodedMessage.TargetAddresses))
 	}
 
-	// DepositAddress (Address)
+	// DepositAddress (PublicKeyHash)
 	if initialMessage.DepositAddress != decodedMessage.DepositAddress {
 		t.Errorf("DepositAddress doesn't match : %v != %v", initialMessage.DepositAddress, decodedMessage.DepositAddress)
 	}
@@ -1389,8 +1372,10 @@ func TestOrder(t *testing.T) {
 	// RefTxnID (sha256)
 	// sha256 test compare not setup
 
-	// FreezePeriod (time)
-	// time test compare not setup
+	// FreezePeriod (Timestamp)
+	if initialMessage.FreezePeriod != decodedMessage.FreezePeriod {
+		t.Errorf("FreezePeriod doesn't match : %v != %v", initialMessage.FreezePeriod, decodedMessage.FreezePeriod)
+	}
 
 	// Message (varchar)
 	if initialMessage.Message != decodedMessage.Message {
@@ -1401,13 +1386,13 @@ func TestOrder(t *testing.T) {
 func TestFreeze(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Freeze{}
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	for i := 0; i < 2; i++ {
-		initialMessage.Addresses = append(initialMessage.Addresses, Address{})
+		initialMessage.Addresses = append(initialMessage.Addresses, PublicKeyHash{})
 	}
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1444,30 +1429,30 @@ func TestFreeze(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	if len(initialMessage.Addresses) != len(decodedMessage.Addresses) {
 		t.Errorf("Addresses lengths don't match : %d != %d", len(initialMessage.Addresses), len(decodedMessage.Addresses))
 	}
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
 func TestThaw(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Thaw{}
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	for i := 0; i < 2; i++ {
-		initialMessage.Addresses = append(initialMessage.Addresses, Address{})
+		initialMessage.Addresses = append(initialMessage.Addresses, PublicKeyHash{})
 	}
 
 	// RefTxnID (sha256)
 	// sha256 test not setup
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1504,7 +1489,7 @@ func TestThaw(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	if len(initialMessage.Addresses) != len(decodedMessage.Addresses) {
 		t.Errorf("Addresses lengths don't match : %d != %d", len(initialMessage.Addresses), len(decodedMessage.Addresses))
 	}
@@ -1512,25 +1497,25 @@ func TestThaw(t *testing.T) {
 	// RefTxnID (sha256)
 	// sha256 test compare not setup
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
 func TestConfiscation(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Confiscation{}
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	for i := 0; i < 2; i++ {
-		initialMessage.Addresses = append(initialMessage.Addresses, Address{})
+		initialMessage.Addresses = append(initialMessage.Addresses, PublicKeyHash{})
 	}
 
 	// DepositQty (uint)
 	// uint test not setup
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1567,7 +1552,7 @@ func TestConfiscation(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	if len(initialMessage.Addresses) != len(decodedMessage.Addresses) {
 		t.Errorf("Addresses lengths don't match : %d != %d", len(initialMessage.Addresses), len(decodedMessage.Addresses))
 	}
@@ -1575,22 +1560,22 @@ func TestConfiscation(t *testing.T) {
 	// DepositQty (uint)
 	// uint test compare not setup
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
 func TestReconciliation(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Reconciliation{}
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	for i := 0; i < 2; i++ {
-		initialMessage.Addresses = append(initialMessage.Addresses, Address{})
+		initialMessage.Addresses = append(initialMessage.Addresses, PublicKeyHash{})
 	}
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1627,14 +1612,14 @@ func TestReconciliation(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Addresses (Address[])
+	// Addresses (PublicKeyHash[])
 	if len(initialMessage.Addresses) != len(decodedMessage.Addresses) {
 		t.Errorf("Addresses lengths don't match : %d != %d", len(initialMessage.Addresses), len(decodedMessage.Addresses))
 	}
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -1650,14 +1635,8 @@ func TestInitiative(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// VoteSystem (uint)
 	// uint test not setup
@@ -1682,8 +1661,8 @@ func TestInitiative(t *testing.T) {
 	// ProposalDocumentHash (sha256)
 	// sha256 test not setup
 
-	// VoteCutOffTimestamp (time)
-	// time test not setup
+	// VoteCutOffTimestamp (Timestamp)
+	initialMessage.VoteCutOffTimestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1725,9 +1704,9 @@ func TestInitiative(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// VoteSystem (uint)
@@ -1757,8 +1736,10 @@ func TestInitiative(t *testing.T) {
 	// ProposalDocumentHash (sha256)
 	// sha256 test compare not setup
 
-	// VoteCutOffTimestamp (time)
-	// time test compare not setup
+	// VoteCutOffTimestamp (Timestamp)
+	if initialMessage.VoteCutOffTimestamp != decodedMessage.VoteCutOffTimestamp {
+		t.Errorf("VoteCutOffTimestamp doesn't match : %v != %v", initialMessage.VoteCutOffTimestamp, decodedMessage.VoteCutOffTimestamp)
+	}
 }
 
 func TestReferendum(t *testing.T) {
@@ -1776,14 +1757,8 @@ func TestReferendum(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+2))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// VoteSystem (uint)
 	// uint test not setup
@@ -1808,8 +1783,8 @@ func TestReferendum(t *testing.T) {
 	// ProposalDocumentHash (sha256)
 	// sha256 test not setup
 
-	// VoteCutOffTimestamp (time)
-	// time test not setup
+	// VoteCutOffTimestamp (Timestamp)
+	initialMessage.VoteCutOffTimestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1854,9 +1829,9 @@ func TestReferendum(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// VoteSystem (uint)
@@ -1886,15 +1861,17 @@ func TestReferendum(t *testing.T) {
 	// ProposalDocumentHash (sha256)
 	// sha256 test compare not setup
 
-	// VoteCutOffTimestamp (time)
-	// time test compare not setup
+	// VoteCutOffTimestamp (Timestamp)
+	if initialMessage.VoteCutOffTimestamp != decodedMessage.VoteCutOffTimestamp {
+		t.Errorf("VoteCutOffTimestamp doesn't match : %v != %v", initialMessage.VoteCutOffTimestamp, decodedMessage.VoteCutOffTimestamp)
+	}
 }
 
 func TestVote(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Vote{}
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1931,9 +1908,9 @@ func TestVote(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -1949,14 +1926,8 @@ func TestBallotCast(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// VoteTxnID (sha256)
 	// sha256 test not setup
@@ -2004,9 +1975,9 @@ func TestBallotCast(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// VoteTxnID (sha256)
@@ -2021,8 +1992,8 @@ func TestBallotCast(t *testing.T) {
 func TestBallotCounted(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCounted{}
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2059,9 +2030,9 @@ func TestBallotCounted(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -2077,14 +2048,8 @@ func TestResult(t *testing.T) {
 		initialMessage.AssetType = string(text)
 	}
 
-	// AssetID (fixedchar)
-	{
-		text := make([]byte, 0, 32)
-		for i := uint64(0); i < 32; i++ {
-			text = append(text, byte(65+i+1))
-		}
-		initialMessage.AssetID = string(text)
-	}
+	// AssetCode (AssetCode)
+	initialMessage.AssetCode = AssetCode{}
 
 	// Proposal (bool)
 	// bool test not setup
@@ -2106,8 +2071,8 @@ func TestResult(t *testing.T) {
 	// Result (varchar)
 	initialMessage.Result = "Text 7"
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2149,9 +2114,9 @@ func TestResult(t *testing.T) {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
 	}
 
-	// AssetID (fixedchar)
-	if initialMessage.AssetID != decodedMessage.AssetID {
-		t.Errorf("AssetID doesn't match : %s != %s", initialMessage.AssetID, decodedMessage.AssetID)
+	// AssetCode (AssetCode)
+	if initialMessage.AssetCode != decodedMessage.AssetCode {
+		t.Errorf("AssetCode doesn't match : %v != %v", initialMessage.AssetCode, decodedMessage.AssetCode)
 	}
 
 	// Proposal (bool)
@@ -2176,18 +2141,15 @@ func TestResult(t *testing.T) {
 		t.Errorf("Result doesn't match : %s != %s", initialMessage.Result, decodedMessage.Result)
 	}
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
 func TestMessage(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Message{}
-	// QtyReceivingAddresses (uint8)
-	// uint8 test not setup
-
 	// AddressIndexes (uint16[])
 	for i := 0; i < 5; i++ {
 		var item uint16
@@ -2196,15 +2158,18 @@ func TestMessage(t *testing.T) {
 
 	// MessageType (fixedchar)
 	{
-		text := make([]byte, 0, 2)
-		for i := uint64(0); i < 2; i++ {
-			text = append(text, byte(65+i+2))
+		text := make([]byte, 0, 4)
+		for i := uint64(0); i < 4; i++ {
+			text = append(text, byte(65+i+1))
 		}
 		initialMessage.MessageType = string(text)
 	}
 
-	// MessagePayload (varchar)
-	initialMessage.MessagePayload = "Text 3"
+	// MessagePayload (varbin)
+	initialMessage.MessagePayload = make([]byte, 0, 32)
+	for i := uint64(0); i < 32; i++ {
+		initialMessage.MessagePayload = append(initialMessage.MessagePayload, byte(65+i+2))
+	}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2241,9 +2206,6 @@ func TestMessage(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// QtyReceivingAddresses (uint8)
-	// uint8 test compare not setup
-
 	// AddressIndexes (uint16[])
 	if len(initialMessage.AddressIndexes) != len(decodedMessage.AddressIndexes) {
 		t.Errorf("AddressIndexes lengths don't match : %d != %d", len(initialMessage.AddressIndexes), len(decodedMessage.AddressIndexes))
@@ -2259,9 +2221,9 @@ func TestMessage(t *testing.T) {
 		t.Errorf("MessageType doesn't match : %s != %s", initialMessage.MessageType, decodedMessage.MessageType)
 	}
 
-	// MessagePayload (varchar)
-	if initialMessage.MessagePayload != decodedMessage.MessagePayload {
-		t.Errorf("MessagePayload doesn't match : %s != %s", initialMessage.MessagePayload, decodedMessage.MessagePayload)
+	// MessagePayload (varbin)
+	if !bytes.Equal(initialMessage.MessagePayload, decodedMessage.MessagePayload) {
+		t.Errorf("MessagePayload doesn't match : %x != %x", initialMessage.MessagePayload, decodedMessage.MessagePayload)
 	}
 }
 
@@ -2283,8 +2245,8 @@ func TestRejection(t *testing.T) {
 	// MessagePayload (varchar)
 	initialMessage.MessagePayload = "Text 3"
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2342,9 +2304,9 @@ func TestRejection(t *testing.T) {
 		t.Errorf("MessagePayload doesn't match : %s != %s", initialMessage.MessagePayload, decodedMessage.MessagePayload)
 	}
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }
 
@@ -2544,8 +2506,8 @@ func TestTransfer(t *testing.T) {
 		initialMessage.Assets = append(initialMessage.Assets, AssetTransfer{})
 	}
 
-	// OfferExpiry (time)
-	// time test not setup
+	// OfferExpiry (Timestamp)
+	initialMessage.OfferExpiry = Timestamp{}
 
 	// ExchangeFeeCurrency (fixedchar)
 	{
@@ -2562,8 +2524,8 @@ func TestTransfer(t *testing.T) {
 	// ExchangeFeeFixed (float)
 	// float test not setup
 
-	// ExchangeFeeAddress (Address)
-	initialMessage.ExchangeFeeAddress = Address{}
+	// ExchangeFeeAddress (PublicKeyHash)
+	initialMessage.ExchangeFeeAddress = PublicKeyHash{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2605,8 +2567,10 @@ func TestTransfer(t *testing.T) {
 		t.Errorf("Assets lengths don't match : %d != %d", len(initialMessage.Assets), len(decodedMessage.Assets))
 	}
 
-	// OfferExpiry (time)
-	// time test compare not setup
+	// OfferExpiry (Timestamp)
+	if initialMessage.OfferExpiry != decodedMessage.OfferExpiry {
+		t.Errorf("OfferExpiry doesn't match : %v != %v", initialMessage.OfferExpiry, decodedMessage.OfferExpiry)
+	}
 
 	// ExchangeFeeCurrency (fixedchar)
 	if initialMessage.ExchangeFeeCurrency != decodedMessage.ExchangeFeeCurrency {
@@ -2619,7 +2583,7 @@ func TestTransfer(t *testing.T) {
 	// ExchangeFeeFixed (float)
 	// float test compare not setup
 
-	// ExchangeFeeAddress (Address)
+	// ExchangeFeeAddress (PublicKeyHash)
 	if initialMessage.ExchangeFeeAddress != decodedMessage.ExchangeFeeAddress {
 		t.Errorf("ExchangeFeeAddress doesn't match : %v != %v", initialMessage.ExchangeFeeAddress, decodedMessage.ExchangeFeeAddress)
 	}
@@ -2633,8 +2597,8 @@ func TestSettlement(t *testing.T) {
 		initialMessage.Assets = append(initialMessage.Assets, AssetSettlement{})
 	}
 
-	// Timestamp (timestamp)
-	initialMessage.Timestamp = uint64(time.Now().UnixNano())
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -2676,8 +2640,8 @@ func TestSettlement(t *testing.T) {
 		t.Errorf("Assets lengths don't match : %d != %d", len(initialMessage.Assets), len(decodedMessage.Assets))
 	}
 
-	// Timestamp (timestamp)
+	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
-		t.Errorf("Timestamp doesn't match : %d != %d", initialMessage.Timestamp, decodedMessage.Timestamp)
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 }

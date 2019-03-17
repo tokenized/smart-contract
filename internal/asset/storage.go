@@ -7,12 +7,13 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 const storageKey = "contracts"
 
 // Put a single asset in storage
-func Save(ctx context.Context, dbConn *db.DB, pkh string, a state.Asset) error {
+func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, a state.Asset) error {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -34,7 +35,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, a state.Asset) error {
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[string]state.Asset{}
+		c.Assets = map[protocol.AssetCode]state.Asset{}
 	}
 
 	// Update the asset
@@ -50,7 +51,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, a state.Asset) error {
 }
 
 // Fetch a single asset from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh string, assetID [32]byte) (*state.Asset, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, assetCode protocol.AssetCode) (*state.Asset, error) {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -72,11 +73,11 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string, assetID [32]byte) (*s
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[string]state.Asset{}
+		c.Assets = map[protocol.AssetCode]state.Asset{}
 	}
 
 	// Locate the asset
-	asset, ok := c.Assets[assetID]
+	asset, ok := c.Assets[assetCode]
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -85,6 +86,6 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string, assetID [32]byte) (*s
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id string) string {
-	return fmt.Sprintf("%v/%v", storageKey, id)
+func buildStoragePath(id protocol.PublicKeyHash) string {
+	return fmt.Sprintf("%v/%x", storageKey, id)
 }

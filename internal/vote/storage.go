@@ -7,12 +7,13 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 const storageKey = "contracts"
 
 // Put a single vote in storage
-func Save(ctx context.Context, dbConn *db.DB, pkh string, v state.Vote) error {
+func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, v state.Vote) error {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -34,11 +35,11 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, v state.Vote) error {
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[string]state.Vote{}
+		c.Votes = map[protocol.TxId]state.Vote{}
 	}
 
 	// Update the vote
-	c.Votes[v.RefTxnIDHash] = v
+	c.Votes[v.RefTxID] = v
 
 	// Save the contract
 	sb, err := json.Marshal(c)
@@ -50,7 +51,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh string, v state.Vote) error {
 }
 
 // Fetch a single vote from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh string, voteID string) (*state.Vote, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, voteID protocol.TxId) (*state.Vote, error) {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -72,7 +73,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string, voteID string) (*stat
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[string]state.Vote{}
+		c.Votes = map[protocol.TxId]state.Vote{}
 	}
 
 	// Locate the vote
@@ -85,6 +86,6 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string, voteID string) (*stat
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id string) string {
-	return fmt.Sprintf("%v/%v", storageKey, id)
+func buildStoragePath(id protocol.PublicKeyHash) string {
+	return fmt.Sprintf("%v/%x", storageKey, id)
 }

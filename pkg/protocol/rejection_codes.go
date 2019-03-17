@@ -27,5 +27,8 @@ var (
 		23: []byte("Contract Malformed Update"),
 		24: []byte("Contract Malformed Update"),
 		25: []byte("Invalid Initiative"),
+		26: []byte("Duplicate Asset Code"),
+		27: []byte("MalFormed Transfer"),
+		28: []byte("MalFormed Settle"),
 	}
 )

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 const storageKey = "contracts"
@@ -24,7 +25,7 @@ func Save(ctx context.Context, dbConn *db.DB, c state.Contract) error {
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh string) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash) (*state.Contract, error) {
 	key := buildStoragePath(pkh)
 
 	b, err := dbConn.Fetch(ctx, key)
@@ -43,18 +44,18 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh string) (*state.Contract, err
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[string]state.Asset{}
+		c.Assets = map[protocol.AssetCode]state.Asset{}
 	}
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[string]state.Vote{}
+		c.Votes = map[protocol.TxId]state.Vote{}
 	}
 
 	return &c, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id string) string {
-	return fmt.Sprintf("%v/%v", storageKey, id)
+func buildStoragePath(id protocol.PublicKeyHash) string {
+	return fmt.Sprintf("%v/%x", storageKey, id)
 }

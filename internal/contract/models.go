@@ -1,20 +1,23 @@
 package contract
 
-import "github.com/tokenized/smart-contract/internal/platform/state"
+import (
+	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
+)
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
-	Timestamp uint64 `json:"timestamp,omitempty"`
+	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
-	Issuer   string `json:"issuer,omitempty"`
-	Operator string `json:"operator,omitempty"`
+	Issuer   protocol.PublicKeyHash `json:"issuer,omitempty"`
+	Operator protocol.PublicKeyHash `json:"operator,omitempty"`
 
 	ContractName               string               `json:"contract_name,omitempty"`
 	ContractFileType           uint8                `json:"contract_file_type,omitempty"`
 	ContractFile               []byte               `json:"contract_file,omitempty"`
 	GoverningLaw               string               `json:"governing_law,omitempty"`
 	Jurisdiction               string               `json:"jurisdiction,omitempty"`
-	ContractExpiration         uint64               `json:"contract_expiration,omitempty"`
+	ContractExpiration         protocol.Timestamp   `json:"contract_expiration,omitempty"`
 	ContractURI                string               `json:"contract_uri,omitempty"`
 	IssuerName                 string               `json:"issuer_name,omitempty"`
 	IssuerType                 byte                 `json:"issuer_type,omitempty"`
@@ -46,18 +49,18 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
-	Revision  *uint64 `json:"revision,omitempty"`
-	Timestamp *uint64 `json:"timestamp,omitempty"`
+	Revision  *uint64             `json:"revision,omitempty"`
+	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
-	Issuer   *string `json:"issuer,omitempty"`
-	Operator *string `json:"operator,omitempty"`
+	Issuer   *protocol.PublicKeyHash `json:"issuer,omitempty"`
+	Operator *protocol.PublicKeyHash `json:"operator,omitempty"`
 
 	ContractName               *string               `json:"contract_name,omitempty"`
 	ContractFileType           *uint8                `json:"contract_file_type,omitempty"`
 	ContractFile               *[]byte               `json:"contract_file,omitempty"`
 	GoverningLaw               *string               `json:"governing_law,omitempty"`
 	Jurisdiction               *string               `json:"jurisdiction,omitempty"`
-	ContractExpiration         *uint64               `json:"contract_expiration,omitempty"`
+	ContractExpiration         *protocol.Timestamp   `json:"contract_expiration,omitempty"`
 	ContractURI                *string               `json:"contract_uri,omitempty"`
 	IssuerName                 *string               `json:"issuer_name,omitempty"`
 	IssuerType                 *byte                 `json:"issuer_type,omitempty"`
