@@ -188,7 +188,8 @@ func Code(b []byte) (string, error) {
 	return string(b[offset : offset+2]), nil
 }
 
-// TxId represents a Bitcoin transaction ID. (SHA256 of tx data)
+// ------------------------------------------------------------------------------------------------
+// TxId represents a Bitcoin transaction ID. (Double SHA256 of tx data)
 type TxId struct {
 	data [32]byte
 }
@@ -210,6 +211,7 @@ func (id *TxId) Write(buf *bytes.Buffer) error {
 	return readLen(buf, id.data[:])
 }
 
+// ------------------------------------------------------------------------------------------------
 // PublicKeyHash represents a Bitcoin Public Key Hash. Often used as an address to receive transactions.
 type PublicKeyHash struct {
 	data [20]byte
@@ -233,6 +235,7 @@ func (hash *PublicKeyHash) Write(buf *bytes.Buffer) error {
 	return readLen(buf, hash.data[:])
 }
 
+// ------------------------------------------------------------------------------------------------
 // AssetCode represents a unique identifier for a Tokenized asset.
 type AssetCode struct {
 	data [32]byte
@@ -261,6 +264,36 @@ func (code *AssetCode) Write(buf *bytes.Buffer) error {
 	return readLen(buf, code.data[:])
 }
 
+// ------------------------------------------------------------------------------------------------
+// ContractCode represents a unique identifier for a Tokenized static contract.
+type ContractCode struct {
+	data [32]byte
+}
+
+// IsZero returns true if the ContractCode is all zeroes. (empty)
+func (id *ContractCode) IsZero() bool {
+	return bytes.Equal(id.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+}
+
+// AssetCodeFromBytes returns a ContractCode with the specified bytes.
+func ContractCodeFromBytes(data []byte) ContractCode {
+	var result ContractCode
+	copy(result.data[:], data)
+	return result
+}
+
+// Bytes returns a byte slice containing the ContractCode.
+func (code *ContractCode) Bytes() []byte { return code.data[:] }
+
+// Serialize returns a byte slice with the ContractCode in it.
+func (code *ContractCode) Serialize() ([]byte, error) { return code.data[:], nil }
+
+// Write reads a ContractCode from a bytes.Buffer
+func (code *ContractCode) Write(buf *bytes.Buffer) error {
+	return readLen(buf, code.data[:])
+}
+
+// ------------------------------------------------------------------------------------------------
 // Timestamp represents a time in the Tokenized protocol.
 type Timestamp struct {
 	nanoseconds uint64 // nanoseconds since Unix epoch

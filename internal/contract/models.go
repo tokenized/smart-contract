@@ -49,7 +49,7 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
-	Revision  *uint64             `json:"revision,omitempty"`
+	Revision  *uint32             `json:"revision,omitempty"`
 	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
 	Issuer   *protocol.PublicKeyHash `json:"issuer,omitempty"`

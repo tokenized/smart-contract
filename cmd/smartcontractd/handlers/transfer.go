@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -111,7 +112,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 	}
 
 	// Index to new output for specified address
-	addresses := make(map[string]*OutputData)
+	addressesMap := make(map[protocol.PublicKeyHash]*OutputData)
 
 	// Setup outputs
 	//   One to each receiver, including any bitcoins received, or dust.
@@ -129,14 +130,15 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
-			_, exists := addresses[itx.Inputs[quantityIndex.Index].Address.String()]
+			address := protocol.PublicKeyHashFromBytes(itx.Inputs[quantityIndex.Index].Address.ScriptAddress())
+			_, exists := addressesMap[address]
 			if !exists {
 				// Add output to sender
 				outputData := OutputData{
 					isDust: true,
 					index:  uint32(len(settleTx.TxOut)),
 				}
-				addresses[itx.Inputs[quantityIndex.Index].Address.String()] = &outputData
+				addressesMap[address] = &outputData
 
 				pkScript, err := txscript.NewScriptBuilder().
 					AddOp(txscript.OP_DUP).
@@ -168,15 +170,16 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 				contractBalance -= tokenReceiver.Quantity
 			}
 
-			address, exists := addresses[itx.Inputs[tokenReceiver.Index].Address.String()]
+			address := protocol.PublicKeyHashFromBytes(itx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
+			outputData, exists := addressesMap[address]
 			if exists {
 				if assetIsBitcoin {
 					// Add bitcoin quantity to receiver's output
-					if address.isDust { // If bitcoins are received then dust is not needed
-						address.isDust = false
-						settleTx.TxOut[address.index].Value = int64(tokenReceiver.Quantity)
+					if outputData.isDust { // If bitcoins are received then dust is not needed
+						outputData.isDust = false
+						settleTx.TxOut[outputData.index].Value = int64(tokenReceiver.Quantity)
 					} else {
-						settleTx.TxOut[address.index].Value += int64(tokenReceiver.Quantity)
+						settleTx.TxOut[outputData.index].Value += int64(tokenReceiver.Quantity)
 					}
 				}
 			} else {
@@ -185,7 +188,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 					isDust: !assetIsBitcoin,
 					index:  uint32(len(settleTx.TxOut)),
 				}
-				addresses[itx.Outputs[tokenReceiver.Index].Address.String()] = &outputData
+				addressesMap[address] = &outputData
 
 				pkScript, err := txscript.NewScriptBuilder().
 					AddOp(txscript.OP_DUP).
@@ -211,8 +214,83 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 		}
 	}
 
-	// Add empty settlement op return data
+	// Create initial settlement data
 	settlement := protocol.Settlement{Timestamp: v.Now}
+
+	// Check for bitcoin transfers.
+	for assetOffset, assetTransfer := range msg.Assets {
+		if assetTransfer.AssetType != "CUR" || !assetTransfer.AssetCode.IsZero() {
+			continue
+		}
+
+		sendBalance := uint64(0)
+
+		// Process senders
+		for senderOffset, sender := range assetTransfer.AssetSenders {
+			// Get sender address from transfer inputs[sender.Index]
+			if int(sender.Index) >= len(itx.Inputs) {
+				logger.Warn(ctx, "%s : Sender input index out of range for asset %d sender %d : %d/%d", v.TraceID,
+					assetOffset, senderOffset, sender.Index, len(itx.Inputs))
+				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			}
+
+			input := itx.Inputs[sender.Index]
+
+			// Get sender's balance
+			if int64(sender.Quantity) >= input.Value {
+				logger.Warn(ctx, "%s : Sender bitcoin quantity higher than input amount for sender %d : %d/%d", v.TraceID,
+					senderOffset, input.Value, sender.Quantity)
+				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			}
+
+			// Update total send balance
+			sendBalance += sender.Quantity
+		}
+
+		// Process receivers
+		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
+			// Get receiver address from outputs[receiver.Index]
+			if int(receiver.Index) >= len(itx.Outputs) {
+				logger.Warn(ctx, "%s : Receiver output index out of range for asset %d receiver %d : %d/%d", v.TraceID,
+					assetOffset, receiverOffset, receiver.Index, len(itx.Outputs))
+				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			}
+
+			// Find output in settle tx
+			address := protocol.PublicKeyHashFromBytes(itx.Outputs[receiver.Index].Address.ScriptAddress())
+			outputData, ok := addressesMap[address]
+			if !ok {
+				logger.Warn(ctx, "%s : Receiver bitcoin output missing output data for receiver %d", v.TraceID, receiverOffset)
+				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			}
+
+			// Add balance to receiver's output
+			output := settleTx.TxOut[outputData.index]
+
+			if outputData.isDust {
+				outputData.isDust = false
+				output.Value = int64(receiver.Quantity)
+			} else {
+				output.Value += int64(receiver.Quantity)
+			}
+
+			// TODO Process RegistrySignatures
+			// RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
+
+			if receiver.Quantity >= sendBalance {
+				logger.Warn(ctx, "%s : Sending more bitcoin than received")
+				return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			}
+
+			sendBalance -= receiver.Quantity
+		}
+
+		if sendBalance != 0 {
+			logger.Warn(ctx, "%s : Not sending all recieved bitcoins : %d remaining", v.TraceID, sendBalance)
+		}
+	}
+
+	// Serialize settlement data into OP_RETURN output.
 	script, err := protocol.Serialize(&settlement)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to serialize empty settlement : %s", v.TraceID, err)
@@ -280,7 +358,8 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 
 	dataAdded := false
 
-	settleOutputAddresses := make([]protocol.PublicKeyHash, len(settleTx.TxOut))
+	// Generate public key hashes for all the outputs
+	settleOutputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxOut))
 	for _, output := range settleTx.TxOut {
 		class, addresses, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, &config.ChainParams)
 		if err != nil {
@@ -293,9 +372,10 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 		}
 	}
 
+	// Generate public key hashes for all the inputs
 	hash256 := sha256.New()
 	hash160 := ripemd160.New()
-	settleInputAddresses := make([]protocol.PublicKeyHash, len(settleTx.TxIn))
+	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
 		pushes, err := txscript.PushedData(input.SignatureScript)
 		if err != nil {
@@ -316,6 +396,10 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 	}
 
 	for assetOffset, assetTransfer := range transfer.Assets {
+		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
+			continue // Skip bitcoin transfers since they should be handled already
+		}
+
 		if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
 			logger.Warn(ctx, "%s : Not enough outputs for transfer %d", v.TraceID, assetOffset)
 			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeMalFormedSettle)

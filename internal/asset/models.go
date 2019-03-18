@@ -34,7 +34,7 @@ type NewAsset struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateAsset struct {
-	Revision  *uint64             `json:"revision,omitempty"`
+	Revision  *uint32             `json:"revision,omitempty"`
 	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   *string  `json:"asset_type,omitempty"`

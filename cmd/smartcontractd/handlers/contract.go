@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+
 	"go.opencensus.io/trace"
 )
 
@@ -127,7 +128,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
-	if ct.Revision != uint64(msg.ContractRevision) {
+	if ct.Revision != msg.ContractRevision {
 		logger.Warn(ctx, "%s : Incorrect contract revision (%s) : specified %d != current %d", v.TraceID, ct.ContractName, msg.ContractRevision, ct.Revision)
 		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractRevision)
 	}

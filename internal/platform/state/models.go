@@ -8,7 +8,7 @@ import (
 // Contract represents a Smart Contract.
 type Contract struct {
 	ID        protocol.PublicKeyHash `json:"id,omitempty"`
-	Revision  uint64                 `json:"revision,omitempty"`
+	Revision  uint32                 `json:"revision,omitempty"`
 	CreatedAt protocol.Timestamp     `json:"created_at,omitempty"`
 	UpdatedAt protocol.Timestamp     `json:"updated_at,omitempty"`
 	Timestamp protocol.Timestamp     `json:"timestamp,omitempty"`
@@ -52,7 +52,7 @@ type Contract struct {
 
 type Asset struct {
 	ID        protocol.AssetCode `json:"id,omitempty"`
-	Revision  uint64             `json:"revision,omitempty"`
+	Revision  uint32             `json:"revision,omitempty"`
 	CreatedAt protocol.Timestamp `json:"created_at,omitempty"`
 	UpdatedAt protocol.Timestamp `json:"updated_at,omitempty"`
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
