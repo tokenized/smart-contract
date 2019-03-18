@@ -26,11 +26,10 @@ type Output struct {
 }
 
 type UTXO struct {
-	AddressID string
-	Hash      chainhash.Hash
-	PkScript  []byte
-	Index     uint32
-	Value     int64
+	Hash     chainhash.Hash
+	PkScript []byte
+	Index    uint32
+	Value    int64
 }
 
 func (u UTXO) ID() string {
