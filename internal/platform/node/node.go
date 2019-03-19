@@ -45,6 +45,7 @@ type Config struct {
 	FeeValue           uint64
 	DustLimit          uint64
 	ChainParams        chaincfg.Params
+	FeeRate            float32
 }
 
 // New creates an App value that handle a set of routes for the application.

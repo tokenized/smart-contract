@@ -60,7 +60,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.Issuer.Bytes()) {
 		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr, msg.AssetCode)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeIssuerAddress)
+		return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
 
 	// Locate Asset
@@ -72,13 +72,13 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	// The asset should not exist already
 	if as != nil {
 		logger.Warn(ctx, "%s : Asset already exists: %s %s", v.TraceID, contractAddr, msg.AssetCode)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
+		return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
 	}
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
 		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %x", v.TraceID, contractAddr, msg.AssetCode)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeFixedQuantity)
+		return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
 	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr, msg.AssetCode)
@@ -118,7 +118,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, mux protomux.Handler, itx
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, mux, itx, rk, &ac, outs)
+	return node.RespondSuccess(ctx, mux, a.Config, itx, rk, &ac, outs)
 }
 
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
@@ -145,13 +145,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// Asset could not be found
 	if as == nil {
 		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetNotFound)
+		return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
 		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractAddr, msg.AssetCode)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetRevision)
+		return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
 	// @TODO: When reducing an assets available supply, the amount must
@@ -184,7 +184,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	// switch(amendment.FieldIndex) {
 	// default:
 	// logger.Warn(ctx, "%s : Incorrect asset amendment field offset (%s) : %d", v.TraceID, assetCode, amendment.FieldIndex)
-	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeAssetMalformedAmendment)
+	// return node.RespondReject(ctx, mux, a.Config, itx, rk, protocol.RejectionCodeAssetMalformedAmendment)
 	// }
 	// }
 
@@ -213,7 +213,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, mux protomux.Handler, i
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, mux, itx, rk, &ac, outs)
+	return node.RespondSuccess(ctx, mux, a.Config, itx, rk, &ac, outs)
 }
 
 // CreationResponse handles an outgoing Asset Creation and writes it to the state

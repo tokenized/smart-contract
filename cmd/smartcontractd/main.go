@@ -67,11 +67,13 @@ func main() {
 
 	var cfg struct {
 		Contract struct {
-			PrivateKey   string `envconfig:"PRIV_KEY"`
-			OperatorName string `envconfig:"OPERATOR_NAME"`
-			Version      string `envconfig:"VERSION"`
-			FeeAddress   string `envconfig:"FEE_ADDRESS"`
-			FeeAmount    uint64 `envconfig:"FEE_AMOUNT"`
+			PrivateKey   string  `envconfig:"PRIV_KEY"`
+			OperatorName string  `envconfig:"OPERATOR_NAME"`
+			Version      string  `envconfig:"VERSION"`
+			FeeAddress   string  `envconfig:"FEE_ADDRESS"`
+			FeeAmount    uint64  `envconfig:"FEE_AMOUNT"`
+			FeeRate      float32 `default:"1.25" envconfig:"FEE_RATE"`
+			DustLimit    uint64  `default:"546" envconfig:"DUST_LIMIT"`
 		}
 		SpyNode struct {
 			Address        string `default:"127.0.0.1:8333" envconfig:"NODE_ADDRESS"`
@@ -214,7 +216,8 @@ func main() {
 		Version:            cfg.Contract.Version,
 		FeeAddress:         cfg.Contract.FeeAddress,
 		FeeValue:           cfg.Contract.FeeAmount,
-		DustLimit:          546,
+		FeeRate:            cfg.Contract.FeeRate,
+		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        chaincfg.MainNetParams,
 	}
 

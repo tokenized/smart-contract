@@ -2,48 +2,116 @@ package txbuilder
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/txscript"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcec"
+	"golang.org/x/crypto/ripemd160"
 )
 
-func sign(privateKey *btcec.PrivateKey,
-	raw []byte,
-	utxos []*TxOutput) ([]byte, error) {
+var (
+	InputValueInsufficientError = errors.New("Input Value Insufficient")
+	WrongPrivateKeyError        = errors.New("Wrong Private Key")
+	MissingPrivateKeyError      = errors.New("Missing Private Key")
+)
 
-	// deserialize the TX
-	tx := &wire.MsgTx{}
-	buf := bytes.NewReader(raw)
+func PubKeyHashFromPrivateKey(key *btcec.PrivateKey) []byte {
+	hash256 := sha256.New()
+	hash160 := ripemd160.New()
 
-	if err := tx.Deserialize(buf); err != nil {
-		return nil, err
+	hash256.Write(key.PubKey().SerializeCompressed())
+	hash160.Write(hash256.Sum(nil))
+	return hash160.Sum(nil)
+}
+
+// SignInput sets the signature script on the specified input.
+// This should only be used when you aren't signing for all inputs and the fee is overestimated, so it needs no adjustement.
+func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
+	if index >= len(tx.Inputs) {
+		return errors.New("Input index out of range")
 	}
 
-	// loop over the utxo's, and sign the tx inputs
-	for i, utxo := range utxos {
-		signature, err := txscript.SignatureScript(
-			tx,
-			i,
-			utxo.PkScript,
-			txscript.SigHashAll+SigHashForkID,
-			privateKey,
-			true,
-			int64(utxo.Value))
+	pkh, err := PubKeyHashFromP2PKH(tx.Inputs[index].PkScript)
+	if err != nil {
+		return err
+	}
 
-		if err != nil {
-			return nil, err
+	if !bytes.Equal(pkh, PubKeyHashFromPrivateKey(key)) {
+		return WrongPrivateKeyError
+	}
+
+	tx.MsgTx.TxIn[index].SignatureScript, err = txscript.SignatureScript(&tx.MsgTx, index,
+		tx.Inputs[index].PkScript, txscript.SigHashAll+SigHashForkID, key, true,
+		int64(tx.Inputs[index].Value))
+	return err
+}
+
+// Sign estimates and updates the fee, signs all inputs, and corrects the fee if necessary.
+//   keys is a slice of all keys required to sign all inputs. They do not have to be in any order.
+//   feeRate is in sat/byte
+func (tx *Tx) Sign(keys []*btcec.PrivateKey, feeRate float32) error {
+	// Update fee to estimated amount
+	estimatedFee := int64(float32(tx.EstimatedSize()) * feeRate)
+	inputValue := tx.inputSum()
+	outputValue := tx.outputSum(true)
+
+	if inputValue < outputValue+uint64(estimatedFee) {
+		return InputValueInsufficientError
+	}
+
+	currentFee := int64(inputValue) - int64(outputValue)
+	if err := tx.adjustFee(estimatedFee - currentFee); err != nil {
+		return err
+	}
+
+	attempt := 3 // Max of 3 fee adjustment attempts
+	for {
+		// Sign all inputs
+		for index, _ := range tx.Inputs {
+			signed := false
+			for _, key := range keys {
+				err := tx.SignInput(index, key)
+				if err == WrongPrivateKeyError {
+					continue
+				}
+				if err != nil {
+					return err
+				}
+				signed = true
+				break
+			}
+
+			if !signed {
+				return MissingPrivateKeyError
+			}
 		}
 
-		tx.TxIn[i].SignatureScript = signature
+		if attempt == 0 {
+			break
+		}
+
+		// Check fee and adjust if too low
+		targetFee := int64(float32(tx.MsgTx.SerializeSize()) * feeRate)
+		inputValue = tx.inputSum()
+		outputValue = tx.outputSum(false)
+		changeValue := tx.changeSum()
+		if inputValue < outputValue+uint64(targetFee) {
+			return InputValueInsufficientError
+		}
+
+		currentFee = int64(inputValue) - int64(outputValue) - int64(changeValue)
+		if currentFee >= targetFee && currentFee-targetFee < 10 {
+			break // Within 10 satoshis of target fee
+		}
+
+		if err := tx.adjustFee(targetFee - currentFee); err != nil {
+			return err
+		}
+
+		attempt--
 	}
 
-	// serialize the TX
-	w := bytes.Buffer{}
-	if err := tx.Serialize(&w); err != nil {
-		return nil, err
-	}
-
-	return w.Bytes(), nil
+	return nil
 }

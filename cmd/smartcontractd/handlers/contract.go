@@ -50,7 +50,7 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 	// The contract should not exist already
 	if ct != nil {
 		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractExists)
+		return node.RespondReject(ctx, mux, c.Config, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
 	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
@@ -91,7 +91,7 @@ func (c *Contract) OfferRequest(ctx context.Context, mux protomux.Handler, itx *
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, mux, itx, rk, &cf, outs)
+	return node.RespondSuccess(ctx, mux, c.Config, itx, rk, &cf, outs)
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
@@ -125,12 +125,12 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.Assets)) {
 		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractQtyReduction)
+		return node.RespondReject(ctx, mux, c.Config, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
 	if ct.Revision != msg.ContractRevision {
 		logger.Warn(ctx, "%s : Incorrect contract revision (%s) : specified %d != current %d", v.TraceID, ct.ContractName, msg.ContractRevision, ct.Revision)
-		return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractRevision)
+		return node.RespondReject(ctx, mux, c.Config, itx, rk, protocol.RejectionCodeContractRevision)
 	}
 
 	// TODO Validate that changes are allowed. Check votes, ...
@@ -164,7 +164,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	// switch(amendment.FieldIndex) {
 	// default:
 	// logger.Warn(ctx, "%s : Incorrect contract amendment field offset (%s) : %d", v.TraceID, ct.ContractName, amendment.FieldIndex)
-	// return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractMalformedAmendment)
+	// return node.RespondReject(ctx, mux, c.Config, itx, rk, protocol.RejectionCodeContractMalformedAmendment)
 	// }
 	// }
 
@@ -187,7 +187,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	if msg.ChangeIssuerAddress {
 		if len(itx.Inputs) < 2 {
 			logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-			return node.RespondReject(ctx, mux, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
+			return node.RespondReject(ctx, mux, c.Config, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
 		}
 
 		outs = append(outs, node.Output{
@@ -214,7 +214,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, mux protomux.Handler, i
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, mux, itx, rk, &cf, outs)
+	return node.RespondSuccess(ctx, mux, c.Config, itx, rk, &cf, outs)
 }
 
 // FormationResponse handles an outgoing Contract Formation and writes it to the state
