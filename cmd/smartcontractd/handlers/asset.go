@@ -112,9 +112,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}}
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, a.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac, outs)
@@ -207,9 +205,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}}
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, a.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac, outs)

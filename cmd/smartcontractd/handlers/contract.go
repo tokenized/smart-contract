@@ -85,9 +85,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}}
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, c.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf, outs)
@@ -208,9 +206,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// }
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, c.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf, outs)

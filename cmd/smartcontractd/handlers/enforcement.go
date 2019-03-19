@@ -121,9 +121,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, e.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a freeze action
 	return node.RespondSuccess(ctx, w, itx, rk, &freeze, outs)
@@ -198,9 +196,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, e.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a thaw action
 	return node.RespondSuccess(ctx, w, itx, rk, &thaw, outs)
@@ -297,9 +293,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
 
 	// Add fee output
-	if fee := node.OutputFee(ctx, e.Config); fee != nil {
-		outs = append(outs, *fee)
-	}
+	w.AddFee(ctx)
 
 	// Respond with a confiscation action
 	return node.RespondSuccess(ctx, w, itx, rk, &confiscation, outs)

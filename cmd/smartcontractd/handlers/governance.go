@@ -134,9 +134,7 @@ func (g *Governance) InitiativeRequest(ctx context.Context, w *node.ResponseWrit
 	// }}
 
 	// // Add fee output
-	// if fee := node.OutputFee(ctx, g.Config); fee != nil {
-	// outs = append(outs, *fee)
-	// }
+	// w.AddFee(ctx)
 
 	// // Respond specifically using the first UTXO
 	// itxUtxos := itx.UTXOs()
@@ -252,9 +250,7 @@ func (g *Governance) ReferendumRequest(ctx context.Context, w *node.ResponseWrit
 	// }}
 
 	// // Add fee output
-	// if fee := node.OutputFee(ctx, g.Config); fee != nil {
-	// outs = append(outs, *fee)
-	// }
+	// w.AddFee(ctx)
 
 	// // Respond specifically using the first UTXO
 	// itxUtxos := itx.UTXOs()

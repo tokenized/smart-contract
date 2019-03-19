@@ -16,6 +16,14 @@ type ResponseWriter struct {
 	Mux     protomux.Handler
 }
 
+// AddFee attaches the fee as the next output, if configured
+func (w *ResponseWriter) AddFee(ctx context.Context) error {
+	if fee := OutputFee(ctx, w.Config); fee != nil {
+		w.Outputs = append(w.Outputs, *fee)
+	}
+}
+
+// Respond sends the prepared response to the protocol mux
 func (w *ResponseWriter) Respond(ctx context.Context, tx *wire.MsgTx) error {
 	return w.Mux.Respond(ctx, tx)
 }
