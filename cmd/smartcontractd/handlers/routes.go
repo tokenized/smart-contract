@@ -11,7 +11,7 @@ import (
 // API returns a handler for a set of routes for protocol actions.
 func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB) protomux.Handler {
 
-	app := node.New(masterWallet)
+	app := node.New(config, masterWallet)
 
 	// Register contract based events.
 	c := Contract{

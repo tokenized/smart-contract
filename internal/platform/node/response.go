@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -32,28 +30,8 @@ const (
 	MinimumForResponse = 2000 // TODO This should be variable depending on the size of the payload. Fee rate * (payload size + response inputs and outputs)
 )
 
-// Output is an output address for a response
-type Output struct {
-	Address btcutil.Address
-	Value   uint64
-	Change  bool
-}
-
-// OutputFee prepares a special fee output based on node configuration
-func OutputFee(ctx context.Context, config *Config) *Output {
-	if config.FeeValue > 0 {
-		feeAddr, _ := btcutil.DecodeAddress(config.FeeAddress, &config.ChainParams)
-		return &Output{
-			Address: feeAddr,
-			Value:   config.FeeValue,
-		}
-	}
-
-	return nil
-}
-
 // Error handles all error responses for the API.
-func Error(ctx context.Context, mux protomux.Handler, err error) {
+func Error(ctx context.Context, w *ResponseWriter, err error) {
 	// switch errors.Cause(err) {
 	// }
 
@@ -61,7 +39,7 @@ func Error(ctx context.Context, mux protomux.Handler, err error) {
 }
 
 // RespondReject sends a rejection message
-func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
+func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
 
 	// Sender is the address that sent the message that we are rejecting.
 	sender := itx.Inputs[0].Address
@@ -70,7 +48,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	receiver := itx.Outputs[0]
 	if uint64(receiver.Value) < MinimumForResponse {
 		// Did not receive enough to fund the response
-		Error(ctx, mux, ErrInsufficientFunds)
+		Error(ctx, w, ErrInsufficientFunds)
 		return ErrNoResponse
 	}
 
@@ -80,7 +58,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	// Find spendable UTXOs
 	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
 	if err != nil {
-		Error(ctx, mux, ErrInsufficientFunds)
+		Error(ctx, w, ErrInsufficientFunds)
 		return ErrNoResponse
 	}
 
@@ -89,7 +67,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	}
 
 	// Add a dust output to the sender, but so they will also receive change.
-	rejectTx.AddP2PKHOutput(sender.ScriptAddress(), config.DustLimit, true, true)
+	rejectTx.AddP2PKHOutput(sender.ScriptAddress(), w.Config.DustLimit, true, true)
 
 	// Build rejection
 	rejection := protocol.Rejection{
@@ -100,24 +78,24 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	// Add the rejection payload
 	payload, err := protocol.Serialize(&rejection)
 	if err != nil {
-		Error(ctx, mux, err)
+		Error(ctx, w, err)
 	}
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, config.FeeRate)
+	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, w.Config.FeeRate)
 	if err != nil {
-		Error(ctx, mux, err)
+		Error(ctx, w, err)
 	}
 
-	if err := Respond(ctx, mux, config, &rejectTx.MsgTx); err != nil {
-		Error(ctx, mux, err)
+	if err := Respond(ctx, w, &rejectTx.MsgTx); err != nil {
+		Error(ctx, w, err)
 	}
 	return ErrRejected
 }
 
 // RespondSuccess broadcasts a successful message
-func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, itx *inspector.Transaction, rk *wallet.RootKey,
+func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey,
 	msg protocol.OpReturnMessage, outs []Output) error {
 
 	// Create respond tx. Use contract address as backup change address if an output wasn't specified
@@ -126,7 +104,7 @@ func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, i
 	// Get spendable UTXO's received for the contract address
 	utxos, err := itx.UTXOs().ForAddress(rk.Address)
 	if err != nil {
-		Error(ctx, mux, err)
+		Error(ctx, w, err)
 	}
 	for _, utxo := range utxos {
 		respondTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
@@ -136,24 +114,24 @@ func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, i
 	for _, out := range outs {
 		err := respondTx.AddOutput(txbuilder.P2PKHScriptForPKH(out.Address.ScriptAddress()), out.Value, out.Change, false)
 		if err != nil {
-			Error(ctx, mux, err)
+			Error(ctx, w, err)
 		}
 	}
 
 	// Add the payload
 	payload, err := protocol.Serialize(msg)
 	if err != nil {
-		Error(ctx, mux, err)
+		Error(ctx, w, err)
 	}
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, config.FeeRate)
+	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, w.Config.FeeRate)
 	if err != nil {
-		Error(ctx, mux, err)
+		Error(ctx, w, err)
 	}
 
-	return Respond(ctx, mux, config, &respondTx.MsgTx)
+	return Respond(ctx, w, &respondTx.MsgTx)
 }
 
 // // RespondUTXO broadcasts a successful message using a specific UTXO
@@ -190,6 +168,6 @@ func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, i
 // }
 
 // Respond sends a TX to the network.
-func Respond(ctx context.Context, mux protomux.Handler, config *Config, tx *wire.MsgTx) error {
-	return mux.Respond(ctx, tx)
+func Respond(ctx context.Context, w *ResponseWriter, tx *wire.MsgTx) error {
+	return w.Respond(ctx, tx)
 }

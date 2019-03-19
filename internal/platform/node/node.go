@@ -26,13 +26,15 @@ type Values struct {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-type Handler func(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
+// type Handler func(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
+type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
 // data/logic on this App struct
 type App struct {
 	*protomux.ProtoMux
+	config *Config
 	mw     []Middleware
 	wallet wallet.WalletInterface
 }
@@ -49,9 +51,10 @@ type Config struct {
 }
 
 // New creates an App value that handle a set of routes for the application.
-func New(wallet wallet.WalletInterface, mw ...Middleware) *App {
+func New(config *Config, wallet wallet.WalletInterface, mw ...Middleware) *App {
 	return &App{
 		ProtoMux: protomux.New(),
+		config:   config,
 		mw:       mw,
 		wallet:   wallet,
 	}
@@ -79,11 +82,17 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 		ctx = context.WithValue(ctx, KeyValues, &v)
 
+		// Prepare response writer
+		w := &ResponseWriter{
+			Mux:    a.ProtoMux,
+			Config: a.config,
+		}
+
 		// For each address controlled by this wallet
 		rootKeys, _ := a.wallet.List(pkhs)
 		for _, rootKey := range rootKeys {
 			// Call the wrapped handler functions.
-			if err := handler(ctx, a.ProtoMux, itx, rootKey); err != nil {
+			if err := handler(ctx, w, itx, rootKey); err != nil {
 				return err
 			}
 		}

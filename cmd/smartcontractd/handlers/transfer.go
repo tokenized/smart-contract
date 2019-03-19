@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -30,7 +29,7 @@ type Transfer struct {
 }
 
 // TransferRequest handles an incoming Transfer request.
-func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return errors.New("Transfer Request Not Implemented")
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Transfer")
 	defer span.End()
@@ -104,7 +103,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 
 		if int(assetTransfer.ContractIndex) >= len(itx.Outputs) {
 			logger.Warn(ctx, "%s : Transfer contract index out of range %d", v.TraceID, assetOffset)
-			return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 		}
 
 		if outputUsed[assetTransfer.ContractIndex] {
@@ -137,7 +136,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 
 			if quantityIndex.Index >= uint16(len(itx.Inputs)) {
 				logger.Warn(ctx, "%s : Transfer sender index out of range %d", v.TraceID, assetOffset)
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			address := protocol.PublicKeyHashFromBytes(itx.Inputs[quantityIndex.Index].Address.ScriptAddress())
@@ -211,7 +210,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 			if int(sender.Index) >= len(itx.Inputs) {
 				logger.Warn(ctx, "%s : Sender input index out of range for asset %d sender %d : %d/%d", v.TraceID,
 					assetOffset, senderOffset, sender.Index, len(itx.Inputs))
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			input := itx.Inputs[sender.Index]
@@ -220,7 +219,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 			if int64(sender.Quantity) >= input.Value {
 				logger.Warn(ctx, "%s : Sender bitcoin quantity higher than input amount for sender %d : %d/%d", v.TraceID,
 					senderOffset, input.Value, sender.Quantity)
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			// Update total send balance
@@ -233,7 +232,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 			if int(receiver.Index) >= len(itx.Outputs) {
 				logger.Warn(ctx, "%s : Receiver output index out of range for asset %d receiver %d : %d/%d", v.TraceID,
 					assetOffset, receiverOffset, receiver.Index, len(itx.Outputs))
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			// Find output in settle tx
@@ -241,7 +240,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 			outputData, ok := addressesMap[address]
 			if !ok {
 				logger.Warn(ctx, "%s : Receiver bitcoin output missing output data for receiver %d", v.TraceID, receiverOffset)
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			// Add balance to receiver's output
@@ -252,7 +251,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 
 			if receiver.Quantity >= sendBalance {
 				logger.Warn(ctx, "%s : Sending more bitcoin than received")
-				return node.RespondReject(ctx, mux, t.Config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			sendBalance -= receiver.Quantity
@@ -272,7 +271,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 	settleTx.AddOutput(script, 0, false, false)
 
 	// Add this contract's data to the settlement op return data
-	if err := AddSettlementData(ctx, mux, t.MasterDB, t.Config, itx, rk, &settleTx.MsgTx); err != nil {
+	if err := AddSettlementData(ctx, w, t.MasterDB, t.Config, itx, rk, &settleTx.MsgTx); err != nil {
 		return err
 	}
 
@@ -282,7 +281,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 			return err
 		}
 
-		return node.Respond(ctx, mux, t.Config, &settleTx.MsgTx)
+		return node.Respond(ctx, w, &settleTx.MsgTx)
 	}
 
 	// Find "boomerang" input. The input to the first contract that will fund the passing around of
@@ -347,12 +346,12 @@ func (t *Transfer) TransferRequest(ctx context.Context, mux protomux.Handler, it
 	// TODO Sign input
 
 	// TODO Send M1 - 1001 to get data from another contract
-	// return node.RespondSuccess(ctx, mux, t.Config, itx, rk, &m1, outs)
+	// return node.RespondSuccess(ctx, w, itx, rk, &m1, outs)
 	return errors.New("Not implemented")
 }
 
 // AddSettlementData appends data to a pending settlement action.
-func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.DB,
+func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db.DB,
 	config *node.Config, itx *inspector.Transaction, rk *wallet.RootKey,
 	settleTx *wire.MsgTx) error {
 
@@ -440,7 +439,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 
 		if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
 			logger.Warn(ctx, "%s : Not enough outputs for transfer %d", v.TraceID, assetOffset)
-			return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedSettle)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
 		}
 
 		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
@@ -484,7 +483,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			if int(sender.Index) >= len(transferTx.Inputs) {
 				logger.Warn(ctx, "%s : Sender input index out of range for asset %d sender %d : %d/%d", v.TraceID,
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			input := transferTx.Inputs[sender.Index]
@@ -501,7 +500,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			if settleOutputIndex == uint16(0xffff) {
 				logger.Warn(ctx, "%s : Sender output not found in settle tx for asset %d sender %d : %d/%d", v.TraceID,
 					assetOffset, senderOffset, sender.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedSettle)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
 			}
 
 			// Check sender's available unfrozen balance
@@ -509,7 +508,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
 					contractAddr, assetTransfer.AssetCode, inputAddress)
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeFrozen)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFrozen)
 			}
 
 			// Get sender's balance
@@ -529,7 +528,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			if int(receiver.Index) >= len(transferTx.Outputs) {
 				logger.Warn(ctx, "%s : Receiver output index out of range for asset %d sender %d : %d/%d", v.TraceID,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			transferOutputAddress := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
@@ -546,7 +545,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			if settleOutputIndex == uint16(0xffff) {
 				logger.Warn(ctx, "%s : Receiver output not found in settle tx for asset %d receiver %d : %d/%d", v.TraceID,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedSettle)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
 			}
 
 			// TODO Process RegistrySignatures
@@ -559,7 +558,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 			// Update asset balance
 			if receiver.Quantity > sendBalance {
 				logger.Warn(ctx, "%s : Receiving more tokens than sending for asset %d", v.TraceID, assetOffset)
-				return node.RespondReject(ctx, mux, config, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 			sendBalance -= receiver.Quantity
 		}
@@ -587,7 +586,7 @@ func AddSettlementData(ctx context.Context, mux protomux.Handler, masterDB *db.D
 }
 
 // SettlementResponse handles an outgoing Settlement action and writes it to the state
-func (t *Transfer) SettlementResponse(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return errors.New("Settlement Response Not Implemented")
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Settlement")
 	defer span.End()
