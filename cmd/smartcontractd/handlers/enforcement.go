@@ -88,7 +88,6 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	// 1..n - Target Addresses
 	// n+1  - Contract Address (Change)
 	// n+2  - Fee
-	outs := make([]node.Output, 0, len(msg.TargetAddresses)+2)
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
@@ -109,7 +108,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		}
 
 		// Notify target address
-		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
+		w.AddOutput(ctx, targetAddr, 0)
 	}
 
 	// Change from/back to contract
@@ -118,13 +117,13 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
-	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
+	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a freeze action
-	return node.RespondSuccess(ctx, w, itx, rk, &freeze, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &freeze)
 }
 
 // OrderThawRequest is a helper of Order
@@ -163,7 +162,6 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	// 1..n - Target Addresses
 	// n+1  - Contract Address (Change)
 	// n+2  - Fee
-	outs := make([]node.Output, 0, len(msg.TargetAddresses)+2)
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
@@ -184,7 +182,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		}
 
 		// Notify target address
-		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
+		w.AddOutput(ctx, targetAddr, 0)
 	}
 
 	// Change from/back to contract
@@ -193,13 +191,13 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
-	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
+	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a thaw action
-	return node.RespondSuccess(ctx, w, itx, rk, &thaw, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &thaw)
 }
 
 // OrderConfiscateRequest is a helper of Order
@@ -240,7 +238,6 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// n+1  - Deposit Address
 	// n+2  - Contract Address (Change)
 	// n+3  - Fee
-	outs := make([]node.Output, 0, len(msg.TargetAddresses)+3)
 
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
 	depositAddr, err := btcutil.NewAddressPubKeyHash(msg.DepositAddress.Bytes(), &e.Config.ChainParams)
@@ -278,11 +275,11 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		}
 
 		// Notify target address
-		outs = append(outs, node.Output{Address: targetAddr, Value: e.Config.DustLimit})
+		w.AddOutput(ctx, targetAddr, 0)
 	}
 
 	// Notify deposit address
-	outs = append(outs, node.Output{Address: depositAddr, Value: e.Config.DustLimit})
+	w.AddOutput(ctx, depositAddr, 0)
 
 	// Change from/back to contract
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &e.Config.ChainParams)
@@ -290,13 +287,13 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
-	outs = append(outs, node.Output{Address: contractAddress, Value: e.Config.DustLimit, Change: true})
+	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a confiscation action
-	return node.RespondSuccess(ctx, w, itx, rk, &confiscation, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &confiscation)
 }
 
 // FreezeResponse handles an outgoing Freeze action and writes it to the state

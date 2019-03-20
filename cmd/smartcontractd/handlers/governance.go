@@ -124,14 +124,8 @@ func (g *Governance) InitiativeRequest(ctx context.Context, w *node.ResponseWrit
 	// // 1 - Contract Address
 	// // 2 - Issuer Address (Change)
 	// // 3 - Fee
-	// outs := []node.Output{{
-	// Address: contractAddr,
-	// Value:   g.Config.DustLimit,
-	// }, {
-	// Address: issuerAddress,
-	// Value:   g.Config.DustLimit,
-	// Change:  true,
-	// }}
+	// w.AddOutput(ctx, contractAddr, 0)
+	// w.AddChangeOutput(ctx, issuerAddress)
 
 	// // Add fee output
 	// w.AddFee(ctx)
@@ -139,9 +133,10 @@ func (g *Governance) InitiativeRequest(ctx context.Context, w *node.ResponseWrit
 	// // Respond specifically using the first UTXO
 	// itxUtxos := itx.UTXOs()
 	// utxos := inspector.UTXOs{itxUtxos[0]}
+	// w.SetUTXOs(utxos)
 
 	// // Respond with a vote action
-	// return node.RespondUTXO(ctx, w, itx, rk, &vote, outs, utxos)
+	// return node.RespondSuccess(ctx, w, itx, rk, &vote)
 }
 
 // ReferendumRequest handles an incoming Referendum request and prepares a BallotCounted response
@@ -240,14 +235,8 @@ func (g *Governance) ReferendumRequest(ctx context.Context, w *node.ResponseWrit
 	// // 1 - Contract Address
 	// // 2 - Issuer Address (Change)
 	// // 3 - Fee
-	// outs := []node.Output{{
-	// Address: contractAddr,
-	// Value:   g.Config.DustLimit,
-	// }, {
-	// Address: issuerAddress,
-	// Value:   g.Config.DustLimit,
-	// Change:  true,
-	// }}
+	// w.AddOutput(ctx, contractAddr, 0)
+	// w.AddChangeOutput(ctx, issuerAddress)
 
 	// // Add fee output
 	// w.AddFee(ctx)
@@ -255,9 +244,10 @@ func (g *Governance) ReferendumRequest(ctx context.Context, w *node.ResponseWrit
 	// // Respond specifically using the first UTXO
 	// itxUtxos := itx.UTXOs()
 	// utxos := inspector.UTXOs{itxUtxos[0]}
+	// w.SetUTXOs(utxos)
 
 	// // Respond with a vote action
-	// return node.RespondUTXO(ctx, w, itx, rk, &vote, outs, utxos)
+	// return node.RespondSuccess(ctx, w, itx, rk, &vote)
 }
 
 // VoteResponse handles an incoming Vote request and prepares a BallotCounted response

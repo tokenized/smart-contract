@@ -346,7 +346,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// TODO Sign input
 
 	// TODO Send M1 - 1001 to get data from another contract
-	// return node.RespondSuccess(ctx, w, itx, rk, &m1, outs)
+	// return node.RespondSuccess(ctx, w, itx, rk, &m1)
 	return errors.New("Not implemented")
 }
 

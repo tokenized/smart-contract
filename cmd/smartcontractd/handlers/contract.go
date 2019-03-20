@@ -75,20 +75,14 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddress,
-		Value:   c.Config.DustLimit,
-	}, {
-		Address: itx.Inputs[0].Address,
-		Value:   c.Config.DustLimit,
-		Change:  true,
-	}}
+	w.AddOutput(ctx, contractAddress, 0)
+	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &cf, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &cf)
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
@@ -175,10 +169,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddress,
-		Value:   c.Config.DustLimit,
-	}}
+	w.AddOutput(ctx, contractAddress, 0)
 
 	// Issuer change. New issuer in second input
 	if msg.ChangeIssuerAddress {
@@ -187,17 +178,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
 		}
 
-		outs = append(outs, node.Output{
-			Address: itx.Inputs[1].Address,
-			Value:   c.Config.DustLimit,
-			Change:  true,
-		})
+		w.AddChangeOutput(ctx, itx.Inputs[1].Address)
 	} else {
-		outs = append(outs, node.Output{
-			Address: itx.Inputs[0].Address,
-			Value:   c.Config.DustLimit,
-			Change:  true,
-		})
+		w.AddChangeOutput(ctx, itx.Inputs[0].Address)
 	}
 
 	// TODO Operator changes
@@ -209,7 +192,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	w.AddFee(ctx)
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &cf, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &cf)
 }
 
 // FormationResponse handles an outgoing Contract Formation and writes it to the state

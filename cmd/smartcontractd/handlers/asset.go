@@ -102,20 +102,14 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddress,
-		Value:   a.Config.DustLimit,
-	}, {
-		Address: itx.Inputs[0].Address, // Request must come from issuer
-		Value:   a.Config.DustLimit,
-		Change:  true,
-	}}
+	w.AddOutput(ctx, contractAddress, 0)
+	w.AddChangeOutput(ctx, itx.Inputs[0].Address) // Request must come from issuer
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &ac, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &ac)
 }
 
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
@@ -195,20 +189,14 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
 	// 3 - Fee
-	outs := []node.Output{{
-		Address: contractAddress,
-		Value:   a.Config.DustLimit,
-	}, {
-		Address: itx.Inputs[0].Address,
-		Value:   a.Config.DustLimit,
-		Change:  true,
-	}}
+	w.AddOutput(ctx, contractAddress, 0)
+	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
 
 	// Add fee output
 	w.AddFee(ctx)
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &ac, outs)
+	return node.RespondSuccess(ctx, w, itx, rk, &ac)
 }
 
 // CreationResponse handles an outgoing Asset Creation and writes it to the state

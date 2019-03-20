@@ -95,23 +95,32 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 }
 
 // RespondSuccess broadcasts a successful message
-func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey,
-	msg protocol.OpReturnMessage, outs []Output) error {
+func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey, msg protocol.OpReturnMessage) error {
 
-	// Create respond tx. Use contract address as backup change address if an output wasn't specified
+	// Create respond tx. Use contract address as backup change
+	//address if an output wasn't specified
 	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress())
 
-	// Get spendable UTXO's received for the contract address
-	utxos, err := itx.UTXOs().ForAddress(rk.Address)
-	if err != nil {
-		Error(ctx, w, err)
+	// Get the specified UTXOs, otherwise look up the spendable
+	// UTXO's received for the contract address
+	var utxos []inspector.UTXO
+	var err error
+	if len(w.Inputs) > 0 {
+		utxos = w.Inputs
+	} else {
+		utxos, err = itx.UTXOs().ForAddress(rk.Address)
+		if err != nil {
+			Error(ctx, w, err)
+		}
 	}
+
+	// Add specified inputs
 	for _, utxo := range utxos {
 		respondTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
 	}
 
 	// Add specified outputs
-	for _, out := range outs {
+	for _, out := range w.Outputs {
 		err := respondTx.AddOutput(txbuilder.P2PKHScriptForPKH(out.Address.ScriptAddress()), out.Value, out.Change, false)
 		if err != nil {
 			Error(ctx, w, err)
@@ -133,39 +142,6 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	return Respond(ctx, w, &respondTx.MsgTx)
 }
-
-// // RespondUTXO broadcasts a successful message using a specific UTXO
-// func RespondUTXO(ctx context.Context, mux protomux.Handler, config *Config, itx *inspector.Transaction, rk *wallet.RootKey,
-// msg protocol.OpReturnMessage, outs []Output, utxos []inspector.UTXO) error {
-
-// var change btcutil.Address
-
-// var buildOuts []txbuilder.TxOutput
-// for _, out := range outs {
-// buildOuts = append(buildOuts, txbuilder.TxOutput{
-// Address: out.Address,
-// Value:   uint64(out.Value),
-// })
-
-// // Change output
-// if out.Change {
-// change = out.Address
-// }
-// }
-
-// // At least one change output is required
-// if change == nil {
-// return errors.New("Missing change output")
-// }
-
-// // Build the new transaction
-// newTx, err := wallet.BuildTX(rk, utxos, buildOuts, change, msg)
-// if err != nil {
-// return err
-// }
-
-// return Respond(ctx, mux, newTx)
-// }
 
 // Respond sends a TX to the network.
 func Respond(ctx context.Context, w *ResponseWriter, tx *wire.MsgTx) error {
