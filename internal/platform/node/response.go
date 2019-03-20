@@ -75,7 +75,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	}
 
 	// Create reject tx
-	rejectTx := txbuilder.NewTx(receiver.Address.ScriptAddress())
+	rejectTx := txbuilder.NewTx(receiver.Address.ScriptAddress(), config.DustLimit, config.FeeRate)
 
 	// Find spendable UTXOs
 	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
@@ -89,7 +89,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	}
 
 	// Add a dust output to the sender, but so they will also receive change.
-	rejectTx.AddP2PKHOutput(sender.ScriptAddress(), config.DustLimit, true, true)
+	rejectTx.AddP2PKHDustOutput(sender.ScriptAddress(), true)
 
 	// Build rejection
 	rejection := protocol.Rejection{
@@ -105,7 +105,7 @@ func RespondReject(ctx context.Context, mux protomux.Handler, config *Config, it
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, config.FeeRate)
+	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		Error(ctx, mux, err)
 	}
@@ -121,7 +121,7 @@ func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, i
 	msg protocol.OpReturnMessage, outs []Output) error {
 
 	// Create respond tx. Use contract address as backup change address if an output wasn't specified
-	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress())
+	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress(), config.DustLimit, config.FeeRate)
 
 	// Get spendable UTXO's received for the contract address
 	utxos, err := itx.UTXOs().ForAddress(rk.Address)
@@ -148,7 +148,7 @@ func RespondSuccess(ctx context.Context, mux protomux.Handler, config *Config, i
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, config.FeeRate)
+	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		Error(ctx, mux, err)
 	}
