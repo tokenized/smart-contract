@@ -24,45 +24,45 @@ func TestTx(t *testing.T) {
 
 	pkh2 := PubKeyHashFromPrivateKey(key2)
 
-	inputTx := NewTx(pkh2)
-	err = inputTx.AddP2PKHOutput(pkh, 10000, true, false)
+	inputTx := NewTx(pkh2, 500, 1.0)
+	err = inputTx.AddP2PKHOutput(pkh, 10000, true)
 	if err != nil {
 		t.Errorf("Failed to add output : %s", err)
 	}
 
-	tx := NewTx(pkh)
+	tx := NewTx(pkh, 500, 1.0)
 
 	err = tx.AddInput(wire.OutPoint{Hash: inputTx.MsgTx.TxHash(), Index: 0}, inputTx.MsgTx.TxOut[0].PkScript, uint64(inputTx.MsgTx.TxOut[0].Value))
 	if err != nil {
 		t.Errorf("Failed to add input : %s", err)
 	}
 
-	err = tx.AddOutput(pkh2, 5000, false, false)
+	err = tx.AddP2PKHOutput(pkh2, 5000, false)
 	if err != nil {
 		t.Errorf("Failed to add output : %s", err)
 	}
 
-	err = tx.AddOutput(pkh, 500, true, true)
+	err = tx.AddP2PKHDustOutput(pkh, true)
 	if err != nil {
 		t.Errorf("Failed to add output : %s", err)
 	}
 
 	// Test single valid private key
-	err = tx.Sign([]*btcec.PrivateKey{key}, 1.0)
+	err = tx.Sign([]*btcec.PrivateKey{key})
 	if err != nil {
 		t.Errorf("Failed to sign tx : %s", err)
 	}
 	t.Logf("Tx Fee : %d", tx.Fee())
 
 	// Test extra private key
-	err = tx.Sign([]*btcec.PrivateKey{key, key2}, 1.0)
+	err = tx.Sign([]*btcec.PrivateKey{key, key2})
 	if err != nil {
 		t.Errorf("Failed to sign tx with both keys : %s", err)
 	}
 	t.Logf("Tx Fee : %d", tx.Fee())
 
 	// Test wrong private key
-	err = tx.Sign([]*btcec.PrivateKey{key2}, 1.0)
+	err = tx.Sign([]*btcec.PrivateKey{key2})
 	if err != MissingPrivateKeyError {
 		if err != nil {
 			t.Errorf("Failed to return wrong private key error : %s", err)
@@ -73,7 +73,7 @@ func TestTx(t *testing.T) {
 	t.Logf("Tx Fee : %d", tx.Fee())
 
 	// Test bad PkScript
-	txMalformed := NewTx(pkh)
+	txMalformed := NewTx(pkh, 500, 1.0)
 	err = txMalformed.AddInput(wire.OutPoint{Hash: inputTx.MsgTx.TxHash(), Index: 0}, append(inputTx.MsgTx.TxOut[0].PkScript, 5), uint64(inputTx.MsgTx.TxOut[0].Value))
 	if err != NotP2PKHScriptError {
 		if err != nil {

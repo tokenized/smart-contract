@@ -34,6 +34,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Transfer")
 	defer span.End()
 
+	var err error
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	msg, ok := itx.MsgProto.(*protocol.Transfer)
@@ -90,7 +91,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	//   Any contracts involved.
 
 	// Build initial settlement response transaction
-	settleTx := txbuilder.NewTx(rk.Address.ScriptAddress())
+	settleTx := txbuilder.NewTx(rk.Address.ScriptAddress(), t.Config.DustLimit, t.Config.FeeRate)
 
 	outputUsed := make([]bool, len(itx.Outputs))
 
@@ -111,17 +112,16 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		}
 
 		// Add input from contract to settlement tx so all involved contracts have to sign for a valid tx.
-		settleTx.AddInput(wire.OutPoint{Hash: itx.Hash, Index: uint32(assetTransfer.ContractIndex)},
+		err = settleTx.AddInput(wire.OutPoint{Hash: itx.Hash, Index: uint32(assetTransfer.ContractIndex)},
 			itx.Outputs[assetTransfer.ContractIndex].UTXO.PkScript, uint64(itx.Outputs[assetTransfer.ContractIndex].Value))
+		if err != nil {
+			return err
+		}
 		outputUsed[assetTransfer.ContractIndex] = true
 	}
 
-	type OutputData struct {
-		index uint32
-	}
-
 	// Index to new output for specified address
-	addressesMap := make(map[protocol.PublicKeyHash]*OutputData)
+	addressesMap := make(map[protocol.PublicKeyHash]uint32)
 
 	// Setup outputs
 	//   One to each receiver, including any bitcoins received, or dust.
@@ -143,12 +143,12 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 			_, exists := addressesMap[address]
 			if !exists {
 				// Add output to sender
-				outputData := OutputData{
-					index: uint32(len(settleTx.MsgTx.TxOut)),
-				}
-				addressesMap[address] = &outputData
+				addressesMap[address] = uint32(len(settleTx.MsgTx.TxOut))
 
-				settleTx.AddP2PKHOutput(itx.Inputs[quantityIndex.Index].Address.ScriptAddress(), t.Config.DustLimit, false, true)
+				err = settleTx.AddP2PKHDustOutput(itx.Inputs[quantityIndex.Index].Address.ScriptAddress(), false)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -166,29 +166,26 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 			}
 
 			address := protocol.PublicKeyHashFromBytes(itx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
-			outputData, exists := addressesMap[address]
+			outputIndex, exists := addressesMap[address]
 			if exists {
 				if assetIsBitcoin {
 					// Add bitcoin quantity to receiver's output
-					if err := settleTx.AddValueToOutput(outputData.index, tokenReceiver.Quantity); err != nil {
+					if err := settleTx.AddValueToOutput(outputIndex, tokenReceiver.Quantity); err != nil {
 						return err
 					}
 				}
 			} else {
 				// Add output to receiver
-				outputData := OutputData{
-					index: uint32(len(settleTx.MsgTx.TxOut)),
-				}
-				addressesMap[address] = &outputData
+				addressesMap[address] = uint32(len(settleTx.MsgTx.TxOut))
 
-				var value uint64
 				if assetIsBitcoin {
-					value = tokenReceiver.Quantity
+					err = settleTx.AddP2PKHOutput(itx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
 				} else {
-					value = t.Config.DustLimit
+					err = settleTx.AddP2PKHDustOutput(itx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), false)
 				}
-
-				settleTx.AddP2PKHOutput(itx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), value, false, !assetIsBitcoin)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -237,14 +234,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 			// Find output in settle tx
 			address := protocol.PublicKeyHashFromBytes(itx.Outputs[receiver.Index].Address.ScriptAddress())
-			outputData, ok := addressesMap[address]
+			outputIndex, ok := addressesMap[address]
 			if !ok {
 				logger.Warn(ctx, "%s : Receiver bitcoin output missing output data for receiver %d", v.TraceID, receiverOffset)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			// Add balance to receiver's output
-			settleTx.AddValueToOutput(outputData.index, receiver.Quantity)
+			settleTx.AddValueToOutput(outputIndex, receiver.Quantity)
 
 			// TODO Process RegistrySignatures
 			// RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
@@ -263,12 +260,16 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Serialize settlement data into OP_RETURN output.
-	script, err := protocol.Serialize(&settlement)
+	var script []byte
+	script, err = protocol.Serialize(&settlement)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to serialize empty settlement : %s", v.TraceID, err)
 		return err
 	}
-	settleTx.AddOutput(script, 0, false, false)
+	err = settleTx.AddOutput(script, 0, false, false)
+	if err != nil {
+		return err
+	}
 
 	// Add this contract's data to the settlement op return data
 	if err := AddSettlementData(ctx, w, t.MasterDB, t.Config, itx, rk, &settleTx.MsgTx); err != nil {
@@ -277,7 +278,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
-		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}, t.Config.FeeRate); err != nil {
+		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
 			return err
 		}
 
@@ -298,17 +299,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		logger.Warn(ctx, "%s : Multi-Contract Transfer missing boomerang output", v.TraceID)
 		return fmt.Errorf("Multi-Contract Transfer missing boomerang output")
 	}
-
-	// Create message to next contract
-	m1Tx := wire.MsgTx{Version: wire.TxVersion, LockTime: 0}
-
-	// Add boomerang as input.
-	input := wire.TxIn{
-		PreviousOutPoint: wire.OutPoint{Hash: itx.Hash, Index: boomerangIndex},
-		// SignatureScript: , Not ready to sign yet
-		Sequence: wire.MaxTxInSequenceNum, // No sequence
-	}
-	m1Tx.AddTxIn(&input)
 
 	// Find next contract
 	nextContractIndex := uint16(0xffff)
@@ -337,17 +327,68 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return fmt.Errorf("Next contract not found in multi-contract transfer")
 	}
 
-	// TODO Add output to next contract
-	// output = wire.TxOut{Value: int64(Remaining), PkScript: pkScriptToNextContract}
-	// settleTx.AddTxOut(&output)
+	// Create message to next contract
+	m1Tx := txbuilder.NewTx(itx.Outputs[nextContractIndex].Address.ScriptAddress(),
+		t.Config.DustLimit, t.Config.FeeRate)
+
+	// Add boomerang funding as input.
+	err = m1Tx.AddInput(wire.OutPoint{Hash: itx.Hash, Index: boomerangIndex},
+		itx.Outputs[boomerangIndex].UTXO.PkScript, uint64(itx.Outputs[boomerangIndex].UTXO.Value))
+	if err != nil {
+		return err
+	}
+
+	// Add output to next contract.
+	// Mark as change so the tx fee will be taken from it.
+	err = m1Tx.AddP2PKHOutput(itx.Outputs[nextContractIndex].Address.ScriptAddress(),
+		uint64(itx.Outputs[boomerangIndex].UTXO.Value), true)
+	if err != nil {
+		return err
+	}
 
 	// TODO Serialize settlement tx into M1 1001 OP_RETURN output
+	var buf bytes.Buffer
+	err = settleTx.MsgTx.Serialize(&buf)
+	if err != nil {
+		return err
+	}
+	m1Payload := protocol.Offer{
+		Version:   0,
+		Timestamp: protocol.CurrentTimestamp(),
+		Offer:     buf.Bytes(),
+	}
 
-	// TODO Sign input
+	// Setup M1 Payload Data
+	var data []byte
+	data, err = m1Payload.Serialize()
+	if err != nil {
+		return err
+	}
+	m1Data := protocol.Message{
+		AddressIndexes: []uint16{0}, // First output is receiver of message
+		MessageType:    protocol.CodeOffer,
+		MessagePayload: data,
+	}
 
-	// TODO Send M1 - 1001 to get data from another contract
-	// return node.RespondSuccess(ctx, w, itx, rk, &m1)
-	return errors.New("Not implemented")
+	// Setup M1 Data
+	script, err = protocol.Serialize(&m1Data)
+	if err != nil {
+		return err
+	}
+
+	// Add output to M1 tx for message.
+	err = m1Tx.AddOutput(script, 0, false, false)
+	if err != nil {
+		return err
+	}
+
+	// Sign input
+	err = m1Tx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+	if err != nil {
+		return err
+	}
+
+	return node.Respond(ctx, mux, t.Config, &m1Tx.MsgTx)
 }
 
 // AddSettlementData appends data to a pending settlement action.

@@ -13,7 +13,7 @@ import (
 )
 
 type Server struct {
-	RpcNode          *rpcWithCache
+	RpcNode          *rpcnode.RPCNode
 	SpyNode          *spynode.Node
 	Handler          protomux.Handler
 	contractPKH      []byte // Used to determine which txs will be needed again
@@ -26,7 +26,7 @@ type Server struct {
 
 func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler, contractPKH []byte) *Server {
 	result := Server{
-		RpcNode:          newRPCWithCache(rpcNode),
+		RpcNode:          rpcNode,
 		SpyNode:          spyNode,
 		Handler:          handler,
 		contractPKH:      contractPKH,
@@ -66,7 +66,6 @@ func (server *Server) Stop(ctx context.Context) error {
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
-	server.RpcNode.RPCNode.SendTX(ctx, tx)
 	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 		return err
 	}
@@ -117,7 +116,7 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 
 	// Save tx to cache so it can be used to process the response
 	if bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), server.contractPKH) {
-		if err := server.RpcNode.AddTX(ctx, itx.MsgTx); err != nil {
+		if err := server.RpcNode.SaveTX(ctx, itx.MsgTx); err != nil {
 			return err
 		}
 	}

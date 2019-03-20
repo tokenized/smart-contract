@@ -50,10 +50,9 @@ func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
 
 // Sign estimates and updates the fee, signs all inputs, and corrects the fee if necessary.
 //   keys is a slice of all keys required to sign all inputs. They do not have to be in any order.
-//   feeRate is in sat/byte
-func (tx *Tx) Sign(keys []*btcec.PrivateKey, feeRate float32) error {
+func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	// Update fee to estimated amount
-	estimatedFee := int64(float32(tx.EstimatedSize()) * feeRate)
+	estimatedFee := int64(float32(tx.EstimatedSize()) * tx.FeeRate)
 	inputValue := tx.inputSum()
 	outputValue := tx.outputSum(true)
 
@@ -93,7 +92,7 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey, feeRate float32) error {
 		}
 
 		// Check fee and adjust if too low
-		targetFee := int64(float32(tx.MsgTx.SerializeSize()) * feeRate)
+		targetFee := int64(float32(tx.MsgTx.SerializeSize()) * tx.FeeRate)
 		inputValue = tx.inputSum()
 		outputValue = tx.outputSum(false)
 		changeValue := tx.changeSum()

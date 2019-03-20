@@ -14,14 +14,18 @@ type Tx struct {
 	Inputs    []*Input  // Additional Input Data
 	Outputs   []*Output // Additional Output Data
 	ChangePKH []byte    // The public key hash to pay extra bitcoins to if an output wasn't already specified.
+	DustLimit uint64    // Smallest amount of bitcoin
+	FeeRate   float32   // The target fee rate in sat/byte
 }
 
 // NewTx returns a new Tx with the specified change PKH
 // changePKH (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
-func NewTx(changePKH []byte) *Tx {
+func NewTx(changePKH []byte, dustLimit uint64, feeRate float32) *Tx {
 	result := Tx{
 		MsgTx:     wire.MsgTx{Version: wire.TxVersion, LockTime: 0},
 		ChangePKH: changePKH,
+		DustLimit: dustLimit,
+		FeeRate:   feeRate,
 	}
 	return &result
 }
@@ -51,15 +55,36 @@ func (tx *Tx) AddInput(outpoint wire.OutPoint, outputScript []byte, value uint64
 // AddP2PKHOutput adds an output to Tx with the specified value and a P2PKH script paying the
 //   specified address.
 // pkh (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
-func (tx *Tx) AddP2PKHOutput(pkh []byte, value uint64, isChange bool, isDust bool) error {
+func (tx *Tx) AddP2PKHOutput(pkh []byte, value uint64, isChange bool) error {
 	output := Output{
 		IsChange: isChange,
-		IsDust:   isDust,
+		IsDust:   false,
 	}
 	tx.Outputs = append(tx.Outputs, &output)
 
 	txout := wire.TxOut{
 		Value:    int64(value),
+		PkScript: P2PKHScriptForPKH(pkh),
+	}
+	tx.MsgTx.AddTxOut(&txout)
+	return nil
+}
+
+// AddP2PKHDustOutput adds an output to Tx with the dust limit amount and a P2PKH script paying the
+//   specified address.
+// These dust outputs are meant as "notifiers" so that a address will see this transaction and
+//   process the data in it. If value is later added to this output, the value replaces the dust
+//   limit amount rather than adding to it.
+// pkh (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
+func (tx *Tx) AddP2PKHDustOutput(pkh []byte, isChange bool) error {
+	output := Output{
+		IsChange: isChange,
+		IsDust:   true,
+	}
+	tx.Outputs = append(tx.Outputs, &output)
+
+	txout := wire.TxOut{
+		Value:    int64(tx.DustLimit),
 		PkScript: P2PKHScriptForPKH(pkh),
 	}
 	tx.MsgTx.AddTxOut(&txout)
