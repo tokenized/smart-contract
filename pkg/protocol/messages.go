@@ -284,7 +284,8 @@ func (action PrivateMessage) String() string {
 type Offer struct {
 	Version   uint8     `json:"version,omitempty"`   // Payload Version
 	Timestamp Timestamp `json:"timestamp,omitempty"` // Timestamp in nanoseconds for when the message sender creates the transaction.
-	Offer     []byte    `json:"offer,omitempty"`     // Full serialized bitcoin tx containing an offer to another party, usually to exchange tokens/bitcoin. The message needs data added by another party.
+	RefTxId   TxId      `json:"ref_tx_id,omitempty"` // Tx Id of the request transaction referenced by the offer.
+	Payload   []byte    `json:"payload,omitempty"`   // Full serialized op return script containing an offer to another party, usually to exchange tokens/bitcoin. The message needs data added by another party.
 }
 
 // Type returns the type identifer for this message.
@@ -331,12 +332,26 @@ func (action *Offer) Serialize() ([]byte, error) {
 	}
 	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
-	// Offer ([]byte)
-	// fmt.Printf("Serializing Offer\n")
-	if err := WriteVarBin(buf, action.Offer, 32); err != nil {
+	// RefTxId (TxId)
+	// fmt.Printf("Serializing RefTxId\n")
+	{
+		b, err := action.RefTxId.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+	// fmt.Printf("Serialized RefTxId : buf len %d\n", buf.Len())
+
+	// Payload ([]byte)
+	// fmt.Printf("Serializing Payload\n")
+	if err := WriteVarBin(buf, action.Payload, 32); err != nil {
 		return nil, err
 	}
-	// fmt.Printf("Serialized Offer : buf len %d\n", buf.Len())
+	// fmt.Printf("Serialized Payload : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -362,17 +377,25 @@ func (action *Offer) Write(b []byte) (int, error) {
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
-	// Offer ([]byte)
-	// fmt.Printf("Reading Offer : %d bytes remaining\n", buf.Len())
+	// RefTxId (TxId)
+	// fmt.Printf("Reading RefTxId : %d bytes remaining\n", buf.Len())
+	if err := action.RefTxId.Write(buf); err != nil {
+		return 0, err
+	}
+
+	// fmt.Printf("Read RefTxId : %d bytes remaining\n%+v\n", buf.Len(), action.RefTxId)
+
+	// Payload ([]byte)
+	// fmt.Printf("Reading Payload : %d bytes remaining\n", buf.Len())
 	{
 		var err error
-		action.Offer, err = ReadVarBin(buf, 32)
+		action.Payload, err = ReadVarBin(buf, 32)
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	// fmt.Printf("Read Offer : %d bytes remaining\n%+v\n", buf.Len(), action.Offer)
+	// fmt.Printf("Read Payload : %d bytes remaining\n%+v\n", buf.Len(), action.Payload)
 
 	// fmt.Printf("Read Offer : %d bytes remaining\n", buf.Len())
 	return len(b) - buf.Len(), nil
@@ -388,7 +411,8 @@ func (action Offer) String() string {
 
 	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
-	vals = append(vals, fmt.Sprintf("Offer:%#x", action.Offer))
+	vals = append(vals, fmt.Sprintf("RefTxId:%#+v", action.RefTxId))
+	vals = append(vals, fmt.Sprintf("Payload:%#x", action.Payload))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }

@@ -9,8 +9,8 @@ import (
 func TestPublicMessage(t *testing.T) {
 	// Create a randomized object
 	initialMessage := PublicMessage{}
-	// Version (uint8)
-	// uint8 test not setup
+	// Version (uint)
+	// uint test not setup
 
 	// Timestamp (Timestamp)
 	initialMessage.Timestamp = Timestamp{}
@@ -53,8 +53,8 @@ func TestPublicMessage(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Version (uint8)
-	// uint8 test compare not setup
+	// Version (uint)
+	// uint test compare not setup
 
 	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
@@ -70,8 +70,8 @@ func TestPublicMessage(t *testing.T) {
 func TestPrivateMessage(t *testing.T) {
 	// Create a randomized object
 	initialMessage := PrivateMessage{}
-	// Version (uint8)
-	// uint8 test not setup
+	// Version (uint)
+	// uint test not setup
 
 	// Timestamp (Timestamp)
 	initialMessage.Timestamp = Timestamp{}
@@ -117,8 +117,8 @@ func TestPrivateMessage(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Version (uint8)
-	// uint8 test compare not setup
+	// Version (uint)
+	// uint test compare not setup
 
 	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
@@ -134,16 +134,19 @@ func TestPrivateMessage(t *testing.T) {
 func TestOffer(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Offer{}
-	// Version (uint8)
-	// uint8 test not setup
+	// Version (uint)
+	// uint test not setup
 
 	// Timestamp (Timestamp)
 	initialMessage.Timestamp = Timestamp{}
 
-	// Offer (varbin)
-	initialMessage.Offer = make([]byte, 0, 32)
+	// RefTxId (TxId)
+	initialMessage.RefTxId = TxId{}
+
+	// Payload (varbin)
+	initialMessage.Payload = make([]byte, 0, 32)
 	for i := uint64(0); i < 32; i++ {
-		initialMessage.Offer = append(initialMessage.Offer, byte(65+i+2))
+		initialMessage.Payload = append(initialMessage.Payload, byte(65+i+3))
 	}
 
 	// Encode message
@@ -181,25 +184,30 @@ func TestOffer(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Version (uint8)
-	// uint8 test compare not setup
+	// Version (uint)
+	// uint test compare not setup
 
 	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {
 		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
 	}
 
-	// Offer (varbin)
-	if !bytes.Equal(initialMessage.Offer, decodedMessage.Offer) {
-		t.Errorf("Offer doesn't match : %x != %x", initialMessage.Offer, decodedMessage.Offer)
+	// RefTxId (TxId)
+	if initialMessage.RefTxId != decodedMessage.RefTxId {
+		t.Errorf("RefTxId doesn't match : %v != %v", initialMessage.RefTxId, decodedMessage.RefTxId)
+	}
+
+	// Payload (varbin)
+	if !bytes.Equal(initialMessage.Payload, decodedMessage.Payload) {
+		t.Errorf("Payload doesn't match : %x != %x", initialMessage.Payload, decodedMessage.Payload)
 	}
 }
 
 func TestSignatureRequest(t *testing.T) {
 	// Create a randomized object
 	initialMessage := SignatureRequest{}
-	// Version (uint8)
-	// uint8 test not setup
+	// Version (uint)
+	// uint test not setup
 
 	// Timestamp (Timestamp)
 	initialMessage.Timestamp = Timestamp{}
@@ -245,8 +253,8 @@ func TestSignatureRequest(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// Version (uint8)
-	// uint8 test compare not setup
+	// Version (uint)
+	// uint test compare not setup
 
 	// Timestamp (Timestamp)
 	if initialMessage.Timestamp != decodedMessage.Timestamp {

@@ -211,6 +211,15 @@ func (id *TxId) Write(buf *bytes.Buffer) error {
 	return readLen(buf, id.data[:])
 }
 
+// Set sets the value specified
+func (id *TxId) Set(value []byte) error {
+	if len(value) != len(id.data) {
+		return errors.New("Invalid value length for txid")
+	}
+	copy(id.data[:], value)
+	return nil
+}
+
 // ------------------------------------------------------------------------------------------------
 // PublicKeyHash represents a Bitcoin Public Key Hash. Often used as an address to receive transactions.
 type PublicKeyHash struct {

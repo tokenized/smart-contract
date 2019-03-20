@@ -99,7 +99,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
-	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress(), config.DustLimit, config.FeeRate)
+	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
 
 	// Get the specified UTXOs, otherwise look up the spendable
 	// UTXO's received for the contract address

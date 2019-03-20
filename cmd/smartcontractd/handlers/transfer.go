@@ -28,6 +28,10 @@ type Transfer struct {
 	Config   *node.Config
 }
 
+var (
+	frozenError = errors.New("Holdings Frozen")
+)
+
 // TransferRequest handles an incoming Transfer request.
 func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	return errors.New("Transfer Request Not Implemented")
@@ -47,12 +51,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Find "first" contract. The "first" contract of a transfer is the one responsible for
-	//   creating the initial settlement transaction and passing it to the next contract if there
+	//   creating the initial settlement data and passing it to the next contract if there
 	//   are more than one.
 	firstContractIndex := uint16(0)
-
-	if msg.Assets[0].ContractIndex == uint16(0xffff) {
-		// First asset transfer doesn't have a contract (probably BSV transfer).
+	for _, asset := range msg.Assets {
+		if asset.ContractIndex != uint16(0xffff) {
+			break
+		}
+		// Asset transfer doesn't have a contract (probably BSV transfer).
 		firstContractIndex++
 	}
 
@@ -82,184 +88,23 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	//
 	// Each contract can be involved in more than one asset in the transfer, but only needs to have
 	//   one output since each asset transfer references the output of it's contract
-
-	// Settle Outputs
-	//   Any addresses sending or receiving tokens or bitcoin.
-	//   Referenced from indices from within settlement data.
-	//
-	// Settle Inputs
-	//   Any contracts involved.
-
-	// Build initial settlement response transaction
-	settleTx := txbuilder.NewTx(rk.Address.ScriptAddress(), t.Config.DustLimit, t.Config.FeeRate)
-
-	outputUsed := make([]bool, len(itx.Outputs))
-
-	// Setup inputs from outputs of the Transfer tx. One from each contract involved.
-	for assetOffset, assetTransfer := range msg.Assets {
-		if assetTransfer.ContractIndex == uint16(0xffff) ||
-			(assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()) {
-			continue
-		}
-
-		if int(assetTransfer.ContractIndex) >= len(itx.Outputs) {
-			logger.Warn(ctx, "%s : Transfer contract index out of range %d", v.TraceID, assetOffset)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-		}
-
-		if outputUsed[assetTransfer.ContractIndex] {
-			continue
-		}
-
-		// Add input from contract to settlement tx so all involved contracts have to sign for a valid tx.
-		err = settleTx.AddInput(wire.OutPoint{Hash: itx.Hash, Index: uint32(assetTransfer.ContractIndex)},
-			itx.Outputs[assetTransfer.ContractIndex].UTXO.PkScript, uint64(itx.Outputs[assetTransfer.ContractIndex].Value))
-		if err != nil {
-			return err
-		}
-		outputUsed[assetTransfer.ContractIndex] = true
+	settleTx, err := BuildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
+	if err != nil {
+		logger.Warn(ctx, "Failed to build settlement tx : %s", err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 	}
 
-	// Index to new output for specified address
-	addressesMap := make(map[protocol.PublicKeyHash]uint32)
-
-	// Setup outputs
-	//   One to each receiver, including any bitcoins received, or dust.
-	//   One to each sender with dust amount.
-	for assetOffset, assetTransfer := range msg.Assets {
-		assetIsBitcoin := assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()
-		assetBalance := uint64(0)
-
-		// Add all senders
-		for _, quantityIndex := range assetTransfer.AssetSenders {
-			assetBalance += quantityIndex.Quantity
-
-			if quantityIndex.Index >= uint16(len(itx.Inputs)) {
-				logger.Warn(ctx, "%s : Transfer sender index out of range %d", v.TraceID, assetOffset)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			address := protocol.PublicKeyHashFromBytes(itx.Inputs[quantityIndex.Index].Address.ScriptAddress())
-			_, exists := addressesMap[address]
-			if !exists {
-				// Add output to sender
-				addressesMap[address] = uint32(len(settleTx.MsgTx.TxOut))
-
-				err = settleTx.AddP2PKHDustOutput(itx.Inputs[quantityIndex.Index].Address.ScriptAddress(), false)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		for _, tokenReceiver := range assetTransfer.AssetReceivers {
-			assetBalance -= tokenReceiver.Quantity
-			// TODO Handle Registry : RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
-
-			if assetIsBitcoin {
-				// Debit from contract's bitcoin balance
-				if tokenReceiver.Quantity > contractBalance {
-					logger.Warn(ctx, "%s : Transfer sent more bitcoin than was funded to contract", v.TraceID)
-					return fmt.Errorf("Transfer sent more bitcoin than was funded to contract")
-				}
-				contractBalance -= tokenReceiver.Quantity
-			}
-
-			address := protocol.PublicKeyHashFromBytes(itx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
-			outputIndex, exists := addressesMap[address]
-			if exists {
-				if assetIsBitcoin {
-					// Add bitcoin quantity to receiver's output
-					if err := settleTx.AddValueToOutput(outputIndex, tokenReceiver.Quantity); err != nil {
-						return err
-					}
-				}
-			} else {
-				// Add output to receiver
-				addressesMap[address] = uint32(len(settleTx.MsgTx.TxOut))
-
-				if assetIsBitcoin {
-					err = settleTx.AddP2PKHOutput(itx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
-				} else {
-					err = settleTx.AddP2PKHDustOutput(itx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), false)
-				}
-				if err != nil {
-					return err
-				}
-			}
-		}
+	// Update outputs to pay bitcoin receivers.
+	err = AddBitcoinSettlements(ctx, itx, msg, settleTx)
+	if err != nil {
+		logger.Warn(ctx, "Failed to add bitcoin settlements : %s", err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 	}
 
 	// Create initial settlement data
 	settlement := protocol.Settlement{Timestamp: v.Now}
 
-	// Check for bitcoin transfers.
-	for assetOffset, assetTransfer := range msg.Assets {
-		if assetTransfer.AssetType != "CUR" || !assetTransfer.AssetCode.IsZero() {
-			continue
-		}
-
-		sendBalance := uint64(0)
-
-		// Process senders
-		for senderOffset, sender := range assetTransfer.AssetSenders {
-			// Get sender address from transfer inputs[sender.Index]
-			if int(sender.Index) >= len(itx.Inputs) {
-				logger.Warn(ctx, "%s : Sender input index out of range for asset %d sender %d : %d/%d", v.TraceID,
-					assetOffset, senderOffset, sender.Index, len(itx.Inputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			input := itx.Inputs[sender.Index]
-
-			// Get sender's balance
-			if int64(sender.Quantity) >= input.Value {
-				logger.Warn(ctx, "%s : Sender bitcoin quantity higher than input amount for sender %d : %d/%d", v.TraceID,
-					senderOffset, input.Value, sender.Quantity)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			// Update total send balance
-			sendBalance += sender.Quantity
-		}
-
-		// Process receivers
-		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
-			// Get receiver address from outputs[receiver.Index]
-			if int(receiver.Index) >= len(itx.Outputs) {
-				logger.Warn(ctx, "%s : Receiver output index out of range for asset %d receiver %d : %d/%d", v.TraceID,
-					assetOffset, receiverOffset, receiver.Index, len(itx.Outputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			// Find output in settle tx
-			address := protocol.PublicKeyHashFromBytes(itx.Outputs[receiver.Index].Address.ScriptAddress())
-			outputIndex, ok := addressesMap[address]
-			if !ok {
-				logger.Warn(ctx, "%s : Receiver bitcoin output missing output data for receiver %d", v.TraceID, receiverOffset)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			// Add balance to receiver's output
-			settleTx.AddValueToOutput(outputIndex, receiver.Quantity)
-
-			// TODO Process RegistrySignatures
-			// RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
-
-			if receiver.Quantity >= sendBalance {
-				logger.Warn(ctx, "%s : Sending more bitcoin than received")
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
-			}
-
-			sendBalance -= receiver.Quantity
-		}
-
-		if sendBalance != 0 {
-			logger.Warn(ctx, "%s : Not sending all recieved bitcoins : %d remaining", v.TraceID, sendBalance)
-		}
-	}
-
-	// Serialize settlement data into OP_RETURN output.
+	// Serialize emtpy settlement data into OP_RETURN output.
 	var script []byte
 	script, err = protocol.Serialize(&settlement)
 	if err != nil {
@@ -272,7 +117,11 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Add this contract's data to the settlement op return data
-	if err := AddSettlementData(ctx, w, t.MasterDB, t.Config, itx, rk, &settleTx.MsgTx); err != nil {
+	err = AddSettlementData(ctx, t.MasterDB, itx, msg, &settleTx.MsgTx, rk)
+	if err == frozenError {
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFrozen)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -285,117 +134,199 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return node.Respond(ctx, w, &settleTx.MsgTx)
 	}
 
-	// Find "boomerang" input. The input to the first contract that will fund the passing around of
-	//   the settlement data to get all contract signatures.
-	boomerangIndex := uint32(0xffffffff)
-	for i, used := range outputUsed {
-		if !used && bytes.Equal(itx.Outputs[i].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
-			boomerangIndex = uint32(i)
-			break
-		}
-	}
+	// Send to next contract
+	return SendToNextContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement)
+}
 
-	if boomerangIndex == 0xffffffff {
-		logger.Warn(ctx, "%s : Multi-Contract Transfer missing boomerang output", v.TraceID)
-		return fmt.Errorf("Multi-Contract Transfer missing boomerang output")
-	}
+// BuildSettlementTx builds the tx for a settlement action.
+func BuildSettlementTx(ctx context.Context, config *node.Config, transferTx *inspector.Transaction,
+	transfer *protocol.Transfer, rk *wallet.RootKey, contractBalance uint64) (*txbuilder.Tx, error) {
+	// Settle Outputs
+	//   Any addresses sending or receiving tokens or bitcoin.
+	//   Referenced from indices from within settlement data.
+	//
+	// Settle Inputs
+	//   Any contracts involved.
+	settleTx := txbuilder.NewTx(rk.Address.ScriptAddress(), config.DustLimit, config.FeeRate)
 
-	// Find next contract
-	nextContractIndex := uint16(0xffff)
+	var err error
+	addresses := make(map[protocol.PublicKeyHash]uint32)
+	outputUsed := make([]bool, len(transferTx.Outputs))
 
-	for _, assetTransfer := range msg.Assets {
-		if assetTransfer.ContractIndex == uint16(0xffff) {
-			// Asset transfer doesn't have a contract (probably BSV transfer).
+	// Setup inputs from outputs of the Transfer tx. One from each contract involved.
+	for assetOffset, assetTransfer := range transfer.Assets {
+		if assetTransfer.ContractIndex == uint16(0xffff) ||
+			(assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()) {
 			continue
 		}
 
-		if assetTransfer.ContractIndex == firstContractIndex {
+		if int(assetTransfer.ContractIndex) >= len(transferTx.Outputs) {
+			return nil, fmt.Errorf("Transfer contract index out of range %d", assetOffset)
+		}
+
+		if outputUsed[assetTransfer.ContractIndex] {
 			continue
 		}
 
-		if int(assetTransfer.ContractIndex) >= len(itx.Outputs) {
-			logger.Warn(ctx, "Transfer contract index out of range")
-			return errors.New("Transfer contract index out of range")
+		// Add input from contract to settlement tx so all involved contracts have to sign for a valid tx.
+		err = settleTx.AddInput(wire.OutPoint{Hash: transferTx.Hash, Index: uint32(assetTransfer.ContractIndex)},
+			transferTx.Outputs[assetTransfer.ContractIndex].UTXO.PkScript, uint64(transferTx.Outputs[assetTransfer.ContractIndex].Value))
+		if err != nil {
+			return nil, err
+		}
+		outputUsed[assetTransfer.ContractIndex] = true
+	}
+
+	// Setup outputs
+	//   One to each receiver, including any bitcoins received, or dust.
+	//   One to each sender with dust amount.
+	for assetOffset, assetTransfer := range transfer.Assets {
+		assetIsBitcoin := assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()
+		assetBalance := uint64(0)
+
+		// Add all senders
+		for _, quantityIndex := range assetTransfer.AssetSenders {
+			assetBalance += quantityIndex.Quantity
+
+			if quantityIndex.Index >= uint16(len(transferTx.Inputs)) {
+				return nil, fmt.Errorf("Transfer sender index out of range %d", assetOffset)
+			}
+
+			address := protocol.PublicKeyHashFromBytes(transferTx.Inputs[quantityIndex.Index].Address.ScriptAddress())
+			_, exists := addresses[address]
+			if !exists {
+				// Add output to sender
+				addresses[address] = uint32(len(settleTx.MsgTx.TxOut))
+
+				err = settleTx.AddP2PKHDustOutput(transferTx.Inputs[quantityIndex.Index].Address.ScriptAddress(), false)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 
-		nextContractIndex = msg.Assets[firstContractIndex].ContractIndex
-		break
+		for _, tokenReceiver := range assetTransfer.AssetReceivers {
+			assetBalance -= tokenReceiver.Quantity
+			// TODO Handle Registry : RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
+
+			if assetIsBitcoin {
+				// Debit from contract's bitcoin balance
+				if tokenReceiver.Quantity > contractBalance {
+					return nil, fmt.Errorf("Transfer sent more bitcoin than was funded to contract")
+				}
+				contractBalance -= tokenReceiver.Quantity
+			}
+
+			address := protocol.PublicKeyHashFromBytes(transferTx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
+			outputIndex, exists := addresses[address]
+			if exists {
+				if assetIsBitcoin {
+					// Add bitcoin quantity to receiver's output
+					if err = settleTx.AddValueToOutput(outputIndex, tokenReceiver.Quantity); err != nil {
+						return nil, err
+					}
+				}
+			} else {
+				// Add output to receiver
+				addresses[address] = uint32(len(settleTx.MsgTx.TxOut))
+
+				if assetIsBitcoin {
+					err = settleTx.AddP2PKHOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
+				} else {
+					err = settleTx.AddP2PKHDustOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), false)
+				}
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
-	if nextContractIndex == 0xffff {
-		logger.Warn(ctx, "%s : Next contract not found in multi-contract transfer", v.TraceID)
-		return fmt.Errorf("Next contract not found in multi-contract transfer")
+	return settleTx, nil
+}
+
+// AddBitcoinSettlements adds bitcoin settlement data to the Settlement data
+func AddBitcoinSettlements(ctx context.Context, transferTx *inspector.Transaction,
+	transfer *protocol.Transfer, settleTx *txbuilder.Tx) error {
+	// Check for bitcoin transfers.
+	for assetOffset, assetTransfer := range transfer.Assets {
+		if assetTransfer.AssetType != "CUR" || !assetTransfer.AssetCode.IsZero() {
+			continue
+		}
+
+		sendBalance := uint64(0)
+
+		// Process senders
+		for senderOffset, sender := range assetTransfer.AssetSenders {
+			// Get sender address from transfer inputs[sender.Index]
+			if int(sender.Index) >= len(transferTx.Inputs) {
+				return fmt.Errorf("Sender input index out of range for asset %d sender %d : %d/%d",
+					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
+			}
+
+			input := transferTx.Inputs[sender.Index]
+
+			// Get sender's balance
+			if int64(sender.Quantity) >= input.Value {
+				return fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
+					senderOffset, input.Value, sender.Quantity)
+			}
+
+			// Update total send balance
+			sendBalance += sender.Quantity
+		}
+
+		// Process receivers
+		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
+			// Get receiver address from outputs[receiver.Index]
+			if int(receiver.Index) >= len(transferTx.Outputs) {
+				return fmt.Errorf("Receiver output index out of range for asset %d receiver %d : %d/%d",
+					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
+			}
+
+			// Find output in settle tx
+			pkh := transferTx.Outputs[receiver.Index].Address.ScriptAddress()
+
+			// Find output for receiver
+			added := false
+			for i, _ := range settleTx.MsgTx.TxOut {
+				outputPKH, err := settleTx.OutputPKH(i)
+				if err != nil {
+					continue
+				}
+				if bytes.Equal(pkh, outputPKH) {
+					// Add balance to receiver's output
+					settleTx.AddValueToOutput(uint32(i), receiver.Quantity)
+					added = true
+					break
+				}
+			}
+
+			if !added {
+				return fmt.Errorf("Receiver bitcoin output missing output data for receiver %d", receiverOffset)
+			}
+
+			// TODO Process RegistrySignatures
+			// RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
+
+			if receiver.Quantity >= sendBalance {
+				return fmt.Errorf("Sending more bitcoin than received")
+			}
+
+			sendBalance -= receiver.Quantity
+		}
+
+		if sendBalance != 0 {
+			return fmt.Errorf("Not sending all recieved bitcoins : %d remaining", sendBalance)
+		}
 	}
 
-	// Create message to next contract
-	m1Tx := txbuilder.NewTx(itx.Outputs[nextContractIndex].Address.ScriptAddress(),
-		t.Config.DustLimit, t.Config.FeeRate)
-
-	// Add boomerang funding as input.
-	err = m1Tx.AddInput(wire.OutPoint{Hash: itx.Hash, Index: boomerangIndex},
-		itx.Outputs[boomerangIndex].UTXO.PkScript, uint64(itx.Outputs[boomerangIndex].UTXO.Value))
-	if err != nil {
-		return err
-	}
-
-	// Add output to next contract.
-	// Mark as change so the tx fee will be taken from it.
-	err = m1Tx.AddP2PKHOutput(itx.Outputs[nextContractIndex].Address.ScriptAddress(),
-		uint64(itx.Outputs[boomerangIndex].UTXO.Value), true)
-	if err != nil {
-		return err
-	}
-
-	// TODO Serialize settlement tx into M1 1001 OP_RETURN output
-	var buf bytes.Buffer
-	err = settleTx.MsgTx.Serialize(&buf)
-	if err != nil {
-		return err
-	}
-	m1Payload := protocol.Offer{
-		Version:   0,
-		Timestamp: protocol.CurrentTimestamp(),
-		Offer:     buf.Bytes(),
-	}
-
-	// Setup M1 Payload Data
-	var data []byte
-	data, err = m1Payload.Serialize()
-	if err != nil {
-		return err
-	}
-	m1Data := protocol.Message{
-		AddressIndexes: []uint16{0}, // First output is receiver of message
-		MessageType:    protocol.CodeOffer,
-		MessagePayload: data,
-	}
-
-	// Setup M1 Data
-	script, err = protocol.Serialize(&m1Data)
-	if err != nil {
-		return err
-	}
-
-	// Add output to M1 tx for message.
-	err = m1Tx.AddOutput(script, 0, false, false)
-	if err != nil {
-		return err
-	}
-
-	// Sign input
-	err = m1Tx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
-	if err != nil {
-		return err
-	}
-
-	return node.Respond(ctx, mux, t.Config, &m1Tx.MsgTx)
+	return nil
 }
 
 // AddSettlementData appends data to a pending settlement action.
-func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db.DB,
-	config *node.Config, itx *inspector.Transaction, rk *wallet.RootKey,
-	settleTx *wire.MsgTx) error {
-
+func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspector.Transaction,
+	transfer *protocol.Transfer, settleTx *wire.MsgTx, rk *wallet.RootKey) error {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	var settlement *protocol.Settlement
@@ -416,35 +347,19 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 	}
 
 	if !found {
-		logger.Warn(ctx, "%s : Settlement op return not found in settle tx", v.TraceID)
 		return fmt.Errorf("Settlement op return not found in settle tx")
 	}
 
 	dbConn := masterDB
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-
-	var transferTx *inspector.Transaction
-	transfer, ok := itx.MsgProto.(*protocol.Transfer)
-	if ok {
-		transferTx = itx
-	} else {
-		// itx is a M1 that needs more data or a signature.
-		// TODO Find transfer transaction for data
-		// Transfer tx is in the inputs of the Settlement tx.
-
-	}
-
 	dataAdded := false
 
 	// Generate public key hashes for all the outputs
 	settleOutputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxOut))
 	for _, output := range settleTx.TxOut {
-		class, addresses, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, &config.ChainParams)
+		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err != nil {
-			continue
-		}
-		if class == txscript.PubKeyHashTy {
-			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHashFromBytes(addresses[0].ScriptAddress()))
+			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHashFromBytes(pkh))
 		} else {
 			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHash{})
 		}
@@ -479,8 +394,7 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 		}
 
 		if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
-			logger.Warn(ctx, "%s : Not enough outputs for transfer %d", v.TraceID, assetOffset)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
+			return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
 		}
 
 		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
@@ -491,8 +405,7 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 		// Locate Asset
 		as, err := asset.Retrieve(ctx, dbConn, contractAddr, assetTransfer.AssetCode)
 		if err != nil || as == nil {
-			logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, assetTransfer.AssetCode)
-			return err
+			return fmt.Errorf("Asset ID not found : %s %s : %s", contractAddr, assetTransfer.AssetCode, err)
 		}
 
 		// Find contract input
@@ -505,8 +418,7 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 		}
 
 		if contractInputOffset == uint16(0xffff) {
-			logger.Warn(ctx, "%s : Contract input not found: %s %s", v.TraceID, contractAddr, assetTransfer.AssetCode)
-			return err
+			return fmt.Errorf("Contract input not found: %s %s", contractAddr, assetTransfer.AssetCode)
 		}
 
 		assetSettlement := protocol.AssetSettlement{
@@ -522,9 +434,8 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 		for senderOffset, sender := range assetTransfer.AssetSenders {
 			// Get sender address from transfer inputs[sender.Index]
 			if int(sender.Index) >= len(transferTx.Inputs) {
-				logger.Warn(ctx, "%s : Sender input index out of range for asset %d sender %d : %d/%d", v.TraceID,
+				return fmt.Errorf("Sender input index out of range for asset %d sender %d : %d/%d",
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			input := transferTx.Inputs[sender.Index]
@@ -539,9 +450,8 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				logger.Warn(ctx, "%s : Sender output not found in settle tx for asset %d sender %d : %d/%d", v.TraceID,
+				return fmt.Errorf("Sender output not found in settle tx for asset %d sender %d : %d/%d",
 					assetOffset, senderOffset, sender.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
 			}
 
 			// Check sender's available unfrozen balance
@@ -549,27 +459,28 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
 					contractAddr, assetTransfer.AssetCode, inputAddress)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFrozen)
+				return frozenError
 			}
 
 			// Get sender's balance
 			senderBalance := asset.GetBalance(ctx, as, inputAddress)
 
 			// assetSettlement.Settlements []QuantityIndex {Index uint16, Quantity uint64}
-			assetSettlement.Settlements = append(assetSettlement.Settlements, protocol.QuantityIndex{Index: settleOutputIndex, Quantity: senderBalance - sender.Quantity})
+			assetSettlement.Settlements = append(assetSettlement.Settlements,
+				protocol.QuantityIndex{Index: settleOutputIndex, Quantity: senderBalance - sender.Quantity})
 
 			// Update total send balance
 			sendBalance += sender.Quantity
 		}
 
 		// Process receivers
-		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64, RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string}
+		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64,
+		//   RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string}
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
 			// Get receiver address from outputs[receiver.Index]
 			if int(receiver.Index) >= len(transferTx.Outputs) {
-				logger.Warn(ctx, "%s : Receiver output index out of range for asset %d sender %d : %d/%d", v.TraceID,
+				return fmt.Errorf("Receiver output index out of range for asset %d sender %d : %d/%d",
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 			}
 
 			transferOutputAddress := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
@@ -584,9 +495,8 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				logger.Warn(ctx, "%s : Receiver output not found in settle tx for asset %d receiver %d : %d/%d", v.TraceID,
+				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %d/%d",
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedSettle)
 			}
 
 			// TODO Process RegistrySignatures
@@ -594,18 +504,18 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 			// Get receiver's balance
 			receiverBalance := asset.GetBalance(ctx, as, transferOutputAddress)
 
-			assetSettlement.Settlements = append(assetSettlement.Settlements, protocol.QuantityIndex{Index: settleOutputIndex, Quantity: receiverBalance + receiver.Quantity})
+			assetSettlement.Settlements = append(assetSettlement.Settlements,
+				protocol.QuantityIndex{Index: settleOutputIndex, Quantity: receiverBalance + receiver.Quantity})
 
 			// Update asset balance
 			if receiver.Quantity > sendBalance {
-				logger.Warn(ctx, "%s : Receiving more tokens than sending for asset %d", v.TraceID, assetOffset)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+				return fmt.Errorf("Receiving more tokens than sending for asset %d", assetOffset)
 			}
 			sendBalance -= receiver.Quantity
 		}
 
 		if sendBalance != 0 {
-			logger.Warn(ctx, "%s : Not sending all input tokens for asset %d : %d remaining", v.TraceID, assetOffset, sendBalance)
+			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining", assetOffset, sendBalance)
 		}
 
 		settlement.Assets = append(settlement.Assets, assetSettlement)
@@ -619,10 +529,133 @@ func AddSettlementData(ctx context.Context, w *node.ResponseWriter, masterDB *db
 	// Serialize settlement data back into OP_RETURN output.
 	script, err := protocol.Serialize(settlement)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to serialize empty settlement : %s", v.TraceID, err)
-		return err
+		return fmt.Errorf("Failed to serialize empty settlement : %s", err)
 	}
 	settleTx.TxOut[settlementOutputIndex].PkScript = script
+	return nil
+}
+
+func SendToNextContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.RootKey,
+	itx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
+	settleTx *txbuilder.Tx, settlement *protocol.Settlement) error {
+	boomerangIndex := uint32(0xffffffff)
+	if len(itx.Outputs) == 1 {
+		// If already an M1, use only output
+		boomerangIndex = 0
+	} else {
+		// Find "boomerang" input. The input to the first contract that will fund the passing around of
+		//   the settlement data to get all contract signatures.
+		for i, output := range itx.Outputs {
+			if bytes.Equal(output.Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+				used := false
+				for _, input := range settleTx.MsgTx.TxIn {
+					if input.PreviousOutPoint.Index == uint32(i) {
+						used = true
+						break
+					}
+				}
+
+				if !used {
+					boomerangIndex = uint32(i)
+					break
+				}
+			}
+		}
+	}
+
+	if boomerangIndex == 0xffffffff {
+		return fmt.Errorf("Multi-Contract Transfer missing boomerang output")
+	}
+
+	// Find next contract
+	nextContractIndex := uint16(0xffff)
+	currentFound := false
+	completedContracts := make(map[[20]byte]bool)
+	for _, asset := range transfer.Assets {
+		if asset.ContractIndex == uint16(0xffff) {
+			continue // Asset transfer doesn't have a contract (probably BSV transfer).
+		}
+
+		if int(asset.ContractIndex) >= len(transferTx.Outputs) {
+			return errors.New("Transfer contract index out of range")
+		}
+
+		var pkh [20]byte
+		copy(pkh[:], transferTx.Outputs[asset.ContractIndex].Address.ScriptAddress())
+
+		if !currentFound {
+			completedContracts[pkh] = true
+			if bytes.Equal(pkh[:], rk.Address.ScriptAddress()) {
+				currentFound = true
+			}
+			continue
+		}
+
+		// Contracts can be used more than once, so ensure this contract wasn't referenced before
+		//   the current contract.
+		_, complete := completedContracts[pkh]
+		if !complete {
+			nextContractIndex = asset.ContractIndex
+			break
+		}
+	}
+
+	if nextContractIndex == 0xffff {
+		return fmt.Errorf("Next contract not found in multi-contract transfer")
+	}
+
+	// Setup M1 response
+	var err error
+	err = w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[boomerangIndex].UTXO})
+	if err != nil {
+		return err
+	}
+
+	// Add output to next contract.
+	// Mark as change so it gets everything except the tx fee.
+	err = w.AddChangeOutput(ctx, transferTx.Outputs[nextContractIndex].Address)
+	if err != nil {
+		return err
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// Serialize settlement data for Message OP_RETURN.
+	var payload []byte
+	payload, err = protocol.Serialize(settlement)
+	if err != nil {
+		return err
+	}
+	messagePayload := protocol.Offer{
+		Version:   0,
+		Timestamp: v.Now,
+		Payload:   payload,
+	}
+
+	err = messagePayload.RefTxId.Set(transferTx.Hash[:])
+	if err != nil {
+		return err
+	}
+
+	// Setup Message
+	var data []byte
+	data, err = messagePayload.Serialize()
+	if err != nil {
+		return err
+	}
+	message := protocol.Message{
+		AddressIndexes: []uint16{0}, // First output is receiver of message
+		MessageType:    protocol.CodeOffer,
+		MessagePayload: data,
+	}
+
+	return node.RespondSuccess(ctx, w, itx, rk, &message)
+}
+
+// TODO CheckSettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
+func CheckSettlement(ctx context.Context, masterDB *db.DB, transferTx *inspector.Transaction,
+	transfer *protocol.Transfer, settleTx *wire.MsgTx, rk *wallet.RootKey) error {
+
 	return nil
 }
 
