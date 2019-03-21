@@ -422,9 +422,9 @@ func (action Offer) String() string {
 // on-chain to the parties (including Smart Contracts) that still have to
 // sign the transaction.
 type SignatureRequest struct {
-	Version    uint8     `json:"version,omitempty"`     // Payload Version
-	Timestamp  Timestamp `json:"timestamp,omitempty"`   // Timestamp in nanoseconds for when the message sender creates the transaction.
-	SigRequest []byte    `json:"sig_request,omitempty"` // Full serialized bitcoin tx with multiple inputs from different wallets/users.
+	Version   uint8     `json:"version,omitempty"`   // Payload Version
+	Timestamp Timestamp `json:"timestamp,omitempty"` // Timestamp in nanoseconds for when the message sender creates the transaction.
+	Payload   []byte    `json:"payload,omitempty"`   // Full serialized bitcoin tx with multiple inputs from different wallets/users.
 }
 
 // Type returns the type identifer for this message.
@@ -471,12 +471,12 @@ func (action *SignatureRequest) Serialize() ([]byte, error) {
 	}
 	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
-	// SigRequest ([]byte)
-	// fmt.Printf("Serializing SigRequest\n")
-	if err := WriteVarBin(buf, action.SigRequest, 32); err != nil {
+	// Payload ([]byte)
+	// fmt.Printf("Serializing Payload\n")
+	if err := WriteVarBin(buf, action.Payload, 32); err != nil {
 		return nil, err
 	}
-	// fmt.Printf("Serialized SigRequest : buf len %d\n", buf.Len())
+	// fmt.Printf("Serialized Payload : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -502,17 +502,17 @@ func (action *SignatureRequest) Write(b []byte) (int, error) {
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
-	// SigRequest ([]byte)
-	// fmt.Printf("Reading SigRequest : %d bytes remaining\n", buf.Len())
+	// Payload ([]byte)
+	// fmt.Printf("Reading Payload : %d bytes remaining\n", buf.Len())
 	{
 		var err error
-		action.SigRequest, err = ReadVarBin(buf, 32)
+		action.Payload, err = ReadVarBin(buf, 32)
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	// fmt.Printf("Read SigRequest : %d bytes remaining\n%+v\n", buf.Len(), action.SigRequest)
+	// fmt.Printf("Read Payload : %d bytes remaining\n%+v\n", buf.Len(), action.Payload)
 
 	// fmt.Printf("Read SignatureRequest : %d bytes remaining\n", buf.Len())
 	return len(b) - buf.Len(), nil
@@ -528,7 +528,7 @@ func (action SignatureRequest) String() string {
 
 	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
-	vals = append(vals, fmt.Sprintf("SigRequest:%#x", action.SigRequest))
+	vals = append(vals, fmt.Sprintf("Payload:%#x", action.Payload))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }

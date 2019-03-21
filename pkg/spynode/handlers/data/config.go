@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // Config holds all configuration for the running service.
 type Config struct {
+	ChainParams    *chaincfg.Params
 	NodeAddress    string         // IP address of trusted external full node
 	UserAgent      string         // User agent to send to external node
 	StartHash      chainhash.Hash // Hash of first block to start processing on initial run
@@ -17,8 +19,9 @@ type Config struct {
 }
 
 // NewConfig returns a new Config populated from environment variables.
-func NewConfig(host, useragent, starthash string, untrustedNodes, safeDelay int) (Config, error) {
+func NewConfig(chainParams *chaincfg.Params, host, useragent, starthash string, untrustedNodes, safeDelay int) (Config, error) {
 	result := Config{
+		ChainParams:    chainParams,
 		NodeAddress:    host,
 		UserAgent:      useragent,
 		UntrustedCount: untrustedNodes,

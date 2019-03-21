@@ -26,6 +26,25 @@ func PubKeyHashFromPrivateKey(key *btcec.PrivateKey) []byte {
 	return hash160.Sum(nil)
 }
 
+// InputIsSigned returns true if the input at the specified index already has a signature script.
+func (tx *Tx) InputIsSigned(index int) bool {
+	if index >= len(tx.MsgTx.TxIn) {
+		return false
+	}
+
+	return len(tx.MsgTx.TxIn[index].SignatureScript) > 0
+}
+
+// AllInputsAreSigned returns true if all inputs have a signature script.
+func (tx *Tx) AllInputsAreSigned() bool {
+	for _, input := range tx.MsgTx.TxIn {
+		if len(input.SignatureScript) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // SignInput sets the signature script on the specified input.
 // This should only be used when you aren't signing for all inputs and the fee is overestimated, so it needs no adjustement.
 func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
@@ -42,7 +61,7 @@ func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
 		return WrongPrivateKeyError
 	}
 
-	tx.MsgTx.TxIn[index].SignatureScript, err = txscript.SignatureScript(&tx.MsgTx, index,
+	tx.MsgTx.TxIn[index].SignatureScript, err = txscript.SignatureScript(tx.MsgTx, index,
 		tx.Inputs[index].PkScript, txscript.SigHashAll+SigHashForkID, key, true,
 		int64(tx.Inputs[index].Value))
 	return err

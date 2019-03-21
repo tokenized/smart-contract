@@ -88,7 +88,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 		Error(ctx, w, err)
 	}
 
-	if err := Respond(ctx, w, &rejectTx.MsgTx); err != nil {
+	if err := Respond(ctx, w, rejectTx.MsgTx); err != nil {
 		Error(ctx, w, err)
 	}
 	return ErrRejected
@@ -140,7 +140,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 		Error(ctx, w, err)
 	}
 
-	return Respond(ctx, w, &respondTx.MsgTx)
+	return Respond(ctx, w, respondTx.MsgTx)
 }
 
 // Respond sends a TX to the network.

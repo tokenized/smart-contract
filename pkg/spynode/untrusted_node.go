@@ -186,7 +186,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, MainNetBch)
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.ChainParams.Net))
 		if err == io.EOF {
 			// Happens when the connection is closed
 			logger.Debug(ctx, "Connection closed")
@@ -297,7 +297,7 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 			break
 		}
 
-		if err := sendAsync(ctx, node.connection, msg); err != nil {
+		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -13,6 +14,7 @@ import (
 )
 
 type Server struct {
+	Config           *node.Config
 	RpcNode          *rpcnode.RPCNode
 	SpyNode          *spynode.Node
 	Handler          protomux.Handler
@@ -24,8 +26,9 @@ type Server struct {
 	inSync           bool
 }
 
-func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler, contractPKH []byte) *Server {
+func NewServer(config *node.Config, rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler, contractPKH []byte) *Server {
 	result := Server{
+		Config:           config,
 		RpcNode:          rpcNode,
 		SpyNode:          spyNode,
 		Handler:          handler,
@@ -41,7 +44,6 @@ func NewServer(rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux
 }
 
 func (server *Server) Run(ctx context.Context) error {
-
 	// Set responder
 	server.Handler.SetResponder(server.respondTx)
 
@@ -57,12 +59,7 @@ func (server *Server) Run(ctx context.Context) error {
 
 func (server *Server) Stop(ctx context.Context) error {
 	// TODO: This action should unregister listeners
-
-	if err := server.SpyNode.Stop(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return server.SpyNode.Stop(ctx)
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {

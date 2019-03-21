@@ -43,7 +43,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	}
 
 	// Promote TX
-	if err := itx.Promote(ctx, server.RpcNode); err != nil {
+	if err := itx.Promote(ctx, server.RpcNode, &server.Config.ChainParams); err != nil {
 		logger.Fatal(ctx, "Failed to promote inspector tx : %s", err.Error())
 		return false, err
 	}
@@ -61,7 +61,6 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-
 				return server.processTx(ctx, itx)
 			}
 		}
@@ -75,7 +74,6 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-
 				return server.processTx(ctx, itx)
 			}
 		}
@@ -84,7 +82,6 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from unsafeRequests
 				server.unsafeRequests = append(server.unsafeRequests[:i], server.unsafeRequests[i+1:]...)
-
 				return server.processTx(ctx, itx)
 			}
 		}

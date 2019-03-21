@@ -26,19 +26,19 @@ import (
 type Transfer struct {
 	MasterDB *db.DB
 	Config   *node.Config
+	TxCache  InspectorTxCache
 }
 
 var (
-	frozenError = errors.New("Holdings Frozen")
+	frozenError       = errors.New("Holdings Frozen")
+	insufficientError = errors.New("Holdings Insufficient")
 )
 
 // TransferRequest handles an incoming Transfer request.
 func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	return errors.New("Transfer Request Not Implemented")
-	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Transfer")
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferRequest")
 	defer span.End()
 
-	var err error
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	msg, ok := itx.MsgProto.(*protocol.Transfer)
@@ -63,18 +63,21 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	if int(msg.Assets[firstContractIndex].ContractIndex) >= len(itx.Outputs) {
-		logger.Info(ctx, "Transfer contract index out of range : %s", rk.Address.String())
+		logger.Warn(ctx, "%s : Transfer contract index out of range : %s", v.TraceID, rk.Address.String())
 		return errors.New("Transfer contract index out of range")
 	}
 
 	if itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Address.String() != rk.Address.String() {
-		logger.Info(ctx, "Not contract for first transfer : %s", rk.Address.String())
+		logger.Verbose(ctx, "%s : Not contract for first transfer. Waiting for Message Offer : %s", v.TraceID,
+			itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Address.String())
+		t.TxCache.SaveTx(ctx, itx)
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
-	contractBalance := uint64(itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Value) // Bitcoin balance of first (this) contract
+	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
+	contractBalance := uint64(itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Value)
 
-	// TODO Verify input amounts are appropriate. Also verify the include any bitcoins required for bitcoin transfers.
+	// TODO Verify input amounts for fees.
 
 	// Transfer Outputs
 	//   Contract 1 : amount = calculated fee for settlement tx + any bitcoins being transfered
@@ -88,23 +91,25 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	//
 	// Each contract can be involved in more than one asset in the transfer, but only needs to have
 	//   one output since each asset transfer references the output of it's contract
-	settleTx, err := BuildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
+	var err error
+	var settleTx *txbuilder.Tx
+	settleTx, err = buildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
 	if err != nil {
-		logger.Warn(ctx, "Failed to build settlement tx : %s", err)
+		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 	}
 
 	// Update outputs to pay bitcoin receivers.
-	err = AddBitcoinSettlements(ctx, itx, msg, settleTx)
+	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
-		logger.Warn(ctx, "Failed to add bitcoin settlements : %s", err)
+		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
 	}
 
 	// Create initial settlement data
 	settlement := protocol.Settlement{Timestamp: v.Now}
 
-	// Serialize emtpy settlement data into OP_RETURN output.
+	// Serialize empty settlement data into OP_RETURN output.
 	var script []byte
 	script, err = protocol.Serialize(&settlement)
 	if err != nil {
@@ -117,7 +122,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = AddSettlementData(ctx, t.MasterDB, itx, msg, &settleTx.MsgTx, rk)
+	err = addSettlementData(ctx, t.MasterDB, rk, itx, msg, settleTx.MsgTx, &settlement)
 	if err == frozenError {
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFrozen)
 	}
@@ -127,20 +132,29 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
+		logger.Info(ctx, "%s : Single contract settlement complete", v.TraceID)
 		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
 			return err
 		}
+		return node.Respond(ctx, w, settleTx.MsgTx)
+	}
 
-		return node.Respond(ctx, w, &settleTx.MsgTx)
+	// Save tx
+	err = t.TxCache.SaveTx(ctx, itx)
+	if err != nil {
+		return err
 	}
 
 	// Send to next contract
-	return SendToNextContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement)
+	return sendToNextSettlementContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement)
 }
 
-// BuildSettlementTx builds the tx for a settlement action.
-func BuildSettlementTx(ctx context.Context, config *node.Config, transferTx *inspector.Transaction,
+// buildSettlementTx builds the tx for a settlement action.
+func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *inspector.Transaction,
 	transfer *protocol.Transfer, rk *wallet.RootKey, contractBalance uint64) (*txbuilder.Tx, error) {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
+	defer span.End()
+
 	// Settle Outputs
 	//   Any addresses sending or receiving tokens or bitcoin.
 	//   Referenced from indices from within settlement data.
@@ -245,9 +259,12 @@ func BuildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 	return settleTx, nil
 }
 
-// AddBitcoinSettlements adds bitcoin settlement data to the Settlement data
-func AddBitcoinSettlements(ctx context.Context, transferTx *inspector.Transaction,
+// addBitcoinSettlements adds bitcoin settlement data to the Settlement data
+func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transaction,
 	transfer *protocol.Transfer, settleTx *txbuilder.Tx) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addBitcoinSettlements")
+	defer span.End()
+
 	// Check for bitcoin transfers.
 	for assetOffset, assetTransfer := range transfer.Assets {
 		if assetTransfer.AssetType != "CUR" || !assetTransfer.AssetCode.IsZero() {
@@ -324,31 +341,14 @@ func AddBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 	return nil
 }
 
-// AddSettlementData appends data to a pending settlement action.
-func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspector.Transaction,
-	transfer *protocol.Transfer, settleTx *wire.MsgTx, rk *wallet.RootKey) error {
+// addSettlementData appends data to a pending settlement action.
+func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
+	transferTx *inspector.Transaction, transfer *protocol.Transfer,
+	settleTx *wire.MsgTx, settlement *protocol.Settlement) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
+	defer span.End()
+
 	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	var settlement *protocol.Settlement
-	found := false
-	settlementOutputIndex := 0
-	for i, output := range settleTx.TxOut {
-		msg, err := protocol.Deserialize(output.PkScript)
-		if err != nil {
-			continue
-		}
-		ok := false
-		settlement, ok = msg.(*protocol.Settlement)
-		if ok {
-			settlementOutputIndex = i
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("Settlement op return not found in settle tx")
-	}
 
 	dbConn := masterDB
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -409,25 +409,26 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 		}
 
 		// Find contract input
-		contractInputOffset := uint16(0xffff)
+		contractInputIndex := uint16(0xffff)
 		for i, input := range settleInputAddresses {
 			if bytes.Equal(input.Bytes(), contractAddr.Bytes()) {
-				contractInputOffset = uint16(i)
+				contractInputIndex = uint16(i)
 				break
 			}
 		}
 
-		if contractInputOffset == uint16(0xffff) {
+		if contractInputIndex == uint16(0xffff) {
 			return fmt.Errorf("Contract input not found: %s %s", contractAddr, assetTransfer.AssetCode)
 		}
 
 		assetSettlement := protocol.AssetSettlement{
-			ContractIndex: contractInputOffset,
+			ContractIndex: contractInputIndex,
 			AssetType:     assetTransfer.AssetType,
 			AssetCode:     assetTransfer.AssetCode,
 		}
 
 		sendBalance := uint64(0)
+		settlementQuantities := make([]*uint64, len(settleTx.TxOut))
 
 		// Process senders
 		// assetTransfer.AssetSenders []QuantityIndex {Index uint16, Quantity uint64}
@@ -438,12 +439,12 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
 			}
 
-			input := transferTx.Inputs[sender.Index]
+			inputPKH := transferTx.Inputs[sender.Index].Address.ScriptAddress()
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if bytes.Equal(outputAddress.Bytes(), input.Address.ScriptAddress()) {
+				if bytes.Equal(outputAddress.Bytes(), inputPKH) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -455,19 +456,26 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 			}
 
 			// Check sender's available unfrozen balance
-			inputAddress := protocol.PublicKeyHashFromBytes(input.Address.ScriptAddress())
+			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
 					contractAddr, assetTransfer.AssetCode, inputAddress)
 				return frozenError
 			}
 
-			// Get sender's balance
-			senderBalance := asset.GetBalance(ctx, as, inputAddress)
+			if settlementQuantities[settleOutputIndex] == nil {
+				// Get sender's balance
+				senderBalance := asset.GetBalance(ctx, as, inputAddress)
+				settlementQuantities[settleOutputIndex] = &senderBalance
+			}
 
-			// assetSettlement.Settlements []QuantityIndex {Index uint16, Quantity uint64}
-			assetSettlement.Settlements = append(assetSettlement.Settlements,
-				protocol.QuantityIndex{Index: settleOutputIndex, Quantity: senderBalance - sender.Quantity})
+			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
+				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
+					contractAddr, assetTransfer.AssetCode, inputAddress)
+				return insufficientError
+			}
+
+			*settlementQuantities[settleOutputIndex] -= sender.Quantity
 
 			// Update total send balance
 			sendBalance += sender.Quantity
@@ -501,11 +509,13 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 
 			// TODO Process RegistrySignatures
 
-			// Get receiver's balance
-			receiverBalance := asset.GetBalance(ctx, as, transferOutputAddress)
+			if settlementQuantities[settleOutputIndex] == nil {
+				// Get receiver's balance
+				receiverBalance := asset.GetBalance(ctx, as, transferOutputAddress)
+				settlementQuantities[settleOutputIndex] = &receiverBalance
+			}
 
-			assetSettlement.Settlements = append(assetSettlement.Settlements,
-				protocol.QuantityIndex{Index: settleOutputIndex, Quantity: receiverBalance + receiver.Quantity})
+			*settlementQuantities[settleOutputIndex] += receiver.Quantity
 
 			// Update asset balance
 			if receiver.Quantity > sendBalance {
@@ -518,7 +528,27 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining", assetOffset, sendBalance)
 		}
 
-		settlement.Assets = append(settlement.Assets, assetSettlement)
+		for index, quantity := range settlementQuantities {
+			if quantity != nil {
+				assetSettlement.Settlements = append(assetSettlement.Settlements,
+					protocol.QuantityIndex{Index: uint16(index), Quantity: *quantity})
+			}
+		}
+
+		// Check if settlement already exists for this asset.
+		replaced := false
+		for i, asset := range settlement.Assets {
+			if asset.AssetType == assetSettlement.AssetType &&
+				bytes.Equal(asset.AssetCode.Bytes(), assetSettlement.AssetCode.Bytes()) {
+				replaced = true
+				settlement.Assets[i] = assetSettlement
+				break
+			}
+		}
+
+		if !replaced {
+			settlement.Assets = append(settlement.Assets, assetSettlement) // Append
+		}
 		dataAdded = true
 	}
 
@@ -531,13 +561,37 @@ func AddSettlementData(ctx context.Context, masterDB *db.DB, transferTx *inspect
 	if err != nil {
 		return fmt.Errorf("Failed to serialize empty settlement : %s", err)
 	}
+
+	// Find Settlement OP_RETURN.
+	found := false
+	settlementOutputIndex := 0
+	for i, output := range settleTx.TxOut {
+		code, err := protocol.Code(output.PkScript)
+		if err != nil {
+			continue
+		}
+		if code == protocol.CodeSettlement {
+			settlementOutputIndex = i
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("Settlement op return not found in settle tx")
+	}
+
 	settleTx.TxOut[settlementOutputIndex].PkScript = script
 	return nil
 }
 
-func SendToNextContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.RootKey,
+// sendToNextSettlementContract sends settlement data to the next contract involved so it can add its data.
+func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.RootKey,
 	itx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.Tx, settlement *protocol.Settlement) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.sendToNextSettlementContract")
+	defer span.End()
+
 	boomerangIndex := uint32(0xffffffff)
 	if len(itx.Outputs) == 1 {
 		// If already an M1, use only output
@@ -604,6 +658,11 @@ func SendToNextContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.
 		return fmt.Errorf("Next contract not found in multi-contract transfer")
 	}
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	logger.Info(ctx, "%s : Sending settlement Offer to %s", v.TraceID,
+		transferTx.Outputs[nextContractIndex].Address.String())
+
 	// Setup M1 response
 	var err error
 	err = w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[boomerangIndex].UTXO})
@@ -617,8 +676,6 @@ func SendToNextContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.
 	if err != nil {
 		return err
 	}
-
-	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Serialize settlement data for Message OP_RETURN.
 	var payload []byte
@@ -645,83 +702,18 @@ func SendToNextContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.
 	}
 	message := protocol.Message{
 		AddressIndexes: []uint16{0}, // First output is receiver of message
-		MessageType:    protocol.CodeOffer,
+		MessageType:    messagePayload.Type(),
 		MessagePayload: data,
 	}
 
 	return node.RespondSuccess(ctx, w, itx, rk, &message)
 }
 
-// TODO CheckSettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
-func CheckSettlement(ctx context.Context, masterDB *db.DB, transferTx *inspector.Transaction,
-	transfer *protocol.Transfer, settleTx *wire.MsgTx, rk *wallet.RootKey) error {
-
-	return nil
-}
-
-// SettlementResponse handles an outgoing Settlement action and writes it to the state
-func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
-	return errors.New("Settlement Response Not Implemented")
-	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.Settlement")
-	defer span.End()
-
-	// msg, ok := itx.MsgProto.(*protocol.Settlement)
-	// if !ok {
-	// return errors.New("Could not assert as *protocol.Settlement")
-	// }
-
-	// dbConn := t.MasterDB
-
-	// v := ctx.Value(node.KeyValues).(*node.Values)
-
-	// // Locate Asset
-	// contractAddr := rk.Address
-	// assetID := string(msg.AssetCode)
-	// as, err := asset.Retrieve(ctx, dbConn, contractAddr.String(), assetID)
-	// if err != nil {
-	// return err
-	// }
-
-	// // Asset could not be found
-	// if as == nil {
-	// logger.Warn(ctx, "%s : Asset ID not found: %s %s\n", v.TraceID, contractAddr, assetID)
-	// return node.ErrNoResponse
-	// }
-
-	// // Validate transaction
-	// if len(itx.Outputs) < 2 {
-	// logger.Warn(ctx, "%s : Not enough outputs: %s %s\n", v.TraceID, contractAddr, assetID)
-	// return node.ErrNoResponse
-	// }
-
-	// // Party 1 (Sender), Party 2 (Receiver)
-	// party1PKH := itx.Outputs[0].Address.String()
-	// party2PKH := itx.Outputs[1].Address.String()
-
-	// logger.Info(ctx, "%s : Settling transfer : %s %s\n", v.TraceID, contractAddr.String(), string(msg.AssetCode))
-	// logger.Info(ctx, "%s : Party 1 %s : %d tokens\n", v.TraceID, party1PKH, msg.Party1TokenQty)
-	// logger.Info(ctx, "%s : Party 2 %s : %d tokens\n", v.TraceID, party2PKH, msg.Party2TokenQty)
-
-	// newBalances := map[string]uint64{
-	// party1PKH: msg.Party1TokenQty,
-	// party2PKH: msg.Party2TokenQty,
-	// }
-
-	// // Update asset
-	// ua := asset.UpdateAsset{
-	// NewBalances: newBalances,
-	// }
-
-	// if err := asset.Update(ctx, dbConn, contractAddr.String(), assetID, &ua, v.Now); err != nil {
-	// return err
-	// }
-
-	// return nil
-	return errors.New("Not implemented")
-}
-
 // settlementIsComplete returns true if the settlement accounts for all assets in the transfer.
 func settlementIsComplete(ctx context.Context, transfer *protocol.Transfer, settlement *protocol.Settlement) bool {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.settlementIsComplete")
+	defer span.End()
+
 	for _, assetTransfer := range transfer.Assets {
 		found := false
 		for _, assetSettle := range settlement.Assets {
@@ -738,4 +730,71 @@ func settlementIsComplete(ctx context.Context, transfer *protocol.Transfer, sett
 	}
 
 	return true
+}
+
+// SettlementResponse handles an outgoing Settlement action and writes it to the state
+func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.SettlementResponse")
+	defer span.End()
+
+	msg, ok := itx.MsgProto.(*protocol.Settlement)
+	if !ok {
+		return errors.New("Could not assert as *protocol.Settlement")
+	}
+
+	dbConn := t.MasterDB
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+
+	for _, assetSettlement := range msg.Assets {
+		if assetSettlement.AssetType == "CUR" && assetSettlement.AssetCode.IsZero() {
+			continue // Bitcoin transaction
+		}
+
+		if assetSettlement.ContractIndex == 0xffff {
+			continue // No contract for this asset
+		}
+
+		if int(assetSettlement.ContractIndex) >= len(itx.Inputs) {
+			return fmt.Errorf("Settlement contract index out of range : %x", assetSettlement.AssetCode)
+		}
+
+		if !bytes.Equal(itx.Inputs[assetSettlement.ContractIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+			continue // Asset not under this contract
+		}
+
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, assetSettlement.AssetCode)
+		if err != nil || as == nil {
+			logger.Warn(ctx, "%s : Asset not found: %x %x", v.TraceID, contractAddr, assetSettlement.AssetCode)
+			return node.ErrNoResponse
+		}
+
+		// Create update record
+		ua := asset.UpdateAsset{
+			NewBalances: make(map[protocol.PublicKeyHash]uint64),
+		}
+
+		for _, settlementQuantity := range assetSettlement.Settlements {
+			if int(settlementQuantity.Index) >= len(itx.Outputs) {
+				return fmt.Errorf("Settlement output index out of range %d/%d : %x",
+					settlementQuantity.Index, len(itx.Outputs), assetSettlement.AssetCode)
+			}
+
+			pkh := protocol.PublicKeyHashFromBytes(itx.Outputs[settlementQuantity.Index].Address.ScriptAddress())
+			ua.NewBalances[pkh] = settlementQuantity.Quantity
+			logger.Verbose(ctx, "%s : Updating balance for %x to %d for asset %x", v.TraceID,
+				itx.Outputs[settlementQuantity.Index].Address.String(), settlementQuantity.Quantity,
+				assetSettlement.AssetCode)
+		}
+
+		// Update database
+		err = asset.Update(ctx, dbConn, contractAddr, assetSettlement.AssetCode, &ua, v.Now)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

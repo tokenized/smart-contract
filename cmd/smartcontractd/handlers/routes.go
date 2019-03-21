@@ -1,15 +1,24 @@
 package handlers
 
 import (
+	"context"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
+type InspectorTxCache interface {
+	GetTx(context.Context, *chainhash.Hash) *inspector.Transaction
+	SaveTx(context.Context, *inspector.Transaction) error
+}
+
 // API returns a handler for a set of routes for protocol actions.
-func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB) protomux.Handler {
+func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB, txCache InspectorTxCache) protomux.Handler {
 
 	app := node.New(config, masterWallet)
 
@@ -39,6 +48,7 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 	t := Transfer{
 		MasterDB: masterDB,
 		Config:   config,
+		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
@@ -68,6 +78,15 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 	app.Handle("SEE", protocol.CodeBallotCast, g.BallotCastRequest)
 	app.Handle("SEE", protocol.CodeBallotCounted, g.BallotCountedResponse)
 	app.Handle("SEE", protocol.CodeResult, g.ResultResponse)
+
+	// Register message based operations.
+	m := Message{
+		MasterDB: masterDB,
+		Config:   config,
+		TxCache:  txCache,
+	}
+
+	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)
 
 	return app
 }

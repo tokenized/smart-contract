@@ -91,7 +91,8 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHa
 }
 
 // Update the asset
-func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, assetCode protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash,
+	assetCode protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
@@ -212,6 +213,7 @@ func MakeHolding(ctx context.Context, asset *state.Asset, userPKH protocol.Publi
 // UpdateBalance will set the balance of a users holdings against the supplied asset.
 // New holdings are created for new users and expired holding statuses are cleared.
 func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
+	// TODO Check timestamp against latest timestamp on each holding and only update if the timestamp is newer.
 	// Set balance
 	holding := MakeHolding(ctx, asset, userPKH, now)
 	holding.Balance = balance

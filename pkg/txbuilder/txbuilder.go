@@ -1,7 +1,9 @@
 package txbuilder
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -10,7 +12,7 @@ import (
 const SigHashForkID txscript.SigHashType = 0x40
 
 type Tx struct {
-	MsgTx     wire.MsgTx
+	MsgTx     *wire.MsgTx
 	Inputs    []*Input  // Additional Input Data
 	Outputs   []*Output // Additional Output Data
 	ChangePKH []byte    // The public key hash to pay extra bitcoins to if an output wasn't already specified.
@@ -21,13 +23,57 @@ type Tx struct {
 // NewTx returns a new Tx with the specified change PKH
 // changePKH (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
 func NewTx(changePKH []byte, dustLimit uint64, feeRate float32) *Tx {
+	tx := wire.MsgTx{Version: wire.TxVersion, LockTime: 0}
 	result := Tx{
-		MsgTx:     wire.MsgTx{Version: wire.TxVersion, LockTime: 0},
+		MsgTx:     &tx,
 		ChangePKH: changePKH,
 		DustLimit: dustLimit,
 		FeeRate:   feeRate,
 	}
 	return &result
+}
+
+func NewTxFromWire(changePKH []byte, dustLimit uint64, feeRate float32, tx *wire.MsgTx, inputs []*wire.MsgTx) (*Tx, error) {
+	result := Tx{
+		MsgTx:     tx,
+		ChangePKH: changePKH,
+		DustLimit: dustLimit,
+		FeeRate:   feeRate,
+	}
+
+	// Setup inputs
+	for _, input := range result.MsgTx.TxIn {
+		found := false
+		for _, inputTx := range inputs {
+			txHash := inputTx.TxHash()
+			if bytes.Equal(txHash[:], input.PreviousOutPoint.Hash[:]) &&
+				int(input.PreviousOutPoint.Index) < len(inputTx.TxOut) {
+				// Add input
+				newInput := Input{
+					PkScript: inputTx.TxOut[input.PreviousOutPoint.Index].PkScript,
+					Value:    uint64(inputTx.TxOut[input.PreviousOutPoint.Index].Value),
+				}
+				result.Inputs = append(result.Inputs, &newInput)
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("Input tx not found : %s %d", input.PreviousOutPoint.Hash, input.PreviousOutPoint.Index)
+		}
+	}
+
+	// Setup outputs
+	for _, output := range result.MsgTx.TxOut {
+		pkh, err := PubKeyHashFromP2PKH(output.PkScript)
+		isChange := err == nil && bytes.Equal(pkh, result.ChangePKH)
+		newOutput := Output{
+			IsChange: isChange,
+			IsDust:   false,
+		}
+		result.Outputs = append(result.Outputs, &newOutput)
+	}
+
+	return &result, nil
 }
 
 // AddInput Adds an input to Tx.

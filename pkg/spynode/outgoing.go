@@ -43,11 +43,11 @@ func buildHeaderRequest(ctx context.Context, protocol uint32, blocks *storage.Bl
 }
 
 // sendAsync writes a message to a peer.
-func sendAsync(ctx context.Context, conn net.Conn, m wire.Message) error {
+func sendAsync(ctx context.Context, conn net.Conn, m wire.Message, net wire.BitcoinNet) error {
 	var buf bytes.Buffer
 
 	// build the message to send
-	_, err := wire.WriteMessageN(&buf, m, wire.ProtocolVersion, MainNetBch)
+	_, err := wire.WriteMessageN(&buf, m, wire.ProtocolVersion, net)
 	if err != nil {
 		return err
 	}

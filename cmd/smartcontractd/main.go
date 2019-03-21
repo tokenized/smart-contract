@@ -136,6 +136,21 @@ func main() {
 	logger.Info(ctx, "Config : %v", string(cfgJSON))
 
 	// -------------------------------------------------------------------------
+	// Node Config
+
+	appConfig := &node.Config{
+		ContractProviderID: cfg.Contract.OperatorName,
+		Version:            cfg.Contract.Version,
+		FeeAddress:         cfg.Contract.FeeAddress,
+		FeeValue:           cfg.Contract.FeeAmount,
+		FeeRate:            cfg.Contract.FeeRate,
+		DustLimit:          cfg.Contract.DustLimit,
+		ChainParams:        chaincfg.MainNetParams,
+	}
+
+	appConfig.ChainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
+
+	// -------------------------------------------------------------------------
 	// SPY Node
 	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
 		cfg.NodeStorage.AccessKey,
@@ -150,7 +165,7 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
+	spyConfig, err := data.NewConfig(&appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
 		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
@@ -209,26 +224,11 @@ func main() {
 	defer masterDB.Close()
 
 	// -------------------------------------------------------------------------
-	// Node Config
-
-	appConfig := &node.Config{
-		ContractProviderID: cfg.Contract.OperatorName,
-		Version:            cfg.Contract.Version,
-		FeeAddress:         cfg.Contract.FeeAddress,
-		FeeValue:           cfg.Contract.FeeAmount,
-		FeeRate:            cfg.Contract.FeeRate,
-		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        chaincfg.MainNetParams,
-	}
-
-	appConfig.ChainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
-
-	// -------------------------------------------------------------------------
 	// Register Hooks
 
-	appHandlers := handlers.API(masterWallet, appConfig, masterDB)
+	appHandlers := handlers.API(masterWallet, appConfig, masterDB, handlers.NewTxCache())
 
-	node := listeners.NewServer(rpcNode, spyNode, appHandlers, rawPKHs[0])
+	node := listeners.NewServer(appConfig, rpcNode, spyNode, appHandlers, rawPKHs[0])
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
