@@ -261,7 +261,9 @@ func main() {
 	// Blocking main and waiting for shutdown.
 	select {
 	case err := <-serverErrors:
-		logger.Fatal(ctx, "Error starting server: %s", err)
+		if err != nil {
+			logger.Fatal(ctx, "Error starting server: %s", err)
+		}
 
 	case <-osSignals:
 		logger.Info(ctx, "Shutting down")

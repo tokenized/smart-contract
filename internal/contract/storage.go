@@ -19,13 +19,13 @@ func Save(ctx context.Context, dbConn *db.DB, c state.Contract) error {
 		return err
 	}
 
-	key := buildStoragePath(c.ID)
+	key := buildStoragePath(&c.ID)
 
 	return dbConn.Put(ctx, key, b)
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash) (*state.Contract, error) {
 	key := buildStoragePath(pkh)
 
 	b, err := dbConn.Fetch(ctx, key)
@@ -44,18 +44,18 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash) (*sta
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[protocol.AssetCode]state.Asset{}
+		c.Assets = make(map[protocol.AssetCode]*state.Asset)
 	}
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[protocol.TxId]state.Vote{}
+		c.Votes = make(map[protocol.TxId]*state.Vote)
 	}
 
 	return &c, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id protocol.PublicKeyHash) string {
+func buildStoragePath(id *protocol.PublicKeyHash) string {
 	return fmt.Sprintf("%v/%x", storageKey, id)
 }

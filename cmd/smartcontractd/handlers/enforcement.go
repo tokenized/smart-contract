@@ -68,14 +68,14 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
@@ -94,16 +94,16 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		// Holdings check
 		_, ok := as.Holdings[target.Address]
 		if !ok {
-			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 
-		logger.Info(ctx, "%s : Freeze order request : %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+		logger.Info(ctx, "%s : Freeze order request : %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 		freeze.Addresses = append(freeze.Addresses, target.Address)
 
 		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.Bytes(), &e.Config.ChainParams)
 		if err != nil {
-			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address.Bytes())
+			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 		}
 
@@ -114,7 +114,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	// Change from/back to contract
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 	w.AddChangeOutput(ctx, contractAddress)
@@ -142,14 +142,14 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
@@ -168,16 +168,16 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		// Holdings check
 		_, ok = as.Holdings[target.Address]
 		if !ok {
-			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 
-		logger.Info(ctx, "%s : Thaw order request : %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+		logger.Info(ctx, "%s : Thaw order request : %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 		thaw.Addresses = append(thaw.Addresses, target.Address)
 
 		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.Bytes(), &e.Config.ChainParams)
 		if err != nil {
-			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 		}
 
@@ -188,7 +188,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	// Change from/back to contract
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 	w.AddChangeOutput(ctx, contractAddress)
@@ -216,14 +216,14 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
@@ -242,7 +242,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
 	depositAddr, err := btcutil.NewAddressPubKeyHash(msg.DepositAddress.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid deposit address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode, msg.DepositAddress)
+		logger.Warn(ctx, "%s : Invalid deposit address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), msg.DepositAddress.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 
@@ -259,18 +259,18 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		// Holdings check
 		holding, ok := as.Holdings[target.Address]
 		if !ok {
-			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 
 		confiscation.DepositQty += holding.Balance
 
-		logger.Info(ctx, "%s : Confiscation order request : %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+		logger.Info(ctx, "%s : Confiscation order request : %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 		confiscation.Addresses = append(confiscation.Addresses, target.Address)
 
 		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.Bytes(), &e.Config.ChainParams)
 		if err != nil {
-			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode, target.Address)
+			logger.Warn(ctx, "%s : Invalid target address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 		}
 
@@ -284,7 +284,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Change from/back to contract
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr, msg.AssetCode)
+		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeUnknownAddress)
 	}
 	w.AddChangeOutput(ctx, contractAddress)
@@ -311,7 +311,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 	// Get order that triggered freeze
 	orderItx, err := inspector.NewTransactionFromWire(ctx, itx.Inputs[0].FullTx)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to get order for freeze : %s", v.TraceID, err.Error())
+		logger.Warn(ctx, "%s : Failed to get order for freeze : %s", v.TraceID, err)
 		return err
 	}
 
@@ -325,7 +325,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 	// Common vars
 	contractAddr := rk.Address
 
-	logger.Warn(ctx, "%s : Freeze response not implemented : %s %s", v.TraceID, contractAddr, order.AssetCode)
+	logger.Warn(ctx, "%s : Freeze response not implemented : %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 	return errors.New("Freeze response not implemented")
 
 	// TODO Implement after format is updated
@@ -366,7 +366,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 	// Get order that triggered freeze
 	orderItx, err := inspector.NewTransactionFromWire(ctx, itx.Inputs[0].FullTx)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to get order for thaw : %s", v.TraceID, err.Error())
+		logger.Warn(ctx, "%s : Failed to get order for thaw : %s", v.TraceID, err)
 		return err
 	}
 
@@ -395,12 +395,12 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 	// ua.ClearHoldingStatuses[address.Address] = refTxID
 	// }
 
-	if err := asset.Update(ctx, dbConn, contractAddr, order.AssetCode, &ua, v.Now); err != nil {
-		logger.Warn(ctx, "%s : Failed to update for thaw : %s %s", v.TraceID, contractAddr, order.AssetCode)
+	if err := asset.Update(ctx, dbConn, contractAddr, &order.AssetCode, &ua, v.Now); err != nil {
+		logger.Warn(ctx, "%s : Failed to update for thaw : %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 		return err
 	}
 
-	logger.Info(ctx, "%s : Processed Thaw : %s %s", v.TraceID, contractAddr, order.AssetCode)
+	logger.Info(ctx, "%s : Processed Thaw : %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 	return nil
 }
 
@@ -419,7 +419,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	// Get order that triggered freeze
 	orderItx, err := inspector.NewTransactionFromWire(ctx, itx.Inputs[0].FullTx)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to get order for thaw : %s", v.TraceID, err.Error())
+		logger.Warn(ctx, "%s : Failed to get order for thaw : %s", v.TraceID, err)
 		return err
 	}
 
@@ -432,14 +432,14 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, order.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &order.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr, order.AssetCode)
+		logger.Warn(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 		return node.ErrNoResponse
 	}
 
@@ -454,16 +454,16 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 
 	// Validate transaction
 	if len(itx.Outputs) < 2 {
-		logger.Warn(ctx, "%s : Not enough outputs: %s %s", v.TraceID, contractAddr, order.AssetCode)
+		logger.Warn(ctx, "%s : Not enough outputs: %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 		return node.ErrNoResponse
 	}
 
-	if err := asset.Update(ctx, dbConn, contractAddr, order.AssetCode, &ua, v.Now); err != nil {
-		logger.Warn(ctx, "%s : Failed to update confiscation : %s %s", v.TraceID, contractAddr, order.AssetCode)
+	if err := asset.Update(ctx, dbConn, contractAddr, &order.AssetCode, &ua, v.Now); err != nil {
+		logger.Warn(ctx, "%s : Failed to update confiscation : %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 		return err
 	}
 
-	logger.Info(ctx, "%s : Processed Confiscation : %s %s", v.TraceID, contractAddr, order.AssetCode)
+	logger.Info(ctx, "%s : Processed Confiscation : %s %s", v.TraceID, contractAddr.String(), order.AssetCode.String())
 	return nil
 }
 

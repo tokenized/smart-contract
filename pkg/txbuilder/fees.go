@@ -1,6 +1,8 @@
 package txbuilder
 
 import (
+	"fmt"
+
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -112,11 +114,11 @@ func (tx *Tx) adjustFee(amount int64) error {
 	if amount > int64(0) {
 		// Increase fee, transfer from change
 		if changeOutputIndex == 0xffffffff {
-			return InputValueInsufficientError // No existing change to move to fee
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for fee"))
 		}
 
 		if tx.MsgTx.TxOut[changeOutputIndex].Value < amount {
-			return InputValueInsufficientError // Not enough change to move to fee
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
 		}
 
 		// Decrease change, thereby increasing the fee

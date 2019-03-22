@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -27,10 +28,6 @@ var (
 	ErrInsufficientFunds = errors.New("Insufficient Payment amount")
 )
 
-const (
-	MinimumForResponse = 2000 // TODO This should be variable depending on the size of the payload. Fee rate * (payload size + response inputs and outputs)
-)
-
 // Error handles all error responses for the API.
 func Error(ctx context.Context, w *ResponseWriter, err error) {
 	logger.Error(ctx, "%s", err)
@@ -47,18 +44,23 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	sender := itx.Inputs[0].Address
 
 	// Receiver (contract) is the address sending the message (UTXO)
-	receiver := itx.Outputs[0]
-	if uint64(receiver.Value) < MinimumForResponse {
-		// Did not receive enough to fund the response
-		Error(ctx, w, ErrInsufficientFunds)
-		return ErrNoResponse
+	var contractOutput *inspector.Output
+	for i, output := range itx.Outputs {
+		if bytes.Equal(output.Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+			contractOutput = &itx.Outputs[i]
+			break
+		}
+	}
+
+	if contractOutput == nil {
+		return errors.New("Contract output not found")
 	}
 
 	// Create reject tx
-	rejectTx := txbuilder.NewTx(receiver.Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+	rejectTx := txbuilder.NewTx(contractOutput.Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
 
 	// Find spendable UTXOs
-	utxos, err := itx.UTXOs().ForAddress(receiver.Address)
+	utxos, err := itx.UTXOs().ForAddress(contractOutput.Address)
 	if err != nil {
 		Error(ctx, w, ErrInsufficientFunds)
 		return ErrNoResponse
@@ -86,10 +88,15 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey})
+	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
-		Error(ctx, w, err)
-		return ErrNoResponse
+		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+			logger.Warn(ctx, err.Error())
+			return ErrNoResponse
+		} else {
+			Error(ctx, w, err)
+			return ErrNoResponse
+		}
 	}
 
 	if err := Respond(ctx, w, rejectTx.MsgTx); err != nil {
@@ -143,10 +150,14 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey})
+	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
-		Error(ctx, w, err)
-		return ErrNoResponse
+		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+			return RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientValue)
+		} else {
+			Error(ctx, w, err)
+			return ErrNoResponse
+		}
 	}
 
 	return Respond(ctx, w, respondTx.MsgTx)

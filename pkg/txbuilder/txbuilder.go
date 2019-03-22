@@ -9,6 +9,10 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
+const (
+	SubSystem = "TxBuilder" // For logger
+)
+
 const SigHashForkID txscript.SigHashType = 0x40
 
 type Tx struct {

@@ -20,7 +20,7 @@ var (
 )
 
 // Retrieve gets the specified vote from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, voteID protocol.TxId) (*state.Vote, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, voteID *protocol.TxId) (*state.Vote, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Retrieve")
 	defer span.End()
 
@@ -37,7 +37,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKey
 }
 
 // Update the vote
-func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, voteID protocol.TxId, upd *UpdateVote, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, voteID *protocol.TxId, upd *UpdateVote, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Update")
 	defer span.End()
 
@@ -56,7 +56,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHa
 	// 	v.IssuerType = ""
 	// }
 
-	if err := Save(ctx, dbConn, contractPKH, *v); err != nil {
+	if err := Save(ctx, dbConn, contractPKH, v); err != nil {
 		return err
 	}
 

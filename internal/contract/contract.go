@@ -1,12 +1,14 @@
 package contract
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
 	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"go.opencensus.io/trace"
@@ -21,7 +23,7 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
@@ -38,7 +40,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash
 }
 
 // Create the contract
-func Create(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
@@ -46,12 +48,13 @@ func Create(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, 
 	var c state.Contract
 
 	// Get current state
-	err := platform.Convert(nu, c)
+	err := platform.Convert(ctx, &nu, &c)
 	if err != nil {
+		logger.Warn(ctx, "Failed to convert new contract to contract : %s", err)
 		return err
 	}
 
-	c.ID = address
+	c.ID = *address
 	c.Revision = 0
 	c.CreatedAt = now
 	c.UpdatedAt = now
@@ -77,7 +80,7 @@ func Create(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, 
 }
 
 // Update the contract
-func Update(ctx context.Context, dbConn *db.DB, address protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
@@ -227,9 +230,9 @@ func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract
-func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH protocol.PublicKeyHash) bool {
+func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH *protocol.PublicKeyHash) bool {
 	for _, a := range contract.Assets {
-		if h, ok := a.Holdings[userPKH]; ok && h.Balance > 0 {
+		if h, ok := a.Holdings[*userPKH]; ok && h.Balance > 0 {
 			return true
 		}
 	}
@@ -238,8 +241,8 @@ func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH protoc
 }
 
 // IsOperator will check if the supplied pkh has operator permission (issuer or operator)
-func IsOperator(ctx context.Context, contract *state.Contract, pkh protocol.PublicKeyHash) bool {
-	return contract.Issuer == pkh || contract.Operator == pkh
+func IsOperator(ctx context.Context, contract *state.Contract, pkh *protocol.PublicKeyHash) bool {
+	return bytes.Equal(contract.Issuer.Bytes(), pkh.Bytes()) || bytes.Equal(contract.Operator.Bytes(), pkh.Bytes())
 }
 
 // IsVotingPermitted returns true if contract allows voting

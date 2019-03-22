@@ -106,7 +106,7 @@ var cmdBuild = &cobra.Command{
 			}
 
 			// Fund contract to be able to post contract formation
-			funding := uint64(float32(tx.EstimatedFee()) * 1.25)
+			funding := tx.EstimatedFee() * 2
 			funding += theClient.Config.ContractFee
 			funding += (theClient.Config.DustLimit * 2)
 			err = tx.AddValueToOutput(0, funding)
@@ -114,7 +114,7 @@ var cmdBuild = &cobra.Command{
 				return errors.Wrap(err, "Failed to add estimated funding to contract output of tx")
 			}
 
-			err = tx.Sign(ctx, []*btcec.PrivateKey{theClient.Wallet.Key})
+			err = tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key})
 			if err != nil {
 				return errors.Wrap(err, "Failed to sign tx")
 			}

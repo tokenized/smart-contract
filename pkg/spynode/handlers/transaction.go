@@ -69,9 +69,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 			}
 			if marked { // Only send for txs that previously matched filters.
 				for _, listener := range handler.listeners {
-					if err := listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, *conflict); err != nil {
-						return nil, err
-					}
+					listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, *conflict)
 				}
 			}
 		}
@@ -98,7 +96,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 	var err error
 	for _, listener := range handler.listeners {
 		if mark, err = listener.HandleTx(ctx, msg); err != nil {
-			return nil, err
+			continue
 		}
 		if mark {
 			marked = true
@@ -110,9 +108,7 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		if len(conflicts) > 0 {
 			handler.txs.MarkUnsafe(ctx, hash)
 			for _, listener := range handler.listeners {
-				if err := listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, hash); err != nil {
-					return nil, err
-				}
+				listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, hash)
 			}
 		}
 	} else {

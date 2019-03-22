@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -25,7 +26,7 @@ var (
 )
 
 // Retrieve gets the specified asset from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, assetCode protocol.AssetCode) (*state.Asset, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode) (*state.Asset, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Retrieve")
 	defer span.End()
 
@@ -46,35 +47,26 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKey
 }
 
 // Create the asset
-func Create(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash, assetCode protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
 	// Set up asset
 	var a state.Asset
 
-	a.ID = assetCode
+	// Get current state
+	err := platform.Convert(ctx, &nu, &a)
+	if err != nil {
+		return err
+	}
+
+	a.ID = *assetCode
 	a.Revision = 0
 	a.CreatedAt = now
 	a.UpdatedAt = now
 
-	a.AssetType = nu.AssetType
-	a.AssetAuthFlags = nu.AssetAuthFlags
-	a.TransfersPermitted = nu.TransfersPermitted
-	a.TradeRestrictions = nu.TradeRestrictions
-	a.EnforcementOrdersPermitted = nu.EnforcementOrdersPermitted
-	a.VoteMultiplier = nu.VoteMultiplier
-	a.ReferendumProposal = nu.ReferendumProposal
-	a.InitiativeProposal = nu.InitiativeProposal
-	a.AssetModificationGovernance = nu.AssetModificationGovernance
-	a.TokenQty = nu.TokenQty
-	a.ContractFeeCurrency = nu.ContractFeeCurrency
-	a.ContractFeeVar = nu.ContractFeeVar
-	a.ContractFeeFixed = nu.ContractFeeFixed
-	a.AssetPayload = nu.AssetPayload
-
-	a.Holdings = make(map[protocol.PublicKeyHash]state.Holding, 1)
-	a.Holdings[nu.IssuerAddress] = state.Holding{
+	a.Holdings = make(map[protocol.PublicKeyHash]*state.Holding, 1)
+	a.Holdings[nu.IssuerAddress] = &state.Holding{
 		Address:   nu.IssuerAddress,
 		Balance:   nu.TokenQty,
 		CreatedAt: a.CreatedAt,
@@ -84,15 +76,15 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHa
 		a.AssetPayload = []byte{}
 	}
 
-	if err := Save(ctx, dbConn, contractPKH, a); err != nil {
+	if err := Save(ctx, dbConn, contractPKH, &a); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Update the asset
-func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHash,
-	assetCode protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+	assetCode *protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
@@ -153,23 +145,23 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHa
 	// Update balances
 	if upd.NewBalances != nil {
 		for pkh, balance := range upd.NewBalances {
-			UpdateBalance(ctx, a, pkh, balance, now)
+			UpdateBalance(ctx, a, &pkh, balance, now)
 		}
 	}
 
 	// Update holding statuses
 	if upd.NewHoldingStatuses != nil {
 		for pkh, status := range upd.NewHoldingStatuses {
-			holding := MakeHolding(ctx, a, pkh, now)
-			holding.HoldingStatuses = append(holding.HoldingStatuses, *status)
-			a.Holdings[pkh] = *holding
+			holding := MakeHolding(ctx, a, &pkh, now)
+			holding.HoldingStatuses = append(holding.HoldingStatuses, status)
+			a.Holdings[pkh] = holding
 		}
 	}
 
 	// Clear holding statuses
 	if upd.ClearHoldingStatuses != nil {
 		for pkh, txid := range upd.ClearHoldingStatuses {
-			holding := MakeHolding(ctx, a, pkh, now)
+			holding := MakeHolding(ctx, a, &pkh, now)
 			found := false
 			for i, status := range holding.HoldingStatuses {
 				if bytes.Equal(status.TxId.Bytes(), txid.Bytes()) {
@@ -182,37 +174,37 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH protocol.PublicKeyHa
 			if !found {
 				return errors.New(fmt.Sprintf("Matching hold not found : address %s txid %s", pkh, txid))
 			}
-			a.Holdings[pkh] = *holding
+			a.Holdings[pkh] = holding
 		}
 	}
 
 	a.UpdatedAt = protocol.CurrentTimestamp()
 
-	if err := Save(ctx, dbConn, contractPKH, *a); err != nil {
+	if err := Save(ctx, dbConn, contractPKH, a); err != nil {
 		return err
 	}
 	return nil
 }
 
 // MakeHolding will return a users holding or make one for them.
-func MakeHolding(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash, now protocol.Timestamp) *state.Holding {
-	holding, ok := asset.Holdings[userPKH]
+func MakeHolding(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, now protocol.Timestamp) *state.Holding {
+	holding, ok := asset.Holdings[*userPKH]
 
 	// New holding
 	if !ok {
-		holding = state.Holding{
-			Address:   userPKH,
+		*holding = state.Holding{
+			Address:   *userPKH,
 			Balance:   0,
 			CreatedAt: now,
 		}
 	}
 
-	return &holding
+	return holding
 }
 
 // UpdateBalance will set the balance of a users holdings against the supplied asset.
 // New holdings are created for new users and expired holding statuses are cleared.
-func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
+func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
 	// TODO Check timestamp against latest timestamp on each holding and only update if the timestamp is newer.
 	// Set balance
 	holding := MakeHolding(ctx, asset, userPKH, now)
@@ -222,7 +214,7 @@ func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH protocol.Pub
 	for {
 		removed := false
 		for i, status := range holding.HoldingStatuses {
-			if HoldingStatusExpired(ctx, &status, now) {
+			if HoldingStatusExpired(ctx, status, now) {
 				// Remove expired status
 				holding.HoldingStatuses = append(holding.HoldingStatuses[:i], holding.HoldingStatuses[i+1:]...)
 				removed = true
@@ -235,13 +227,13 @@ func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH protocol.Pub
 	}
 
 	// Put the holding back on the asset
-	asset.Holdings[userPKH] = *holding
+	asset.Holdings[*userPKH] = holding
 	return nil
 }
 
 // GetBalance returns the balance for a PKH holder
-func GetBalance(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash) uint64 {
-	holding, ok := asset.Holdings[userPKH]
+func GetBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash) uint64 {
+	holding, ok := asset.Holdings[*userPKH]
 	if !ok {
 		return 0
 	}
@@ -249,8 +241,8 @@ func GetBalance(ctx context.Context, asset *state.Asset, userPKH protocol.Public
 }
 
 // CheckBalance checks to see if the user has the specified balance available
-func CheckBalance(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash, amount uint64) bool {
-	holding, ok := asset.Holdings[userPKH]
+func CheckBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, amount uint64) bool {
+	holding, ok := asset.Holdings[*userPKH]
 	if !ok {
 		return false
 	}
@@ -259,15 +251,15 @@ func CheckBalance(ctx context.Context, asset *state.Asset, userPKH protocol.Publ
 
 // CheckBalanceFrozen checks to see if the user has the specified unfrozen balance available
 // NB(srg): Amount remains as an argument because it will be a consideration in future
-func CheckBalanceFrozen(ctx context.Context, asset *state.Asset, userPKH protocol.PublicKeyHash, amount uint64, now protocol.Timestamp) bool {
-	holding, ok := asset.Holdings[userPKH]
+func CheckBalanceFrozen(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, amount uint64, now protocol.Timestamp) bool {
+	holding, ok := asset.Holdings[*userPKH]
 	if !ok {
 		return false
 	}
 
 	result := holding.Balance
 	for _, status := range holding.HoldingStatuses {
-		if HoldingStatusExpired(ctx, &status, now) {
+		if HoldingStatusExpired(ctx, status, now) {
 			continue
 		}
 		if status.Balance > result {

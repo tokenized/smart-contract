@@ -63,7 +63,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Locate Asset
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
 
-	err = platform.Convert(msg, &ac)
+	err = platform.Convert(ctx, &msg, &ac)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Asset Creation <- Asset Modification
 	ac := protocol.AssetCreation{}
 
-	err = platform.Convert(as, &ac)
+	err = platform.Convert(ctx, &as, &ac)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return err
@@ -226,12 +226,12 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		// Prepare creation object
 		na := asset.NewAsset{}
 
-		err = platform.Convert(msg, &na)
+		err = platform.Convert(ctx, &msg, &na)
 		if err != nil {
 			return err
 		}
 
-		if err := asset.Create(ctx, dbConn, contractAddr, msg.AssetCode, &na, v.Now); err != nil {
+		if err := asset.Create(ctx, dbConn, contractAddr, &msg.AssetCode, &na, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 			return err
 		}
@@ -303,7 +303,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.AssetPayload)
 		}
 
-		if err := asset.Update(ctx, dbConn, contractAddr, msg.AssetCode, &ua, v.Now); err != nil {
+		if err := asset.Update(ctx, dbConn, contractAddr, &msg.AssetCode, &ua, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractAddr, msg.AssetCode.String())
 			return err
 		}

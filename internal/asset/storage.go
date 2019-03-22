@@ -13,7 +13,7 @@ import (
 const storageKey = "contracts"
 
 // Put a single asset in storage
-func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, a state.Asset) error {
+func Save(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, a *state.Asset) error {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -35,7 +35,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, a stat
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[protocol.AssetCode]state.Asset{}
+		c.Assets = make(map[protocol.AssetCode]*state.Asset)
 	}
 
 	// Update the asset
@@ -51,7 +51,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, a stat
 }
 
 // Fetch a single asset from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, assetCode protocol.AssetCode) (*state.Asset, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, assetCode *protocol.AssetCode) (*state.Asset, error) {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -73,19 +73,19 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, asset
 
 	// Initialize Asset map
 	if c.Assets == nil {
-		c.Assets = map[protocol.AssetCode]state.Asset{}
+		c.Assets = make(map[protocol.AssetCode]*state.Asset)
 	}
 
 	// Locate the asset
-	asset, ok := c.Assets[assetCode]
+	asset, ok := c.Assets[*assetCode]
 	if !ok {
 		return nil, ErrNotFound
 	}
 
-	return &asset, nil
+	return asset, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id protocol.PublicKeyHash) string {
+func buildStoragePath(id *protocol.PublicKeyHash) string {
 	return fmt.Sprintf("%v/%x", storageKey, id)
 }

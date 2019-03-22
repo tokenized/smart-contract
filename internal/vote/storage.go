@@ -13,7 +13,7 @@ import (
 const storageKey = "contracts"
 
 // Put a single vote in storage
-func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, v state.Vote) error {
+func Save(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, v *state.Vote) error {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -35,7 +35,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, v stat
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[protocol.TxId]state.Vote{}
+		c.Votes = make(map[protocol.TxId]*state.Vote)
 	}
 
 	// Update the vote
@@ -51,7 +51,7 @@ func Save(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, v stat
 }
 
 // Fetch a single vote from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, voteID protocol.TxId) (*state.Vote, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, voteID *protocol.TxId) (*state.Vote, error) {
 
 	// Fetch the contract
 	key := buildStoragePath(pkh)
@@ -73,19 +73,19 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh protocol.PublicKeyHash, voteI
 
 	// Initialize Vote map
 	if c.Votes == nil {
-		c.Votes = map[protocol.TxId]state.Vote{}
+		c.Votes = make(map[protocol.TxId]*state.Vote)
 	}
 
 	// Locate the vote
-	vote, ok := c.Votes[voteID]
+	vote, ok := c.Votes[*voteID]
 	if !ok {
 		return nil, ErrNotFound
 	}
 
-	return &vote, nil
+	return vote, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id protocol.PublicKeyHash) string {
+func buildStoragePath(id *protocol.PublicKeyHash) string {
 	return fmt.Sprintf("%v/%x", storageKey, id)
 }

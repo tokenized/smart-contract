@@ -196,7 +196,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 		signed := false
 		for i, _ := range settleTx.Inputs {
 			err = settleTx.SignInput(i, rk.PrivateKey)
-			if err == txbuilder.WrongPrivateKeyError {
+			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 				continue
 			}
 			if err != nil {
@@ -312,7 +312,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	signed := false
 	for i, _ := range settleTx.Inputs {
 		err = settleTx.SignInput(i, rk.PrivateKey)
-		if err == txbuilder.WrongPrivateKeyError {
+		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 			continue
 		}
 		if err != nil {
@@ -416,13 +416,13 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Generate public key hashes for all the outputs
-	settleOutputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxOut))
+	settleOutputAddresses := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
 	for _, output := range settleTx.TxOut {
 		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
-		if err != nil {
+		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHashFromBytes(pkh))
 		} else {
-			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHash{})
+			settleOutputAddresses = append(settleOutputAddresses, nil)
 		}
 	}
 
@@ -446,7 +446,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		hash256.Write(pushes[1])
 		hash160.Reset()
 		hash160.Write(hash256.Sum(nil))
-		settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHashFromBytes(hash160.Sum(nil)))
+		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(hash160.Sum(nil)))
 	}
 
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -459,7 +459,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		}
 
 		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-		if !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
+		if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
 			continue // This asset is not for this contract.
 		}
 
@@ -467,7 +467,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		var as *state.Asset
 		var err error
 		if !assetIsBitcoin {
-			as, err = asset.Retrieve(ctx, masterDB, contractAddr, assetTransfer.AssetCode)
+			as, err = asset.Retrieve(ctx, masterDB, contractAddr, &assetTransfer.AssetCode)
 			if err != nil || as == nil {
 				return fmt.Errorf("Asset ID not found : %s %s : %s", contractAddr, assetTransfer.AssetCode, err)
 			}
@@ -504,7 +504,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if bytes.Equal(outputAddress.Bytes(), inputPKH) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), inputPKH) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -561,7 +561,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}

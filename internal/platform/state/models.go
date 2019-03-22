@@ -46,8 +46,8 @@ type Contract struct {
 	KeyRoles                   []KeyRole          `json:"key_roles,omitempty"`
 	NotableRoles               []NotableRole      `json:"notable_roles,omitempty"`
 
-	Assets map[protocol.AssetCode]Asset `json:"assets,omitempty"`
-	Votes  map[protocol.TxId]Vote       `json:"votes,omitempty"`
+	Assets map[protocol.AssetCode]*Asset `json:"assets,omitempty"`
+	Votes  map[protocol.TxId]*Vote       `json:"votes,omitempty"`
 }
 
 type Asset struct {
@@ -72,13 +72,13 @@ type Asset struct {
 	ContractFeeFixed            float32 `json:"contract_fee_fixed,omitempty"`
 	AssetPayload                []byte  `json:"asset_payload,omitempty"`
 
-	Holdings map[protocol.PublicKeyHash]Holding `json:"holdings,omitempty"`
+	Holdings map[protocol.PublicKeyHash]*Holding `json:"holdings,omitempty"`
 }
 
 type Holding struct {
 	Address         protocol.PublicKeyHash `json:"address,omit_empty"`
 	Balance         uint64                 `json:"balance,omit_empty"`
-	HoldingStatuses []HoldingStatus        `json:"order_status,omitempty"`
+	HoldingStatuses []*HoldingStatus       `json:"order_status,omitempty"`
 	CreatedAt       protocol.Timestamp     `json:"created_at,omit_empty"`
 }
 
@@ -101,7 +101,7 @@ type Vote struct {
 	ProposalDocumentHash string                 `json:"proposal_document_hash,omit_empty"`
 	VoteCutOffTimestamp  protocol.Timestamp     `json:"vote_cut_off_timestamp,omit_empty"`
 	RefTxID              protocol.TxId          `json:"ref_txn_id_hash,omit_empty"`
-	Ballots              map[string]Ballot      `json:"ballots,omit_empty,omit_empty"`
+	Ballots              map[string]*Ballot     `json:"ballots,omit_empty,omit_empty"`
 	UTXO                 inspector.UTXO         `json:"utxo,omit_empty,omit_empty"`
 	Result               *Result                `json:"result,omitempty,omit_empty"`
 	UsedBy               string                 `json:"used_by,omit_empty,omit_empty"`

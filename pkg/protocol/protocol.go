@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -195,10 +196,10 @@ type TxId struct {
 	data [32]byte
 }
 
-func TxIdFromBytes(data []byte) TxId {
+func TxIdFromBytes(data []byte) *TxId {
 	var result TxId
 	copy(result.data[:], data)
-	return result
+	return &result
 }
 
 // Bytes returns the byte slice for the TxId.
@@ -242,10 +243,10 @@ type PublicKeyHash struct {
 }
 
 // PublicKeyHashFromBytes returns a PublicKeyHash with the specified bytes.
-func PublicKeyHashFromBytes(data []byte) PublicKeyHash {
+func PublicKeyHashFromBytes(data []byte) *PublicKeyHash {
 	var result PublicKeyHash
 	copy(result.data[:], data)
-	return result
+	return &result
 }
 
 // Bytes returns a byte slice containing the PublicKeyHash.
@@ -269,8 +270,17 @@ func (hash *PublicKeyHash) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (hash *PublicKeyHash) UnmarshalJSON(data []byte) error {
-	_, err := fmt.Sscanf(string(data), "\"%x\"", hash.data)
-	return err
+	if len(data) < 2 {
+		return errors.New("To short for hex data")
+	}
+	n, err := hex.Decode(hash.data[:], data[1:len(data)-1])
+	if err != nil {
+		return err
+	}
+	if n != 20 {
+		return errors.New("Invalid size")
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -285,10 +295,10 @@ func (id *AssetCode) IsZero() bool {
 }
 
 // AssetCodeFromBytes returns a AssetCode with the specified bytes.
-func AssetCodeFromBytes(data []byte) AssetCode {
+func AssetCodeFromBytes(data []byte) *AssetCode {
 	var result AssetCode
 	copy(result.data[:], data)
-	return result
+	return &result
 }
 
 // Bytes returns a byte slice containing the AssetCode.
@@ -312,8 +322,17 @@ func (code *AssetCode) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (code *AssetCode) UnmarshalJSON(data []byte) error {
-	_, err := fmt.Sscanf(string(data), "\"%x\"", code.data)
-	return err
+	if len(data) < 2 {
+		return errors.New("To short for hex data")
+	}
+	n, err := hex.Decode(code.data[:], data[1:len(data)-1])
+	if err != nil {
+		return err
+	}
+	if n != 32 {
+		return errors.New("Invalid size")
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -328,10 +347,10 @@ func (id *ContractCode) IsZero() bool {
 }
 
 // AssetCodeFromBytes returns a ContractCode with the specified bytes.
-func ContractCodeFromBytes(data []byte) ContractCode {
+func ContractCodeFromBytes(data []byte) *ContractCode {
 	var result ContractCode
 	copy(result.data[:], data)
-	return result
+	return &result
 }
 
 // Bytes returns a byte slice containing the ContractCode.
@@ -355,8 +374,17 @@ func (code *ContractCode) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (code *ContractCode) UnmarshalJSON(data []byte) error {
-	_, err := fmt.Sscanf(string(data), "\"%x\"", code.data)
-	return err
+	if len(data) < 2 {
+		return errors.New("To short for hex data")
+	}
+	n, err := hex.Decode(code.data[:], data[1:len(data)-1])
+	if err != nil {
+		return err
+	}
+	if n != 32 {
+		return errors.New("Invalid size")
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -400,6 +428,11 @@ func (time *Timestamp) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (time *Timestamp) UnmarshalJSON(data []byte) error {
+	if len(data) == 2 && data[0] == '{' && data[1] == '}' {
+		time.nanoseconds = 0
+		return nil
+	}
+
 	var err error
 	time.nanoseconds, err = strconv.ParseUint(string(data), 10, 64)
 	return err

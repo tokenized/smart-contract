@@ -77,7 +77,7 @@ func (g *Governance) InitiativeRequest(ctx context.Context, w *node.ResponseWrit
 	// If an asset is specified
 	if !msg.AssetCode.IsZero() {
 		// Locate asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 		if err != nil {
 			return err
 		}
@@ -194,7 +194,7 @@ func (g *Governance) ReferendumRequest(ctx context.Context, w *node.ResponseWrit
 	// If an asset is specified
 	if !msg.AssetCode.IsZero() {
 		// Locate asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, msg.AssetCode)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 		if err != nil {
 			return err
 		}

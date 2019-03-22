@@ -133,7 +133,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
 		logger.Info(ctx, "%s : Single contract settlement complete", v.TraceID)
-		if err := settleTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey}); err != nil {
+		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
 			return err
 		}
 		return node.Respond(ctx, w, settleTx.MsgTx)
@@ -207,10 +207,10 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 			}
 
 			address := protocol.PublicKeyHashFromBytes(transferTx.Inputs[quantityIndex.Index].Address.ScriptAddress())
-			_, exists := addresses[address]
+			_, exists := addresses[*address]
 			if !exists {
 				// Add output to sender
-				addresses[address] = uint32(len(settleTx.MsgTx.TxOut))
+				addresses[*address] = uint32(len(settleTx.MsgTx.TxOut))
 
 				err = settleTx.AddP2PKHDustOutput(transferTx.Inputs[quantityIndex.Index].Address.ScriptAddress(), false)
 				if err != nil {
@@ -232,7 +232,7 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 			}
 
 			address := protocol.PublicKeyHashFromBytes(transferTx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
-			outputIndex, exists := addresses[address]
+			outputIndex, exists := addresses[*address]
 			if exists {
 				if assetIsBitcoin {
 					// Add bitcoin quantity to receiver's output
@@ -242,7 +242,7 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				}
 			} else {
 				// Add output to receiver
-				addresses[address] = uint32(len(settleTx.MsgTx.TxOut))
+				addresses[*address] = uint32(len(settleTx.MsgTx.TxOut))
 
 				if assetIsBitcoin {
 					err = settleTx.AddP2PKHOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
@@ -355,28 +355,28 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	dataAdded := false
 
 	// Generate public key hashes for all the outputs
-	settleOutputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxOut))
+	settleOutputAddresses := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
 	for _, output := range settleTx.TxOut {
 		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
-		if err != nil {
+		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHashFromBytes(pkh))
 		} else {
-			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHash{})
+			settleOutputAddresses = append(settleOutputAddresses, nil)
 		}
 	}
 
 	// Generate public key hashes for all the inputs
 	hash256 := sha256.New()
 	hash160 := ripemd160.New()
-	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
+	settleInputAddresses := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
 		pushes, err := txscript.PushedData(input.SignatureScript)
 		if err != nil {
-			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
+			settleInputAddresses = append(settleInputAddresses, nil)
 			continue
 		}
 		if len(pushes) != 2 {
-			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
+			settleInputAddresses = append(settleInputAddresses, nil)
 			continue
 		}
 
@@ -398,12 +398,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		}
 
 		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-		if !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
+		if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
 			continue // This asset is not ours. Skip it.
 		}
 
 		// Locate Asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, assetTransfer.AssetCode)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &assetTransfer.AssetCode)
 		if err != nil || as == nil {
 			return fmt.Errorf("Asset ID not found : %s %s : %s", contractAddr, assetTransfer.AssetCode, err)
 		}
@@ -411,7 +411,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		// Find contract input
 		contractInputIndex := uint16(0xffff)
 		for i, input := range settleInputAddresses {
-			if bytes.Equal(input.Bytes(), contractAddr.Bytes()) {
+			if input != nil && bytes.Equal(input.Bytes(), contractAddr.Bytes()) {
 				contractInputIndex = uint16(i)
 				break
 			}
@@ -444,7 +444,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if bytes.Equal(outputAddress.Bytes(), inputPKH) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), inputPKH) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -496,7 +496,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -765,7 +765,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			continue // Asset not under this contract
 		}
 
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, assetSettlement.AssetCode)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &assetSettlement.AssetCode)
 		if err != nil || as == nil {
 			logger.Warn(ctx, "%s : Asset not found: %x %x", v.TraceID, contractAddr, assetSettlement.AssetCode)
 			return node.ErrNoResponse
@@ -783,14 +783,14 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			}
 
 			pkh := protocol.PublicKeyHashFromBytes(itx.Outputs[settlementQuantity.Index].Address.ScriptAddress())
-			ua.NewBalances[pkh] = settlementQuantity.Quantity
+			ua.NewBalances[*pkh] = settlementQuantity.Quantity
 			logger.Verbose(ctx, "%s : Updating balance for %x to %d for asset %x", v.TraceID,
 				itx.Outputs[settlementQuantity.Index].Address.String(), settlementQuantity.Quantity,
 				assetSettlement.AssetCode)
 		}
 
 		// Update database
-		err = asset.Update(ctx, dbConn, contractAddr, assetSettlement.AssetCode, &ua, v.Now)
+		err = asset.Update(ctx, dbConn, contractAddr, &assetSettlement.AssetCode, &ua, v.Now)
 		if err != nil {
 			return err
 		}

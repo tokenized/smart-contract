@@ -2,25 +2,14 @@ package txbuilder
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txscript"
 
 	"github.com/btcsuite/btcd/btcec"
 	"golang.org/x/crypto/ripemd160"
-)
-
-const (
-	SubSystem = "TxBuilder" // For logger
-)
-
-var (
-	InputValueInsufficientError = errors.New("Input Value Insufficient")
-	WrongPrivateKeyError        = errors.New("Wrong Private Key")
-	MissingPrivateKeyError      = errors.New("Missing Private Key")
 )
 
 func PubKeyHashFromPrivateKey(key *btcec.PrivateKey) []byte {
@@ -64,7 +53,7 @@ func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
 	}
 
 	if !bytes.Equal(pkh, PubKeyHashFromPrivateKey(key)) {
-		return WrongPrivateKeyError
+		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", pkh))
 	}
 
 	tx.MsgTx.TxIn[index].SignatureScript, err = txscript.SignatureScript(tx.MsgTx, index,
@@ -75,49 +64,40 @@ func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
 
 // Sign estimates and updates the fee, signs all inputs, and corrects the fee if necessary.
 //   keys is a slice of all keys required to sign all inputs. They do not have to be in any order.
-func (tx *Tx) Sign(ctx context.Context, keys []*btcec.PrivateKey) error {
-	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-
+func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	// Update fee to estimated amount
 	estimatedFee := int64(float32(tx.EstimatedSize()) * tx.FeeRate)
 	inputValue := tx.inputSum()
 	outputValue := tx.outputSum(true)
 
 	if inputValue < outputValue+uint64(estimatedFee) {
-		logger.Verbose(ctx, "Insufficient value %d/%d\n", inputValue, outputValue+uint64(estimatedFee))
-		return InputValueInsufficientError
+		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(estimatedFee)))
 	}
 
 	currentFee := int64(inputValue) - int64(outputValue)
 	if err := tx.adjustFee(estimatedFee - currentFee); err != nil {
-		logger.Verbose(ctx, "Failed to adjust fee : %s\n", err)
 		return err
 	}
 
 	attempt := 3 // Max of 3 fee adjustment attempts
 	for {
-		logger.Verbose(ctx, "Signing all %d inputs\n", len(tx.Inputs))
 		// Sign all inputs
 		for index, _ := range tx.Inputs {
 			signed := false
-			for i, key := range keys {
+			for _, key := range keys {
 				err := tx.SignInput(index, key)
-				if err == WrongPrivateKeyError {
-					logger.Verbose(ctx, "Key %d doesn't match input %d\n", i, index)
+				if IsErrorCode(err, ErrorCodeWrongPrivateKey) {
 					continue
 				}
 				if err != nil {
-					logger.Verbose(ctx, "Error signing : %s\n", err)
 					return err
 				}
-				logger.Verbose(ctx, "Used key %d to sign input %d\n", i, index)
 				signed = true
 				break
 			}
 
 			if !signed {
-				logger.Verbose(ctx, "Failed to sign input %d\n", index)
-				return MissingPrivateKeyError
+				return newError(ErrorCodeMissingPrivateKey, "")
 			}
 		}
 
@@ -131,16 +111,14 @@ func (tx *Tx) Sign(ctx context.Context, keys []*btcec.PrivateKey) error {
 		outputValue = tx.outputSum(false)
 		changeValue := tx.changeSum()
 		if inputValue < outputValue+uint64(targetFee) {
-			return InputValueInsufficientError
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(targetFee)))
 		}
 
 		currentFee = int64(inputValue) - int64(outputValue) - int64(changeValue)
 		if currentFee >= targetFee && currentFee-targetFee < 10 {
-			logger.Verbose(ctx, "Signature complete. Fee %d/%d\n", currentFee, targetFee)
 			break // Within 10 satoshis of target fee
 		}
 
-		logger.Verbose(ctx, "Adjusting fee by %d sats\n", targetFee-currentFee)
 		if err := tx.adjustFee(targetFee - currentFee); err != nil {
 			return err
 		}
@@ -148,6 +126,5 @@ func (tx *Tx) Sign(ctx context.Context, keys []*btcec.PrivateKey) error {
 		attempt--
 	}
 
-	logger.Verbose(ctx, "Done signing\n")
 	return nil
 }
