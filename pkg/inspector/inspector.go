@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/pkg/errors"
 )
 
@@ -36,9 +35,6 @@ var (
 
 	// ErrMissingOutputs
 	ErrMissingOutputs = errors.New("Message is missing outputs")
-
-	// targetVersion Protocol prefix
-	targetVersion = []byte{0x0, 0x0, 0x0, 0x20}
 
 	// prefixP2PKH Pay to PKH prefix
 	prefixP2PKH = []byte{0x76, 0xA9}
@@ -95,19 +91,14 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, 
 		return nil, errors.Wrap(ErrMissingOutputs, "parsing transaction")
 	}
 
-	// Set up the protocol message
+	// Find and deserialize protocol message
 	var msg protocol.OpReturnMessage
-
+	var err error
 	for _, txOut := range tx.TxOut {
-		if !isTokenizedOpReturn(txOut.PkScript) {
-			continue
+		msg, err = protocol.Deserialize(txOut.PkScript)
+		if err == nil {
+			break // Tokenized output found
 		}
-
-		if txOut.PkScript[0] != txscript.OP_RETURN {
-			return nil, errors.Wrap(ErrInvalidProtocol, "parsing op return")
-		}
-
-		msg, _ = protocol.Deserialize(txOut.PkScript)
 	}
 
 	return &Transaction{
@@ -125,25 +116,6 @@ func NewUTXOFromWire(tx *wire.MsgTx, index uint32) UTXO {
 		PkScript: tx.TxOut[index].PkScript,
 		Value:    tx.TxOut[index].Value,
 	}
-}
-
-// Checks if a script carries the protocol signature
-func isTokenizedOpReturn(pkScript []byte) bool {
-	if len(pkScript) < 20 {
-		// This isn't long enough to be a sane message
-		return false
-	}
-
-	version := make([]byte, 4, 4)
-
-	// Get the version. Where that is, depends on the message structure.
-	if pkScript[1] < 0x4c {
-		version = pkScript[2:6]
-	} else {
-		version = pkScript[3:7]
-	}
-
-	return bytes.Equal(version, targetVersion)
 }
 
 func isPayToPublicKeyHash(pkScript []byte) bool {

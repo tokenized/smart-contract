@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -32,6 +33,7 @@ const (
 
 // Error handles all error responses for the API.
 func Error(ctx context.Context, w *ResponseWriter, err error) {
+	logger.Error(ctx, "%s", err)
 	// switch errors.Cause(err) {
 	// }
 
@@ -79,17 +81,20 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	payload, err := protocol.Serialize(&rejection)
 	if err != nil {
 		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+	err = rejectTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 
 	if err := Respond(ctx, w, rejectTx.MsgTx); err != nil {
 		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 	return ErrRejected
 }
@@ -111,6 +116,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 		utxos, err = itx.UTXOs().ForAddress(rk.Address)
 		if err != nil {
 			Error(ctx, w, err)
+			return ErrNoResponse
 		}
 	}
 
@@ -124,6 +130,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 		err := respondTx.AddOutput(txbuilder.P2PKHScriptForPKH(out.Address.ScriptAddress()), out.Value, out.Change, false)
 		if err != nil {
 			Error(ctx, w, err)
+			return ErrNoResponse
 		}
 	}
 
@@ -131,13 +138,15 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	payload, err := protocol.Serialize(msg)
 	if err != nil {
 		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+	err = respondTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 
 	return Respond(ctx, w, respondTx.MsgTx)

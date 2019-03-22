@@ -5,13 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
 const (
 	// OpReturn (OP_RETURN) is a script opcode is used to mark a transaction
 	// output as invalid, and can be used to add data to a TX.
-	OpReturn = 0x6a
+	OpReturn = byte(0x6a)
 
 	// ProtocolID is the current protocol ID
 	ProtocolID = "tokenized.com"
@@ -45,7 +46,7 @@ func Deserialize(b []byte) (OpReturnMessage, error) {
 	var err error
 
 	// Parse OP_RETURN op code
-	err = binary.Read(buf, defaultEndian, &opCode)
+	err = binary.Read(buf, DefaultEndian, &opCode)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func Deserialize(b []byte) (OpReturnMessage, error) {
 	}
 
 	// Parse push op code for op return protocol ID
-	err = binary.Read(buf, defaultEndian, &opCode)
+	err = binary.Read(buf, DefaultEndian, &opCode)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func Deserialize(b []byte) (OpReturnMessage, error) {
 
 	// Parse version
 	var version uint8
-	err = binary.Read(buf, defaultEndian, &version)
+	err = binary.Read(buf, DefaultEndian, &version)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func Deserialize(b []byte) (OpReturnMessage, error) {
 		return nil, fmt.Errorf("Unknown code : %s", code)
 	}
 
-	if _, err := msg.write(b); err != nil {
+	if _, err := msg.write(b[len(b)-buf.Len():]); err != nil {
 		return nil, err
 	}
 
@@ -122,14 +123,14 @@ func Serialize(msg OpReturnMessage) ([]byte, error) {
 	var err error
 
 	// Write OP_RETURN op code
-	err = binary.Write(&buf, defaultEndian, OpReturn)
+	err = binary.Write(&buf, DefaultEndian, OpReturn)
 	if err != nil {
 		return nil, err
 	}
 
 	// Write signature push op code
 	protocolIDSize := uint8(len(ProtocolID))
-	err = binary.Write(&buf, defaultEndian, protocolIDSize)
+	err = binary.Write(&buf, DefaultEndian, protocolIDSize)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +154,7 @@ func Serialize(msg OpReturnMessage) ([]byte, error) {
 	}
 
 	// Write version
-	err = binary.Write(&buf, defaultEndian, Version)
+	err = binary.Write(&buf, DefaultEndian, Version)
 	if err != nil {
 		return nil, err
 	}
@@ -203,12 +204,26 @@ func TxIdFromBytes(data []byte) TxId {
 // Bytes returns the byte slice for the TxId.
 func (id *TxId) Bytes() []byte { return id.data[:] }
 
+// String converts to a string
+func (id *TxId) String() string { return fmt.Sprintf("%x", id.data[:]) }
+
 // Serialize returns a byte slice with the TxId in it.
 func (id *TxId) Serialize() ([]byte, error) { return id.data[:], nil }
 
 // Write reads a TxId from a bytes.Buffer
 func (id *TxId) Write(buf *bytes.Buffer) error {
 	return readLen(buf, id.data[:])
+}
+
+// MarshalJSON converts to json.
+func (id *TxId) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%x\"", id.data)), nil
+}
+
+// UnmarshalJSON converts from json.
+func (id *TxId) UnmarshalJSON(data []byte) error {
+	_, err := fmt.Sscanf(string(data), "\"%x\"", id.data)
+	return err
 }
 
 // Set sets the value specified
@@ -236,12 +251,26 @@ func PublicKeyHashFromBytes(data []byte) PublicKeyHash {
 // Bytes returns a byte slice containing the PublicKeyHash.
 func (hash *PublicKeyHash) Bytes() []byte { return hash.data[:] }
 
+// String converts to a string
+func (hash *PublicKeyHash) String() string { return fmt.Sprintf("%x", hash.data[:]) }
+
 // Serialize returns a byte slice with the PublicKeyHash in it.
 func (hash *PublicKeyHash) Serialize() ([]byte, error) { return hash.data[:], nil }
 
 // Write reads a PublicKeyHash from a bytes.Buffer
 func (hash *PublicKeyHash) Write(buf *bytes.Buffer) error {
 	return readLen(buf, hash.data[:])
+}
+
+// MarshalJSON converts to json.
+func (hash *PublicKeyHash) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%x\"", hash.data)), nil
+}
+
+// UnmarshalJSON converts from json.
+func (hash *PublicKeyHash) UnmarshalJSON(data []byte) error {
+	_, err := fmt.Sscanf(string(data), "\"%x\"", hash.data)
+	return err
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -265,12 +294,26 @@ func AssetCodeFromBytes(data []byte) AssetCode {
 // Bytes returns a byte slice containing the AssetCode.
 func (code *AssetCode) Bytes() []byte { return code.data[:] }
 
+// String converts to a string
+func (code *AssetCode) String() string { return fmt.Sprintf("%x", code.data[:]) }
+
 // Serialize returns a byte slice with the AssetCode in it.
 func (code *AssetCode) Serialize() ([]byte, error) { return code.data[:], nil }
 
 // Write reads a AssetCode from a bytes.Buffer
 func (code *AssetCode) Write(buf *bytes.Buffer) error {
 	return readLen(buf, code.data[:])
+}
+
+// MarshalJSON converts to json.
+func (code *AssetCode) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%x\"", code.data)), nil
+}
+
+// UnmarshalJSON converts from json.
+func (code *AssetCode) UnmarshalJSON(data []byte) error {
+	_, err := fmt.Sscanf(string(data), "\"%x\"", code.data)
+	return err
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -294,12 +337,26 @@ func ContractCodeFromBytes(data []byte) ContractCode {
 // Bytes returns a byte slice containing the ContractCode.
 func (code *ContractCode) Bytes() []byte { return code.data[:] }
 
+// String converts to a string
+func (code *ContractCode) String() string { return fmt.Sprintf("%x", code.data[:]) }
+
 // Serialize returns a byte slice with the ContractCode in it.
 func (code *ContractCode) Serialize() ([]byte, error) { return code.data[:], nil }
 
 // Write reads a ContractCode from a bytes.Buffer
 func (code *ContractCode) Write(buf *bytes.Buffer) error {
 	return readLen(buf, code.data[:])
+}
+
+// MarshalJSON converts to json.
+func (code *ContractCode) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%x\"", code.data)), nil
+}
+
+// UnmarshalJSON converts from json.
+func (code *ContractCode) UnmarshalJSON(data []byte) error {
+	_, err := fmt.Sscanf(string(data), "\"%x\"", code.data)
+	return err
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -316,6 +373,9 @@ func CurrentTimestamp() Timestamp {
 // Nano returns the nanoseconds since the Unix epoch for the Timestamp.
 func (time *Timestamp) Nano() uint64 { return time.nanoseconds }
 
+// String converts to a string
+func (time *Timestamp) String() string { return strconv.FormatUint(time.nanoseconds, 10) }
+
 // Serialize returns a byte slice with the Timestamp in it.
 func (time *Timestamp) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -331,4 +391,16 @@ func (time *Timestamp) Write(buf *bytes.Buffer) error {
 		return err
 	}
 	return nil
+}
+
+// MarshalJSON converts to json.
+func (time *Timestamp) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatUint(time.nanoseconds, 10)), nil
+}
+
+// UnmarshalJSON converts from json.
+func (time *Timestamp) UnmarshalJSON(data []byte) error {
+	var err error
+	time.nanoseconds, err = strconv.ParseUint(string(data), 10, 64)
+	return err
 }

@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	defaultEndian = binary.BigEndian
+	DefaultEndian = binary.BigEndian
 )
 
 // pad returns a []byte with the given length.
@@ -67,14 +67,14 @@ func lpad(b []byte, l int) []byte {
 
 // write writes the  value to the buffer.
 func write(buf io.Writer, v interface{}) error {
-	return binary.Write(buf, defaultEndian, v)
+	return binary.Write(buf, DefaultEndian, v)
 }
 
 // read fills the value with the appropriate number of bytes from the buffer.
 //
 // This is useful for fixed size types such as int, float etc.
 func read(buf io.Reader, v interface{}) error {
-	return binary.Read(buf, defaultEndian, v)
+	return binary.Read(buf, DefaultEndian, v)
 }
 
 // readLen reads the number of bytes from the buffer to fill the slice of
@@ -92,21 +92,21 @@ func PushDataScript(size uint64) []byte {
 		return []byte{OpPushdata1, byte(size)}
 	} else if size < OpPushdata2Max {
 		var buf bytes.Buffer
-		binary.Write(&buf, defaultEndian, OpPushdata2)
-		binary.Write(&buf, defaultEndian, uint16(size))
+		binary.Write(&buf, DefaultEndian, OpPushdata2)
+		binary.Write(&buf, DefaultEndian, uint16(size))
 		return buf.Bytes()
 	}
 
 	var buf bytes.Buffer
-	binary.Write(&buf, defaultEndian, OpPushdata4)
-	binary.Write(&buf, defaultEndian, uint32(size))
+	binary.Write(&buf, DefaultEndian, OpPushdata4)
+	binary.Write(&buf, DefaultEndian, uint32(size))
 	return buf.Bytes()
 }
 
 // ParsePushDataScript will parse a push data script and return its size
 func ParsePushDataScript(buf io.Reader) (uint64, error) {
 	var opCode byte
-	err := binary.Read(buf, defaultEndian, &opCode)
+	err := binary.Read(buf, DefaultEndian, &opCode)
 	if err != nil {
 		return 0, err
 	}
@@ -118,21 +118,21 @@ func ParsePushDataScript(buf io.Reader) (uint64, error) {
 	switch opCode {
 	case OpPushdata1:
 		var size uint8
-		err := binary.Read(buf, defaultEndian, &size)
+		err := binary.Read(buf, DefaultEndian, &size)
 		if err != nil {
 			return 0, err
 		}
 		return uint64(size), nil
 	case OpPushdata2:
 		var size uint16
-		err := binary.Read(buf, defaultEndian, &size)
+		err := binary.Read(buf, DefaultEndian, &size)
 		if err != nil {
 			return 0, err
 		}
 		return uint64(size), nil
 	case OpPushdata4:
 		var size uint32
-		err := binary.Read(buf, defaultEndian, &size)
+		err := binary.Read(buf, DefaultEndian, &size)
 		if err != nil {
 			return 0, err
 		}

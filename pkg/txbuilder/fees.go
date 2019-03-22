@@ -59,6 +59,10 @@ func (tx *Tx) EstimatedSize() int {
 	return result
 }
 
+func (tx *Tx) EstimatedFee() uint64 {
+	return uint64(float32(tx.EstimatedSize()) * tx.FeeRate)
+}
+
 // inputSum returns the sum of the values of the inputs.
 func (tx *Tx) inputSum() uint64 {
 	inputValue := uint64(0)

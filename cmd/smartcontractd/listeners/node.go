@@ -3,6 +3,7 @@ package listeners
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -63,6 +64,12 @@ func (server *Server) Stop(ctx context.Context) error {
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
+	data, err := json.MarshalIndent(tx, "", "  ")
+	if err != nil {
+		logger.Verbose(ctx, "Failed to marshal tx : %s", err)
+	} else {
+		logger.Verbose(ctx, "Broadcast Tx :\n%s", string(data))
+	}
 	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 		return err
 	}

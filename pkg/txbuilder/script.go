@@ -1,7 +1,12 @@
 package txbuilder
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"errors"
+
+	"github.com/tokenized/smart-contract/pkg/protocol"
+	"golang.org/x/crypto/ripemd160"
 )
 
 const (
@@ -104,4 +109,40 @@ func PubKeyHashFromP2PKH(script []byte) ([]byte, error) {
 	offset++
 
 	return script[3:23], nil
+}
+
+func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
+	buf := bytes.NewBuffer(script)
+
+	// Signature
+	size, err := protocol.ParsePushDataScript(buf)
+	if err != nil {
+		return nil, NotP2PKHScriptError
+	}
+
+	signature := make([]byte, size)
+	_, err = buf.Read(signature)
+	if err != nil {
+		return nil, NotP2PKHScriptError
+	}
+
+	// Public Key
+	size, err = protocol.ParsePushDataScript(buf)
+	if err != nil {
+		return nil, NotP2PKHScriptError
+	}
+
+	publicKey := make([]byte, size)
+	_, err = buf.Read(publicKey)
+	if err != nil {
+		return nil, NotP2PKHScriptError
+	}
+
+	// Hash public key
+	hash256 := sha256.New()
+	hash160 := ripemd160.New()
+
+	hash256.Write(publicKey)
+	hash160.Write(hash256.Sum(nil))
+	return hash160.Sum(nil), nil
 }

@@ -133,7 +133,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
 		logger.Info(ctx, "%s : Single contract settlement complete", v.TraceID)
-		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
+		if err := settleTx.Sign(ctx, []*btcec.PrivateKey{rk.PrivateKey}); err != nil {
 			return err
 		}
 		return node.Respond(ctx, w, settleTx.MsgTx)

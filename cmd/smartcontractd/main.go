@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -46,7 +48,8 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Logging
 
-	logFileName := filepath.FromSlash("tmp/main.log")
+	os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
+	logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
 	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
 	if err != nil {
 		fmt.Printf("Failed to open log file : %v\n", err)
@@ -60,6 +63,7 @@ func main() {
 	logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
+	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
 
 	// -------------------------------------------------------------------------
@@ -72,7 +76,7 @@ func main() {
 			Version      string  `envconfig:"VERSION"`
 			FeeAddress   string  `envconfig:"FEE_ADDRESS"`
 			FeeAmount    uint64  `envconfig:"FEE_AMOUNT"`
-			FeeRate      float32 `default:"1.25" envconfig:"FEE_RATE"`
+			FeeRate      float32 `default:"1.1" envconfig:"FEE_RATE"`
 			DustLimit    uint64  `default:"546" envconfig:"DUST_LIMIT"`
 		}
 		SpyNode struct {
@@ -275,9 +279,6 @@ var (
 	// 0x0d <Push next 13 bytes>
 	// 0x746f6b656e697a65642e636f6d <"tokenized.com">
 	tokenizedSignature = []byte{0x6a, 0x0d, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x69, 0x7a, 0x65, 0x64, 0x2e, 0x63, 0x6f, 0x6d}
-
-	// old targetVersion Protocol prefix
-	oldTokenizedTargetVersion = []byte{0x0, 0x0, 0x0, 0x20}
 )
 
 // Filters for transactions with tokenized.com op return scripts.
@@ -302,7 +303,7 @@ func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
 func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	containsTokenized := false
 	for _, output := range tx.TxOut {
-		if IsTokenizedOpReturn(output.PkScript) || IsOldTokenizedOpReturn(output.PkScript) {
+		if IsTokenizedOpReturn(output.PkScript) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches TokenizedFilter : %s", tx.TxHash().String())
 			containsTokenized = true
@@ -362,24 +363,4 @@ func IsTokenizedOpReturn(pkScript []byte) bool {
 		return false
 	}
 	return bytes.Equal(pkScript[:len(tokenizedSignature)], tokenizedSignature)
-}
-
-func IsOldTokenizedOpReturn(pkScript []byte) bool {
-	if len(pkScript) < 20 {
-		return false // This isn't long enough to be a sane message
-	}
-	if pkScript[0] != 0x6a {
-		return false // This isn't an OP_RETURN
-	}
-
-	version := make([]byte, 4)
-
-	// Get the version. Where that is, depends on the message structure.
-	if pkScript[1] < 0x4c { // single byte push op code
-		version = pkScript[2:6]
-	} else { // assume no more than two byte push op code
-		version = pkScript[3:7]
-	}
-
-	return bytes.Equal(version, oldTokenizedTargetVersion)
 }

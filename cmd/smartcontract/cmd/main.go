@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"context"
-	"time"
+
+	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-	"github.com/tokenized/smart-contract/internal/platform/node"
 )
 
 var scCmd = &cobra.Command{
@@ -16,6 +17,7 @@ var scCmd = &cobra.Command{
 
 func Execute() {
 	scCmd.AddCommand(cmdSync)
+	scCmd.AddCommand(cmdBuild)
 	scCmd.Execute()
 }
 
@@ -23,7 +25,7 @@ func Execute() {
 func Context() context.Context {
 	values := node.Values{
 		TraceID: uuid.New().String(),
-		Now:     time.Now(),
+		Now:     protocol.CurrentTimestamp(),
 	}
 
 	return context.WithValue(context.Background(), node.KeyValues, &values)

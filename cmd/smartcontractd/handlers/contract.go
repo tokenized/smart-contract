@@ -48,16 +48,16 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	// The contract should not exist already
 	if ct != nil {
-		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
-	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
+	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.ContractFormation{}
 
-	err = platform.Convert(msg, cf)
+	err = platform.Convert(msg, &cf)
 	if err != nil {
 		return err
 	}
@@ -108,14 +108,14 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Contract could not be found
 	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr.String())
 		return node.ErrNoResponse
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.Assets)) {
-		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr)
+		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
@@ -128,13 +128,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// TODO Verify RefTxID data
 	//msg.RefTxID               []byte
 
-	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractAddr)
+	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractAddr.String())
 
 	// Contract Formation <- Contract Amendment
 	cf := protocol.ContractFormation{}
 
 	// Get current state
-	err = platform.Convert(ct, cf)
+	err = platform.Convert(ct, &cf)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
 		}
-		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractAddr)
+		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractAddr.String())
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -513,7 +513,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
-		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr)
+		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
 	}
 
 	return nil

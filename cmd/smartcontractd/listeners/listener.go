@@ -32,7 +32,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	// Check if transaction relates to protocol
 	itx, err := inspector.NewTransactionFromWire(ctx, tx)
 	if err != nil {
-		logger.Warn(ctx, "Failed to create inspector tx : %s", err.Error())
+		logger.Warn(ctx, "Failed to create inspector tx : %s", err)
 		return false, err
 	}
 
@@ -44,7 +44,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 
 	// Promote TX
 	if err := itx.Promote(ctx, server.RpcNode, &server.Config.ChainParams); err != nil {
-		logger.Fatal(ctx, "Failed to promote inspector tx : %s", err.Error())
+		logger.Fatal(ctx, "Failed to promote inspector tx : %s", err)
 		return false, err
 	}
 
@@ -61,7 +61,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				return server.processTx(ctx, itx)
+				err := server.processTx(ctx, itx)
+				if err != nil {
+					logger.Warn(ctx, "Failed to process safe tx : %s", err)
+				}
+				return err
 			}
 		}
 
@@ -74,7 +78,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				return server.processTx(ctx, itx)
+				err := server.processTx(ctx, itx)
+				if err != nil {
+					logger.Warn(ctx, "Failed to process confirm tx : %s", err)
+				}
+				return err
 			}
 		}
 
@@ -82,7 +90,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from unsafeRequests
 				server.unsafeRequests = append(server.unsafeRequests[:i], server.unsafeRequests[i+1:]...)
-				return server.processTx(ctx, itx)
+				err := server.processTx(ctx, itx)
+				if err != nil {
+					logger.Warn(ctx, "Failed to process unsafe confirm tx : %s", err)
+				}
+				return err
 			}
 		}
 
@@ -137,6 +149,9 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	for _, pendingTx := range pending {
 		logger.Info(ctx, "Sending pending response: %s", pendingTx.TxHash().String())
 		if err := server.sendTx(ctx, pendingTx); err != nil {
+			if err != nil {
+				logger.Warn(ctx, "Failed to send tx : %s", err)
+			}
 			return err // TODO Probably a fatal error
 		}
 	}
