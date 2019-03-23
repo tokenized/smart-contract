@@ -179,6 +179,7 @@ type Input struct {
 type Output struct {
 	IsChange bool
 	IsDust   bool
+	addedForFee bool
 }
 
 // InputAddress returns the address that is paying to the input

@@ -6,6 +6,7 @@ const (
 	ErrorCodeInsufficientValue = 1
 	ErrorCodeWrongPrivateKey   = 2
 	ErrorCodeMissingPrivateKey = 3
+	ErrorCodeNotP2PKHScript    = 4
 )
 
 func IsErrorCode(err error, code int) bool {

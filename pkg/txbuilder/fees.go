@@ -126,6 +126,10 @@ func (tx *Tx) adjustFee(amount int64) error {
 
 		// Check if change is below dust
 		if uint64(tx.MsgTx.TxOut[changeOutputIndex].Value) < tx.DustLimit {
+			if !tx.Outputs[changeOutputIndex].addedForFee {
+				// Don't remove outputs unless they were added by fee adjustment
+				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
+			}
 			// Remove change output since it is less than dust. Dust will go to miner.
 			tx.MsgTx.TxOut = append(tx.MsgTx.TxOut[:changeOutputIndex], tx.MsgTx.TxOut[changeOutputIndex+1:]...)
 		}
@@ -135,6 +139,7 @@ func (tx *Tx) adjustFee(amount int64) error {
 			// Add a change output if it would be more than the dust limit
 			if uint64(-amount) > tx.DustLimit {
 				tx.AddP2PKHOutput(tx.ChangePKH, uint64(-amount), true)
+				tx.Outputs[len(tx.Outputs)-1].addedForFee = true
 			}
 			return nil
 		}

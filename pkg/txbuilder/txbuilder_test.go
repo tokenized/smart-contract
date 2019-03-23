@@ -63,7 +63,7 @@ func TestTx(t *testing.T) {
 
 	// Test wrong private key
 	err = tx.Sign([]*btcec.PrivateKey{key2})
-	if err != MissingPrivateKeyError {
+	if IsErrorCode(err, ErrorCodeWrongPrivateKey) {
 		if err != nil {
 			t.Errorf("Failed to return wrong private key error : %s", err)
 		} else {
@@ -75,7 +75,7 @@ func TestTx(t *testing.T) {
 	// Test bad PkScript
 	txMalformed := NewTx(pkh, 500, 1.0)
 	err = txMalformed.AddInput(wire.OutPoint{Hash: inputTx.MsgTx.TxHash(), Index: 0}, append(inputTx.MsgTx.TxOut[0].PkScript, 5), uint64(inputTx.MsgTx.TxOut[0].Value))
-	if err != NotP2PKHScriptError {
+	if IsErrorCode(err, ErrorCodeNotP2PKHScript) {
 		if err != nil {
 			t.Errorf("Failed to return \"Not P2PKH Script\" error : %s", err)
 		} else {

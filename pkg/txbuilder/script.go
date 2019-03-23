@@ -79,32 +79,32 @@ func P2PKHScriptForPKH(pkh []byte) []byte {
 
 func PubKeyHashFromP2PKH(script []byte) ([]byte, error) {
 	if len(script) != 25 {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Wrong length")
 	}
 
 	offset := 0
 	if script[offset] != OP_DUP {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Missing OP_DUP")
 	}
 	offset++
 
 	if script[offset] != OP_HASH160 {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Missing OP_HASH160")
 	}
 	offset++
 
 	if script[offset] != OP_PUSH_DATA_20 { // Single byte push op for 20 bytes
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Missing OP_PUSH_DATA_20")
 	}
 	offset += 21 // Skip push op code and data
 
 	if script[offset] != OP_EQUALVERIFY {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Missing OP_EQUALVERIFY")
 	}
 	offset++
 
 	if script[offset] != OP_CHECKSIG {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, "Missing OP_CHECKSIG")
 	}
 	offset++
 
@@ -117,25 +117,25 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	// Signature
 	size, err := protocol.ParsePushDataScript(buf)
 	if err != nil {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
 
 	signature := make([]byte, size)
 	_, err = buf.Read(signature)
 	if err != nil {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
 
 	// Public Key
 	size, err = protocol.ParsePushDataScript(buf)
 	if err != nil {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
 
 	publicKey := make([]byte, size)
 	_, err = buf.Read(publicKey)
 	if err != nil {
-		return nil, NotP2PKHScriptError
+		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
 
 	// Hash public key
