@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcd/btcec"
 )
 
 var (
@@ -30,11 +31,10 @@ var (
 
 // Error handles all error responses for the API.
 func Error(ctx context.Context, w *ResponseWriter, err error) {
-	logger.Error(ctx, "%s", err)
 	// switch errors.Cause(err) {
 	// }
 
-	// This should simply log the message somewhere
+	logger.Error(ctx, "%s", err)
 }
 
 // RespondReject sends a rejection message

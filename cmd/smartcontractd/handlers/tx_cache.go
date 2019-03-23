@@ -3,8 +3,9 @@ package handlers
 import (
 	"context"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 type TxCache struct {

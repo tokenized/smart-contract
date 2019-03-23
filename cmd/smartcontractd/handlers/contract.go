@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -17,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/btcsuite/btcutil"
 	"go.opencensus.io/trace"
 )
 
@@ -74,12 +74,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
-	// 3 - Fee
 	w.AddOutput(ctx, contractAddress, 0)
 	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
-
-	// Add fee output
-	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -168,7 +164,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
-	// 3 - Fee
 	w.AddOutput(ctx, contractAddress, 0)
 
 	// Issuer change. New issuer in second input
@@ -187,9 +182,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// if msg.ChangeOperatorAddress {
 
 	// }
-
-	// Add fee output
-	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)

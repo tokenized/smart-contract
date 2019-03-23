@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
 const (
@@ -79,7 +81,7 @@ func Deserialize(b []byte) (OpReturnMessage, error) {
 
 	// Parse push op code for payload length + 3 for version and message type code
 	var payloadSize uint64
-	payloadSize, err = ParsePushDataScript(buf)
+	payloadSize, err = txbuilder.ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +151,7 @@ func Serialize(msg OpReturnMessage) ([]byte, error) {
 	}
 
 	// Write push op code for payload length + 3 for version and message type code
-	_, err = buf.Write(PushDataScript(uint64(len(payload)) + 3))
+	_, err = buf.Write(txbuilder.PushDataScript(uint64(len(payload)) + 3))
 	if err != nil {
 		return nil, err
 	}

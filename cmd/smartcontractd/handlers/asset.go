@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform"
@@ -16,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/btcsuite/btcutil"
 	"go.opencensus.io/trace"
 )
 

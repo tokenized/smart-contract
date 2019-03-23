@@ -1134,6 +1134,7 @@ type ContractOffer struct {
 	IssuerType                 byte           `json:"issuer_type,omitempty"`                   // P - Public Company Limited by Shares, C - Private Company Limited by Shares, I - Individual, L - Limited Partnership, U -Unlimited Partnership, T - Sole Proprietorship, S - Statutory Company, O - Non-Profit Organization, N - Nation State, G - Government Agency, U - Unit Trust, D - Discretionary Trust.  Found in 'Entities' (Specification/Resources).
 	IssuerLEI                  string         `json:"issuer_lei,omitempty"`                    // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
 	IssuerLogoURL              string         `json:"issuer_logo_url,omitempty"`               // The URL of the Issuers logo.
+	ContractOperatorIncluded   bool           `json:"contract_operator_included,omitempty"`    // If true, then the second input is a contract operator. If false, then all additional inputs are just funding.
 	ContractOperatorID         string         `json:"contract_operator_id,omitempty"`          // Length 0-255 bytes. 0 is valid. Smart Contract Operator identifier. Can be any unique identifying string, including human readable names for branding/vanity purposes. Can also be null or the Issuer.
 	OperatorLEI                string         `json:"operator_lei,omitempty"`                  // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
 	ContractAuthFlags          [16]byte       `json:"contract_auth_flags,omitempty"`           // Authorization Flags aka Terms and Conditions that the smart contract can enforce.  Other terms and conditions that are out of the smart contract's control are listed in the actual Contract File.
@@ -1298,6 +1299,13 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		return nil, err
 	}
 	// fmt.Printf("Serialized IssuerLogoURL : buf len %d\n", buf.Len())
+
+	// ContractOperatorIncluded (bool)
+	// fmt.Printf("Serializing ContractOperatorIncluded\n")
+	if err := write(buf, action.ContractOperatorIncluded); err != nil {
+		return nil, err
+	}
+	// fmt.Printf("Serialized ContractOperatorIncluded : buf len %d\n", buf.Len())
 
 	// ContractOperatorID (string)
 	// fmt.Printf("Serializing ContractOperatorID\n")
@@ -1635,6 +1643,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 
 	// fmt.Printf("Read IssuerLogoURL : %d bytes remaining\n%+v\n", buf.Len(), action.IssuerLogoURL)
 
+	// ContractOperatorIncluded (bool)
+	// fmt.Printf("Reading ContractOperatorIncluded : %d bytes remaining\n", buf.Len())
+	if err := read(buf, &action.ContractOperatorIncluded); err != nil {
+		return 0, err
+	}
+
+	// fmt.Printf("Read ContractOperatorIncluded : %d bytes remaining\n%+v\n", buf.Len(), action.ContractOperatorIncluded)
+
 	// ContractOperatorID (string)
 	// fmt.Printf("Reading ContractOperatorID : %d bytes remaining\n", buf.Len())
 	{
@@ -1913,6 +1929,7 @@ func (action ContractOffer) String() string {
 	vals = append(vals, fmt.Sprintf("IssuerType:%#+v", action.IssuerType))
 	vals = append(vals, fmt.Sprintf("IssuerLEI:%#+v", action.IssuerLEI))
 	vals = append(vals, fmt.Sprintf("IssuerLogoURL:%#+v", action.IssuerLogoURL))
+	vals = append(vals, fmt.Sprintf("ContractOperatorIncluded:%#+v", action.ContractOperatorIncluded))
 	vals = append(vals, fmt.Sprintf("ContractOperatorID:%#+v", action.ContractOperatorID))
 	vals = append(vals, fmt.Sprintf("OperatorLEI:%#+v", action.OperatorLEI))
 	vals = append(vals, fmt.Sprintf("ContractAuthFlags:%#+v", action.ContractAuthFlags))

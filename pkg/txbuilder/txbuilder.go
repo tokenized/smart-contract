@@ -177,8 +177,8 @@ type Input struct {
 }
 
 type Output struct {
-	IsChange bool
-	IsDust   bool
+	IsChange    bool
+	IsDust      bool
 	addedForFee bool
 }
 

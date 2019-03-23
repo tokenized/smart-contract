@@ -18,19 +18,22 @@ const (
 	//   Public key push to stack = 34
 	//       push size = 1 byte
 	//       public key size = 33 bytes
-	estimatedInputSize = 32 + 4 + 2 + 75 + 34
+	EstimatedInputSize = 32 + 4 + 2 + 75 + 34
 
 	// P2PKH/P2SH output size 33
 	//   amount = 8 bytes
 	//   script size = 1 byte
 	//   Script (24 bytes) OP_DUP OP_HASH160 <PUB KEY/SCRIPT HASH (20 bytes)> OP_EQUALVERIFY
 	//     OP_CHECKSIG
-	// estimatedOutputSize = 8 + 25
+	P2PKHOutputSize = 8 + 25
+
+	// Size of output not including script
+	OutputBaseSize = 8
 
 	// BaseTxFee is the size of the tx not included in inputs and outputs.
 	//   Version = 4 bytes
 	//   LockTime = 4 bytes
-	baseTxSize = 8
+	BaseTxSize = 8
 )
 
 // The fee should be estimated before signing, then after signing the fee should be checked.
@@ -43,14 +46,14 @@ func (tx *Tx) Fee() uint64 {
 // EstimatedSize returns the estimated size in bytes of the tx after signatures are added.
 // It assumes all inputs are P2PKH.
 func (tx *Tx) EstimatedSize() int {
-	result := baseTxSize + wire.VarIntSerializeSize(uint64(len(tx.MsgTx.TxIn))) +
+	result := BaseTxSize + wire.VarIntSerializeSize(uint64(len(tx.MsgTx.TxIn))) +
 		wire.VarIntSerializeSize(uint64(len(tx.MsgTx.TxOut)))
 
 	for _, input := range tx.MsgTx.TxIn {
 		if len(input.SignatureScript) > 0 {
 			result += input.SerializeSize()
 		} else {
-			result += estimatedInputSize
+			result += EstimatedInputSize
 		}
 	}
 

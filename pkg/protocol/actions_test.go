@@ -488,14 +488,17 @@ func TestContractOffer(t *testing.T) {
 	// IssuerLogoURL (varchar)
 	initialMessage.IssuerLogoURL = "Text 12"
 
+	// ContractOperatorIncluded (bool)
+	// bool test not setup
+
 	// ContractOperatorID (varchar)
-	initialMessage.ContractOperatorID = "Text 13"
+	initialMessage.ContractOperatorID = "Text 14"
 
 	// OperatorLEI (fixedchar)
 	{
 		text := make([]byte, 0, 20)
 		for i := uint64(0); i < 20; i++ {
-			text = append(text, byte(65+i+14))
+			text = append(text, byte(65+i+15))
 		}
 		initialMessage.OperatorLEI = string(text)
 	}
@@ -526,22 +529,22 @@ func TestContractOffer(t *testing.T) {
 	// bool test not setup
 
 	// UnitNumber (varchar)
-	initialMessage.UnitNumber = "Text 22"
+	initialMessage.UnitNumber = "Text 23"
 
 	// BuildingNumber (varchar)
-	initialMessage.BuildingNumber = "Text 23"
+	initialMessage.BuildingNumber = "Text 24"
 
 	// Street (varchar)
-	initialMessage.Street = "Text 24"
+	initialMessage.Street = "Text 25"
 
 	// SuburbCity (varchar)
-	initialMessage.SuburbCity = "Text 25"
+	initialMessage.SuburbCity = "Text 26"
 
 	// TerritoryStateProvinceCode (fixedchar)
 	{
 		text := make([]byte, 0, 5)
 		for i := uint64(0); i < 5; i++ {
-			text = append(text, byte(65+i+26))
+			text = append(text, byte(65+i+27))
 		}
 		initialMessage.TerritoryStateProvinceCode = string(text)
 	}
@@ -550,19 +553,19 @@ func TestContractOffer(t *testing.T) {
 	{
 		text := make([]byte, 0, 3)
 		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+27))
+			text = append(text, byte(65+i+28))
 		}
 		initialMessage.CountryCode = string(text)
 	}
 
 	// PostalZIPCode (varchar)
-	initialMessage.PostalZIPCode = "Text 28"
+	initialMessage.PostalZIPCode = "Text 29"
 
 	// EmailAddress (varchar)
-	initialMessage.EmailAddress = "Text 29"
+	initialMessage.EmailAddress = "Text 30"
 
 	// PhoneNumber (varchar)
-	initialMessage.PhoneNumber = "Text 30"
+	initialMessage.PhoneNumber = "Text 31"
 
 	// KeyRoles (KeyRole[])
 	for i := 0; i < 2; i++ {
@@ -667,6 +670,9 @@ func TestContractOffer(t *testing.T) {
 	if initialMessage.IssuerLogoURL != decodedMessage.IssuerLogoURL {
 		t.Errorf("IssuerLogoURL doesn't match : %s != %s", initialMessage.IssuerLogoURL, decodedMessage.IssuerLogoURL)
 	}
+
+	// ContractOperatorIncluded (bool)
+	// bool test compare not setup
 
 	// ContractOperatorID (varchar)
 	if initialMessage.ContractOperatorID != decodedMessage.ContractOperatorID {

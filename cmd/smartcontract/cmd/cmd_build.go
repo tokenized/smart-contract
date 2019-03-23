@@ -106,9 +106,9 @@ var cmdBuild = &cobra.Command{
 			}
 
 			// Fund contract to be able to post contract formation
-			funding := tx.EstimatedFee() * 2
-			funding += theClient.Config.ContractFee
-			funding += (theClient.Config.DustLimit * 2)
+			estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, theClient.Config.DustLimit)
+			funding = uint64(float32(funding) * 1.1) // Add 10% buffer
+			funding += uint64(float32(estimatedSize) * theClient.Config.FeeRate) // Add response tx fee
 			err = tx.AddValueToOutput(0, funding)
 			if err != nil {
 				return errors.Wrap(err, "Failed to add estimated funding to contract output of tx")

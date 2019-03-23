@@ -3,9 +3,11 @@ package txbuilder
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 
-	"github.com/tokenized/smart-contract/pkg/protocol"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -17,10 +19,34 @@ const (
 	OP_PUSH_DATA_20 = 0x14
 	OP_EQUALVERIFY  = 0x88
 	OP_CHECKSIG     = 0xac
+
+	// OP_MAX_SINGLE_BYTE_PUSH_DATA represents the max length for a single byte push
+	OP_MAX_SINGLE_BYTE_PUSH_DATA = byte(0x4b)
+
+	// OP_PUSH_DATA_1 represent the OP_PUSHDATA1 opcode.
+	OP_PUSH_DATA_1 = byte(0x4c)
+
+	// OP_PUSH_DATA_2 represents the OP_PUSHDATA2 opcode.
+	OP_PUSH_DATA_2 = byte(0x4d)
+
+	// OP_PUSH_DATA_4 represents the OP_PUSHDATA4 opcode.
+	OP_PUSH_DATA_4 = byte(0x4e)
+
+	// OP_PUSH_DATA_1_MAX is the maximum number of bytes that can be used in the
+	// OP_PUSHDATA1 opcode.
+	OP_PUSH_DATA_1_MAX = uint64(255)
+
+	// OP_PUSH_DATA_2_MAX is the maximum number of bytes that can be used in the
+	// OP_PUSHDATA2 opcode.
+	OP_PUSH_DATA_2_MAX = uint64(65535)
 )
 
 var (
 	NotP2PKHScriptError = errors.New("Not a P2PKH script")
+)
+
+var (
+	endian = binary.BigEndian
 )
 
 // IsOpReturn returns true if the script is an OP_RETURN output script.
@@ -115,7 +141,7 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	buf := bytes.NewBuffer(script)
 
 	// Signature
-	size, err := protocol.ParsePushDataScript(buf)
+	size, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
@@ -127,7 +153,7 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	}
 
 	// Public Key
-	size, err = protocol.ParsePushDataScript(buf)
+	size, err = ParsePushDataScript(buf)
 	if err != nil {
 		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
 	}
@@ -145,4 +171,62 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	hash256.Write(publicKey)
 	hash160.Write(hash256.Sum(nil))
 	return hash160.Sum(nil), nil
+}
+
+// PushDataScript prepares a push data script based on the given size
+func PushDataScript(size uint64) []byte {
+	if size <= uint64(OP_MAX_SINGLE_BYTE_PUSH_DATA) {
+		return []byte{byte(size)} // Single byte push
+	} else if size < OP_PUSH_DATA_1_MAX {
+		return []byte{OP_PUSH_DATA_1, byte(size)}
+	} else if size < OP_PUSH_DATA_2_MAX {
+		var buf bytes.Buffer
+		binary.Write(&buf, endian, OP_PUSH_DATA_2)
+		binary.Write(&buf, endian, uint16(size))
+		return buf.Bytes()
+	}
+
+	var buf bytes.Buffer
+	binary.Write(&buf, endian, OP_PUSH_DATA_4)
+	binary.Write(&buf, endian, uint32(size))
+	return buf.Bytes()
+}
+
+// ParsePushDataScript will parse a push data script and return its size
+func ParsePushDataScript(buf io.Reader) (uint64, error) {
+	var opCode byte
+	err := binary.Read(buf, endian, &opCode)
+	if err != nil {
+		return 0, err
+	}
+
+	if opCode <= OP_MAX_SINGLE_BYTE_PUSH_DATA {
+		return uint64(opCode), nil
+	}
+
+	switch opCode {
+	case OP_PUSH_DATA_1:
+		var size uint8
+		err := binary.Read(buf, endian, &size)
+		if err != nil {
+			return 0, err
+		}
+		return uint64(size), nil
+	case OP_PUSH_DATA_2:
+		var size uint16
+		err := binary.Read(buf, endian, &size)
+		if err != nil {
+			return 0, err
+		}
+		return uint64(size), nil
+	case OP_PUSH_DATA_4:
+		var size uint32
+		err := binary.Read(buf, endian, &size)
+		if err != nil {
+			return 0, err
+		}
+		return uint64(size), nil
+	default:
+		return 0, fmt.Errorf("Invalid push data op code : 0x%02x", opCode)
+	}
 }
