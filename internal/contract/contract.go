@@ -65,6 +65,9 @@ func Create(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 	if c.Registries == nil {
 		c.Registries = []state.Registry{}
 	}
+	if c.ActionFee == nil {
+		c.ActionFee = []protocol.Fee{}
+	}
 	if c.KeyRoles == nil {
 		c.KeyRoles = []state.KeyRole{}
 	}
@@ -140,6 +143,12 @@ func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 	}
 	if upd.ContractAuthFlags != nil {
 		c.ContractAuthFlags = *upd.ContractAuthFlags
+	}
+	if upd.ActionFee != nil {
+		c.ActionFee = *upd.ActionFee
+		if c.ActionFee == nil {
+			c.ActionFee = []protocol.Fee{}
+		}
 	}
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems

@@ -367,8 +367,44 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract phone (%s) : %s", v.TraceID, ct.ContractName, *uc.PhoneNumber)
 		}
 
+		// Check if action fee is different
+		different := len(ct.ActionFee) != len(msg.ActionFee)
+		if !different {
+			for i, actionFee := range ct.ActionFee {
+				if !bytes.Equal(actionFee.Contract.Bytes(), msg.ActionFee[i].Contract.Bytes()) {
+					different = true
+					break
+				}
+				if actionFee.AssetType != msg.ActionFee[i].AssetType {
+					different = true
+					break
+				}
+				if !bytes.Equal(actionFee.AssetCode.Bytes(), msg.ActionFee[i].AssetCode.Bytes()) {
+					different = true
+					break
+				}
+				if actionFee.FixedRate != msg.ActionFee[i].FixedRate {
+					different = true
+					break
+				}
+			}
+		}
+
+		if different {
+			newActionFees := make([]protocol.Fee, 0, len(msg.ActionFee))
+			for _, actionFee := range msg.ActionFee {
+				var newActionFee protocol.Fee
+				err := platform.Convert(ctx, &actionFee, &newActionFee)
+				if err != nil {
+					return err
+				}
+				newActionFees = append(newActionFees, newActionFee)
+			}
+			uc.ActionFee = &newActionFees
+		}
+
 		// Check if key roles are different
-		different := len(ct.KeyRoles) != len(msg.KeyRoles)
+		different = len(ct.KeyRoles) != len(msg.KeyRoles)
 		if !different {
 			for i, keyRole := range ct.KeyRoles {
 				if keyRole.Type != msg.KeyRoles[i].Type || keyRole.Name != msg.KeyRoles[i].Name {

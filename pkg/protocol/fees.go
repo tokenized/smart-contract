@@ -44,7 +44,7 @@ func EstimatedResponse(requestTx *wire.MsgTx, dustLimit uint64) (int, uint64, er
 		// 1 input from contract
 		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
 
-		// P2PKH dust output to contract + op return output
+		// P2PKH dust output to contract, and op return output
 		size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
 		value += dustLimit
 

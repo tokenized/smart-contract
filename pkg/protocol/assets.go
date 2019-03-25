@@ -57,14 +57,13 @@ func AssetTypeMapping(code string) PayloadMessage {
 
 // Coupon asset type.
 type Coupon struct {
-	Version            uint8
-	TradingRestriction []byte
-	RedeemingEntity    string
-	IssueDate          Timestamp
-	ExpiryDate         Timestamp
-	Value              uint64
-	Currency           string
-	Description        string
+	Version         uint8     `json:"version,omitempty"`          // Payload Version
+	RedeemingEntity string    `json:"redeeming_entity,omitempty"` //
+	IssueDate       Timestamp `json:"issue_date,omitempty"`       //
+	ExpiryDate      Timestamp `json:"expiry_date,omitempty"`      //
+	Value           uint64    `json:"value,omitempty"`            //
+	Currency        string    `json:"currency,omitempty"`         //
+	Description     string    `json:"description,omitempty"`      //
 }
 
 // Type returns the type identifer for this message.
@@ -100,13 +99,8 @@ func (m *Coupon) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
 	// RedeemingEntity (string)
-	if err := WriteVarChar(buf, m.RedeemingEntity, 255); err != nil {
+	if err := WriteVarChar(buf, m.RedeemingEntity, 8); err != nil {
 		return nil, err
 	}
 
@@ -146,16 +140,10 @@ func (m *Coupon) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
-		return 0, err
-	}
-
 	// RedeemingEntity (string)
 	{
 		var err error
-		m.RedeemingEntity, err = ReadVarChar(buf, 255)
+		m.RedeemingEntity, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -200,7 +188,6 @@ func (m Coupon) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
 	vals = append(vals, fmt.Sprintf("RedeemingEntity:%#+v", m.RedeemingEntity))
 	vals = append(vals, fmt.Sprintf("IssueDate:%#+v", m.IssueDate))
 	vals = append(vals, fmt.Sprintf("ExpiryDate:%#+v", m.ExpiryDate))
@@ -213,11 +200,10 @@ func (m Coupon) String() string {
 
 // Currency asset type.
 type Currency struct {
-	Version            uint8
-	TradingRestriction []byte
-	ISOCode            string
-	MonetaryAuthority  string
-	Description        string
+	Version           uint8  `json:"version,omitempty"`            // Payload Version
+	ISOCode           string `json:"iso_code,omitempty"`           //
+	MonetaryAuthority string `json:"monetary_authority,omitempty"` //
+	Description       string `json:"description,omitempty"`        //
 }
 
 // Type returns the type identifer for this message.
@@ -253,23 +239,18 @@ func (m *Currency) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
 	// ISOCode (string)
 	if err := WriteFixedChar(buf, m.ISOCode, 3); err != nil {
 		return nil, err
 	}
 
 	// MonetaryAuthority (string)
-	if err := WriteVarChar(buf, m.MonetaryAuthority, 255); err != nil {
+	if err := WriteVarChar(buf, m.MonetaryAuthority, 8); err != nil {
 		return nil, err
 	}
 
 	// Description (string)
-	if err := WriteVarChar(buf, m.Description, 255); err != nil {
+	if err := WriteVarChar(buf, m.Description, 16); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -281,12 +262,6 @@ func (m *Currency) Write(b []byte) (int, error) {
 
 	// Version (uint8)
 	if err := read(buf, &m.Version); err != nil {
-		return 0, err
-	}
-
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
 		return 0, err
 	}
 
@@ -302,7 +277,7 @@ func (m *Currency) Write(b []byte) (int, error) {
 	// MonetaryAuthority (string)
 	{
 		var err error
-		m.MonetaryAuthority, err = ReadVarChar(buf, 255)
+		m.MonetaryAuthority, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -311,7 +286,7 @@ func (m *Currency) Write(b []byte) (int, error) {
 	// Description (string)
 	{
 		var err error
-		m.Description, err = ReadVarChar(buf, 255)
+		m.Description, err = ReadVarChar(buf, 16)
 		if err != nil {
 			return 0, err
 		}
@@ -323,7 +298,6 @@ func (m Currency) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
 	vals = append(vals, fmt.Sprintf("ISOCode:%#+v", m.ISOCode))
 	vals = append(vals, fmt.Sprintf("MonetaryAuthority:%#+v", m.MonetaryAuthority))
 	vals = append(vals, fmt.Sprintf("Description:%#+v", m.Description))
@@ -333,14 +307,13 @@ func (m Currency) String() string {
 
 // LoyaltyPoints asset type.
 type LoyaltyPoints struct {
-	Version             uint8
-	TradingRestriction  []byte
-	AgeRestriction      []byte
-	OfferType           byte
-	OfferName           string
-	ValidFrom           Timestamp
-	ExpirationTimestamp Timestamp
-	Description         string
+	Version             uint8     `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
+	OfferType           byte      `json:"offer_type,omitempty"`           //
+	OfferName           string    `json:"offer_name,omitempty"`           //
+	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
+	Description         string    `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -376,13 +349,8 @@ func (m *LoyaltyPoints) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
-	// AgeRestriction ([]byte)
-	if err := write(buf, pad(m.AgeRestriction, 5)); err != nil {
+	// AgeRestriction (uint8)
+	if err := write(buf, m.AgeRestriction); err != nil {
 		return nil, err
 	}
 
@@ -392,7 +360,7 @@ func (m *LoyaltyPoints) Serialize() ([]byte, error) {
 	}
 
 	// OfferName (string)
-	if err := WriteVarChar(buf, m.OfferName, 255); err != nil {
+	if err := WriteVarChar(buf, m.OfferName, 8); err != nil {
 		return nil, err
 	}
 
@@ -422,15 +390,8 @@ func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
-		return 0, err
-	}
-
-	// AgeRestriction ([]byte)
-	m.AgeRestriction = make([]byte, 5)
-	if err := readLen(buf, m.AgeRestriction); err != nil {
+	// AgeRestriction (uint8)
+	if err := read(buf, &m.AgeRestriction); err != nil {
 		return 0, err
 	}
 
@@ -442,7 +403,7 @@ func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 	// OfferName (string)
 	{
 		var err error
-		m.OfferName, err = ReadVarChar(buf, 255)
+		m.OfferName, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -473,8 +434,7 @@ func (m LoyaltyPoints) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
-	vals = append(vals, fmt.Sprintf("AgeRestriction:%#x", m.AgeRestriction))
+	vals = append(vals, fmt.Sprintf("AgeRestriction:%#+v", m.AgeRestriction))
 	vals = append(vals, fmt.Sprintf("OfferType:%#+v", m.OfferType))
 	vals = append(vals, fmt.Sprintf("OfferName:%#+v", m.OfferName))
 	vals = append(vals, fmt.Sprintf("ValidFrom:%#+v", m.ValidFrom))
@@ -486,14 +446,13 @@ func (m LoyaltyPoints) String() string {
 
 // Membership asset type.
 type Membership struct {
-	Version             uint8
-	TradingRestriction  []byte
-	AgeRestriction      []byte
-	ValidFrom           Timestamp
-	ExpirationTimestamp Timestamp
-	ID                  string
-	MembershipType      string
-	Description         string
+	Version             uint8     `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
+	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
+	ID                  string    `json:"id,omitempty"`                   //
+	MembershipType      string    `json:"membership_type,omitempty"`      //
+	Description         string    `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -529,13 +488,8 @@ func (m *Membership) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
-	// AgeRestriction ([]byte)
-	if err := write(buf, pad(m.AgeRestriction, 5)); err != nil {
+	// AgeRestriction (uint8)
+	if err := write(buf, m.AgeRestriction); err != nil {
 		return nil, err
 	}
 
@@ -550,12 +504,12 @@ func (m *Membership) Serialize() ([]byte, error) {
 	}
 
 	// ID (string)
-	if err := WriteVarChar(buf, m.ID, 255); err != nil {
+	if err := WriteVarChar(buf, m.ID, 8); err != nil {
 		return nil, err
 	}
 
 	// MembershipType (string)
-	if err := WriteVarChar(buf, m.MembershipType, 255); err != nil {
+	if err := WriteVarChar(buf, m.MembershipType, 8); err != nil {
 		return nil, err
 	}
 
@@ -575,15 +529,8 @@ func (m *Membership) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
-		return 0, err
-	}
-
-	// AgeRestriction ([]byte)
-	m.AgeRestriction = make([]byte, 5)
-	if err := readLen(buf, m.AgeRestriction); err != nil {
+	// AgeRestriction (uint8)
+	if err := read(buf, &m.AgeRestriction); err != nil {
 		return 0, err
 	}
 
@@ -600,7 +547,7 @@ func (m *Membership) Write(b []byte) (int, error) {
 	// ID (string)
 	{
 		var err error
-		m.ID, err = ReadVarChar(buf, 255)
+		m.ID, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -609,7 +556,7 @@ func (m *Membership) Write(b []byte) (int, error) {
 	// MembershipType (string)
 	{
 		var err error
-		m.MembershipType, err = ReadVarChar(buf, 255)
+		m.MembershipType, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -630,8 +577,7 @@ func (m Membership) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
-	vals = append(vals, fmt.Sprintf("AgeRestriction:%#x", m.AgeRestriction))
+	vals = append(vals, fmt.Sprintf("AgeRestriction:%#+v", m.AgeRestriction))
 	vals = append(vals, fmt.Sprintf("ValidFrom:%#+v", m.ValidFrom))
 	vals = append(vals, fmt.Sprintf("ExpirationTimestamp:%#+v", m.ExpirationTimestamp))
 	vals = append(vals, fmt.Sprintf("ID:%#+v", m.ID))
@@ -643,12 +589,11 @@ func (m Membership) String() string {
 
 // ShareCommon asset type.
 type ShareCommon struct {
-	Version            uint8
-	TradingRestriction []byte
-	TransferLockout    Timestamp
-	Ticker             string
-	ISIN               string
-	Description        string
+	Version         uint8     `json:"version,omitempty"`          // Payload Version
+	TransferLockout Timestamp `json:"transfer_lockout,omitempty"` //
+	Ticker          string    `json:"ticker,omitempty"`           //
+	ISIN            string    `json:"isin,omitempty"`             //
+	Description     string    `json:"description,omitempty"`      //
 }
 
 // Type returns the type identifer for this message.
@@ -684,11 +629,6 @@ func (m *ShareCommon) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
 	// TransferLockout (Timestamp)
 	if err := write(buf, m.TransferLockout); err != nil {
 		return nil, err
@@ -705,7 +645,7 @@ func (m *ShareCommon) Serialize() ([]byte, error) {
 	}
 
 	// Description (string)
-	if err := WriteVarChar(buf, m.Description, 113); err != nil {
+	if err := WriteVarChar(buf, m.Description, 16); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -717,12 +657,6 @@ func (m *ShareCommon) Write(b []byte) (int, error) {
 
 	// Version (uint8)
 	if err := read(buf, &m.Version); err != nil {
-		return 0, err
-	}
-
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
 		return 0, err
 	}
 
@@ -752,7 +686,7 @@ func (m *ShareCommon) Write(b []byte) (int, error) {
 	// Description (string)
 	{
 		var err error
-		m.Description, err = ReadVarChar(buf, 113)
+		m.Description, err = ReadVarChar(buf, 16)
 		if err != nil {
 			return 0, err
 		}
@@ -764,7 +698,6 @@ func (m ShareCommon) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
 	vals = append(vals, fmt.Sprintf("TransferLockout:%#+v", m.TransferLockout))
 	vals = append(vals, fmt.Sprintf("Ticker:%#+v", m.Ticker))
 	vals = append(vals, fmt.Sprintf("ISIN:%#+v", m.ISIN))
@@ -775,18 +708,17 @@ func (m ShareCommon) String() string {
 
 // TicketAdmission asset type.
 type TicketAdmission struct {
-	Version             uint8
-	TradingRestriction  []byte
-	AgeRestriction      []byte
-	AdmissionType       string
-	Venue               string
-	Class               string
-	Area                string
-	Seat                string
-	StartTimeDate       Timestamp
-	ValidFrom           Timestamp
-	ExpirationTimestamp Timestamp
-	Description         string
+	Version             uint8     `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
+	AdmissionType       string    `json:"admission_type,omitempty"`       //
+	Venue               string    `json:"venue,omitempty"`                //
+	Class               string    `json:"class,omitempty"`                //
+	Area                string    `json:"area,omitempty"`                 //
+	Seat                string    `json:"seat,omitempty"`                 //
+	StartTimeDate       Timestamp `json:"start_time_date,omitempty"`      //
+	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
+	Description         string    `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -822,13 +754,8 @@ func (m *TicketAdmission) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// TradingRestriction ([]byte)
-	if err := write(buf, pad(m.TradingRestriction, 5)); err != nil {
-		return nil, err
-	}
-
-	// AgeRestriction ([]byte)
-	if err := write(buf, pad(m.AgeRestriction, 5)); err != nil {
+	// AgeRestriction (uint8)
+	if err := write(buf, m.AgeRestriction); err != nil {
 		return nil, err
 	}
 
@@ -838,22 +765,22 @@ func (m *TicketAdmission) Serialize() ([]byte, error) {
 	}
 
 	// Venue (string)
-	if err := WriteVarChar(buf, m.Venue, 255); err != nil {
+	if err := WriteVarChar(buf, m.Venue, 8); err != nil {
 		return nil, err
 	}
 
 	// Class (string)
-	if err := WriteVarChar(buf, m.Class, 255); err != nil {
+	if err := WriteVarChar(buf, m.Class, 8); err != nil {
 		return nil, err
 	}
 
 	// Area (string)
-	if err := WriteVarChar(buf, m.Area, 255); err != nil {
+	if err := WriteVarChar(buf, m.Area, 8); err != nil {
 		return nil, err
 	}
 
 	// Seat (string)
-	if err := WriteVarChar(buf, m.Seat, 255); err != nil {
+	if err := WriteVarChar(buf, m.Seat, 8); err != nil {
 		return nil, err
 	}
 
@@ -888,15 +815,8 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 		return 0, err
 	}
 
-	// TradingRestriction ([]byte)
-	m.TradingRestriction = make([]byte, 5)
-	if err := readLen(buf, m.TradingRestriction); err != nil {
-		return 0, err
-	}
-
-	// AgeRestriction ([]byte)
-	m.AgeRestriction = make([]byte, 5)
-	if err := readLen(buf, m.AgeRestriction); err != nil {
+	// AgeRestriction (uint8)
+	if err := read(buf, &m.AgeRestriction); err != nil {
 		return 0, err
 	}
 
@@ -912,7 +832,7 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 	// Venue (string)
 	{
 		var err error
-		m.Venue, err = ReadVarChar(buf, 255)
+		m.Venue, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -921,7 +841,7 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 	// Class (string)
 	{
 		var err error
-		m.Class, err = ReadVarChar(buf, 255)
+		m.Class, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -930,7 +850,7 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 	// Area (string)
 	{
 		var err error
-		m.Area, err = ReadVarChar(buf, 255)
+		m.Area, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -939,7 +859,7 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 	// Seat (string)
 	{
 		var err error
-		m.Seat, err = ReadVarChar(buf, 255)
+		m.Seat, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -975,8 +895,7 @@ func (m TicketAdmission) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
-	vals = append(vals, fmt.Sprintf("TradingRestriction:%#x", m.TradingRestriction))
-	vals = append(vals, fmt.Sprintf("AgeRestriction:%#x", m.AgeRestriction))
+	vals = append(vals, fmt.Sprintf("AgeRestriction:%#+v", m.AgeRestriction))
 	vals = append(vals, fmt.Sprintf("AdmissionType:%#+v", m.AdmissionType))
 	vals = append(vals, fmt.Sprintf("Venue:%#+v", m.Venue))
 	vals = append(vals, fmt.Sprintf("Class:%#+v", m.Class))
