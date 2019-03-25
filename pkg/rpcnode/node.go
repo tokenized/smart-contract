@@ -21,6 +21,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
@@ -32,11 +33,13 @@ const (
 )
 
 type RPCNode struct {
-	client  *rpcclient.Client
-	txCache map[chainhash.Hash]*wire.MsgTx
+	client      *rpcclient.Client
+	txCache     map[chainhash.Hash]*wire.MsgTx
+	chainParams *chaincfg.Params
 }
 
-func NewNode(config Config) (*RPCNode, error) {
+// NewNode returns a new instance of an RPC node
+func NewNode(config *Config) (*RPCNode, error) {
 	rpcConfig := rpcclient.ConnConfig{
 		HTTPPostMode: true,
 		DisableTLS:   true,
@@ -51,13 +54,53 @@ func NewNode(config Config) (*RPCNode, error) {
 	}
 
 	n := &RPCNode{
-		client:  client,
-		txCache: make(map[chainhash.Hash]*wire.MsgTx),
+		client:      client,
+		txCache:     make(map[chainhash.Hash]*wire.MsgTx),
+		chainParams: config.ChainParams,
 	}
 
 	return n, nil
 }
 
+// GetChainParams returns the bitcoin network parameters (mainnet/testnet)
+func (r *RPCNode) GetChainParams() *chaincfg.Params {
+	return r.chainParams
+}
+
+// GetTX requests a tx from the remote server.
+func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, error) {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	defer logger.Elapsed(ctx, time.Now(), "GetTX")
+
+	msg, ok := r.txCache[*id]
+	if ok {
+		logger.Verbose(ctx, "Using tx from RPC cache : %s\n", id.String())
+		delete(r.txCache, *id)
+		return msg, nil
+	}
+
+	logger.Verbose(ctx, "Requesting tx from RPC : %s\n", id.String())
+	raw, err := r.client.GetRawTransactionVerbose(id)
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := hex.DecodeString(raw.Hex)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := wire.MsgTx{}
+	buf := bytes.NewReader(b)
+
+	if err := tx.Deserialize(buf); err != nil {
+		return nil, err
+	}
+
+	return &tx, nil
+}
+
+// WatchAddress instructs the RPC node to watch an address without rescan
 func (r *RPCNode) WatchAddress(ctx context.Context, address btcutil.Address) error {
 	strAddr := address.String()
 
@@ -69,6 +112,7 @@ func (r *RPCNode) WatchAddress(ctx context.Context, address btcutil.Address) err
 	return nil
 }
 
+// ListTransactions returns all transactions for watched addresses
 func (r *RPCNode) ListTransactions(ctx context.Context) ([]btcjson.ListTransactionsResult, error) {
 
 	// Prepare listtransactions command
@@ -106,8 +150,8 @@ func (r *RPCNode) ListTransactions(ctx context.Context) ([]btcjson.ListTransacti
 	return response, nil
 }
 
-func (r *RPCNode) ListUnspent(ctx context.Context,
-	address btcutil.Address) ([]btcjson.ListUnspentResult, error) {
+// ListUnspent returns unspent transactions
+func (r *RPCNode) ListUnspent(ctx context.Context, address btcutil.Address) ([]btcjson.ListUnspentResult, error) {
 
 	// Make address known to node without rescan
 	if err := r.WatchAddress(ctx, address); err != nil {
@@ -125,6 +169,7 @@ func (r *RPCNode) ListUnspent(ctx context.Context,
 	return out, nil
 }
 
+// SendRawTransaction broadcasts a raw transaction
 func (r *RPCNode) SendRawTransaction(ctx context.Context,
 	tx *wire.MsgTx) error {
 
@@ -136,40 +181,6 @@ func (r *RPCNode) SendRawTransaction(ctx context.Context,
 	_, err = r.client.SendRawTransaction(nx, false)
 
 	return err
-}
-
-// GetTX requests a tx from the remote server.
-func (r *RPCNode) GetTX(ctx context.Context,
-	id *chainhash.Hash) (*wire.MsgTx, error) {
-	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	defer logger.Elapsed(ctx, time.Now(), "GetTX")
-
-	msg, ok := r.txCache[*id]
-	if ok {
-		logger.Verbose(ctx, "Using tx from RPC cache : %s\n", id.String())
-		delete(r.txCache, *id)
-		return msg, nil
-	}
-
-	logger.Verbose(ctx, "Requesting tx from RPC : %s\n", id.String())
-	raw, err := r.client.GetRawTransactionVerbose(id)
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := hex.DecodeString(raw.Hex)
-	if err != nil {
-		return nil, err
-	}
-
-	tx := wire.MsgTx{}
-	buf := bytes.NewReader(b)
-
-	if err := tx.Deserialize(buf); err != nil {
-		return nil, err
-	}
-
-	return &tx, nil
 }
 
 // SaveTX saves a tx to be used later.
@@ -198,13 +209,13 @@ func (r *RPCNode) SendTX(ctx context.Context,
 }
 
 func (r *RPCNode) GetLatestBlock() (*chainhash.Hash, int32, error) {
-	// get the best block hash
+	// Get the best block hash
 	hash, err := r.client.GetBestBlockHash()
 	if err != nil {
 		return nil, -1, err
 	}
 
-	// the height is in the header
+	// The height is in the header
 	header, err := r.client.GetBlockHeaderVerbose(hash)
 	if err != nil {
 		return nil, -1, err
@@ -223,10 +234,9 @@ func (r *RPCNode) getRawPayload(tx *btcwire.MsgTx) string {
 	return s
 }
 
-// txToBtcdTx converts a "pkg/wire".MsgTx to a
-// "btcsuite/btcd/wire".MsgTx".
+// txToBtcdTx converts a "pkg/wire".MsgTx to a "btcsuite/btcd/wire".MsgTx".
 func (r *RPCNode) txToBtcdTX(tx *wire.MsgTx) (*btcwire.MsgTx, error) {
-	// read the payload from the input TX, into the output TX.
+	// Read the payload from the input TX, into the output TX.
 	var buf bytes.Buffer
 	tx.Serialize(&buf)
 

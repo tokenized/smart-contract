@@ -52,13 +52,13 @@ type Transaction struct {
 }
 
 // Promote will populate the inputs and outputs accordingly
-func (itx *Transaction) Promote(ctx context.Context, node NodeInterface, netParams *chaincfg.Params) error {
+func (itx *Transaction) Promote(ctx context.Context, node NodeInterface) error {
 
-	if err := itx.ParseOutputs(ctx, netParams); err != nil {
+	if err := itx.ParseOutputs(ctx, node); err != nil {
 		return err
 	}
 
-	if err := itx.ParseInputs(ctx, node, netParams); err != nil {
+	if err := itx.ParseInputs(ctx, node); err != nil {
 		return err
 	}
 
@@ -71,11 +71,11 @@ func (itx *Transaction) IsPromoted(ctx context.Context) bool {
 }
 
 // ParseOutputs sets the Outputs property of the Transaction
-func (itx *Transaction) ParseOutputs(ctx context.Context, netParams *chaincfg.Params) error {
+func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) error {
 	outputs := []Output{}
 
 	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(itx.MsgTx, n, netParams)
+		output, err := buildOutput(itx.MsgTx, n, node.GetChainParams())
 
 		if err != nil {
 			return err
@@ -123,7 +123,7 @@ func buildOutput(tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, er
 }
 
 // ParseInputs sets the Inputs property of the Transaction
-func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface, netParams *chaincfg.Params) error {
+func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
 	inputs := []Input{}
 
 	for _, txin := range itx.MsgTx.TxIn {
@@ -134,7 +134,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface, net
 			return err
 		}
 
-		input, err := buildInput(inputTX, txin.PreviousOutPoint.Index, netParams)
+		input, err := buildInput(inputTX, txin.PreviousOutPoint.Index, node.GetChainParams())
 		if err != nil {
 			return err
 		}

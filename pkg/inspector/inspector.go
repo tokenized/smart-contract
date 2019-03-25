@@ -10,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
@@ -40,8 +41,11 @@ var (
 	prefixP2PKH = []byte{0x76, 0xA9}
 )
 
+// NodeInterface represents a configured bitcoin node that is capable
+// of looking up transactions and parameters for its network
 type NodeInterface interface {
 	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
+	GetChainParams() *chaincfg.Params
 }
 
 // NewTransaction builds an ITX from a raw transaction.

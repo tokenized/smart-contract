@@ -43,7 +43,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	}
 
 	// Promote TX
-	if err := itx.Promote(ctx, server.RpcNode, &server.Config.ChainParams); err != nil {
+	if err := itx.Promote(ctx, server.RpcNode); err != nil {
 		logger.Fatal(ctx, "Failed to promote inspector tx : %s", err)
 		return false, err
 	}

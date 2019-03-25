@@ -180,9 +180,12 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// RPC Node
-	rpcConfig := rpcnode.NewConfig(cfg.RpcNode.Host,
-		cfg.RpcNode.Username,
-		cfg.RpcNode.Password)
+	rpcConfig := &rpcnode.Config{
+		Host:        cfg.RpcNode.Host,
+		Username:    cfg.RpcNode.Username,
+		Password:    cfg.RpcNode.Password,
+		ChainParams: &appConfig.ChainParams,
+	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)
 	if err != nil {
