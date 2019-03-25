@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
@@ -55,7 +55,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	var a state.Asset
 
 	// Get current state
-	err := platform.Convert(ctx, &nu, &a)
+	err := node.Convert(ctx, &nu, &a)
 	if err != nil {
 		return err
 	}

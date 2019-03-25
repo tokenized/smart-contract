@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/tokenized/smart-contract/internal/contract"
-	"github.com/tokenized/smart-contract/internal/platform"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
@@ -43,7 +43,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Offer : \n%s\n", string(text))
 
 	// Formation
-	err = platform.Convert(offer, formation)
+	err = node.Convert(offer, formation)
 	if err != nil {
 		t.Errorf("Failed to convert offer to formation : %s", err)
 	}
@@ -52,7 +52,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Formation : \n%s\n", string(text))
 
 	// State
-	err = platform.Convert(formation, st)
+	err = node.Convert(formation, st)
 	if err != nil {
 		t.Errorf("Failed to convert formation to state : %s", err)
 	}
@@ -61,7 +61,7 @@ func TestContract(t *testing.T) {
 	t.Logf("State : \n%s\n", string(text))
 
 	// Create
-	err = platform.Convert(formation, create)
+	err = node.Convert(formation, create)
 	if err != nil {
 		t.Errorf("Failed to convert formation to create : %s", err)
 	}
@@ -70,7 +70,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Create : \n%s\n", string(text))
 
 	// Update
-	err = platform.Convert(formation, update)
+	err = node.Convert(formation, update)
 	if err != nil {
 		t.Errorf("Failed to convert formation to update : %s", err)
 	}

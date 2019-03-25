@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -48,7 +48,7 @@ func Create(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 	var c state.Contract
 
 	// Get current state
-	err := platform.Convert(ctx, &nu, &c)
+	err := node.Convert(ctx, &nu, &c)
 	if err != nil {
 		logger.Warn(ctx, "Failed to convert new contract to contract : %s", err)
 		return err

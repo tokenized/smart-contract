@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
-	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -57,7 +56,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	// Contract Formation <- Contract Offer
 	cf := protocol.ContractFormation{}
 
-	err = platform.Convert(ctx, &msg, &cf)
+	err = node.Convert(ctx, &msg, &cf)
 	if err != nil {
 		return err
 	}
@@ -130,7 +129,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	cf := protocol.ContractFormation{}
 
 	// Get current state
-	err = platform.Convert(ctx, &ct, &cf)
+	err = node.Convert(ctx, &ct, &cf)
 	if err != nil {
 		return err
 	}
@@ -214,7 +213,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	if ct == nil {
 		// Prepare creation object
 		var nc contract.NewContract
-		err := platform.Convert(ctx, &msg, &nc)
+		err := node.Convert(ctx, &msg, &nc)
 		if err != nil {
 			logger.Warn(ctx, "%s : Failed to convert formation to new contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
@@ -382,7 +381,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			newKeyRoles := make([]state.KeyRole, 0, len(msg.KeyRoles))
 			for _, keyRole := range msg.KeyRoles {
 				var newKeyRole state.KeyRole
-				err := platform.Convert(ctx, &keyRole, &newKeyRole)
+				err := node.Convert(ctx, &keyRole, &newKeyRole)
 				if err != nil {
 					return err
 				}
@@ -406,7 +405,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			newNotableRoles := make([]state.NotableRole, 0, len(msg.NotableRoles))
 			for _, notableRole := range msg.NotableRoles {
 				var newNotableRole state.NotableRole
-				err := platform.Convert(ctx, &notableRole, &newNotableRole)
+				err := node.Convert(ctx, &notableRole, &newNotableRole)
 				if err != nil {
 					return err
 				}
@@ -432,7 +431,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			newRegistries := make([]state.Registry, 0, len(msg.Registries))
 			for _, registry := range msg.Registries {
 				var newRegistry state.Registry
-				err := platform.Convert(ctx, &registry, &newRegistry)
+				err := node.Convert(ctx, &registry, &newRegistry)
 				if err != nil {
 					return err
 				}
@@ -491,7 +490,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			newVotingSystems := make([]state.VotingSystem, 0, len(msg.VotingSystems))
 			for _, votingSystem := range msg.VotingSystems {
 				var newVotingSystem state.VotingSystem
-				err := platform.Convert(ctx, &votingSystem, &newVotingSystem)
+				err := node.Convert(ctx, &votingSystem, &newVotingSystem)
 				if err != nil {
 					return err
 				}

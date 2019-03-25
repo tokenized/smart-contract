@@ -7,7 +7,6 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
-	"github.com/tokenized/smart-contract/internal/platform"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -85,7 +84,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
 
-	err = platform.Convert(ctx, &msg, &ac)
+	err = node.Convert(ctx, &msg, &ac)
 	if err != nil {
 		return err
 	}
@@ -155,7 +154,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Asset Creation <- Asset Modification
 	ac := protocol.AssetCreation{}
 
-	err = platform.Convert(ctx, &as, &ac)
+	err = node.Convert(ctx, &as, &ac)
 	if err != nil {
 		return err
 	}
@@ -226,7 +225,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		// Prepare creation object
 		na := asset.NewAsset{}
 
-		err = platform.Convert(ctx, &msg, &na)
+		err = node.Convert(ctx, &msg, &na)
 		if err != nil {
 			return err
 		}
