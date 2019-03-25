@@ -19,6 +19,8 @@ type Contract struct {
 	ContractName               string             `json:"contract_name,omitempty"`
 	ContractFileType           uint8              `json:"contract_file_type,omitempty"`
 	ContractFile               []byte             `json:"contract_file,omitempty"`
+	SupportingDocsFileType     uint8              `json:"supporting_docs_file_type,omitempty"`
+	SupportingDocs             []byte             `json:"supporting_docs,omitempty"`
 	GoverningLaw               string             `json:"governing_law,omitempty"`
 	Jurisdiction               string             `json:"jurisdiction,omitempty"`
 	ContractExpiration         protocol.Timestamp `json:"contract_expiration,omitempty"`
@@ -28,12 +30,12 @@ type Contract struct {
 	IssuerLogoURL              string             `json:"issuer_logo_url,omitempty"`
 	ContractOperatorID         string             `json:"contract_operator_id,omitempty"`
 	ContractAuthFlags          [16]byte           `json:"contract_auth_flags,omitempty"`
+	ActionFee                  []protocol.Fee     `json:"action_fee,omitempty"`
 	VotingSystems              []VotingSystem     `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets        uint64             `json:"restricted_qty_assets,omitempty"`
 	ReferendumProposal         bool               `json:"referendum_proposal,omitempty"`
 	InitiativeProposal         bool               `json:"initiative_proposal,omitempty"`
 	Registries                 []Registry         `json:"registries,omitempty"`
-	IssuerAddress              bool               `json:"issuer_address,omitempty"`
 	UnitNumber                 string             `json:"unit_number,omitempty"`
 	BuildingNumber             string             `json:"building_number,omitempty"`
 	Street                     string             `json:"street,omitempty"`
@@ -57,20 +59,17 @@ type Asset struct {
 	UpdatedAt protocol.Timestamp `json:"updated_at,omitempty"`
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
-	AssetType                   string  `json:"asset_type,omitempty"`
-	AssetAuthFlags              [8]byte `json:"asset_auth_flags,omitempty"`
-	TransfersPermitted          bool    `json:"transfers_permitted,omitempty"`
-	TradeRestrictions           string  `json:"trade_restrictions,omitempty"`
-	EnforcementOrdersPermitted  bool    `json:"enforcement_orders_permitted,omitempty"`
-	VoteMultiplier              uint8   `json:"vote_multiplier,omitempty"`
-	ReferendumProposal          bool    `json:"referendum_proposal,omitempty"`
-	InitiativeProposal          bool    `json:"initiative_proposal,omitempty"`
-	AssetModificationGovernance bool    `json:"asset_modification_governance,omitempty"`
-	TokenQty                    uint64  `json:"token_qty,omitempty"`
-	ContractFeeCurrency         string  `json:"contract_fee_currency,omitempty"`
-	ContractFeeVar              float32 `json:"contract_fee_var,omitempty"`
-	ContractFeeFixed            float32 `json:"contract_fee_fixed,omitempty"`
-	AssetPayload                []byte  `json:"asset_payload,omitempty"`
+	AssetType                   string          `json:"asset_type,omitempty"`
+	AssetAuthFlags              [8]byte         `json:"asset_auth_flags,omitempty"`
+	TransfersPermitted          bool            `json:"transfers_permitted,omitempty"`
+	TradeRestrictions           protocol.Polity `json:"trade_restrictions,omitempty"`
+	EnforcementOrdersPermitted  bool            `json:"enforcement_orders_permitted,omitempty"`
+	VoteMultiplier              uint8           `json:"vote_multiplier,omitempty"`
+	ReferendumProposal          bool            `json:"referendum_proposal,omitempty"`
+	InitiativeProposal          bool            `json:"initiative_proposal,omitempty"`
+	AssetModificationGovernance bool            `json:"asset_modification_governance,omitempty"`
+	TokenQty                    uint64          `json:"token_qty,omitempty"`
+	AssetPayload                []byte          `json:"asset_payload,omitempty"`
 
 	Holdings map[protocol.PublicKeyHash]*Holding `json:"holdings,omitempty"`
 }

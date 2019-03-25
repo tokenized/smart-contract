@@ -12,7 +12,8 @@ const (
 
 var cmdSync = &cobra.Command{
 	Use:   "sync",
-	Short: "Syncronize contract state with the network",
+	Short: "Syncronize with the Bitcoin network.",
+	Long:  "Syncronize with the Bitcoin network. This is required after any txs effect the wallet are posted to update UTXOs so that valid/spendable txs can be created.",
 	RunE: func(c *cobra.Command, args []string) error {
 		ctx := client.Context()
 		theClient, err := client.NewClient(ctx)

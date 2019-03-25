@@ -24,6 +24,7 @@ type NewContract struct {
 	IssuerLogoURL              string               `json:"issuer_logo_url,omitempty"`
 	ContractOperatorID         string               `json:"contract_operator_id,omitempty"`
 	ContractAuthFlags          [16]byte             `json:"contract_auth_flags,omitempty"`
+	ActionFee                  []protocol.Fee       `json:"action_fee,omitempty"`
 	VotingSystems              []state.VotingSystem `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets        uint64               `json:"restricted_qty_assets,omitempty"`
 	ReferendumProposal         bool                 `json:"referendum_proposal,omitempty"`
@@ -67,6 +68,7 @@ type UpdateContract struct {
 	IssuerLogoURL              *string               `json:"issuer_logo_url,omitempty"`
 	ContractOperatorID         *string               `json:"contract_operator_id,omitempty"`
 	ContractAuthFlags          *[16]byte             `json:"contract_auth_flags,omitempty"`
+	ActionFee                  *[]protocol.Fee       `json:"action_fee,omitempty"`
 	VotingSystems              *[]state.VotingSystem `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets        *uint64               `json:"restricted_qty_assets,omitempty"`
 	ReferendumProposal         *bool                 `json:"referendum_proposal,omitempty"`

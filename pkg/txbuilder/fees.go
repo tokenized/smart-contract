@@ -40,7 +40,7 @@ const (
 // If the fee is too low after signing, then the fee should be adjusted and the tx re-signed.
 
 func (tx *Tx) Fee() uint64 {
-	return tx.inputSum() - tx.outputSum(true)
+	return tx.InputValue() - tx.OutputValue(true)
 }
 
 // EstimatedSize returns the estimated size in bytes of the tx after signatures are added.
@@ -68,8 +68,8 @@ func (tx *Tx) EstimatedFee() uint64 {
 	return uint64(float32(tx.EstimatedSize()) * tx.FeeRate)
 }
 
-// inputSum returns the sum of the values of the inputs.
-func (tx *Tx) inputSum() uint64 {
+// InputValue returns the sum of the values of the inputs.
+func (tx *Tx) InputValue() uint64 {
 	inputValue := uint64(0)
 	for _, input := range tx.Inputs {
 		inputValue += input.Value
@@ -77,8 +77,8 @@ func (tx *Tx) inputSum() uint64 {
 	return inputValue
 }
 
-// outputSum returns the sum of the values of the outputs.
-func (tx *Tx) outputSum(includeChange bool) uint64 {
+// OutputValue returns the sum of the values of the outputs.
+func (tx *Tx) OutputValue(includeChange bool) uint64 {
 	outputValue := uint64(0)
 	for i, output := range tx.MsgTx.TxOut {
 		if includeChange || !tx.Outputs[i].IsChange {

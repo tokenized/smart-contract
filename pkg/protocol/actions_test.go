@@ -25,54 +25,33 @@ func TestAssetDefinition(t *testing.T) {
 	// bin test not setup
 
 	// TransfersPermitted (bool)
-	// bool test not setup
+	initialMessage.TransfersPermitted = true
 
-	// TradeRestrictions (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+4))
-		}
-		initialMessage.TradeRestrictions = string(text)
-	}
+	// TradeRestrictions (Polity)
+	initialMessage.TradeRestrictions = Polity{}
 
 	// EnforcementOrdersPermitted (bool)
-	// bool test not setup
+	initialMessage.EnforcementOrdersPermitted = true
 
 	// VoteMultiplier (uint)
 	// uint test not setup
 
 	// ReferendumProposal (bool)
-	// bool test not setup
+	initialMessage.ReferendumProposal = true
 
 	// InitiativeProposal (bool)
-	// bool test not setup
+	initialMessage.InitiativeProposal = true
 
 	// AssetModificationGovernance (bool)
-	// bool test not setup
+	initialMessage.AssetModificationGovernance = true
 
 	// TokenQty (uint)
 	// uint test not setup
 
-	// ContractFeeCurrency (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+11))
-		}
-		initialMessage.ContractFeeCurrency = string(text)
-	}
-
-	// ContractFeeVar (float)
-	// float test not setup
-
-	// ContractFeeFixed (float)
-	// float test not setup
-
 	// AssetPayload (varbin)
 	initialMessage.AssetPayload = make([]byte, 0, 16)
 	for i := uint64(0); i < 16; i++ {
-		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+14))
+		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+11))
 	}
 
 	// Encode message
@@ -126,9 +105,14 @@ func TestAssetDefinition(t *testing.T) {
 	// TransfersPermitted (bool)
 	// bool test compare not setup
 
-	// TradeRestrictions (fixedchar)
-	if initialMessage.TradeRestrictions != decodedMessage.TradeRestrictions {
-		t.Errorf("TradeRestrictions doesn't match : %s != %s", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
+	// TradeRestrictions (Polity)
+	if len(initialMessage.TradeRestrictions.Items) != len(decodedMessage.TradeRestrictions.Items) {
+		t.Errorf("TradeRestrictions length doesn't match : %d != %d", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
+	}
+	for i, value := range initialMessage.TradeRestrictions.Items {
+		if !bytes.Equal(value[:], decodedMessage.TradeRestrictions.Items[i][:]) {
+			t.Errorf("TradeRestrictions.Items[%d] doesn't match : %s != %s", i, string(value[:]), string(decodedMessage.TradeRestrictions.Items[i][:]))
+		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -148,17 +132,6 @@ func TestAssetDefinition(t *testing.T) {
 
 	// TokenQty (uint)
 	// uint test compare not setup
-
-	// ContractFeeCurrency (fixedchar)
-	if initialMessage.ContractFeeCurrency != decodedMessage.ContractFeeCurrency {
-		t.Errorf("ContractFeeCurrency doesn't match : %s != %s", initialMessage.ContractFeeCurrency, decodedMessage.ContractFeeCurrency)
-	}
-
-	// ContractFeeVar (float)
-	// float test compare not setup
-
-	// ContractFeeFixed (float)
-	// float test compare not setup
 
 	// AssetPayload (varbin)
 	if !bytes.Equal(initialMessage.AssetPayload, decodedMessage.AssetPayload) {
@@ -185,54 +158,33 @@ func TestAssetCreation(t *testing.T) {
 	// bin test not setup
 
 	// TransfersPermitted (bool)
-	// bool test not setup
+	initialMessage.TransfersPermitted = true
 
-	// TradeRestrictions (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+4))
-		}
-		initialMessage.TradeRestrictions = string(text)
-	}
+	// TradeRestrictions (Polity)
+	initialMessage.TradeRestrictions = Polity{}
 
 	// EnforcementOrdersPermitted (bool)
-	// bool test not setup
+	initialMessage.EnforcementOrdersPermitted = true
 
 	// VoteMultiplier (uint)
 	// uint test not setup
 
 	// ReferendumProposal (bool)
-	// bool test not setup
+	initialMessage.ReferendumProposal = true
 
 	// InitiativeProposal (bool)
-	// bool test not setup
+	initialMessage.InitiativeProposal = true
 
 	// AssetModificationGovernance (bool)
-	// bool test not setup
+	initialMessage.AssetModificationGovernance = true
 
 	// TokenQty (uint)
 	// uint test not setup
 
-	// ContractFeeCurrency (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+11))
-		}
-		initialMessage.ContractFeeCurrency = string(text)
-	}
-
-	// ContractFeeVar (float)
-	// float test not setup
-
-	// ContractFeeFixed (float)
-	// float test not setup
-
 	// AssetPayload (varbin)
 	initialMessage.AssetPayload = make([]byte, 0, 16)
 	for i := uint64(0); i < 16; i++ {
-		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+14))
+		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+11))
 	}
 
 	// AssetRevision (uint)
@@ -292,9 +244,14 @@ func TestAssetCreation(t *testing.T) {
 	// TransfersPermitted (bool)
 	// bool test compare not setup
 
-	// TradeRestrictions (fixedchar)
-	if initialMessage.TradeRestrictions != decodedMessage.TradeRestrictions {
-		t.Errorf("TradeRestrictions doesn't match : %s != %s", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
+	// TradeRestrictions (Polity)
+	if len(initialMessage.TradeRestrictions.Items) != len(decodedMessage.TradeRestrictions.Items) {
+		t.Errorf("TradeRestrictions length doesn't match : %d != %d", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
+	}
+	for i, value := range initialMessage.TradeRestrictions.Items {
+		if !bytes.Equal(value[:], decodedMessage.TradeRestrictions.Items[i][:]) {
+			t.Errorf("TradeRestrictions.Items[%d] doesn't match : %s != %s", i, string(value[:]), string(decodedMessage.TradeRestrictions.Items[i][:]))
+		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -314,17 +271,6 @@ func TestAssetCreation(t *testing.T) {
 
 	// TokenQty (uint)
 	// uint test compare not setup
-
-	// ContractFeeCurrency (fixedchar)
-	if initialMessage.ContractFeeCurrency != decodedMessage.ContractFeeCurrency {
-		t.Errorf("ContractFeeCurrency doesn't match : %s != %s", initialMessage.ContractFeeCurrency, decodedMessage.ContractFeeCurrency)
-	}
-
-	// ContractFeeVar (float)
-	// float test compare not setup
-
-	// ContractFeeFixed (float)
-	// float test compare not setup
 
 	// AssetPayload (varbin)
 	if !bytes.Equal(initialMessage.AssetPayload, decodedMessage.AssetPayload) {
@@ -489,7 +435,7 @@ func TestContractOffer(t *testing.T) {
 	initialMessage.IssuerLogoURL = "Text 12"
 
 	// ContractOperatorIncluded (bool)
-	// bool test not setup
+	initialMessage.ContractOperatorIncluded = true
 
 	// ContractOperatorID (varchar)
 	initialMessage.ContractOperatorID = "Text 14"
@@ -506,6 +452,11 @@ func TestContractOffer(t *testing.T) {
 	// ContractAuthFlags (bin)
 	// bin test not setup
 
+	// ActionFee (Fee[])
+	for i := 0; i < 2; i++ {
+		initialMessage.ActionFee = append(initialMessage.ActionFee, Fee{})
+	}
+
 	// VotingSystems (VotingSystem[])
 	for i := 0; i < 2; i++ {
 		initialMessage.VotingSystems = append(initialMessage.VotingSystems, VotingSystem{})
@@ -515,36 +466,36 @@ func TestContractOffer(t *testing.T) {
 	// uint test not setup
 
 	// ReferendumProposal (bool)
-	// bool test not setup
+	initialMessage.ReferendumProposal = true
 
 	// InitiativeProposal (bool)
-	// bool test not setup
+	initialMessage.InitiativeProposal = true
 
 	// Registries (Registry[])
 	for i := 0; i < 2; i++ {
 		initialMessage.Registries = append(initialMessage.Registries, Registry{})
 	}
 
-	// IssuerAddress (bool)
-	// bool test not setup
+	// IssuerAddressIncluded (bool)
+	initialMessage.IssuerAddressIncluded = true
 
 	// UnitNumber (varchar)
-	initialMessage.UnitNumber = "Text 23"
+	initialMessage.UnitNumber = "Text 24"
 
 	// BuildingNumber (varchar)
-	initialMessage.BuildingNumber = "Text 24"
+	initialMessage.BuildingNumber = "Text 25"
 
 	// Street (varchar)
-	initialMessage.Street = "Text 25"
+	initialMessage.Street = "Text 26"
 
 	// SuburbCity (varchar)
-	initialMessage.SuburbCity = "Text 26"
+	initialMessage.SuburbCity = "Text 27"
 
 	// TerritoryStateProvinceCode (fixedchar)
 	{
 		text := make([]byte, 0, 5)
 		for i := uint64(0); i < 5; i++ {
-			text = append(text, byte(65+i+27))
+			text = append(text, byte(65+i+28))
 		}
 		initialMessage.TerritoryStateProvinceCode = string(text)
 	}
@@ -553,19 +504,19 @@ func TestContractOffer(t *testing.T) {
 	{
 		text := make([]byte, 0, 3)
 		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+28))
+			text = append(text, byte(65+i+29))
 		}
 		initialMessage.CountryCode = string(text)
 	}
 
 	// PostalZIPCode (varchar)
-	initialMessage.PostalZIPCode = "Text 29"
+	initialMessage.PostalZIPCode = "Text 30"
 
 	// EmailAddress (varchar)
-	initialMessage.EmailAddress = "Text 30"
+	initialMessage.EmailAddress = "Text 31"
 
 	// PhoneNumber (varchar)
-	initialMessage.PhoneNumber = "Text 31"
+	initialMessage.PhoneNumber = "Text 32"
 
 	// KeyRoles (KeyRole[])
 	for i := 0; i < 2; i++ {
@@ -687,6 +638,11 @@ func TestContractOffer(t *testing.T) {
 	// ContractAuthFlags (bin)
 	// bin test compare not setup
 
+	// ActionFee (Fee[])
+	if len(initialMessage.ActionFee) != len(decodedMessage.ActionFee) {
+		t.Errorf("ActionFee lengths don't match : %d != %d", len(initialMessage.ActionFee), len(decodedMessage.ActionFee))
+	}
+
 	// VotingSystems (VotingSystem[])
 	if len(initialMessage.VotingSystems) != len(decodedMessage.VotingSystems) {
 		t.Errorf("VotingSystems lengths don't match : %d != %d", len(initialMessage.VotingSystems), len(decodedMessage.VotingSystems))
@@ -706,7 +662,7 @@ func TestContractOffer(t *testing.T) {
 		t.Errorf("Registries lengths don't match : %d != %d", len(initialMessage.Registries), len(decodedMessage.Registries))
 	}
 
-	// IssuerAddress (bool)
+	// IssuerAddressIncluded (bool)
 	// bool test compare not setup
 
 	// UnitNumber (varchar)
@@ -828,20 +784,28 @@ func TestContractFormation(t *testing.T) {
 	// IssuerLogoURL (varchar)
 	initialMessage.IssuerLogoURL = "Text 12"
 
+	// ContractOperatorIncluded (bool)
+	initialMessage.ContractOperatorIncluded = true
+
 	// ContractOperatorID (varchar)
-	initialMessage.ContractOperatorID = "Text 13"
+	initialMessage.ContractOperatorID = "Text 14"
 
 	// OperatorLEI (fixedchar)
 	{
 		text := make([]byte, 0, 20)
 		for i := uint64(0); i < 20; i++ {
-			text = append(text, byte(65+i+14))
+			text = append(text, byte(65+i+15))
 		}
 		initialMessage.OperatorLEI = string(text)
 	}
 
 	// ContractAuthFlags (bin)
 	// bin test not setup
+
+	// ActionFee (Fee[])
+	for i := 0; i < 2; i++ {
+		initialMessage.ActionFee = append(initialMessage.ActionFee, Fee{})
+	}
 
 	// VotingSystems (VotingSystem[])
 	for i := 0; i < 2; i++ {
@@ -852,36 +816,36 @@ func TestContractFormation(t *testing.T) {
 	// uint test not setup
 
 	// ReferendumProposal (bool)
-	// bool test not setup
+	initialMessage.ReferendumProposal = true
 
 	// InitiativeProposal (bool)
-	// bool test not setup
+	initialMessage.InitiativeProposal = true
 
 	// Registries (Registry[])
 	for i := 0; i < 2; i++ {
 		initialMessage.Registries = append(initialMessage.Registries, Registry{})
 	}
 
-	// IssuerAddress (bool)
-	// bool test not setup
+	// IssuerAddressIncluded (bool)
+	initialMessage.IssuerAddressIncluded = true
 
 	// UnitNumber (varchar)
-	initialMessage.UnitNumber = "Text 22"
+	initialMessage.UnitNumber = "Text 24"
 
 	// BuildingNumber (varchar)
-	initialMessage.BuildingNumber = "Text 23"
+	initialMessage.BuildingNumber = "Text 25"
 
 	// Street (varchar)
-	initialMessage.Street = "Text 24"
+	initialMessage.Street = "Text 26"
 
 	// SuburbCity (varchar)
-	initialMessage.SuburbCity = "Text 25"
+	initialMessage.SuburbCity = "Text 27"
 
 	// TerritoryStateProvinceCode (fixedchar)
 	{
 		text := make([]byte, 0, 5)
 		for i := uint64(0); i < 5; i++ {
-			text = append(text, byte(65+i+26))
+			text = append(text, byte(65+i+28))
 		}
 		initialMessage.TerritoryStateProvinceCode = string(text)
 	}
@@ -890,19 +854,19 @@ func TestContractFormation(t *testing.T) {
 	{
 		text := make([]byte, 0, 3)
 		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+27))
+			text = append(text, byte(65+i+29))
 		}
 		initialMessage.CountryCode = string(text)
 	}
 
 	// PostalZIPCode (varchar)
-	initialMessage.PostalZIPCode = "Text 28"
+	initialMessage.PostalZIPCode = "Text 30"
 
 	// EmailAddress (varchar)
-	initialMessage.EmailAddress = "Text 29"
+	initialMessage.EmailAddress = "Text 31"
 
 	// PhoneNumber (varchar)
-	initialMessage.PhoneNumber = "Text 30"
+	initialMessage.PhoneNumber = "Text 32"
 
 	// KeyRoles (KeyRole[])
 	for i := 0; i < 2; i++ {
@@ -1014,6 +978,9 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("IssuerLogoURL doesn't match : %s != %s", initialMessage.IssuerLogoURL, decodedMessage.IssuerLogoURL)
 	}
 
+	// ContractOperatorIncluded (bool)
+	// bool test compare not setup
+
 	// ContractOperatorID (varchar)
 	if initialMessage.ContractOperatorID != decodedMessage.ContractOperatorID {
 		t.Errorf("ContractOperatorID doesn't match : %s != %s", initialMessage.ContractOperatorID, decodedMessage.ContractOperatorID)
@@ -1026,6 +993,11 @@ func TestContractFormation(t *testing.T) {
 
 	// ContractAuthFlags (bin)
 	// bin test compare not setup
+
+	// ActionFee (Fee[])
+	if len(initialMessage.ActionFee) != len(decodedMessage.ActionFee) {
+		t.Errorf("ActionFee lengths don't match : %d != %d", len(initialMessage.ActionFee), len(decodedMessage.ActionFee))
+	}
 
 	// VotingSystems (VotingSystem[])
 	if len(initialMessage.VotingSystems) != len(decodedMessage.VotingSystems) {
@@ -1046,7 +1018,7 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("Registries lengths don't match : %d != %d", len(initialMessage.Registries), len(decodedMessage.Registries))
 	}
 
-	// IssuerAddress (bool)
+	// IssuerAddressIncluded (bool)
 	// bool test compare not setup
 
 	// UnitNumber (varchar)
@@ -1117,10 +1089,10 @@ func TestContractAmendment(t *testing.T) {
 	// Create a randomized object
 	initialMessage := ContractAmendment{}
 	// ChangeIssuerAddress (bool)
-	// bool test not setup
+	initialMessage.ChangeIssuerAddress = true
 
 	// ChangeOperatorAddress (bool)
-	// bool test not setup
+	initialMessage.ChangeOperatorAddress = true
 
 	// ContractRevision (uint)
 	// uint test not setup
@@ -1766,7 +1738,7 @@ func TestInitiative(t *testing.T) {
 	// uint test not setup
 
 	// Proposal (bool)
-	// bool test not setup
+	initialMessage.Proposal = true
 
 	// ProposedChanges (Amendment[])
 	for i := 0; i < 2; i++ {
@@ -1870,7 +1842,7 @@ func TestReferendum(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Referendum{}
 	// AssetSpecificVote (bool)
-	// bool test not setup
+	initialMessage.AssetSpecificVote = true
 
 	// AssetType (fixedchar)
 	{
@@ -1888,7 +1860,7 @@ func TestReferendum(t *testing.T) {
 	// uint test not setup
 
 	// Proposal (bool)
-	// bool test not setup
+	initialMessage.Proposal = true
 
 	// ProposedChanges (Amendment[])
 	for i := 0; i < 2; i++ {
@@ -2178,7 +2150,7 @@ func TestResult(t *testing.T) {
 	initialMessage.AssetCode = AssetCode{}
 
 	// Proposal (bool)
-	// bool test not setup
+	initialMessage.Proposal = true
 
 	// ProposedChanges (Amendment[])
 	for i := 0; i < 2; i++ {

@@ -129,15 +129,6 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.TokenQty != nil {
 		a.TokenQty = *upd.TokenQty
 	}
-	if upd.ContractFeeCurrency != nil {
-		a.ContractFeeCurrency = *upd.ContractFeeCurrency
-	}
-	if upd.ContractFeeVar != nil {
-		a.ContractFeeVar = *upd.ContractFeeVar
-	}
-	if upd.ContractFeeFixed != nil {
-		a.ContractFeeFixed = *upd.ContractFeeFixed
-	}
 	if upd.AssetPayload != nil {
 		a.AssetPayload = *upd.AssetPayload
 	}

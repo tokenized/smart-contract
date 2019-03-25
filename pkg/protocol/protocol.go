@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -438,4 +439,100 @@ func (time *Timestamp) UnmarshalJSON(data []byte) error {
 	var err error
 	time.nanoseconds, err = strconv.ParseUint(string(data), 10, 64)
 	return err
+}
+
+// ------------------------------------------------------------------------------------------------
+// Polity represents list of countries in which something is valid.
+type Polity struct {
+	Items [][3]byte
+}
+
+// String converts to a string
+func (polity *Polity) String() string {
+	return fmt.Sprintf("%v", polity.Items)
+}
+
+// Serialize returns a byte slice with the Polity in it.
+func (polity *Polity) Serialize() ([]byte, error) {
+	if len(polity.Items) > 65535 {
+		return nil, fmt.Errorf("Polity item count beyond limit (%d) : %d", 65535, len(polity.Items))
+	}
+
+	// Write 16 bit size
+	var buf bytes.Buffer
+	err := write(&buf, uint16(len(polity.Items)))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range polity.Items {
+		_, err := buf.Write(item[:])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Write reads a Polity from a bytes.Buffer
+func (polity *Polity) Write(buf *bytes.Buffer) error {
+	// Read 16 bit size
+	var size uint16
+	err := read(buf, &size)
+	if err != nil {
+		return err
+	}
+
+	polity.Items = make([][3]byte, 0, size)
+	for i := uint16(0); i < size; i++ {
+		var newItem [3]byte
+		err = readLen(buf, newItem[:])
+		if err != nil {
+			return err
+		}
+		polity.Items = append(polity.Items, newItem)
+	}
+
+	return nil
+}
+
+// MarshalJSON converts to json.
+func (polity *Polity) MarshalJSON() ([]byte, error) {
+	result := make([]byte, 0, 4+(len(polity.Items)*7))
+	result = append(result, '[')
+	result = append(result, ' ')
+
+	for _, item := range polity.Items {
+		result = append(result, '"')
+		result = append(result, item[:]...)
+		result = append(result, '"')
+	}
+
+	result = append(result, ' ')
+	result = append(result, ']')
+	return result, nil
+}
+
+// UnmarshalJSON converts from json.
+func (polity *Polity) UnmarshalJSON(data []byte) error {
+	// Unmarshal into list of strings
+	var items []string
+	err := json.Unmarshal(data, &items)
+	if err != nil {
+		return err
+	}
+
+	polity.Items = make([][3]byte, 0, len(items))
+	for _, item := range items {
+		if len(item) > 3 {
+			return fmt.Errorf("Polity item too long (limit 3 chars) : %s", item)
+		}
+
+		var newItem [3]byte
+		copy(newItem[:], []byte(item))
+		polity.Items = append(polity.Items, newItem)
+	}
+
+	return nil
 }

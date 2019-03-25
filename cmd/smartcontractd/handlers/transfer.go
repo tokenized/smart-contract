@@ -254,6 +254,8 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				}
 			}
 		}
+
+		// TODO Add asset fee
 	}
 
 	return settleTx, nil

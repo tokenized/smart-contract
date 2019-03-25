@@ -100,12 +100,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
-	// 3 - Fee
 	w.AddOutput(ctx, contractAddress, 0)
 	w.AddChangeOutput(ctx, itx.Inputs[0].Address) // Request must come from issuer
-
-	// Add fee output
-	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -187,12 +183,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Issuer (Change)
-	// 3 - Fee
 	w.AddOutput(ctx, contractAddress, 0)
 	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
-
-	// Add fee output
-	w.AddFee(ctx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -257,10 +249,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.TransfersPermitted = &msg.TransfersPermitted
 			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.TransfersPermitted)
 		}
-		if as.TradeRestrictions != msg.TradeRestrictions {
-			ua.TradeRestrictions = &msg.TradeRestrictions
-			logger.Info(ctx, "%s : Updating asset trade restrictions (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.TradeRestrictions)
-		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
 			logger.Info(ctx, "%s : Updating asset enforcement orders permitted (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.EnforcementOrdersPermitted)
@@ -285,21 +273,28 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.TokenQty = &msg.TokenQty
 			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, msg.AssetCode.String(), *ua.TokenQty)
 		}
-		if as.ContractFeeCurrency != msg.ContractFeeCurrency {
-			ua.ContractFeeCurrency = &msg.ContractFeeCurrency
-			logger.Info(ctx, "%s : Updating asset contract fee currency (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.ContractFeeCurrency)
-		}
-		if as.ContractFeeVar != msg.ContractFeeVar {
-			ua.ContractFeeVar = &msg.ContractFeeVar
-			logger.Info(ctx, "%s : Updating asset contract fee variable (%s) : %f", v.TraceID, msg.AssetCode.String(), *ua.ContractFeeVar)
-		}
-		if as.ContractFeeFixed != msg.ContractFeeFixed {
-			ua.ContractFeeFixed = &msg.ContractFeeFixed
-			logger.Info(ctx, "%s : Updating asset contract fee fixed (%s) : %f", v.TraceID, msg.AssetCode.String(), *ua.ContractFeeFixed)
-		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
 			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.AssetPayload)
+		}
+
+		// Check if trade restrictions are different
+		different := len(as.TradeRestrictions.Items) != len(msg.TradeRestrictions.Items)
+		if !different {
+			for i, tradeRestrictions := range as.TradeRestrictions.Items {
+				if !bytes.Equal(tradeRestrictions[:], msg.TradeRestrictions.Items[i][:]) {
+					different = true
+					break
+				}
+			}
+		}
+
+		if different {
+			var newTradeRestrictions protocol.Polity
+			for _, tradeRestriction := range msg.TradeRestrictions.Items {
+				newTradeRestrictions.Items = append(newTradeRestrictions.Items, tradeRestriction)
+			}
+			ua.TradeRestrictions = &newTradeRestrictions
 		}
 
 		if err := asset.Update(ctx, dbConn, contractAddr, &msg.AssetCode, &ua, v.Now); err != nil {

@@ -32,6 +32,8 @@ type Client struct {
 	ContractFeePKH     []byte
 	spyNode            *spynode.Node
 	spyNodeStopChannel chan error
+	blocksAdded        int
+	blockHeight        int
 }
 
 type Config struct {
@@ -198,6 +200,11 @@ func (client *Client) HandleBlock(ctx context.Context, msgType int, block *handl
 
 	switch msgType {
 	case handlers.ListenerMsgBlock:
+		client.blockHeight = block.Height
+		client.blocksAdded++
+		if client.blocksAdded%100 == 0 {
+			logger.Info(ctx, "Added 100 blocks to height %d", client.blockHeight)
+		}
 	case handlers.ListenerMsgBlockRevert:
 	}
 	return nil
@@ -257,6 +264,11 @@ func (client *Client) HandleInSync(ctx context.Context) error {
 
 	// TODO Build/Send outgoing transactions
 
+	if client.blocksAdded == 0 {
+		logger.Info(ctx, "No new blocks found")
+	} else {
+		logger.Info(ctx, "Synchronized %d new block(s) to height %d", client.blocksAdded, client.blockHeight)
+	}
 	logger.Info(ctx, "Balance : %.08f", BitcoinsFromSatoshis(client.Wallet.Balance()))
 
 	// Trigger close
