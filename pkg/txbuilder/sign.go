@@ -67,8 +67,8 @@ func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
 func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	// Update fee to estimated amount
 	estimatedFee := int64(float32(tx.EstimatedSize()) * tx.FeeRate)
-	inputValue := tx.inputSum()
-	outputValue := tx.outputSum(true)
+	inputValue := tx.InputValue()
+	outputValue := tx.OutputValue(true)
 
 	if inputValue < outputValue+uint64(estimatedFee) {
 		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(estimatedFee)))
@@ -107,8 +107,8 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 
 		// Check fee and adjust if too low
 		targetFee := int64(float32(tx.MsgTx.SerializeSize()) * tx.FeeRate)
-		inputValue = tx.inputSum()
-		outputValue = tx.outputSum(false)
+		inputValue = tx.InputValue()
+		outputValue = tx.OutputValue(false)
 		changeValue := tx.changeSum()
 		if inputValue < outputValue+uint64(targetFee) {
 			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(targetFee)))
