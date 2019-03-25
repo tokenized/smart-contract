@@ -17,6 +17,7 @@ import (
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -30,7 +31,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/kelseyhightower/envconfig"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -69,45 +69,8 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Config
 
-	var cfg struct {
-		Contract struct {
-			PrivateKey   string  `envconfig:"PRIV_KEY"`
-			OperatorName string  `envconfig:"OPERATOR_NAME"`
-			Version      string  `envconfig:"VERSION"`
-			FeeAddress   string  `envconfig:"FEE_ADDRESS"`
-			FeeAmount    uint64  `envconfig:"FEE_AMOUNT"`
-			FeeRate      float32 `default:"1.1" envconfig:"FEE_RATE"`
-			DustLimit    uint64  `default:"546" envconfig:"DUST_LIMIT"`
-		}
-		SpyNode struct {
-			Address        string `default:"127.0.0.1:8333" envconfig:"NODE_ADDRESS"`
-			UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
-			StartHash      string `envconfig:"START_HASH"`
-			UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
-			SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
-		}
-		RpcNode struct {
-			Host     string `envconfig:"RPC_HOST"`
-			Username string `envconfig:"RPC_USERNAME"`
-			Password string `envconfig:"RPC_PASSWORD"`
-		}
-		NodeStorage struct {
-			Region    string `default:"ap-southeast-2" envconfig:"NODE_STORAGE_REGION"`
-			AccessKey string `envconfig:"NODE_STORAGE_ACCESS_KEY"`
-			Secret    string `envconfig:"NODE_STORAGE_SECRET"`
-			Bucket    string `default:"standalone" envconfig:"NODE_STORAGE_BUCKET"`
-			Root      string `default:"./tmp" envconfig:"NODE_STORAGE_ROOT"`
-		}
-		Storage struct {
-			Region    string `default:"ap-southeast-2" envconfig:"CONTRACT_STORAGE_REGION"`
-			AccessKey string `envconfig:"CONTRACT_STORAGE_ACCESS_KEY"`
-			Secret    string `envconfig:"CONTRACT_STORAGE_SECRET"`
-			Bucket    string `default:"standalone" envconfig:"CONTRACT_STORAGE_BUCKET"`
-			Root      string `default:"./tmp" envconfig:"CONTRACT_STORAGE_ROOT"`
-		}
-	}
-
-	if err := envconfig.Process("API", &cfg); err != nil {
+	cfg, err := config.Environment()
+	if err != nil {
 		logger.Fatal(ctx, "Parsing Config : %s", err)
 	}
 
@@ -120,19 +83,7 @@ func main() {
 	logger.Info(ctx, "Build %v (%v on %v)", buildVersion, buildUser, buildDate)
 
 	// Mask sensitive values
-	cfgSafe := cfg
-	if len(cfgSafe.Contract.PrivateKey) > 0 {
-		cfgSafe.Contract.PrivateKey = "*** Masked ***"
-	}
-	if len(cfgSafe.RpcNode.Password) > 0 {
-		cfgSafe.RpcNode.Password = "*** Masked ***"
-	}
-	if len(cfgSafe.NodeStorage.Secret) > 0 {
-		cfgSafe.NodeStorage.Secret = "*** Masked ***"
-	}
-	if len(cfgSafe.Storage.Secret) > 0 {
-		cfgSafe.Storage.Secret = "*** Masked ***"
-	}
+	cfgSafe := config.SafeConfig(cfg)
 	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
 	if err != nil {
 		logger.Fatal(ctx, "Marshalling Config to JSON : %s", err)
@@ -149,10 +100,8 @@ func main() {
 		FeeValue:           cfg.Contract.FeeAmount,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        chaincfg.MainNetParams,
+		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
 	}
-
-	appConfig.ChainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
 
 	// -------------------------------------------------------------------------
 	// SPY Node
