@@ -47,7 +47,7 @@ type Config struct {
 }
 
 // SafeConfig masks sensitive config values
-func SafeConfig(cfg *Config) *Config {
+func SafeConfig(cfg Config) *Config {
 	cfgSafe := cfg
 
 	if len(cfgSafe.Contract.PrivateKey) > 0 {
@@ -63,7 +63,7 @@ func SafeConfig(cfg *Config) *Config {
 		cfgSafe.Storage.Secret = "*** Masked ***"
 	}
 
-	return cfgSafe
+	return &cfgSafe
 }
 
 // Environment returns configuration sourced from environment variables

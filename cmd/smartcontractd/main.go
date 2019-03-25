@@ -83,7 +83,7 @@ func main() {
 	logger.Info(ctx, "Build %v (%v on %v)", buildVersion, buildUser, buildDate)
 
 	// Mask sensitive values
-	cfgSafe := config.SafeConfig(cfg)
+	cfgSafe := config.SafeConfig(*cfg)
 	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
 	if err != nil {
 		logger.Fatal(ctx, "Marshalling Config to JSON : %s", err)
