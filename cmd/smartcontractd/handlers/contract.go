@@ -393,7 +393,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			newActionFees := make([]protocol.Fee, 0, len(msg.ActionFee))
 			for _, actionFee := range msg.ActionFee {
 				var newActionFee protocol.Fee
-				err := platform.Convert(ctx, &actionFee, &newActionFee)
+				err := node.Convert(ctx, &actionFee, &newActionFee)
 				if err != nil {
 					return err
 				}
