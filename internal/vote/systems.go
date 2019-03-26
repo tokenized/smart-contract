@@ -1,11 +1,15 @@
 package vote
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"sort"
 
+	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -51,7 +55,7 @@ type VotingSystem interface {
 	// case of a draw, multiple winners.
 	//
 	// Unless there is a single winner, the vote has not been successful.
-	Winners(state.Contract, state.Vote) ([]uint8, error)
+	Winners(context.Context, *db.DB, *state.Contract, *state.Vote) ([]uint8, error)
 }
 
 type baseVotingSystem struct{}
@@ -89,7 +93,7 @@ type MajorityVote struct {
 	baseVotingSystem
 }
 
-func (m MajorityVote) Winners(contract state.Contract, vote state.Vote) ([]uint8, error) {
+func (m MajorityVote) Winners(_ context.Context, _ *db.DB, contract *state.Contract, vote *state.Vote) ([]uint8, error) {
 	// Get the totals
 	totalValue := uint64(0)
 
@@ -126,21 +130,25 @@ type AbsoluteMajority struct {
 	baseVotingSystem
 }
 
-func (a AbsoluteMajority) Winners(c state.Contract, v state.Vote) ([]uint8, error) {
+func (a AbsoluteMajority) Winners(ctx context.Context, dbConn *db.DB, c *state.Contract, v *state.Vote) ([]uint8, error) {
 	// Number of asset holders
 	tokenHolderCount := 0
 
 	if v.AssetCode.IsZero() {
-		for _, a := range c.Assets {
-			tokenHolderCount += len(a.Holdings)
+		for _, a := range c.AssetCodes {
+			asset, err := asset.Retrieve(ctx, dbConn, &c.ID, &a)
+			if err != nil {
+				return nil, errors.Wrap(err, "Failed to count holdings")
+			}
+			tokenHolderCount += len(asset.Holdings)
 		}
 	} else {
-		a, ok := c.Assets[v.AssetCode]
-		if !ok {
-			return nil, errors.New("Asset not found")
+		asset, err := asset.Retrieve(ctx, dbConn, &c.ID, &v.AssetCode)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to count holdings")
 		}
 
-		tokenHolderCount += len(a.Holdings)
+		tokenHolderCount += len(asset.Holdings)
 	}
 
 	// Get the ballot count
@@ -179,7 +187,7 @@ type PluralityVotingSystem struct {
 	baseVotingSystem
 }
 
-func (p PluralityVotingSystem) Winners(c state.Contract, vote state.Vote) ([]uint8, error) {
+func (p PluralityVotingSystem) Winners(_ context.Context, _ *db.DB, c *state.Contract, vote *state.Vote) ([]uint8, error) {
 	// Get the highest vote
 	max := ResultMaximum(*vote.Result)
 
@@ -203,7 +211,7 @@ type SuperMajority struct {
 	baseVotingSystem
 }
 
-func (s SuperMajority) Winners(c state.Contract, v state.Vote) ([]uint8, error) {
+func (s SuperMajority) Winners(_ context.Context, _ *db.DB, c *state.Contract, v *state.Vote) ([]uint8, error) {
 	// Get the totals
 	totalValue := uint64(0)
 
@@ -240,21 +248,25 @@ type AbsoluteSuperMajority struct {
 	baseVotingSystem
 }
 
-func (a AbsoluteSuperMajority) Winners(c state.Contract, v state.Vote) ([]uint8, error) {
+func (a AbsoluteSuperMajority) Winners(ctx context.Context, dbConn *db.DB, c *state.Contract, v *state.Vote) ([]uint8, error) {
 	// Number of asset holders
 	tokenHolderCount := 0
 
 	if v.AssetCode.IsZero() {
-		for _, a := range c.Assets {
-			tokenHolderCount += len(a.Holdings)
+		for _, a := range c.AssetCodes {
+			asset, err := asset.Retrieve(ctx, dbConn, &c.ID, &a)
+			if err != nil {
+				return nil, errors.Wrap(err, "Failed to count holdings")
+			}
+			tokenHolderCount += len(asset.Holdings)
 		}
 	} else {
-		a, ok := c.Assets[v.AssetCode]
-		if !ok {
-			return nil, errors.New("Asset not found")
+		asset, err := asset.Retrieve(ctx, dbConn, &c.ID, &v.AssetCode)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to count holdings")
 		}
 
-		tokenHolderCount += len(a.Holdings)
+		tokenHolderCount += len(asset.Holdings)
 	}
 
 	// Get the ballot count
@@ -290,6 +302,6 @@ func (a AbsoluteSuperMajority) Winners(c state.Contract, v state.Vote) ([]uint8,
 // Rights" (N) voting system.
 type NoVotingRights struct{}
 
-func (v NoVotingRights) Winners(_ state.Contract, _ state.Vote) ([]uint8, error) {
+func (v NoVotingRights) Winners(_ context.Context, _ *db.DB, _ *state.Contract, _ *state.Vote) ([]uint8, error) {
 	return []uint8{}, nil
 }

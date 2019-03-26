@@ -29,7 +29,6 @@ type Client struct {
 	Wallet             Wallet
 	Config             Config
 	ContractPKH        []byte
-	ContractFeePKH     []byte
 	spyNode            *spynode.Node
 	spyNodeStopChannel chan error
 	blocksAdded        int
@@ -42,14 +41,13 @@ type Config struct {
 	FeeRate     float32 `default:"1.1" envconfig:"CLIENT_FEE_RATE"`
 	DustLimit   uint64  `default:"546" envconfig:"CLIENT_DUST_LIMIT"`
 	Contract    string  `envconfig:"CLIENT_CONTRACT_ADDRESS"`
-	FeeAddress  string  `envconfig:"CLIENT_FEE_ADDRESS"`
 	ContractFee uint64  `default:"1000" envconfig:"CLIENT_CONTRACT_FEE"`
 	SpyNode     struct {
 		Address          string `default:"127.0.0.1:8333" envconfig:"CLIENT_NODE_ADDRESS"`
 		UserAgent        string `default:"/Tokenized:0.1.0/" envconfig:"CLIENT_NODE_USER_AGENT"`
 		StartHash        string `envconfig:"CLIENT_START_HASH"`
-		UntrustedClients int    `default:"8" envconfig:"CLIENT_UNTRUSTED_NODES"`
-		SafeTxDelay      int    `default:"2000" envconfig:"CLIENT_SAFE_TX_DELAY"`
+		UntrustedClients int    `default:"0" envconfig:"CLIENT_UNTRUSTED_NODES"`
+		SafeTxDelay      int    `default:"0" envconfig:"CLIENT_SAFE_TX_DELAY"`
 	}
 }
 
@@ -102,13 +100,6 @@ func NewClient(ctx context.Context) (*Client, error) {
 	}
 	logger.Info(ctx, "Contract address : %s", address)
 	client.ContractPKH = address.ScriptAddress()
-
-	address, err = btcutil.DecodeAddress(client.Config.FeeAddress, &client.Config.ChainParams)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get fee address")
-	}
-	logger.Info(ctx, "Fee address : %s", address)
-	client.ContractFeePKH = address.ScriptAddress()
 
 	return &client, nil
 }

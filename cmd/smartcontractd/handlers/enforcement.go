@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"context"
-	"errors"
 
 	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -69,9 +70,13 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
 	// Asset could not be found
@@ -93,8 +98,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
 		// Holdings check
-		_, ok := as.Holdings[target.Address]
-		if !ok {
+		if !asset.CheckHolding(ctx, as, &target.Address) {
 			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
@@ -121,7 +125,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
-	w.AddFee(ctx)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a freeze action
 	return node.RespondSuccess(ctx, w, itx, rk, &freeze)
@@ -143,9 +147,13 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
 	// Asset could not be found
@@ -167,8 +175,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
 		// Holdings check
-		_, ok = as.Holdings[target.Address]
-		if !ok {
+		if !asset.CheckHolding(ctx, as, &target.Address) {
 			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
@@ -195,7 +202,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
-	w.AddFee(ctx)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a thaw action
 	return node.RespondSuccess(ctx, w, itx, rk, &thaw)
@@ -217,9 +224,13 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
 	// Asset could not be found
@@ -248,23 +259,17 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	}
 
 	// Holdings check
-	depositHolding, depositOK := as.Holdings[msg.DepositAddress]
-	if depositOK {
-		confiscation.DepositQty = depositHolding.Balance
-	} else {
-		confiscation.DepositQty = 0 // No intial balance in "custodian"
-	}
+	confiscation.DepositQty = asset.GetBalance(ctx, as, &msg.DepositAddress)
 
 	// Validate target addresses
 	for _, target := range msg.TargetAddresses {
 		// Holdings check
-		holding, ok := as.Holdings[target.Address]
-		if !ok {
+		if !asset.CheckHolding(ctx, as, &target.Address) {
 			logger.Warn(ctx, "%s : Holding not found: contract=%s asset=%s party=%s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 		}
 
-		confiscation.DepositQty += holding.Balance
+		confiscation.DepositQty += asset.GetBalance(ctx, as, &target.Address)
 
 		logger.Info(ctx, "%s : Confiscation order request : %s %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String(), target.Address.String())
 		confiscation.Addresses = append(confiscation.Addresses, target.Address)
@@ -291,7 +296,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	w.AddChangeOutput(ctx, contractAddress)
 
 	// Add fee output
-	w.AddFee(ctx)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a confiscation action
 	return node.RespondSuccess(ctx, w, itx, rk, &confiscation)
@@ -389,7 +394,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 	// }
 
 	// Remove freezes
-	ua := asset.UpdateAsset{NewHoldingStatuses: make(map[protocol.PublicKeyHash]*state.HoldingStatus)}
+	ua := asset.UpdateAsset{NewHoldingStatuses: make(map[protocol.PublicKeyHash]state.HoldingStatus)}
 
 	// TODO Implement after format is updated
 	// for _, address := range thaw.Addresses {

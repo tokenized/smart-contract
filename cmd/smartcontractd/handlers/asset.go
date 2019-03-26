@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"errors"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -15,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -45,8 +45,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract : %s", v.TraceID, contractAddr.String())
-		return err
+		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	// Contract could not be found
@@ -56,20 +55,19 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Verify issuer is sender of tx.
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.Issuer.Bytes()) {
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
 		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
 
 	// Locate Asset
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
-	if err != nil {
-		return err
-	}
-
-	// The asset should not exist already
-	if as != nil {
-		logger.Warn(ctx, "%s : Asset already exists: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+	_, err = asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
+	if err != asset.ErrNotFound {
+		if err != nil {
+			logger.Warn(ctx, "%s : Error retrieving asset : %s", v.TraceID, msg.AssetCode.String())
+		} else {
+			logger.Warn(ctx, "%s : Asset already exists : %s", v.TraceID, msg.AssetCode.String())
+		}
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
 	}
 
@@ -98,10 +96,10 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer (Change)
-	w.AddOutput(ctx, contractAddress, 0)
-	w.AddChangeOutput(ctx, itx.Inputs[0].Address) // Request must come from issuer
+	// 1 - Contract Address (change)
+	// 2 - Contract Fee
+	w.AddChangeOutput(ctx, contractAddress)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -123,6 +121,10 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
@@ -181,10 +183,10 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer (Change)
-	w.AddOutput(ctx, contractAddress, 0)
-	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
+	// 1 - Contract Address (change)
+	// 2 - Contract Fee
+	w.AddChangeOutput(ctx, contractAddress)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -206,10 +208,14 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 	// Locate Asset
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractAddr.Bytes()) {
+		return errors.New("Asset Creation not from contract")
+	}
+
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
-	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
-		return err
+	if err != nil && err != asset.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
 	// Create or update Asset
@@ -217,14 +223,16 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		// Prepare creation object
 		na := asset.NewAsset{}
 
-		err = node.Convert(ctx, &msg, &na)
-		if err != nil {
+		if err = node.Convert(ctx, &msg, &na); err != nil {
+			return err
+		}
+
+		if err := contract.AddAssetCode(ctx, dbConn, contractAddr, &msg.AssetCode, v.Now); err != nil {
 			return err
 		}
 
 		if err := asset.Create(ctx, dbConn, contractAddr, &msg.AssetCode, &na, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to create asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
-			return err
+			return errors.Wrap(err, "Failed to create asset")
 		}
 		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 	} else {

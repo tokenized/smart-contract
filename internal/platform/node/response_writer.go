@@ -31,8 +31,8 @@ func (w *ResponseWriter) AddOutput(ctx context.Context, addr btcutil.Address, va
 }
 
 // AddFee attaches the fee as the next output, if configured
-func (w *ResponseWriter) AddFee(ctx context.Context) error {
-	if fee := outputFee(ctx, w.Config); fee != nil {
+func (w *ResponseWriter) AddContractFee(ctx context.Context, value uint64) error {
+	if fee := outputFee(ctx, w.Config, value); fee != nil {
 		w.Outputs = append(w.Outputs, *fee)
 	}
 	return nil
@@ -73,12 +73,12 @@ func outputValue(ctx context.Context, config *Config, addr btcutil.Address, valu
 }
 
 // outputFee prepares a special fee output based on node configuration
-func outputFee(ctx context.Context, config *Config) *Output {
+func outputFee(ctx context.Context, config *Config, value uint64) *Output {
 	if config.FeeValue > 0 {
 		feeAddr, _ := btcutil.DecodeAddress(config.FeeAddress, &config.ChainParams)
 		return &Output{
 			Address: feeAddr,
-			Value:   config.FeeValue,
+			Value:   value,
 		}
 	}
 

@@ -27,6 +27,7 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 	c := Contract{
 		MasterDB: masterDB,
 		Config:   config,
+		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeContractOffer, c.OfferRequest)

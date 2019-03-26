@@ -1024,64 +1024,28 @@ func (action AssetModification) String() string {
 // action allows for the positive response from the smart contract with
 // either a Contract Formation Action or a Rejection Action.
 type ContractOffer struct {
-	Header                     Header         `json:"header,omitempty"`                        // Common header data for all actions
-	ContractName               string         `json:"contract_name,omitempty"`                 // Can be any unique identifying string, including human readable names for branding/vanity purposes.   [Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address.]. Smart contracts can be branded and specialized to suit any terms and conditions.
-	ContractFileType           uint8          `json:"contract_file_type,omitempty"`            // 1 - SHA-256 Hash, 2 - Markdown
-	ContractFile               []byte         `json:"contract_file,omitempty"`                 // SHA-256 hash of the contract file or markdown data for contract file specific to the smart contract and relevant Assets.  Legal and technical information. (eg. pdf)
-	SupportingDocsFileType     uint8          `json:"supporting_docs_file_type,omitempty"`     // 1 - 7z
-	SupportingDocs             string         `json:"supporting_docs,omitempty"`               //
-	GoverningLaw               string         `json:"governing_law,omitempty"`                 // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
-	Jurisdiction               string         `json:"jurisdiction,omitempty"`                  // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
-	ContractExpiration         Timestamp      `json:"contract_expiration,omitempty"`           // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate total smart contract running costs for the entire life of the contract. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
-	ContractURI                string         `json:"contract_uri,omitempty"`                  // Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on-chain information or even a public address (DNS).
-	IssuerName                 string         `json:"issuer_name,omitempty"`                   // Length 0-255 bytes. 0 is not valid.Issuing entity (company, organization, individual).  Can be any unique identifying string, including human readable names for branding/vanity purposes.
-	IssuerType                 byte           `json:"issuer_type,omitempty"`                   // P - Public Company Limited by Shares, C - Private Company Limited by Shares, I - Individual, L - Limited Partnership, U -Unlimited Partnership, T - Sole Proprietorship, S - Statutory Company, O - Non-Profit Organization, N - Nation State, G - Government Agency, U - Unit Trust, D - Discretionary Trust.  Found in 'Entities' (Specification/Resources).
-	IssuerLEI                  string         `json:"issuer_lei,omitempty"`                    // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
-	IssuerLogoURL              string         `json:"issuer_logo_url,omitempty"`               // The URL of the Issuers logo.
-	ContractOperatorIncluded   bool           `json:"contract_operator_included,omitempty"`    // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
-	ContractOperatorID         string         `json:"contract_operator_id,omitempty"`          // Length 0-255 bytes. 0 is valid. Smart Contract Operator identifier. Can be any unique identifying string, including human readable names for branding/vanity purposes. Can also be null or the Issuer.
-	OperatorLEI                string         `json:"operator_lei,omitempty"`                  // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
-	ContractAuthFlags          [16]byte       `json:"contract_auth_flags,omitempty"`           // Authorization Flags aka Terms and Conditions that the smart contract can enforce.  Other terms and conditions that are out of the smart contract's control are listed in the actual Contract File.
-	ActionFee                  []Fee          `json:"action_fee,omitempty"`                    // The tokens available for payment of action fees. One is required per action and must be included in the action request transaction. i.e. Bitcoin amount or an AUD backed token and amount.
-	VotingSystems              []VotingSystem `json:"voting_systems,omitempty"`                // A list of voting systems.
-	RestrictedQtyAssets        uint64         `json:"restricted_qty_assets,omitempty"`         // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
-	ReferendumProposal         bool           `json:"referendum_proposal,omitempty"`           // A Referendum is permitted for Proposals (outside of smart contract scope).
-	InitiativeProposal         bool           `json:"initiative_proposal,omitempty"`           // An initiative is permitted for Proposals (outside of smart contract scope).
-	Registries                 []Registry     `json:"registries,omitempty"`                    // A list Registries
-	IssuerAddressIncluded      bool           `json:"issuer_address_included,omitempty"`       // Physical/mailing address. False means the "includes" fields are skipped in serialization.
-	UnitNumber                 string         `json:"unit_number,omitempty"`                   // Issuer Address Details (eg. HQ)
-	BuildingNumber             string         `json:"building_number,omitempty"`               //
-	Street                     string         `json:"street,omitempty"`                        //
-	SuburbCity                 string         `json:"suburb_city,omitempty"`                   //
-	TerritoryStateProvinceCode string         `json:"territory_state_province_code,omitempty"` //
-	CountryCode                string         `json:"country_code,omitempty"`                  //
-	PostalZIPCode              string         `json:"postal_zip_code,omitempty"`               //
-	EmailAddress               string         `json:"email_address,omitempty"`                 // Length 0-255 bytes. 0 is valid (no EmailAddress). Address for text-based communication: eg. email address, Bitcoin address
-	PhoneNumber                string         `json:"phone_number,omitempty"`                  // Length 0-50 bytes. 0 is valid (no Phone subfield).Phone Number for Entity.
-	KeyRoles                   []KeyRole      `json:"key_roles,omitempty"`                     // A list of Key Roles.
-	NotableRoles               []NotableRole  `json:"notable_roles,omitempty"`                 // A list of Notable Roles.
-}
-
-// SetIssuerAddress Sets the issuer's mailing address on the contract..
-func (action *ContractOffer) SetIssuerAddress(unit string, building string, street string, city string, state string, countryCode string, postalCode string) {
-	action.UnitNumber = unit
-	action.BuildingNumber = building
-	action.Street = street
-	action.SuburbCity = city
-	action.TerritoryStateProvinceCode = state
-	action.CountryCode = countryCode
-	action.PostalZIPCode = postalCode
-	action.IssuerAddressIncluded = true
-}
-
-// AddKeyRole Adds a key role to the contract.
-func (action *ContractOffer) AddKeyRole(roleType uint8, name string) {
-	action.KeyRoles = append(action.KeyRoles, *NewKeyRole(roleType, name))
-}
-
-// AddNotableRole Adds a notable role to the contract.
-func (action *ContractOffer) AddNotableRole(roleType uint8, name string) {
-	action.NotableRoles = append(action.NotableRoles, *NewNotableRole(roleType, name))
+	Header                   Header         `json:"header,omitempty"`                     // Common header data for all actions
+	ContractName             string         `json:"contract_name,omitempty"`              // Can be any unique identifying string, including human readable names for branding/vanity purposes.   [Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address.]. Smart contracts can be branded and specialized to suit any terms and conditions.
+	BodyOfAgreementType      uint8          `json:"body_of_agreement_type,omitempty"`     // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
+	BodyOfAgreement          []byte         `json:"body_of_agreement,omitempty"`          // SHA-256 hash of the body of the agreement (full contract in pdf format or the like) or the full terms and conditions of an agreement in the Tokenized Body of Agreement format.  This is specific to the smart contract and relevant Assets.  Legal and technical information.
+	ContractType             string         `json:"contract_type,omitempty"`              //
+	SupportingDocsFileType   uint8          `json:"supporting_docs_file_type,omitempty"`  // 1 - 7z
+	SupportingDocs           []byte         `json:"supporting_docs,omitempty"`            //
+	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
+	Jurisdiction             string         `json:"jurisdiction,omitempty"`               // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
+	ContractExpiration       Timestamp      `json:"contract_expiration,omitempty"`        // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate total smart contract running costs for the entire life of the contract. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
+	ContractURI              string         `json:"contract_uri,omitempty"`               // Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on-chain information or even a public address (DNS).
+	Issuer                   Entity         `json:"issuer,omitempty"`                     // The issuer of this contract.
+	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the Issuers logo.
+	ContractOperatorIncluded bool           `json:"contract_operator_included,omitempty"` // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
+	ContractOperator         Entity         `json:"contract_operator,omitempty"`          // An additional entity with operator access to the contract.
+	ContractAuthFlags        [16]byte       `json:"contract_auth_flags,omitempty"`        // Authorization Flags aka Terms and Conditions that the smart contract can enforce.  Other terms and conditions that are out of the smart contract's control are listed in the actual Contract File.
+	ContractFee              uint64         `json:"contract_fee,omitempty"`               // Satoshis required to be paid to the contract for each asset action.
+	VotingSystems            []VotingSystem `json:"voting_systems,omitempty"`             // A list of voting systems.
+	RestrictedQtyAssets      uint64         `json:"restricted_qty_assets,omitempty"`      // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
+	ReferendumProposal       bool           `json:"referendum_proposal,omitempty"`        // A Referendum is permitted for Proposals (outside of smart contract scope).
+	InitiativeProposal       bool           `json:"initiative_proposal,omitempty"`        // An initiative is permitted for Proposals (outside of smart contract scope).
+	Registries               []Registry     `json:"registries,omitempty"`                 // A list Registries
 }
 
 // Type returns the type identifer for this message.
@@ -1117,18 +1081,26 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := write(buf, action.ContractFileType); err != nil {
+		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
-		if err := WriteVarBin(buf, action.ContractFile, 32); err != nil {
+		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
@@ -1141,10 +1113,10 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		}
 	}
 
-	// SupportingDocs (string)
+	// SupportingDocs ([]byte)
 	_, skip = excludes["SupportingDocs"]
 	if !skip {
-		if err := WriteVarChar(buf, action.SupportingDocs, 32); err != nil {
+		if err := WriteVarBin(buf, action.SupportingDocs, 32); err != nil {
 			return nil, err
 		}
 	}
@@ -1186,26 +1158,15 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		}
 	}
 
-	// IssuerName (string)
-	_, skip = excludes["IssuerName"]
+	// Issuer (Entity)
+	_, skip = excludes["Issuer"]
 	if !skip {
-		if err := WriteVarChar(buf, action.IssuerName, 8); err != nil {
+		b, err := action.Issuer.Serialize()
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	// IssuerType (byte)
-	_, skip = excludes["IssuerType"]
-	if !skip {
-		if err := write(buf, action.IssuerType); err != nil {
-			return nil, err
-		}
-	}
-
-	// IssuerLEI (string)
-	_, skip = excludes["IssuerLEI"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.IssuerLEI, 20); err != nil {
+		if err := write(buf, b); err != nil {
 			return nil, err
 		}
 	}
@@ -1225,23 +1186,19 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 			return nil, err
 		}
 		if !action.ContractOperatorIncluded {
-			excludes["ContractOperatorID"] = true
-			excludes["OperatorLEI"] = true
+			excludes["ContractOperator"] = true
 		}
 	}
 
-	// ContractOperatorID (string)
-	_, skip = excludes["ContractOperatorID"]
+	// ContractOperator (Entity)
+	_, skip = excludes["ContractOperator"]
 	if !skip {
-		if err := WriteVarChar(buf, action.ContractOperatorID, 8); err != nil {
+		b, err := action.ContractOperator.Serialize()
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	// OperatorLEI (string)
-	_, skip = excludes["OperatorLEI"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.OperatorLEI, 20); err != nil {
+		if err := write(buf, b); err != nil {
 			return nil, err
 		}
 	}
@@ -1254,21 +1211,11 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		}
 	}
 
-	// ActionFee ([]Fee)
-	_, skip = excludes["ActionFee"]
+	// ContractFee (uint64)
+	_, skip = excludes["ContractFee"]
 	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.ActionFee)), 8, 8); err != nil {
+		if err := write(buf, action.ContractFee); err != nil {
 			return nil, err
-		}
-		for _, value := range action.ActionFee {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -1332,131 +1279,6 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 		}
 	}
 
-	// IssuerAddressIncluded (bool)
-	_, skip = excludes["IssuerAddressIncluded"]
-	if !skip {
-		if err := write(buf, action.IssuerAddressIncluded); err != nil {
-			return nil, err
-		}
-		if !action.IssuerAddressIncluded {
-			excludes["UnitNumber"] = true
-			excludes["BuildingNumber"] = true
-			excludes["Street"] = true
-			excludes["SuburbCity"] = true
-			excludes["TerritoryStateProvinceCode"] = true
-			excludes["CountryCode"] = true
-			excludes["PostalZIPCode"] = true
-		}
-	}
-
-	// UnitNumber (string)
-	_, skip = excludes["UnitNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.UnitNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// BuildingNumber (string)
-	_, skip = excludes["BuildingNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.BuildingNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// Street (string)
-	_, skip = excludes["Street"]
-	if !skip {
-		if err := WriteVarChar(buf, action.Street, 16); err != nil {
-			return nil, err
-		}
-	}
-
-	// SuburbCity (string)
-	_, skip = excludes["SuburbCity"]
-	if !skip {
-		if err := WriteVarChar(buf, action.SuburbCity, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// TerritoryStateProvinceCode (string)
-	_, skip = excludes["TerritoryStateProvinceCode"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.TerritoryStateProvinceCode, 5); err != nil {
-			return nil, err
-		}
-	}
-
-	// CountryCode (string)
-	_, skip = excludes["CountryCode"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.CountryCode, 3); err != nil {
-			return nil, err
-		}
-	}
-
-	// PostalZIPCode (string)
-	_, skip = excludes["PostalZIPCode"]
-	if !skip {
-		if err := WriteVarChar(buf, action.PostalZIPCode, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// EmailAddress (string)
-	_, skip = excludes["EmailAddress"]
-	if !skip {
-		if err := WriteVarChar(buf, action.EmailAddress, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// PhoneNumber (string)
-	_, skip = excludes["PhoneNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.PhoneNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// KeyRoles ([]KeyRole)
-	_, skip = excludes["KeyRoles"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.KeyRoles)), 0, 8); err != nil {
-			return nil, err
-		}
-		for _, value := range action.KeyRoles {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// NotableRoles ([]NotableRole)
-	_, skip = excludes["NotableRoles"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.NotableRoles)), 0, 8); err != nil {
-			return nil, err
-		}
-		for _, value := range action.NotableRoles {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	return buf.Bytes(), nil
 }
 
@@ -1483,19 +1305,29 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := read(buf, &action.ContractFileType); err != nil {
+		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
 		var err error
-		action.ContractFile, err = ReadVarBin(buf, 32)
+		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		var err error
+		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -1509,11 +1341,11 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 		}
 	}
 
-	// SupportingDocs (string)
+	// SupportingDocs ([]byte)
 	_, skip = excludes["SupportingDocs"]
 	if !skip {
 		var err error
-		action.SupportingDocs, err = ReadVarChar(buf, 32)
+		action.SupportingDocs, err = ReadVarBin(buf, 32)
 		if err != nil {
 			return 0, err
 		}
@@ -1557,30 +1389,10 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 		}
 	}
 
-	// IssuerName (string)
-	_, skip = excludes["IssuerName"]
+	// Issuer (Entity)
+	_, skip = excludes["Issuer"]
 	if !skip {
-		var err error
-		action.IssuerName, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// IssuerType (byte)
-	_, skip = excludes["IssuerType"]
-	if !skip {
-		if err := read(buf, &action.IssuerType); err != nil {
-			return 0, err
-		}
-	}
-
-	// IssuerLEI (string)
-	_, skip = excludes["IssuerLEI"]
-	if !skip {
-		var err error
-		action.IssuerLEI, err = ReadFixedChar(buf, 20)
-		if err != nil {
+		if err := action.Issuer.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -1602,27 +1414,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 			return 0, err
 		}
 		if !action.ContractOperatorIncluded {
-			excludes["ContractOperatorID"] = true
-			excludes["OperatorLEI"] = true
+			excludes["ContractOperator"] = true
 		}
 	}
 
-	// ContractOperatorID (string)
-	_, skip = excludes["ContractOperatorID"]
+	// ContractOperator (Entity)
+	_, skip = excludes["ContractOperator"]
 	if !skip {
-		var err error
-		action.ContractOperatorID, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// OperatorLEI (string)
-	_, skip = excludes["OperatorLEI"]
-	if !skip {
-		var err error
-		action.OperatorLEI, err = ReadFixedChar(buf, 20)
-		if err != nil {
+		if err := action.ContractOperator.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -1635,21 +1434,11 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 		}
 	}
 
-	// ActionFee ([]Fee)
-	_, skip = excludes["ActionFee"]
+	// ContractFee (uint64)
+	_, skip = excludes["ContractFee"]
 	if !skip {
-		size, err := ReadVariableSize(buf, 8, 8)
-		if err != nil {
+		if err := read(buf, &action.ContractFee); err != nil {
 			return 0, err
-		}
-		action.ActionFee = make([]Fee, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue Fee
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.ActionFee = append(action.ActionFee, newValue)
 		}
 	}
 
@@ -1713,149 +1502,6 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 		}
 	}
 
-	// IssuerAddressIncluded (bool)
-	_, skip = excludes["IssuerAddressIncluded"]
-	if !skip {
-		if err := read(buf, &action.IssuerAddressIncluded); err != nil {
-			return 0, err
-		}
-		if !action.IssuerAddressIncluded {
-			excludes["UnitNumber"] = true
-			excludes["BuildingNumber"] = true
-			excludes["Street"] = true
-			excludes["SuburbCity"] = true
-			excludes["TerritoryStateProvinceCode"] = true
-			excludes["CountryCode"] = true
-			excludes["PostalZIPCode"] = true
-		}
-	}
-
-	// UnitNumber (string)
-	_, skip = excludes["UnitNumber"]
-	if !skip {
-		var err error
-		action.UnitNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// BuildingNumber (string)
-	_, skip = excludes["BuildingNumber"]
-	if !skip {
-		var err error
-		action.BuildingNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// Street (string)
-	_, skip = excludes["Street"]
-	if !skip {
-		var err error
-		action.Street, err = ReadVarChar(buf, 16)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// SuburbCity (string)
-	_, skip = excludes["SuburbCity"]
-	if !skip {
-		var err error
-		action.SuburbCity, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// TerritoryStateProvinceCode (string)
-	_, skip = excludes["TerritoryStateProvinceCode"]
-	if !skip {
-		var err error
-		action.TerritoryStateProvinceCode, err = ReadFixedChar(buf, 5)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// CountryCode (string)
-	_, skip = excludes["CountryCode"]
-	if !skip {
-		var err error
-		action.CountryCode, err = ReadFixedChar(buf, 3)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// PostalZIPCode (string)
-	_, skip = excludes["PostalZIPCode"]
-	if !skip {
-		var err error
-		action.PostalZIPCode, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// EmailAddress (string)
-	_, skip = excludes["EmailAddress"]
-	if !skip {
-		var err error
-		action.EmailAddress, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// PhoneNumber (string)
-	_, skip = excludes["PhoneNumber"]
-	if !skip {
-		var err error
-		action.PhoneNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// KeyRoles ([]KeyRole)
-	_, skip = excludes["KeyRoles"]
-	if !skip {
-		size, err := ReadVariableSize(buf, 0, 8)
-		if err != nil {
-			return 0, err
-		}
-		action.KeyRoles = make([]KeyRole, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue KeyRole
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.KeyRoles = append(action.KeyRoles, newValue)
-		}
-	}
-
-	// NotableRoles ([]NotableRole)
-	_, skip = excludes["NotableRoles"]
-	if !skip {
-		size, err := ReadVariableSize(buf, 0, 8)
-		if err != nil {
-			return 0, err
-		}
-		action.NotableRoles = make([]NotableRole, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue NotableRole
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.NotableRoles = append(action.NotableRoles, newValue)
-		}
-	}
-
 	return len(b) - buf.Len(), nil
 }
 
@@ -1869,40 +1515,26 @@ func (action ContractOffer) String() string {
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
 	vals = append(vals, fmt.Sprintf("ContractName:%#+v", action.ContractName))
-	vals = append(vals, fmt.Sprintf("ContractFileType:%v", action.ContractFileType))
-	vals = append(vals, fmt.Sprintf("ContractFile:%#x", action.ContractFile))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreementType:%v", action.BodyOfAgreementType))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreement:%#x", action.BodyOfAgreement))
+	vals = append(vals, fmt.Sprintf("ContractType:%#+v", action.ContractType))
 	vals = append(vals, fmt.Sprintf("SupportingDocsFileType:%v", action.SupportingDocsFileType))
-	vals = append(vals, fmt.Sprintf("SupportingDocs:%#+v", action.SupportingDocs))
+	vals = append(vals, fmt.Sprintf("SupportingDocs:%#x", action.SupportingDocs))
 	vals = append(vals, fmt.Sprintf("GoverningLaw:%#+v", action.GoverningLaw))
 	vals = append(vals, fmt.Sprintf("Jurisdiction:%#+v", action.Jurisdiction))
 	vals = append(vals, fmt.Sprintf("ContractExpiration:%#+v", action.ContractExpiration))
 	vals = append(vals, fmt.Sprintf("ContractURI:%#+v", action.ContractURI))
-	vals = append(vals, fmt.Sprintf("IssuerName:%#+v", action.IssuerName))
-	vals = append(vals, fmt.Sprintf("IssuerType:%#+v", action.IssuerType))
-	vals = append(vals, fmt.Sprintf("IssuerLEI:%#+v", action.IssuerLEI))
+	vals = append(vals, fmt.Sprintf("Issuer:%#+v", action.Issuer))
 	vals = append(vals, fmt.Sprintf("IssuerLogoURL:%#+v", action.IssuerLogoURL))
 	vals = append(vals, fmt.Sprintf("ContractOperatorIncluded:%#+v", action.ContractOperatorIncluded))
-	vals = append(vals, fmt.Sprintf("ContractOperatorID:%#+v", action.ContractOperatorID))
-	vals = append(vals, fmt.Sprintf("OperatorLEI:%#+v", action.OperatorLEI))
+	vals = append(vals, fmt.Sprintf("ContractOperator:%#+v", action.ContractOperator))
 	vals = append(vals, fmt.Sprintf("ContractAuthFlags:%#+v", action.ContractAuthFlags))
-	vals = append(vals, fmt.Sprintf("ActionFee:%#+v", action.ActionFee))
+	vals = append(vals, fmt.Sprintf("ContractFee:%v", action.ContractFee))
 	vals = append(vals, fmt.Sprintf("VotingSystems:%#+v", action.VotingSystems))
 	vals = append(vals, fmt.Sprintf("RestrictedQtyAssets:%v", action.RestrictedQtyAssets))
 	vals = append(vals, fmt.Sprintf("ReferendumProposal:%#+v", action.ReferendumProposal))
 	vals = append(vals, fmt.Sprintf("InitiativeProposal:%#+v", action.InitiativeProposal))
 	vals = append(vals, fmt.Sprintf("Registries:%#+v", action.Registries))
-	vals = append(vals, fmt.Sprintf("IssuerAddressIncluded:%#+v", action.IssuerAddressIncluded))
-	vals = append(vals, fmt.Sprintf("UnitNumber:%#+v", action.UnitNumber))
-	vals = append(vals, fmt.Sprintf("BuildingNumber:%#+v", action.BuildingNumber))
-	vals = append(vals, fmt.Sprintf("Street:%#+v", action.Street))
-	vals = append(vals, fmt.Sprintf("SuburbCity:%#+v", action.SuburbCity))
-	vals = append(vals, fmt.Sprintf("TerritoryStateProvinceCode:%#+v", action.TerritoryStateProvinceCode))
-	vals = append(vals, fmt.Sprintf("CountryCode:%#+v", action.CountryCode))
-	vals = append(vals, fmt.Sprintf("PostalZIPCode:%#+v", action.PostalZIPCode))
-	vals = append(vals, fmt.Sprintf("EmailAddress:%#+v", action.EmailAddress))
-	vals = append(vals, fmt.Sprintf("PhoneNumber:%#+v", action.PhoneNumber))
-	vals = append(vals, fmt.Sprintf("KeyRoles:%#+v", action.KeyRoles))
-	vals = append(vals, fmt.Sprintf("NotableRoles:%#+v", action.NotableRoles))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
@@ -1913,44 +1545,30 @@ func (action ContractOffer) String() string {
 // on a server controlled by the Issuer. or a Smart Contract Operator on
 // their behalf.
 type ContractFormation struct {
-	Header                     Header         `json:"header,omitempty"`                        // Common header data for all actions
-	ContractName               string         `json:"contract_name,omitempty"`                 // Can be any unique identifying string, including human readable names for branding/vanity purposes.   [Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address.]. Smart contracts can be branded and specialized to suit any terms and conditions.
-	ContractFileType           uint8          `json:"contract_file_type,omitempty"`            // 1 - SHA-256 Hash, 2 - Markdown file
-	ContractFile               []byte         `json:"contract_file,omitempty"`                 // SHA-256 hash of the contract file or markdown data for contract file specific to the smart contract and relevant Assets.  Legal and technical information. (eg. pdf)
-	SupportingDocsFileType     uint8          `json:"supporting_docs_file_type,omitempty"`     // 1 - 7z
-	SupportingDocs             string         `json:"supporting_docs,omitempty"`               //
-	GoverningLaw               string         `json:"governing_law,omitempty"`                 // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
-	Jurisdiction               string         `json:"jurisdiction,omitempty"`                  // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
-	ContractExpiration         Timestamp      `json:"contract_expiration,omitempty"`           // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate smart contract running costs. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
-	ContractURI                string         `json:"contract_uri,omitempty"`                  // Length 0-255 bytes.  0 is valid. Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on chain information or even a public address (DNS).
-	IssuerName                 string         `json:"issuer_name,omitempty"`                   // Length 0-255 bytes. 0 is not valid. Issuing entity (company, organization, individual).  Can be any unique identifying string, including human readable names for branding/vanity purposes.
-	IssuerType                 byte           `json:"issuer_type,omitempty"`                   // P - Public Company Limited by Shares, C - Private Company Limited by Shares, I - Individual, L - Limited Partnership, U -Unlimited Partnership, T - Sole Proprietorship, S - Statutory Company, O - Non-Profit Organization, N - Nation State, G - Government Agency, U - Unit Trust, D - Discretionary Trust.  Found in 'Entities' (Specification/Resources).
-	IssuerLEI                  string         `json:"issuer_lei,omitempty"`                    // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
-	IssuerLogoURL              string         `json:"issuer_logo_url,omitempty"`               // The URL of the Issuers logo.
-	ContractOperatorIncluded   bool           `json:"contract_operator_included,omitempty"`    // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
-	ContractOperatorID         string         `json:"contract_operator_id,omitempty"`          // Length 0-255 bytes. 0 is valid. Smart Contract Operator identifier. Can be any unique identifying string, including human readable names for branding/vanity purposes. Can also be null or the Issuer.
-	OperatorLEI                string         `json:"operator_lei,omitempty"`                  // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
-	ContractAuthFlags          [16]byte       `json:"contract_auth_flags,omitempty"`           // Authorization Flags aka Terms and Conditions that the smart contract can enforce.  Other terms and conditions that are out of the smart contract's control are listed in the actual Contract File.
-	ActionFee                  []Fee          `json:"action_fee,omitempty"`                    // The tokens available for payment of action fees. One is required per action and must be included in the action request transaction. i.e. Bitcoin amount or an AUD backed token and amount.
-	VotingSystems              []VotingSystem `json:"voting_systems,omitempty"`                // A list voting systems.
-	RestrictedQtyAssets        uint64         `json:"restricted_qty_assets,omitempty"`         // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
-	ReferendumProposal         bool           `json:"referendum_proposal,omitempty"`           // A Referendum is permitted for Contract-Wide Proposals (outside of smart contract scope).
-	InitiativeProposal         bool           `json:"initiative_proposal,omitempty"`           // An initiative is permitted for Contract-Wide Proposals (outside of smart contract scope).
-	Registries                 []Registry     `json:"registries,omitempty"`                    // A list Registries
-	IssuerAddressIncluded      bool           `json:"issuer_address_included,omitempty"`       // Physical/mailing address. False means the "includes" fields are skipped in serialization.
-	UnitNumber                 string         `json:"unit_number,omitempty"`                   // Issuer Address Details (eg. HQ)
-	BuildingNumber             string         `json:"building_number,omitempty"`               //
-	Street                     string         `json:"street,omitempty"`                        //
-	SuburbCity                 string         `json:"suburb_city,omitempty"`                   //
-	TerritoryStateProvinceCode string         `json:"territory_state_province_code,omitempty"` //
-	CountryCode                string         `json:"country_code,omitempty"`                  //
-	PostalZIPCode              string         `json:"postal_zip_code,omitempty"`               //
-	EmailAddress               string         `json:"email_address,omitempty"`                 // Address for text-based communication: eg. email address, Bitcoin address
-	PhoneNumber                string         `json:"phone_number,omitempty"`                  // Phone Number for Entity. Max acceptable size: 50.
-	KeyRoles                   []KeyRole      `json:"key_roles,omitempty"`                     // A list of Key Roles.
-	NotableRoles               []NotableRole  `json:"notable_roles,omitempty"`                 // A list of Notable Roles.
-	ContractRevision           uint32         `json:"contract_revision,omitempty"`             // Counter. Cannot be manually changed by issuer.  Can only be incremented by 1 by SC when CF action is published.
-	Timestamp                  Timestamp      `json:"timestamp,omitempty"`                     // Timestamp in nanoseconds of when the smart contract created the action.
+	Header                   Header         `json:"header,omitempty"`                     // Common header data for all actions
+	ContractName             string         `json:"contract_name,omitempty"`              // Can be any unique identifying string, including human readable names for branding/vanity purposes.   [Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address.]. Smart contracts can be branded and specialized to suit any terms and conditions.
+	BodyOfAgreementType      uint8          `json:"body_of_agreement_type,omitempty"`     // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
+	BodyOfAgreement          []byte         `json:"body_of_agreement,omitempty"`          // SHA-256 hash of the body of the agreement (full contract in pdf format or the like) or the full terms and conditions of an agreement in the Tokenized Body of Agreement format.  This is specific to the smart contract and relevant Assets.  Legal and technical information.
+	ContractType             string         `json:"contract_type,omitempty"`              //
+	SupportingDocsFileType   uint8          `json:"supporting_docs_file_type,omitempty"`  // 1 - 7z
+	SupportingDocs           []byte         `json:"supporting_docs,omitempty"`            //
+	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
+	Jurisdiction             string         `json:"jurisdiction,omitempty"`               // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
+	ContractExpiration       Timestamp      `json:"contract_expiration,omitempty"`        // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate smart contract running costs. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
+	ContractURI              string         `json:"contract_uri,omitempty"`               // Length 0-255 bytes.  0 is valid. Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on chain information or even a public address (DNS).
+	Issuer                   Entity         `json:"issuer,omitempty"`                     // The issuer of this contract.
+	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the Issuers logo.
+	ContractOperatorIncluded bool           `json:"contract_operator_included,omitempty"` // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
+	ContractOperator         Entity         `json:"contract_operator,omitempty"`          // An additional entity with operator access to the contract.
+	ContractAuthFlags        [16]byte       `json:"contract_auth_flags,omitempty"`        // Authorization Flags aka Terms and Conditions that the smart contract can enforce.  Other terms and conditions that are out of the smart contract's control are listed in the actual Contract File.
+	ContractFee              uint64         `json:"contract_fee,omitempty"`               // Satoshis required to be paid to the contract for each asset action.
+	VotingSystems            []VotingSystem `json:"voting_systems,omitempty"`             // A list voting systems.
+	RestrictedQtyAssets      uint64         `json:"restricted_qty_assets,omitempty"`      // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
+	ReferendumProposal       bool           `json:"referendum_proposal,omitempty"`        // A Referendum is permitted for Contract-Wide Proposals (outside of smart contract scope).
+	InitiativeProposal       bool           `json:"initiative_proposal,omitempty"`        // An initiative is permitted for Contract-Wide Proposals (outside of smart contract scope).
+	Registries               []Registry     `json:"registries,omitempty"`                 // A list Registries
+	ContractRevision         uint32         `json:"contract_revision,omitempty"`          // Counter. Cannot be manually changed by issuer.  Can only be incremented by 1 by SC when CF action is published.
+	Timestamp                Timestamp      `json:"timestamp,omitempty"`                  // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -1986,18 +1604,26 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := write(buf, action.ContractFileType); err != nil {
+		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
-		if err := WriteVarBin(buf, action.ContractFile, 32); err != nil {
+		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
@@ -2010,10 +1636,10 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// SupportingDocs (string)
+	// SupportingDocs ([]byte)
 	_, skip = excludes["SupportingDocs"]
 	if !skip {
-		if err := WriteVarChar(buf, action.SupportingDocs, 32); err != nil {
+		if err := WriteVarBin(buf, action.SupportingDocs, 32); err != nil {
 			return nil, err
 		}
 	}
@@ -2055,26 +1681,15 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// IssuerName (string)
-	_, skip = excludes["IssuerName"]
+	// Issuer (Entity)
+	_, skip = excludes["Issuer"]
 	if !skip {
-		if err := WriteVarChar(buf, action.IssuerName, 8); err != nil {
+		b, err := action.Issuer.Serialize()
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	// IssuerType (byte)
-	_, skip = excludes["IssuerType"]
-	if !skip {
-		if err := write(buf, action.IssuerType); err != nil {
-			return nil, err
-		}
-	}
-
-	// IssuerLEI (string)
-	_, skip = excludes["IssuerLEI"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.IssuerLEI, 20); err != nil {
+		if err := write(buf, b); err != nil {
 			return nil, err
 		}
 	}
@@ -2094,23 +1709,19 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 			return nil, err
 		}
 		if !action.ContractOperatorIncluded {
-			excludes["ContractOperatorID"] = true
-			excludes["OperatorLEI"] = true
+			excludes["ContractOperator"] = true
 		}
 	}
 
-	// ContractOperatorID (string)
-	_, skip = excludes["ContractOperatorID"]
+	// ContractOperator (Entity)
+	_, skip = excludes["ContractOperator"]
 	if !skip {
-		if err := WriteVarChar(buf, action.ContractOperatorID, 8); err != nil {
+		b, err := action.ContractOperator.Serialize()
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	// OperatorLEI (string)
-	_, skip = excludes["OperatorLEI"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.OperatorLEI, 20); err != nil {
+		if err := write(buf, b); err != nil {
 			return nil, err
 		}
 	}
@@ -2123,21 +1734,11 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// ActionFee ([]Fee)
-	_, skip = excludes["ActionFee"]
+	// ContractFee (uint64)
+	_, skip = excludes["ContractFee"]
 	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.ActionFee)), 8, 8); err != nil {
+		if err := write(buf, action.ContractFee); err != nil {
 			return nil, err
-		}
-		for _, value := range action.ActionFee {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -2190,131 +1791,6 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 			return nil, err
 		}
 		for _, value := range action.Registries {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// IssuerAddressIncluded (bool)
-	_, skip = excludes["IssuerAddressIncluded"]
-	if !skip {
-		if err := write(buf, action.IssuerAddressIncluded); err != nil {
-			return nil, err
-		}
-		if !action.IssuerAddressIncluded {
-			excludes["UnitNumber"] = true
-			excludes["BuildingNumber"] = true
-			excludes["Street"] = true
-			excludes["SuburbCity"] = true
-			excludes["TerritoryStateProvinceCode"] = true
-			excludes["CountryCode"] = true
-			excludes["PostalZIPCode"] = true
-		}
-	}
-
-	// UnitNumber (string)
-	_, skip = excludes["UnitNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.UnitNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// BuildingNumber (string)
-	_, skip = excludes["BuildingNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.BuildingNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// Street (string)
-	_, skip = excludes["Street"]
-	if !skip {
-		if err := WriteVarChar(buf, action.Street, 16); err != nil {
-			return nil, err
-		}
-	}
-
-	// SuburbCity (string)
-	_, skip = excludes["SuburbCity"]
-	if !skip {
-		if err := WriteVarChar(buf, action.SuburbCity, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// TerritoryStateProvinceCode (string)
-	_, skip = excludes["TerritoryStateProvinceCode"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.TerritoryStateProvinceCode, 5); err != nil {
-			return nil, err
-		}
-	}
-
-	// CountryCode (string)
-	_, skip = excludes["CountryCode"]
-	if !skip {
-		if err := WriteFixedChar(buf, action.CountryCode, 3); err != nil {
-			return nil, err
-		}
-	}
-
-	// PostalZIPCode (string)
-	_, skip = excludes["PostalZIPCode"]
-	if !skip {
-		if err := WriteVarChar(buf, action.PostalZIPCode, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// EmailAddress (string)
-	_, skip = excludes["EmailAddress"]
-	if !skip {
-		if err := WriteVarChar(buf, action.EmailAddress, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// PhoneNumber (string)
-	_, skip = excludes["PhoneNumber"]
-	if !skip {
-		if err := WriteVarChar(buf, action.PhoneNumber, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// KeyRoles ([]KeyRole)
-	_, skip = excludes["KeyRoles"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.KeyRoles)), 0, 8); err != nil {
-			return nil, err
-		}
-		for _, value := range action.KeyRoles {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// NotableRoles ([]NotableRole)
-	_, skip = excludes["NotableRoles"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.NotableRoles)), 0, 8); err != nil {
-			return nil, err
-		}
-		for _, value := range action.NotableRoles {
 			b, err := value.Serialize()
 			if err != nil {
 				return nil, err
@@ -2373,19 +1849,29 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := read(buf, &action.ContractFileType); err != nil {
+		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
 		var err error
-		action.ContractFile, err = ReadVarBin(buf, 32)
+		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		var err error
+		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -2399,11 +1885,11 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// SupportingDocs (string)
+	// SupportingDocs ([]byte)
 	_, skip = excludes["SupportingDocs"]
 	if !skip {
 		var err error
-		action.SupportingDocs, err = ReadVarChar(buf, 32)
+		action.SupportingDocs, err = ReadVarBin(buf, 32)
 		if err != nil {
 			return 0, err
 		}
@@ -2447,30 +1933,10 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// IssuerName (string)
-	_, skip = excludes["IssuerName"]
+	// Issuer (Entity)
+	_, skip = excludes["Issuer"]
 	if !skip {
-		var err error
-		action.IssuerName, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// IssuerType (byte)
-	_, skip = excludes["IssuerType"]
-	if !skip {
-		if err := read(buf, &action.IssuerType); err != nil {
-			return 0, err
-		}
-	}
-
-	// IssuerLEI (string)
-	_, skip = excludes["IssuerLEI"]
-	if !skip {
-		var err error
-		action.IssuerLEI, err = ReadFixedChar(buf, 20)
-		if err != nil {
+		if err := action.Issuer.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -2492,27 +1958,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 			return 0, err
 		}
 		if !action.ContractOperatorIncluded {
-			excludes["ContractOperatorID"] = true
-			excludes["OperatorLEI"] = true
+			excludes["ContractOperator"] = true
 		}
 	}
 
-	// ContractOperatorID (string)
-	_, skip = excludes["ContractOperatorID"]
+	// ContractOperator (Entity)
+	_, skip = excludes["ContractOperator"]
 	if !skip {
-		var err error
-		action.ContractOperatorID, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// OperatorLEI (string)
-	_, skip = excludes["OperatorLEI"]
-	if !skip {
-		var err error
-		action.OperatorLEI, err = ReadFixedChar(buf, 20)
-		if err != nil {
+		if err := action.ContractOperator.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -2525,21 +1978,11 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// ActionFee ([]Fee)
-	_, skip = excludes["ActionFee"]
+	// ContractFee (uint64)
+	_, skip = excludes["ContractFee"]
 	if !skip {
-		size, err := ReadVariableSize(buf, 8, 8)
-		if err != nil {
+		if err := read(buf, &action.ContractFee); err != nil {
 			return 0, err
-		}
-		action.ActionFee = make([]Fee, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue Fee
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.ActionFee = append(action.ActionFee, newValue)
 		}
 	}
 
@@ -2603,149 +2046,6 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// IssuerAddressIncluded (bool)
-	_, skip = excludes["IssuerAddressIncluded"]
-	if !skip {
-		if err := read(buf, &action.IssuerAddressIncluded); err != nil {
-			return 0, err
-		}
-		if !action.IssuerAddressIncluded {
-			excludes["UnitNumber"] = true
-			excludes["BuildingNumber"] = true
-			excludes["Street"] = true
-			excludes["SuburbCity"] = true
-			excludes["TerritoryStateProvinceCode"] = true
-			excludes["CountryCode"] = true
-			excludes["PostalZIPCode"] = true
-		}
-	}
-
-	// UnitNumber (string)
-	_, skip = excludes["UnitNumber"]
-	if !skip {
-		var err error
-		action.UnitNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// BuildingNumber (string)
-	_, skip = excludes["BuildingNumber"]
-	if !skip {
-		var err error
-		action.BuildingNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// Street (string)
-	_, skip = excludes["Street"]
-	if !skip {
-		var err error
-		action.Street, err = ReadVarChar(buf, 16)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// SuburbCity (string)
-	_, skip = excludes["SuburbCity"]
-	if !skip {
-		var err error
-		action.SuburbCity, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// TerritoryStateProvinceCode (string)
-	_, skip = excludes["TerritoryStateProvinceCode"]
-	if !skip {
-		var err error
-		action.TerritoryStateProvinceCode, err = ReadFixedChar(buf, 5)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// CountryCode (string)
-	_, skip = excludes["CountryCode"]
-	if !skip {
-		var err error
-		action.CountryCode, err = ReadFixedChar(buf, 3)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// PostalZIPCode (string)
-	_, skip = excludes["PostalZIPCode"]
-	if !skip {
-		var err error
-		action.PostalZIPCode, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// EmailAddress (string)
-	_, skip = excludes["EmailAddress"]
-	if !skip {
-		var err error
-		action.EmailAddress, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// PhoneNumber (string)
-	_, skip = excludes["PhoneNumber"]
-	if !skip {
-		var err error
-		action.PhoneNumber, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// KeyRoles ([]KeyRole)
-	_, skip = excludes["KeyRoles"]
-	if !skip {
-		size, err := ReadVariableSize(buf, 0, 8)
-		if err != nil {
-			return 0, err
-		}
-		action.KeyRoles = make([]KeyRole, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue KeyRole
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.KeyRoles = append(action.KeyRoles, newValue)
-		}
-	}
-
-	// NotableRoles ([]NotableRole)
-	_, skip = excludes["NotableRoles"]
-	if !skip {
-		size, err := ReadVariableSize(buf, 0, 8)
-		if err != nil {
-			return 0, err
-		}
-		action.NotableRoles = make([]NotableRole, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue NotableRole
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.NotableRoles = append(action.NotableRoles, newValue)
-		}
-	}
-
 	// ContractRevision (uint32)
 	_, skip = excludes["ContractRevision"]
 	if !skip {
@@ -2775,40 +2075,26 @@ func (action ContractFormation) String() string {
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
 	vals = append(vals, fmt.Sprintf("ContractName:%#+v", action.ContractName))
-	vals = append(vals, fmt.Sprintf("ContractFileType:%v", action.ContractFileType))
-	vals = append(vals, fmt.Sprintf("ContractFile:%#x", action.ContractFile))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreementType:%v", action.BodyOfAgreementType))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreement:%#x", action.BodyOfAgreement))
+	vals = append(vals, fmt.Sprintf("ContractType:%#+v", action.ContractType))
 	vals = append(vals, fmt.Sprintf("SupportingDocsFileType:%v", action.SupportingDocsFileType))
-	vals = append(vals, fmt.Sprintf("SupportingDocs:%#+v", action.SupportingDocs))
+	vals = append(vals, fmt.Sprintf("SupportingDocs:%#x", action.SupportingDocs))
 	vals = append(vals, fmt.Sprintf("GoverningLaw:%#+v", action.GoverningLaw))
 	vals = append(vals, fmt.Sprintf("Jurisdiction:%#+v", action.Jurisdiction))
 	vals = append(vals, fmt.Sprintf("ContractExpiration:%#+v", action.ContractExpiration))
 	vals = append(vals, fmt.Sprintf("ContractURI:%#+v", action.ContractURI))
-	vals = append(vals, fmt.Sprintf("IssuerName:%#+v", action.IssuerName))
-	vals = append(vals, fmt.Sprintf("IssuerType:%#+v", action.IssuerType))
-	vals = append(vals, fmt.Sprintf("IssuerLEI:%#+v", action.IssuerLEI))
+	vals = append(vals, fmt.Sprintf("Issuer:%#+v", action.Issuer))
 	vals = append(vals, fmt.Sprintf("IssuerLogoURL:%#+v", action.IssuerLogoURL))
 	vals = append(vals, fmt.Sprintf("ContractOperatorIncluded:%#+v", action.ContractOperatorIncluded))
-	vals = append(vals, fmt.Sprintf("ContractOperatorID:%#+v", action.ContractOperatorID))
-	vals = append(vals, fmt.Sprintf("OperatorLEI:%#+v", action.OperatorLEI))
+	vals = append(vals, fmt.Sprintf("ContractOperator:%#+v", action.ContractOperator))
 	vals = append(vals, fmt.Sprintf("ContractAuthFlags:%#+v", action.ContractAuthFlags))
-	vals = append(vals, fmt.Sprintf("ActionFee:%#+v", action.ActionFee))
+	vals = append(vals, fmt.Sprintf("ContractFee:%v", action.ContractFee))
 	vals = append(vals, fmt.Sprintf("VotingSystems:%#+v", action.VotingSystems))
 	vals = append(vals, fmt.Sprintf("RestrictedQtyAssets:%v", action.RestrictedQtyAssets))
 	vals = append(vals, fmt.Sprintf("ReferendumProposal:%#+v", action.ReferendumProposal))
 	vals = append(vals, fmt.Sprintf("InitiativeProposal:%#+v", action.InitiativeProposal))
 	vals = append(vals, fmt.Sprintf("Registries:%#+v", action.Registries))
-	vals = append(vals, fmt.Sprintf("IssuerAddressIncluded:%#+v", action.IssuerAddressIncluded))
-	vals = append(vals, fmt.Sprintf("UnitNumber:%#+v", action.UnitNumber))
-	vals = append(vals, fmt.Sprintf("BuildingNumber:%#+v", action.BuildingNumber))
-	vals = append(vals, fmt.Sprintf("Street:%#+v", action.Street))
-	vals = append(vals, fmt.Sprintf("SuburbCity:%#+v", action.SuburbCity))
-	vals = append(vals, fmt.Sprintf("TerritoryStateProvinceCode:%#+v", action.TerritoryStateProvinceCode))
-	vals = append(vals, fmt.Sprintf("CountryCode:%#+v", action.CountryCode))
-	vals = append(vals, fmt.Sprintf("PostalZIPCode:%#+v", action.PostalZIPCode))
-	vals = append(vals, fmt.Sprintf("EmailAddress:%#+v", action.EmailAddress))
-	vals = append(vals, fmt.Sprintf("PhoneNumber:%#+v", action.PhoneNumber))
-	vals = append(vals, fmt.Sprintf("KeyRoles:%#+v", action.KeyRoles))
-	vals = append(vals, fmt.Sprintf("NotableRoles:%#+v", action.NotableRoles))
 	vals = append(vals, fmt.Sprintf("ContractRevision:%v", action.ContractRevision))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
@@ -2821,8 +2107,8 @@ func (action ContractFormation) String() string {
 // the current revision of Contract Formation action.
 type ContractAmendment struct {
 	Header                Header      `json:"header,omitempty"`                  // Common header data for all actions
-	ChangeIssuerAddress   bool        `json:"change_issuer_address,omitempty"`   // 1 - Yes, 0 - No.  Used to change the issuer address.  The new issuer address must be in the input[1] position.
-	ChangeOperatorAddress bool        `json:"change_operator_address,omitempty"` // 1 - Yes, 0 - No.  Used to change the smart contract operator address.  The new operator address must be in the input[1] position.
+	ChangeIssuerAddress   bool        `json:"change_issuer_address,omitempty"`   // Used to change the issuer address.  The new issuer address must be in the input[1] position.
+	ChangeOperatorAddress bool        `json:"change_operator_address,omitempty"` // Used to change the smart contract operator address.  The new operator address must be in the input[1] position, unless issuer is being changed too, then it is in input[2].
 	ContractRevision      uint32      `json:"contract_revision,omitempty"`       // Counter 0 to (2^32)-1
 	Amendments            []Amendment `json:"amendments,omitempty"`              //
 	RefTxID               TxId        `json:"ref_tx_id,omitempty"`               // Tx-ID of the associated Result action (governance) that permitted the modifications.
@@ -2999,10 +2285,10 @@ func (action ContractAmendment) String() string {
 type StaticContractFormation struct {
 	Header                 Header       `json:"header,omitempty"`                    // Common header data for all actions
 	ContractName           string       `json:"contract_name,omitempty"`             // Length 0-255 bytes. Can be any unique identifying string, including human readable names for branding/vanity purposes.   [Contract identifier (instance) is the bitcoin public address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address.]. Smart contracts can be branded and specialized to suit any terms and conditions.
-	ContractType           string       `json:"contract_type,omitempty"`             //
 	ContractCode           ContractCode `json:"contract_code,omitempty"`             // 32 randomly generated bytes.  Each Contract Code should be unique.  The Contract ID will be human facing and will be the Contract Code, with a checksum, encoded in base58 and prefixed by 'CON'. Contract ID = CON + base58(ContractCode + checksum).  Eg. Contract ID = 'CON18RDoKK7Ed5zid2FkKVy7q3rULr4tgfjr4'
-	ContractFileType       uint8        `json:"contract_file_type,omitempty"`        // 1 - SHA-256 Hash, 2 - Markdown file
-	ContractFile           []byte       `json:"contract_file,omitempty"`             // SHA-256 hash of the contract file or markdown data for contract file specific to the smart contract and relevant Assets.  Legal and technical information. (eg. pdf)
+	BodyOfAgreementType    uint8        `json:"body_of_agreement_type,omitempty"`    // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
+	BodyOfAgreement        []byte       `json:"body_of_agreement,omitempty"`         // SHA-256 hash of the body of the agreement (full contract in pdf format or the like) or the full terms and conditions of an agreement in the Tokenized Body of Agreement format.  This is specific to the smart contract and relevant Assets.  Legal and technical information.
+	ContractType           string       `json:"contract_type,omitempty"`             //
 	SupportingDocsFileType uint8        `json:"supporting_docs_file_type,omitempty"` // 1 - 7z
 	SupportingDocs         string       `json:"supporting_docs,omitempty"`           //
 	ContractRevision       uint32       `json:"contract_revision,omitempty"`         // Counter 0 to (2^32)-1
@@ -3048,14 +2334,6 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
-		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
-			return nil, err
-		}
-	}
-
 	// ContractCode (ContractCode)
 	_, skip = excludes["ContractCode"]
 	if !skip {
@@ -3069,18 +2347,26 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := write(buf, action.ContractFileType); err != nil {
+		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
-		if err := WriteVarBin(buf, action.ContractFile, 32); err != nil {
+		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
@@ -3216,16 +2502,6 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
-		var err error
-		action.ContractType, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
 	// ContractCode (ContractCode)
 	_, skip = excludes["ContractCode"]
 	if !skip {
@@ -3234,19 +2510,29 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 		}
 	}
 
-	// ContractFileType (uint8)
-	_, skip = excludes["ContractFileType"]
+	// BodyOfAgreementType (uint8)
+	_, skip = excludes["BodyOfAgreementType"]
 	if !skip {
-		if err := read(buf, &action.ContractFileType); err != nil {
+		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
-	// ContractFile ([]byte)
-	_, skip = excludes["ContractFile"]
+	// BodyOfAgreement ([]byte)
+	_, skip = excludes["BodyOfAgreement"]
 	if !skip {
 		var err error
-		action.ContractFile, err = ReadVarBin(buf, 32)
+		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// ContractType (string)
+	_, skip = excludes["ContractType"]
+	if !skip {
+		var err error
+		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -3363,10 +2649,10 @@ func (action StaticContractFormation) String() string {
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
 	vals = append(vals, fmt.Sprintf("ContractName:%#+v", action.ContractName))
-	vals = append(vals, fmt.Sprintf("ContractType:%#+v", action.ContractType))
 	vals = append(vals, fmt.Sprintf("ContractCode:%#+v", action.ContractCode))
-	vals = append(vals, fmt.Sprintf("ContractFileType:%v", action.ContractFileType))
-	vals = append(vals, fmt.Sprintf("ContractFile:%#x", action.ContractFile))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreementType:%v", action.BodyOfAgreementType))
+	vals = append(vals, fmt.Sprintf("BodyOfAgreement:%#x", action.BodyOfAgreement))
+	vals = append(vals, fmt.Sprintf("ContractType:%#+v", action.ContractType))
 	vals = append(vals, fmt.Sprintf("SupportingDocsFileType:%v", action.SupportingDocsFileType))
 	vals = append(vals, fmt.Sprintf("SupportingDocs:%#+v", action.SupportingDocs))
 	vals = append(vals, fmt.Sprintf("ContractRevision:%v", action.ContractRevision))
@@ -3396,7 +2682,7 @@ type Order struct {
 	AuthorityPublicKey     string          `json:"authority_public_key,omitempty"`      // Length 0-255 bytes. Public Key associated with the Enforcement Authority
 	OrderSignature         string          `json:"order_signature,omitempty"`           // Length 0-255 bytes. Signature for a message that lists out the target addresses and deposit address. Signature of (Contract Address, Asset Code, Compliance Action, Supporting Evidence Hash, Time Out Expiration, TargetAddress1, TargetAddress1Qty, TargetAddressX, TargetAddressXQty,...,DepositAddress)
 	SupportingEvidenceTxId TxId            `json:"supporting_evidence_tx_id,omitempty"` // SHA-256: warrant, court order, etc.
-	RefTxnID               TxId            `json:"ref_txn_id,omitempty"`                // The settlement action that was dropped from the network.  Not applicable for Freeze, Thaw, and Confiscation orders.  Only applicable for reconcilliation actions.  No subfield when F, T, R is selected as the Compliance Action subfield.
+	RefTxns                TxId            `json:"ref_txns,omitempty"`                  // The request/response actions that were dropped.  The entire txn for both actions is included as evidence that the actions were accepted into the mempool at one point and that the senders (token/Bitcoin) signed their intent to transfer.  The management of this record keeping is off-chain and managed by the issuer or operator to preserve the integrity of the state of the tokens. Only applicable for reconcilliation actions.  No subfield when F, T, R is selected as the Compliance Action subfield.
 	FreezePeriod           Timestamp       `json:"freeze_period,omitempty"`             // Used for a 'time out'.  Tokens are automatically unfrozen after the expiration timestamp without requiring a Thaw Action. Null value for Thaw, Confiscation and Reconciallitaion orders.
 	Message                string          `json:"message,omitempty"`                   //
 }
@@ -3531,10 +2817,10 @@ func (action *Order) serialize() ([]byte, error) {
 		}
 	}
 
-	// RefTxnID (TxId)
-	_, skip = excludes["RefTxnID"]
+	// RefTxns (TxId)
+	_, skip = excludes["RefTxns"]
 	if !skip {
-		b, err := action.RefTxnID.Serialize()
+		b, err := action.RefTxns.Serialize()
 		if err != nil {
 			return nil, err
 		}
@@ -3679,10 +2965,10 @@ func (action *Order) write(b []byte) (int, error) {
 		}
 	}
 
-	// RefTxnID (TxId)
-	_, skip = excludes["RefTxnID"]
+	// RefTxns (TxId)
+	_, skip = excludes["RefTxns"]
 	if !skip {
-		if err := action.RefTxnID.Write(buf); err != nil {
+		if err := action.RefTxns.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -3727,7 +3013,7 @@ func (action Order) String() string {
 	vals = append(vals, fmt.Sprintf("AuthorityPublicKey:%#+v", action.AuthorityPublicKey))
 	vals = append(vals, fmt.Sprintf("OrderSignature:%#+v", action.OrderSignature))
 	vals = append(vals, fmt.Sprintf("SupportingEvidenceTxId:%#+v", action.SupportingEvidenceTxId))
-	vals = append(vals, fmt.Sprintf("RefTxnID:%#+v", action.RefTxnID))
+	vals = append(vals, fmt.Sprintf("RefTxns:%#+v", action.RefTxns))
 	vals = append(vals, fmt.Sprintf("FreezePeriod:%#+v", action.FreezePeriod))
 	vals = append(vals, fmt.Sprintf("Message:%#+v", action.Message))
 

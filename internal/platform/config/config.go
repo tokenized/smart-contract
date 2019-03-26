@@ -11,7 +11,6 @@ type Config struct {
 		OperatorName string  `envconfig:"OPERATOR_NAME"`
 		Version      string  `envconfig:"VERSION"`
 		FeeAddress   string  `envconfig:"FEE_ADDRESS"`
-		FeeAmount    uint64  `envconfig:"FEE_AMOUNT"`
 		FeeRate      float32 `default:"1.1" envconfig:"FEE_RATE"`
 		DustLimit    uint64  `default:"546" envconfig:"DUST_LIMIT"`
 	}

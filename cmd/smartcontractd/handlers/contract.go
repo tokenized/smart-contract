@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"errors"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -16,12 +15,14 @@ import (
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
 type Contract struct {
 	MasterDB *db.DB
 	Config   *node.Config
+	TxCache  InspectorTxCache
 }
 
 // OfferRequest handles an incoming Contract Offer and prepares a Formation response
@@ -40,14 +41,13 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	// Locate Contract
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != nil {
-		return err
-	}
-
-	// The contract should not exist already
-	if ct != nil {
-		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr.String())
+	_, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	if err != contract.ErrNotFound {
+		if err != nil {
+			logger.Warn(ctx, "%s : Error retreiving contract : %s", v.TraceID, contractAddr.String())
+		} else {
+			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractAddr.String())
+		}
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
@@ -71,10 +71,13 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer (Change)
-	w.AddOutput(ctx, contractAddress, 0)
-	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
+	// 1 - Contract Address (change)
+	// 2 - Contract Fee
+	w.AddChangeOutput(ctx, contractAddress)
+	w.AddContractFee(ctx, msg.ContractFee)
+
+	// Save Tx for when formation is processed.
+	c.TxCache.SaveTx(ctx, itx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -109,7 +112,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
-	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.Assets)) {
+	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
 		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
@@ -161,9 +164,10 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Build outputs
-	// 1 - Contract Address
-	// 2 - Issuer (Change)
-	w.AddOutput(ctx, contractAddress, 0)
+	// 1 - Contract Address (change)
+	// 2 - Contract Fee
+	w.AddChangeOutput(ctx, contractAddress)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Issuer change. New issuer in second input
 	if msg.ChangeIssuerAddress {
@@ -171,16 +175,19 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
 		}
-
-		w.AddChangeOutput(ctx, itx.Inputs[1].Address)
-	} else {
-		w.AddChangeOutput(ctx, itx.Inputs[0].Address)
 	}
 
-	// TODO Operator changes
-	// if msg.ChangeOperatorAddress {
-
-	// }
+	// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+	if msg.ChangeOperatorAddress {
+		index := 1
+		if msg.ChangeIssuerAddress {
+			index++
+		}
+		if index >= len(itx.Inputs) {
+			logger.Warn(ctx, "%s : New operator specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewOperator)
+		}
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -202,11 +209,15 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractAddr.Bytes()) {
+		return errors.New("Contract Formation not from contract")
+	}
+
 	contractName := msg.ContractName
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, contractName, err.Error())
-		return err
+	if err != nil && err != contract.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	// Create or update Contract
@@ -219,8 +230,36 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return err
 		}
 
-		nc.Issuer = *protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress()) // Second output of formation tx
-		// nc.Operator =  // TODO How do we determine if an operator is specified?
+		// Get contract offer message to retrieve issuer and operator.
+		var offerTx *inspector.Transaction
+		offerTx = c.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+		if offerTx == nil {
+			return errors.New("ContractOffer tx not found")
+		}
+
+		// Get transfer from it
+		var offer *protocol.ContractOffer
+		for _, output := range offerTx.MsgTx.TxOut {
+			opReturn, err := protocol.Deserialize(output.PkScript)
+			if err != nil {
+				continue
+			}
+
+			var ok bool
+			offer, ok = opReturn.(*protocol.ContractOffer)
+			if ok {
+				break
+			}
+		}
+
+		if offer == nil {
+			return errors.New("Could not find ContractOffer in offer tx")
+		}
+
+		nc.IssuerPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[0].Address.ScriptAddress()) // First input of offer tx
+		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
+			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[1].Address.ScriptAddress()) // Second input of offer tx
+		}
 
 		if err := contract.Create(ctx, dbConn, contractAddr, &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
@@ -228,6 +267,31 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractAddr.String())
 	} else {
+		// TODO Pull from ammendment tx.
+		// // TODO Issuer change. New issuer in second input
+		// if msg.ChangeIssuerAddress {
+		// if len(itx.Inputs) < 2 {
+		// logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
+		// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
+		// }
+
+		// cf.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[1].Address.ScriptAddress)
+		// }
+
+		// // TODO Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+		// if msg.ChangeOperatorAddress {
+		// index := 1
+		// if msg.ChangeIssuerAddress {
+		// index++
+		// }
+		// if index >= len(itx.Inputs) {
+		// logger.Warn(ctx, "%s : New operator specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
+		// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewOperator)
+		// }
+
+		// cf.OperatorPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[index].Address.ScriptAddress)
+		// }
+
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
 
@@ -237,9 +301,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			Timestamp: &msg.Timestamp,
 		}
 
-		if !bytes.Equal(ct.Issuer.Bytes(), itx.Outputs[1].Address.ScriptAddress()) { // Second output of formation tx
+		if !bytes.Equal(ct.IssuerPKH.Bytes(), itx.Outputs[1].Address.ScriptAddress()) { // Second output of formation tx
 			// TODO Should asset balances be moved from previous issuer to new issuer.
-			uc.Issuer = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
+			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
 			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
 		}
 
@@ -250,14 +314,29 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract name (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractName)
 		}
 
-		if ct.ContractFileType != msg.ContractFileType {
-			uc.ContractFileType = &msg.ContractFileType
-			logger.Info(ctx, "%s : Updating contract file type (%s) : %02x", v.TraceID, ct.ContractName, msg.ContractFileType)
+		if ct.ContractType != msg.ContractType {
+			uc.ContractType = stringPointer(msg.ContractType)
+			logger.Info(ctx, "%s : Updating contract type (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractType)
 		}
 
-		if !bytes.Equal(ct.ContractFile, msg.ContractFile) {
-			uc.ContractFile = &msg.ContractFile
-			logger.Info(ctx, "%s : Updating contract file (%s)", v.TraceID, ct.ContractName)
+		if ct.BodyOfAgreementType != msg.BodyOfAgreementType {
+			uc.BodyOfAgreementType = &msg.BodyOfAgreementType
+			logger.Info(ctx, "%s : Updating agreement file type (%s) : %02x", v.TraceID, ct.ContractName, msg.BodyOfAgreementType)
+		}
+
+		if !bytes.Equal(ct.BodyOfAgreement, msg.BodyOfAgreement) {
+			uc.BodyOfAgreement = &msg.BodyOfAgreement
+			logger.Info(ctx, "%s : Updating agreement (%s)", v.TraceID, ct.ContractName)
+		}
+
+		if ct.SupportingDocsFileType != msg.SupportingDocsFileType {
+			uc.SupportingDocsFileType = &msg.SupportingDocsFileType
+			logger.Info(ctx, "%s : Updating supporting docs file type (%s) : %02x", v.TraceID, ct.ContractName, msg.SupportingDocsFileType)
+		}
+
+		if !bytes.Equal(ct.SupportingDocs, msg.SupportingDocs) {
+			uc.SupportingDocs = &msg.SupportingDocs
+			logger.Info(ctx, "%s : Updating supporting docs (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if ct.GoverningLaw != string(msg.GoverningLaw) {
@@ -281,14 +360,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract URI (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractURI)
 		}
 
-		if ct.IssuerName != msg.IssuerName {
-			uc.IssuerName = stringPointer(msg.IssuerName)
-			logger.Info(ctx, "%s : Updating contract issuer name (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerName)
-		}
-
-		if ct.IssuerType != msg.IssuerType {
-			uc.IssuerType = &msg.IssuerType
-			logger.Info(ctx, "%s : Updating contract issuer type (%s) : %02x", v.TraceID, ct.ContractName, *uc.IssuerType)
+		if !ct.Issuer.Equal(msg.Issuer) {
+			uc.Issuer = &msg.Issuer
+			logger.Info(ctx, "%s : Updating contract issuer data (%s) : %02x", v.TraceID, ct.ContractName, *uc.Issuer)
 		}
 
 		if ct.IssuerLogoURL != msg.IssuerLogoURL {
@@ -296,14 +370,19 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract issuer logo URL (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerLogoURL)
 		}
 
-		if ct.ContractOperatorID != msg.ContractOperatorID {
-			uc.ContractOperatorID = stringPointer(msg.ContractOperatorID)
-			logger.Info(ctx, "%s : Updating contract operator ID (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractOperatorID)
+		if !ct.ContractOperator.Equal(msg.ContractOperator) {
+			uc.ContractOperator = &msg.ContractOperator
+			logger.Info(ctx, "%s : Updating contract operator data (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractOperator)
 		}
 
 		if !bytes.Equal(ct.ContractAuthFlags[:], msg.ContractAuthFlags[:]) {
 			uc.ContractAuthFlags = &msg.ContractAuthFlags
 			logger.Info(ctx, "%s : Updating contract auth flags (%s) : %v", v.TraceID, ct.ContractName, *uc.ContractAuthFlags)
+		}
+
+		if ct.ContractFee != msg.ContractFee {
+			uc.ContractFee = &msg.ContractFee
+			logger.Info(ctx, "%s : Updating action fee (%s) : %d", v.TraceID, ct.ContractName, *uc.ContractFee)
 		}
 
 		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
@@ -321,137 +400,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract initiative proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.InitiativeProposal)
 		}
 
-		if ct.UnitNumber != msg.UnitNumber {
-			uc.UnitNumber = stringPointer(msg.UnitNumber)
-			logger.Info(ctx, "%s : Updating contract unit number (%s) : %s", v.TraceID, ct.ContractName, *uc.UnitNumber)
-		}
-
-		if ct.BuildingNumber != msg.BuildingNumber {
-			uc.BuildingNumber = stringPointer(msg.BuildingNumber)
-			logger.Info(ctx, "%s : Updating contract building number (%s) : %s", v.TraceID, ct.ContractName, *uc.BuildingNumber)
-		}
-
-		if ct.Street != msg.Street {
-			uc.Street = stringPointer(msg.Street)
-			logger.Info(ctx, "%s : Updating contract street (%s) : %s", v.TraceID, ct.ContractName, *uc.Street)
-		}
-
-		if ct.SuburbCity != msg.SuburbCity {
-			uc.SuburbCity = stringPointer(msg.SuburbCity)
-			logger.Info(ctx, "%s : Updating contract city (%s) : %s", v.TraceID, ct.ContractName, *uc.SuburbCity)
-		}
-
-		if ct.TerritoryStateProvinceCode != msg.TerritoryStateProvinceCode {
-			uc.TerritoryStateProvinceCode = &msg.TerritoryStateProvinceCode
-			logger.Info(ctx, "%s : Updating contract state (%s) : %s", v.TraceID, ct.ContractName, *uc.TerritoryStateProvinceCode)
-		}
-
-		if ct.CountryCode != msg.CountryCode {
-			uc.CountryCode = &msg.CountryCode
-			logger.Info(ctx, "%s : Updating contract country (%s) : %s", v.TraceID, ct.ContractName, *uc.CountryCode)
-		}
-
-		if ct.PostalZIPCode != msg.PostalZIPCode {
-			uc.PostalZIPCode = &msg.PostalZIPCode
-			logger.Info(ctx, "%s : Updating contract postal code (%s) : %s", v.TraceID, ct.ContractName, *uc.PostalZIPCode)
-		}
-
-		if ct.EmailAddress != msg.EmailAddress {
-			uc.EmailAddress = &msg.EmailAddress
-			logger.Info(ctx, "%s : Updating contract email (%s) : %s", v.TraceID, ct.ContractName, *uc.EmailAddress)
-		}
-
-		if ct.PhoneNumber != msg.PhoneNumber {
-			uc.PhoneNumber = &msg.PhoneNumber
-			logger.Info(ctx, "%s : Updating contract phone (%s) : %s", v.TraceID, ct.ContractName, *uc.PhoneNumber)
-		}
-
-		// Check if action fee is different
-		different := len(ct.ActionFee) != len(msg.ActionFee)
-		if !different {
-			for i, actionFee := range ct.ActionFee {
-				if !bytes.Equal(actionFee.Contract.Bytes(), msg.ActionFee[i].Contract.Bytes()) {
-					different = true
-					break
-				}
-				if actionFee.AssetType != msg.ActionFee[i].AssetType {
-					different = true
-					break
-				}
-				if !bytes.Equal(actionFee.AssetCode.Bytes(), msg.ActionFee[i].AssetCode.Bytes()) {
-					different = true
-					break
-				}
-				if actionFee.FixedRate != msg.ActionFee[i].FixedRate {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newActionFees := make([]protocol.Fee, 0, len(msg.ActionFee))
-			for _, actionFee := range msg.ActionFee {
-				var newActionFee protocol.Fee
-				err := node.Convert(ctx, &actionFee, &newActionFee)
-				if err != nil {
-					return err
-				}
-				newActionFees = append(newActionFees, newActionFee)
-			}
-			uc.ActionFee = &newActionFees
-		}
-
-		// Check if key roles are different
-		different = len(ct.KeyRoles) != len(msg.KeyRoles)
-		if !different {
-			for i, keyRole := range ct.KeyRoles {
-				if keyRole.Type != msg.KeyRoles[i].Type || keyRole.Name != msg.KeyRoles[i].Name {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newKeyRoles := make([]state.KeyRole, 0, len(msg.KeyRoles))
-			for _, keyRole := range msg.KeyRoles {
-				var newKeyRole state.KeyRole
-				err := node.Convert(ctx, &keyRole, &newKeyRole)
-				if err != nil {
-					return err
-				}
-				newKeyRoles = append(newKeyRoles, newKeyRole)
-			}
-			uc.KeyRoles = &newKeyRoles
-		}
-
-		// Check if notable roles are different
-		different = len(ct.NotableRoles) != len(msg.NotableRoles)
-		if !different {
-			for i, notableRole := range ct.NotableRoles {
-				if notableRole.Type != msg.NotableRoles[i].Type || notableRole.Name != msg.NotableRoles[i].Name {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newNotableRoles := make([]state.NotableRole, 0, len(msg.NotableRoles))
-			for _, notableRole := range msg.NotableRoles {
-				var newNotableRole state.NotableRole
-				err := node.Convert(ctx, &notableRole, &newNotableRole)
-				if err != nil {
-					return err
-				}
-				newNotableRoles = append(newNotableRoles, newNotableRole)
-			}
-			uc.NotableRoles = &newNotableRoles
-		}
-
 		// Check if registries are different
-		different = len(ct.Registries) != len(msg.Registries)
+		different := len(ct.Registries) != len(msg.Registries)
 		if !different {
 			for i, registry := range ct.Registries {
 				if registry.Name != msg.Registries[i].Name ||

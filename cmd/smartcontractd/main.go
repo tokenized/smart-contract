@@ -61,9 +61,15 @@ func main() {
 	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
 	logConfig.Main.MinLevel = logger.LevelDebug
-	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
+
+	// Configure spynode logs to be verbose
+	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
+	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
+	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
+	logConfig.SubSystems[spynode.SubSystem].SetWriter(io.MultiWriter(os.Stdout, logFile))
+
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
 
 	// -------------------------------------------------------------------------
@@ -97,7 +103,6 @@ func main() {
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
 		FeeAddress:         cfg.Contract.FeeAddress,
-		FeeValue:           cfg.Contract.FeeAmount,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),

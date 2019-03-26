@@ -64,7 +64,7 @@ func (g *Governance) InitiativeRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Sender must hold balance of at least one asset
 	senderAddr := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
-	if !contract.HasAnyBalance(ctx, ct, senderAddr) {
+	if !contract.HasAnyBalance(ctx, dbConn, ct, senderAddr) {
 		logger.Warn(ctx, "%s : Sender holds no assets: %s %s", v.TraceID, contractAddr, senderAddr)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)
 	}

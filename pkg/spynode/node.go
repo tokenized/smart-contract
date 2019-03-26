@@ -580,10 +580,7 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 
 		for _, txid := range txids {
 			for _, listener := range node.listeners {
-				err := listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
-				if err != nil {
-					logger.Warn(ctx, err.Error())
-				}
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
 			}
 		}
 	}

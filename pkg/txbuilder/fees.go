@@ -20,15 +20,15 @@ const (
 	//       public key size = 33 bytes
 	EstimatedInputSize = 32 + 4 + 2 + 75 + 34
 
+	// Size of output not including script
+	OutputBaseSize = 8
+
 	// P2PKH/P2SH output size 33
 	//   amount = 8 bytes
 	//   script size = 1 byte
 	//   Script (24 bytes) OP_DUP OP_HASH160 <PUB KEY/SCRIPT HASH (20 bytes)> OP_EQUALVERIFY
 	//     OP_CHECKSIG
-	P2PKHOutputSize = 8 + 25
-
-	// Size of output not including script
-	OutputBaseSize = 8
+	P2PKHOutputSize = OutputBaseSize + 25
 
 	// BaseTxFee is the size of the tx not included in inputs and outputs.
 	//   Version = 4 bytes

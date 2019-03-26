@@ -7,7 +7,7 @@ import (
 
 // NewAsset defines what we require when creating a Asset record.
 type NewAsset struct {
-	IssuerAddress protocol.PublicKeyHash `json:"issuer_address,omitempty"`
+	IssuerPKH protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
 
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
@@ -49,7 +49,7 @@ type UpdateAsset struct {
 	TokenQty                    *uint64          `json:"token_qty,omitempty"`
 	AssetPayload                *[]byte          `json:"asset_payload,omitempty"`
 
-	NewBalances          map[protocol.PublicKeyHash]uint64               `json:"new_balances,omitempty"`
-	NewHoldingStatuses   map[protocol.PublicKeyHash]*state.HoldingStatus `json:"new_holding_statuses,omitempty"`
-	ClearHoldingStatuses map[protocol.PublicKeyHash]*protocol.TxId       `json:"clear_holding_statuses,omitempty"`
+	NewBalances          map[protocol.PublicKeyHash]uint64              `json:"new_balances,omitempty"`
+	NewHoldingStatuses   map[protocol.PublicKeyHash]state.HoldingStatus `json:"new_holding_statuses,omitempty"`
+	ClearHoldingStatuses map[protocol.PublicKeyHash]protocol.TxId       `json:"clear_holding_statuses,omitempty"`
 }

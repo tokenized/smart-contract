@@ -12,9 +12,9 @@ const (
 	// a PKH not associated with the Contract.
 	RejectionCodeIssuerAddress
 
-	// RejectionCodeDuplicateAssetID is sent when the issuer attempted to
-	// add a duplicate Asset ID.
-	RejectionCodeDuplicateAssetID
+	// RejectionCodeDuplicateAssetCode is sent when the issuer attempted to
+	// add a duplicate Asset Code.
+	RejectionCodeDuplicateAssetCode
 
 	// RejectionCodeFixedQuantity is sent when the issuer attempted to
 	// change increase the quantity of a contract beyond the fixed quantity
@@ -91,12 +91,13 @@ const (
 	// RejectionCodeMissingNewIssuer is returned when an issuer change was requested, but the new issuer was not provided.
 	RejectionCodeContractMissingNewIssuer
 
+	// RejectionCodeContractMissingNewOperator is returned when an operator change was requested, but the new operator was not provided.
+	RejectionCodeContractMissingNewOperator
+
 	// RejectionCodeMissingNewIssuer is returned when an amendment request is malformed.
 	RejectionCodeContractMalformedAmendment
 
 	RejectionCodeInvalidInitiative
-
-	RejectionCodeDuplicateAssetCode
 
 	RejectionCodeMalFormedTransfer
 

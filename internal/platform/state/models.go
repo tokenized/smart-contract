@@ -13,43 +13,32 @@ type Contract struct {
 	UpdatedAt protocol.Timestamp     `json:"updated_at,omitempty"`
 	Timestamp protocol.Timestamp     `json:"timestamp,omitempty"`
 
-	Issuer   protocol.PublicKeyHash `json:"issuer,omitempty"`
-	Operator protocol.PublicKeyHash `json:"operator,omitempty"`
+	IssuerPKH   protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
+	OperatorPKH protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
 
-	ContractName               string             `json:"contract_name,omitempty"`
-	ContractFileType           uint8              `json:"contract_file_type,omitempty"`
-	ContractFile               []byte             `json:"contract_file,omitempty"`
-	SupportingDocsFileType     uint8              `json:"supporting_docs_file_type,omitempty"`
-	SupportingDocs             []byte             `json:"supporting_docs,omitempty"`
-	GoverningLaw               string             `json:"governing_law,omitempty"`
-	Jurisdiction               string             `json:"jurisdiction,omitempty"`
-	ContractExpiration         protocol.Timestamp `json:"contract_expiration,omitempty"`
-	ContractURI                string             `json:"contract_uri,omitempty"`
-	IssuerName                 string             `json:"issuer_name,omitempty"`
-	IssuerType                 byte               `json:"issuer_type,omitempty"`
-	IssuerLogoURL              string             `json:"issuer_logo_url,omitempty"`
-	ContractOperatorID         string             `json:"contract_operator_id,omitempty"`
-	ContractAuthFlags          [16]byte           `json:"contract_auth_flags,omitempty"`
-	ActionFee                  []protocol.Fee     `json:"action_fee,omitempty"`
-	VotingSystems              []VotingSystem     `json:"voting_systems,omitempty"`
-	RestrictedQtyAssets        uint64             `json:"restricted_qty_assets,omitempty"`
-	ReferendumProposal         bool               `json:"referendum_proposal,omitempty"`
-	InitiativeProposal         bool               `json:"initiative_proposal,omitempty"`
-	Registries                 []Registry         `json:"registries,omitempty"`
-	UnitNumber                 string             `json:"unit_number,omitempty"`
-	BuildingNumber             string             `json:"building_number,omitempty"`
-	Street                     string             `json:"street,omitempty"`
-	SuburbCity                 string             `json:"suburb_city,omitempty"`
-	TerritoryStateProvinceCode string             `json:"territory_state_province_code,omitempty"`
-	CountryCode                string             `json:"country_code,omitempty"`
-	PostalZIPCode              string             `json:"postal_zip_code,omitempty"`
-	EmailAddress               string             `json:"email_address,omitempty"`
-	PhoneNumber                string             `json:"phone_number,omitempty"`
-	KeyRoles                   []KeyRole          `json:"key_roles,omitempty"`
-	NotableRoles               []NotableRole      `json:"notable_roles,omitempty"`
+	ContractName           string             `json:"contract_name,omitempty"`
+	BodyOfAgreementType    uint8              `json:"body_of_agreement_type,omitempty"`
+	BodyOfAgreement        []byte             `json:"body_of_agreement,omitempty"`
+	ContractType           string             `json:"contract_type,omitempty"`
+	SupportingDocsFileType uint8              `json:"supporting_docs_file_type,omitempty"`
+	SupportingDocs         []byte             `json:"supporting_docs,omitempty"`
+	GoverningLaw           string             `json:"governing_law,omitempty"`
+	Jurisdiction           string             `json:"jurisdiction,omitempty"`
+	ContractExpiration     protocol.Timestamp `json:"contract_expiration,omitempty"`
+	ContractURI            string             `json:"contract_uri,omitempty"`
+	Issuer                 protocol.Entity    `json:"issuer,omitempty"`
+	IssuerLogoURL          string             `json:"issuer_logo_url,omitempty"`
+	ContractOperator       protocol.Entity    `json:"contract_operator,omitempty"`
+	ContractAuthFlags      [16]byte           `json:"contract_auth_flags,omitempty"`
+	ContractFee            uint64             `json:"contract_fee,omitempty"`
+	VotingSystems          []VotingSystem     `json:"voting_systems,omitempty"`
+	RestrictedQtyAssets    uint64             `json:"restricted_qty_assets,omitempty"`
+	ReferendumProposal     bool               `json:"referendum_proposal,omitempty"`
+	InitiativeProposal     bool               `json:"initiative_proposal,omitempty"`
+	Registries             []Registry         `json:"registries,omitempty"`
 
-	Assets map[protocol.AssetCode]*Asset `json:"assets,omitempty"`
-	Votes  map[protocol.TxId]*Vote       `json:"votes,omitempty"`
+	AssetCodes []protocol.AssetCode
+	Votes      map[protocol.TxId]*Vote `json:"votes,omitempty"`
 }
 
 type Asset struct {
@@ -71,13 +60,13 @@ type Asset struct {
 	TokenQty                    uint64          `json:"token_qty,omitempty"`
 	AssetPayload                []byte          `json:"asset_payload,omitempty"`
 
-	Holdings map[protocol.PublicKeyHash]*Holding `json:"holdings,omitempty"`
+	Holdings []Holding `json:"holdings,omitempty"`
 }
 
 type Holding struct {
-	Address         protocol.PublicKeyHash `json:"address,omit_empty"`
+	PKH             protocol.PublicKeyHash `json:"address,omit_empty"`
 	Balance         uint64                 `json:"balance,omit_empty"`
-	HoldingStatuses []*HoldingStatus       `json:"order_status,omitempty"`
+	HoldingStatuses []HoldingStatus        `json:"order_status,omitempty"`
 	CreatedAt       protocol.Timestamp     `json:"created_at,omit_empty"`
 }
 
@@ -133,14 +122,4 @@ type Registry struct {
 	Name      string                 `json:"name,omit_empty"`
 	URL       string                 `json:"url,omit_empty"`
 	PublicKey protocol.PublicKeyHash `json:"public_key,omit_empty"`
-}
-
-type KeyRole struct {
-	Type byte   `json:"type,omit_empty"`
-	Name string `json:"name,omit_empty"`
-}
-
-type NotableRole struct {
-	Type byte   `json:"type,omit_empty"`
-	Name string `json:"name,omit_empty"`
 }

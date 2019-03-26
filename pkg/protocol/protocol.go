@@ -205,6 +205,11 @@ func TxIdFromBytes(data []byte) *TxId {
 	return &result
 }
 
+// Equal returns true if the specified values are the same.
+func (id *TxId) Equal(other TxId) bool {
+	return bytes.Equal(id.data[:], other.data[:])
+}
+
 // Bytes returns the byte slice for the TxId.
 func (id *TxId) Bytes() []byte { return id.data[:] }
 
@@ -245,6 +250,11 @@ type PublicKeyHash struct {
 	data [20]byte
 }
 
+// Equal returns true if the specified values are the same.
+func (hash *PublicKeyHash) Equal(other PublicKeyHash) bool {
+	return bytes.Equal(hash.data[:], other.data[:])
+}
+
 // PublicKeyHashFromBytes returns a PublicKeyHash with the specified bytes.
 func PublicKeyHashFromBytes(data []byte) *PublicKeyHash {
 	var result PublicKeyHash
@@ -274,14 +284,14 @@ func (hash *PublicKeyHash) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON converts from json.
 func (hash *PublicKeyHash) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
-		return errors.New("To short for hex data")
+		return fmt.Errorf("Too short for PublicKeyHash hex data : %d", len(data))
 	}
 	n, err := hex.Decode(hash.data[:], data[1:len(data)-1])
 	if err != nil {
 		return err
 	}
 	if n != 20 {
-		return errors.New("Invalid size")
+		return fmt.Errorf("Invalid PublicKeyHash size : %d", n)
 	}
 	return nil
 }
@@ -293,8 +303,13 @@ type AssetCode struct {
 }
 
 // IsZero returns true if the AssetCode is all zeroes. (empty)
-func (id *AssetCode) IsZero() bool {
-	return bytes.Equal(id.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+func (code *AssetCode) IsZero() bool {
+	return bytes.Equal(code.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+}
+
+// Equal returns true if the specified asset code is the same value.
+func (code *AssetCode) Equal(other AssetCode) bool {
+	return bytes.Equal(code.data[:], other.data[:])
 }
 
 // AssetCodeFromBytes returns a AssetCode with the specified bytes.
@@ -326,14 +341,14 @@ func (code *AssetCode) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON converts from json.
 func (code *AssetCode) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
-		return errors.New("To short for hex data")
+		return fmt.Errorf("Too short for AssetCode hex data : %d", len(data))
 	}
 	n, err := hex.Decode(code.data[:], data[1:len(data)-1])
 	if err != nil {
 		return err
 	}
 	if n != 32 {
-		return errors.New("Invalid size")
+		return fmt.Errorf("Invalid AssetCode size : %d", n)
 	}
 	return nil
 }
@@ -345,8 +360,13 @@ type ContractCode struct {
 }
 
 // IsZero returns true if the ContractCode is all zeroes. (empty)
-func (id *ContractCode) IsZero() bool {
-	return bytes.Equal(id.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+func (code *ContractCode) IsZero() bool {
+	return bytes.Equal(code.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+}
+
+// Equal returns true if the specified values are the same.
+func (code *ContractCode) Equal(other ContractCode) bool {
+	return bytes.Equal(code.data[:], other.data[:])
 }
 
 // AssetCodeFromBytes returns a ContractCode with the specified bytes.
@@ -378,14 +398,14 @@ func (code *ContractCode) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON converts from json.
 func (code *ContractCode) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
-		return errors.New("To short for hex data")
+		return fmt.Errorf("Too short for ContractCode hex data : %d", len(data))
 	}
 	n, err := hex.Decode(code.data[:], data[1:len(data)-1])
 	if err != nil {
 		return err
 	}
 	if n != 32 {
-		return errors.New("Invalid size")
+		return fmt.Errorf("Invalid ContractCode size : %d", n)
 	}
 	return nil
 }
@@ -399,6 +419,11 @@ type Timestamp struct {
 // CurrentTimestamp returns a Timestamp containing the current time.
 func CurrentTimestamp() Timestamp {
 	return Timestamp{nanoseconds: uint64(time.Now().UnixNano())}
+}
+
+// Equal returns true if the specified values are the same.
+func (time *Timestamp) Equal(other Timestamp) bool {
+	return time.nanoseconds == other.nanoseconds
 }
 
 // Nano returns the nanoseconds since the Unix epoch for the Timestamp.
@@ -450,6 +475,22 @@ type Polity struct {
 // String converts to a string
 func (polity *Polity) String() string {
 	return fmt.Sprintf("%v", polity.Items)
+}
+
+// Equal returns true if the specified values are the same.
+func (polity *Polity) Equal(other Polity) bool {
+	if len(polity.Items) == 0 && len(other.Items) == 0 {
+		return true
+	}
+	if len(polity.Items) != len(other.Items) {
+		return false
+	}
+	for i, item := range polity.Items {
+		if !bytes.Equal(item[:], other.Items[i][:]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Serialize returns a byte slice with the Polity in it.
