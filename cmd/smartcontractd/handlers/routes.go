@@ -74,8 +74,7 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 		Config:   config,
 	}
 
-	app.Handle("SEE", protocol.CodeInitiative, g.InitiativeRequest)
-	app.Handle("SEE", protocol.CodeReferendum, g.ReferendumRequest)
+	app.Handle("SEE", protocol.CodeProposal, g.ProposalRequest)
 	app.Handle("SEE", protocol.CodeVote, g.VoteResponse)
 	app.Handle("SEE", protocol.CodeBallotCast, g.BallotCastRequest)
 	app.Handle("SEE", protocol.CodeBallotCounted, g.BallotCountedResponse)

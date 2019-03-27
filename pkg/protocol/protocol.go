@@ -211,13 +211,19 @@ func (id *TxId) Equal(other TxId) bool {
 }
 
 // Bytes returns the byte slice for the TxId.
-func (id *TxId) Bytes() []byte { return id.data[:] }
+func (id *TxId) Bytes() []byte {
+	return id.data[:]
+}
 
 // String converts to a string
-func (id *TxId) String() string { return fmt.Sprintf("%x", id.data[:]) }
+func (id *TxId) String() string {
+	return fmt.Sprintf("%x", id.data[:])
+}
 
 // Serialize returns a byte slice with the TxId in it.
-func (id *TxId) Serialize() ([]byte, error) { return id.data[:], nil }
+func (id *TxId) Serialize() ([]byte, error) {
+	return id.data[:], nil
+}
 
 // Write reads a TxId from a bytes.Buffer
 func (id *TxId) Write(buf *bytes.Buffer) error {
@@ -263,13 +269,19 @@ func PublicKeyHashFromBytes(data []byte) *PublicKeyHash {
 }
 
 // Bytes returns a byte slice containing the PublicKeyHash.
-func (hash *PublicKeyHash) Bytes() []byte { return hash.data[:] }
+func (hash *PublicKeyHash) Bytes() []byte {
+	return hash.data[:]
+}
 
 // String converts to a string
-func (hash *PublicKeyHash) String() string { return fmt.Sprintf("%x", hash.data[:]) }
+func (hash *PublicKeyHash) String() string {
+	return fmt.Sprintf("%x", hash.data[:])
+}
 
 // Serialize returns a byte slice with the PublicKeyHash in it.
-func (hash *PublicKeyHash) Serialize() ([]byte, error) { return hash.data[:], nil }
+func (hash *PublicKeyHash) Serialize() ([]byte, error) {
+	return hash.data[:], nil
+}
 
 // Write reads a PublicKeyHash from a bytes.Buffer
 func (hash *PublicKeyHash) Write(buf *bytes.Buffer) error {
@@ -304,7 +316,8 @@ type AssetCode struct {
 
 // IsZero returns true if the AssetCode is all zeroes. (empty)
 func (code *AssetCode) IsZero() bool {
-	return bytes.Equal(code.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	zero := make([]byte, 32, 32)
+	return bytes.Equal(code.data[:], zero)
 }
 
 // Equal returns true if the specified asset code is the same value.
@@ -320,13 +333,19 @@ func AssetCodeFromBytes(data []byte) *AssetCode {
 }
 
 // Bytes returns a byte slice containing the AssetCode.
-func (code *AssetCode) Bytes() []byte { return code.data[:] }
+func (code *AssetCode) Bytes() []byte {
+	return code.data[:]
+}
 
 // String converts to a string
-func (code *AssetCode) String() string { return fmt.Sprintf("%x", code.data[:]) }
+func (code *AssetCode) String() string {
+	return fmt.Sprintf("%x", code.data[:])
+}
 
 // Serialize returns a byte slice with the AssetCode in it.
-func (code *AssetCode) Serialize() ([]byte, error) { return code.data[:], nil }
+func (code *AssetCode) Serialize() ([]byte, error) {
+	return code.data[:], nil
+}
 
 // Write reads a AssetCode from a bytes.Buffer
 func (code *AssetCode) Write(buf *bytes.Buffer) error {
@@ -361,7 +380,8 @@ type ContractCode struct {
 
 // IsZero returns true if the ContractCode is all zeroes. (empty)
 func (code *ContractCode) IsZero() bool {
-	return bytes.Equal(code.data[:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	zero := make([]byte, 32, 32)
+	return bytes.Equal(code.data[:], zero)
 }
 
 // Equal returns true if the specified values are the same.
@@ -377,13 +397,19 @@ func ContractCodeFromBytes(data []byte) *ContractCode {
 }
 
 // Bytes returns a byte slice containing the ContractCode.
-func (code *ContractCode) Bytes() []byte { return code.data[:] }
+func (code *ContractCode) Bytes() []byte {
+	return code.data[:]
+}
 
 // String converts to a string
-func (code *ContractCode) String() string { return fmt.Sprintf("%x", code.data[:]) }
+func (code *ContractCode) String() string {
+	return fmt.Sprintf("%x", code.data[:])
+}
 
 // Serialize returns a byte slice with the ContractCode in it.
-func (code *ContractCode) Serialize() ([]byte, error) { return code.data[:], nil }
+func (code *ContractCode) Serialize() ([]byte, error) {
+	return code.data[:], nil
+}
 
 // Write reads a ContractCode from a bytes.Buffer
 func (code *ContractCode) Write(buf *bytes.Buffer) error {
@@ -427,10 +453,14 @@ func (time *Timestamp) Equal(other Timestamp) bool {
 }
 
 // Nano returns the nanoseconds since the Unix epoch for the Timestamp.
-func (time *Timestamp) Nano() uint64 { return time.nanoseconds }
+func (time *Timestamp) Nano() uint64 {
+	return time.nanoseconds
+}
 
 // String converts to a string
-func (time *Timestamp) String() string { return strconv.FormatUint(time.nanoseconds, 10) }
+func (time *Timestamp) String() string {
+	return strconv.FormatUint(time.nanoseconds, 10)
+}
 
 // Serialize returns a byte slice with the Timestamp in it.
 func (time *Timestamp) Serialize() ([]byte, error) {

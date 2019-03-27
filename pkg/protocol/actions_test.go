@@ -20,8 +20,11 @@ func TestAssetDefinition(t *testing.T) {
 	// AssetCode (AssetCode)
 	initialMessage.AssetCode = AssetCode{}
 
-	// AssetAuthFlags (bin)
-	// bin test not setup
+	// AssetAuthFlags (varbin)
+	initialMessage.AssetAuthFlags = make([]byte, 0, 8)
+	for i := uint64(0); i < 8; i++ {
+		initialMessage.AssetAuthFlags = append(initialMessage.AssetAuthFlags, byte(65+i+2))
+	}
 
 	// TransfersPermitted (bool)
 	initialMessage.TransfersPermitted = true
@@ -35,11 +38,11 @@ func TestAssetDefinition(t *testing.T) {
 	// VoteMultiplier (uint)
 	// uint test not setup
 
-	// ReferendumProposal (bool)
-	initialMessage.ReferendumProposal = true
+	// IssuerProposal (bool)
+	initialMessage.IssuerProposal = true
 
-	// InitiativeProposal (bool)
-	initialMessage.InitiativeProposal = true
+	// HolderProposal (bool)
+	initialMessage.HolderProposal = true
 
 	// AssetModificationGovernance (bool)
 	initialMessage.AssetModificationGovernance = true
@@ -96,9 +99,9 @@ func TestAssetDefinition(t *testing.T) {
 	// AssetCode (AssetCode)
 	// AssetCode test compare not setup
 
-	// AssetAuthFlags (bin)
-	if initialMessage.AssetAuthFlags != decodedMessage.AssetAuthFlags {
-		t.Errorf("AssetAuthFlags doesn't match : %v != %v", initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags)
+	// AssetAuthFlags (varbin)
+	if !bytes.Equal(initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags) {
+		t.Errorf("AssetAuthFlags doesn't match : %x != %x", initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags)
 	}
 
 	// TransfersPermitted (bool)
@@ -126,14 +129,14 @@ func TestAssetDefinition(t *testing.T) {
 		t.Errorf("VoteMultiplier doesn't match : %v != %v", initialMessage.VoteMultiplier, decodedMessage.VoteMultiplier)
 	}
 
-	// ReferendumProposal (bool)
-	if initialMessage.ReferendumProposal != decodedMessage.ReferendumProposal {
-		t.Errorf("ReferendumProposal doesn't match : %v != %v", initialMessage.ReferendumProposal, decodedMessage.ReferendumProposal)
+	// IssuerProposal (bool)
+	if initialMessage.IssuerProposal != decodedMessage.IssuerProposal {
+		t.Errorf("IssuerProposal doesn't match : %v != %v", initialMessage.IssuerProposal, decodedMessage.IssuerProposal)
 	}
 
-	// InitiativeProposal (bool)
-	if initialMessage.InitiativeProposal != decodedMessage.InitiativeProposal {
-		t.Errorf("InitiativeProposal doesn't match : %v != %v", initialMessage.InitiativeProposal, decodedMessage.InitiativeProposal)
+	// HolderProposal (bool)
+	if initialMessage.HolderProposal != decodedMessage.HolderProposal {
+		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
 	// AssetModificationGovernance (bool)
@@ -167,8 +170,11 @@ func TestAssetCreation(t *testing.T) {
 	// AssetCode (AssetCode)
 	initialMessage.AssetCode = AssetCode{}
 
-	// AssetAuthFlags (bin)
-	// bin test not setup
+	// AssetAuthFlags (varbin)
+	initialMessage.AssetAuthFlags = make([]byte, 0, 8)
+	for i := uint64(0); i < 8; i++ {
+		initialMessage.AssetAuthFlags = append(initialMessage.AssetAuthFlags, byte(65+i+2))
+	}
 
 	// TransfersPermitted (bool)
 	initialMessage.TransfersPermitted = true
@@ -182,11 +188,11 @@ func TestAssetCreation(t *testing.T) {
 	// VoteMultiplier (uint)
 	// uint test not setup
 
-	// ReferendumProposal (bool)
-	initialMessage.ReferendumProposal = true
+	// IssuerProposal (bool)
+	initialMessage.IssuerProposal = true
 
-	// InitiativeProposal (bool)
-	initialMessage.InitiativeProposal = true
+	// HolderProposal (bool)
+	initialMessage.HolderProposal = true
 
 	// AssetModificationGovernance (bool)
 	initialMessage.AssetModificationGovernance = true
@@ -249,9 +255,9 @@ func TestAssetCreation(t *testing.T) {
 	// AssetCode (AssetCode)
 	// AssetCode test compare not setup
 
-	// AssetAuthFlags (bin)
-	if initialMessage.AssetAuthFlags != decodedMessage.AssetAuthFlags {
-		t.Errorf("AssetAuthFlags doesn't match : %v != %v", initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags)
+	// AssetAuthFlags (varbin)
+	if !bytes.Equal(initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags) {
+		t.Errorf("AssetAuthFlags doesn't match : %x != %x", initialMessage.AssetAuthFlags, decodedMessage.AssetAuthFlags)
 	}
 
 	// TransfersPermitted (bool)
@@ -279,14 +285,14 @@ func TestAssetCreation(t *testing.T) {
 		t.Errorf("VoteMultiplier doesn't match : %v != %v", initialMessage.VoteMultiplier, decodedMessage.VoteMultiplier)
 	}
 
-	// ReferendumProposal (bool)
-	if initialMessage.ReferendumProposal != decodedMessage.ReferendumProposal {
-		t.Errorf("ReferendumProposal doesn't match : %v != %v", initialMessage.ReferendumProposal, decodedMessage.ReferendumProposal)
+	// IssuerProposal (bool)
+	if initialMessage.IssuerProposal != decodedMessage.IssuerProposal {
+		t.Errorf("IssuerProposal doesn't match : %v != %v", initialMessage.IssuerProposal, decodedMessage.IssuerProposal)
 	}
 
-	// InitiativeProposal (bool)
-	if initialMessage.InitiativeProposal != decodedMessage.InitiativeProposal {
-		t.Errorf("InitiativeProposal doesn't match : %v != %v", initialMessage.InitiativeProposal, decodedMessage.InitiativeProposal)
+	// HolderProposal (bool)
+	if initialMessage.HolderProposal != decodedMessage.HolderProposal {
+		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
 	// AssetModificationGovernance (bool)
@@ -459,8 +465,11 @@ func TestContractOffer(t *testing.T) {
 	// ContractOperator (Entity)
 	initialMessage.ContractOperator = Entity{}
 
-	// ContractAuthFlags (bin)
-	// bin test not setup
+	// ContractAuthFlags (varbin)
+	initialMessage.ContractAuthFlags = make([]byte, 0, 16)
+	for i := uint64(0); i < 16; i++ {
+		initialMessage.ContractAuthFlags = append(initialMessage.ContractAuthFlags, byte(65+i+14))
+	}
 
 	// ContractFee (uint)
 	// uint test not setup
@@ -473,11 +482,11 @@ func TestContractOffer(t *testing.T) {
 	// RestrictedQtyAssets (uint)
 	// uint test not setup
 
-	// ReferendumProposal (bool)
-	initialMessage.ReferendumProposal = true
+	// IssuerProposal (bool)
+	initialMessage.IssuerProposal = true
 
-	// InitiativeProposal (bool)
-	initialMessage.InitiativeProposal = true
+	// HolderProposal (bool)
+	initialMessage.HolderProposal = true
 
 	// Registries (Registry[])
 	for i := 0; i < 2; i++ {
@@ -583,9 +592,9 @@ func TestContractOffer(t *testing.T) {
 	// ContractOperator (Entity)
 	// Entity test compare not setup
 
-	// ContractAuthFlags (bin)
-	if initialMessage.ContractAuthFlags != decodedMessage.ContractAuthFlags {
-		t.Errorf("ContractAuthFlags doesn't match : %v != %v", initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags)
+	// ContractAuthFlags (varbin)
+	if !bytes.Equal(initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags) {
+		t.Errorf("ContractAuthFlags doesn't match : %x != %x", initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags)
 	}
 
 	// ContractFee (uint)
@@ -603,14 +612,14 @@ func TestContractOffer(t *testing.T) {
 		t.Errorf("RestrictedQtyAssets doesn't match : %v != %v", initialMessage.RestrictedQtyAssets, decodedMessage.RestrictedQtyAssets)
 	}
 
-	// ReferendumProposal (bool)
-	if initialMessage.ReferendumProposal != decodedMessage.ReferendumProposal {
-		t.Errorf("ReferendumProposal doesn't match : %v != %v", initialMessage.ReferendumProposal, decodedMessage.ReferendumProposal)
+	// IssuerProposal (bool)
+	if initialMessage.IssuerProposal != decodedMessage.IssuerProposal {
+		t.Errorf("IssuerProposal doesn't match : %v != %v", initialMessage.IssuerProposal, decodedMessage.IssuerProposal)
 	}
 
-	// InitiativeProposal (bool)
-	if initialMessage.InitiativeProposal != decodedMessage.InitiativeProposal {
-		t.Errorf("InitiativeProposal doesn't match : %v != %v", initialMessage.InitiativeProposal, decodedMessage.InitiativeProposal)
+	// HolderProposal (bool)
+	if initialMessage.HolderProposal != decodedMessage.HolderProposal {
+		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
 	// Registries (Registry[])
@@ -682,8 +691,11 @@ func TestContractFormation(t *testing.T) {
 	// ContractOperator (Entity)
 	initialMessage.ContractOperator = Entity{}
 
-	// ContractAuthFlags (bin)
-	// bin test not setup
+	// ContractAuthFlags (varbin)
+	initialMessage.ContractAuthFlags = make([]byte, 0, 16)
+	for i := uint64(0); i < 16; i++ {
+		initialMessage.ContractAuthFlags = append(initialMessage.ContractAuthFlags, byte(65+i+14))
+	}
 
 	// ContractFee (uint)
 	// uint test not setup
@@ -696,11 +708,11 @@ func TestContractFormation(t *testing.T) {
 	// RestrictedQtyAssets (uint)
 	// uint test not setup
 
-	// ReferendumProposal (bool)
-	initialMessage.ReferendumProposal = true
+	// IssuerProposal (bool)
+	initialMessage.IssuerProposal = true
 
-	// InitiativeProposal (bool)
-	initialMessage.InitiativeProposal = true
+	// HolderProposal (bool)
+	initialMessage.HolderProposal = true
 
 	// Registries (Registry[])
 	for i := 0; i < 2; i++ {
@@ -812,9 +824,9 @@ func TestContractFormation(t *testing.T) {
 	// ContractOperator (Entity)
 	// Entity test compare not setup
 
-	// ContractAuthFlags (bin)
-	if initialMessage.ContractAuthFlags != decodedMessage.ContractAuthFlags {
-		t.Errorf("ContractAuthFlags doesn't match : %v != %v", initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags)
+	// ContractAuthFlags (varbin)
+	if !bytes.Equal(initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags) {
+		t.Errorf("ContractAuthFlags doesn't match : %x != %x", initialMessage.ContractAuthFlags, decodedMessage.ContractAuthFlags)
 	}
 
 	// ContractFee (uint)
@@ -832,14 +844,14 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("RestrictedQtyAssets doesn't match : %v != %v", initialMessage.RestrictedQtyAssets, decodedMessage.RestrictedQtyAssets)
 	}
 
-	// ReferendumProposal (bool)
-	if initialMessage.ReferendumProposal != decodedMessage.ReferendumProposal {
-		t.Errorf("ReferendumProposal doesn't match : %v != %v", initialMessage.ReferendumProposal, decodedMessage.ReferendumProposal)
+	// IssuerProposal (bool)
+	if initialMessage.IssuerProposal != decodedMessage.IssuerProposal {
+		t.Errorf("IssuerProposal doesn't match : %v != %v", initialMessage.IssuerProposal, decodedMessage.IssuerProposal)
 	}
 
-	// InitiativeProposal (bool)
-	if initialMessage.InitiativeProposal != decodedMessage.InitiativeProposal {
-		t.Errorf("InitiativeProposal doesn't match : %v != %v", initialMessage.InitiativeProposal, decodedMessage.InitiativeProposal)
+	// HolderProposal (bool)
+	if initialMessage.HolderProposal != decodedMessage.HolderProposal {
+		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
 	// Registries (Registry[])
@@ -1478,132 +1490,12 @@ func TestReconciliation(t *testing.T) {
 	// Timestamp test compare not setup
 }
 
-func TestInitiative(t *testing.T) {
+func TestProposal(t *testing.T) {
 	// Create a randomized object
-	initialMessage := Initiative{}
-	// AssetType (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+0))
-		}
-		initialMessage.AssetType = string(text)
-	}
-
-	// AssetCode (AssetCode)
-	initialMessage.AssetCode = AssetCode{}
-
-	// VoteSystem (uint)
+	initialMessage := Proposal{}
+	// Initiator (uint)
 	// uint test not setup
 
-	// Proposal (bool)
-	initialMessage.Proposal = true
-
-	// ProposedChanges (Amendment[])
-	for i := 0; i < 2; i++ {
-		initialMessage.ProposedChanges = append(initialMessage.ProposedChanges, Amendment{})
-	}
-
-	// VoteOptions (varchar)
-	initialMessage.VoteOptions = "Text 5"
-
-	// VoteMax (uint)
-	// uint test not setup
-
-	// ProposalDescription (varchar)
-	initialMessage.ProposalDescription = "Text 7"
-
-	// ProposalDocumentHash (bin)
-	// bin test not setup
-
-	// VoteCutOffTimestamp (Timestamp)
-	initialMessage.VoteCutOffTimestamp = Timestamp{}
-
-	// Encode message
-	initialEncoding, err := initialMessage.serialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Initial encoding : %d bytes", len(initialEncoding))
-
-	// Decode message
-	decodedMessage := Initiative{}
-
-	n, err := decodedMessage.write(initialEncoding)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Decoded : %d bytes", n)
-
-	if n != len(initialEncoding) {
-		t.Fatalf("got %v, want %v", n, len(initialEncoding))
-	}
-
-	// Serializing the message should give us the same bytes
-	secondEncoding, err := decodedMessage.serialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(initialEncoding, secondEncoding) {
-		t.Errorf("Encoded value doesn't match.\ngot\n%+v\nwant\n%+v", initialEncoding, secondEncoding)
-	}
-
-	// if !cmp.Equal(&initialMessage, &decodedMessage) {
-	// 	t.Errorf("Decoded value doesn't match.\ninitial : %+v\ndecoded : %+v", initialMessage, decodedMessage)
-	// }
-
-	// Compare re-serialized values
-	// AssetType (fixedchar)
-	if initialMessage.AssetType != decodedMessage.AssetType {
-		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
-	}
-
-	// AssetCode (AssetCode)
-	// AssetCode test compare not setup
-
-	// VoteSystem (uint)
-	if initialMessage.VoteSystem != decodedMessage.VoteSystem {
-		t.Errorf("VoteSystem doesn't match : %v != %v", initialMessage.VoteSystem, decodedMessage.VoteSystem)
-	}
-
-	// Proposal (bool)
-	if initialMessage.Proposal != decodedMessage.Proposal {
-		t.Errorf("Proposal doesn't match : %v != %v", initialMessage.Proposal, decodedMessage.Proposal)
-	}
-
-	// ProposedChanges (Amendment[])
-	if len(initialMessage.ProposedChanges) != len(decodedMessage.ProposedChanges) {
-		t.Errorf("ProposedChanges lengths don't match : %d != %d", len(initialMessage.ProposedChanges), len(decodedMessage.ProposedChanges))
-	}
-
-	// VoteOptions (varchar)
-	if initialMessage.VoteOptions != decodedMessage.VoteOptions {
-		t.Errorf("VoteOptions doesn't match : %s != %s", initialMessage.VoteOptions, decodedMessage.VoteOptions)
-	}
-
-	// VoteMax (uint)
-	if initialMessage.VoteMax != decodedMessage.VoteMax {
-		t.Errorf("VoteMax doesn't match : %v != %v", initialMessage.VoteMax, decodedMessage.VoteMax)
-	}
-
-	// ProposalDescription (varchar)
-	if initialMessage.ProposalDescription != decodedMessage.ProposalDescription {
-		t.Errorf("ProposalDescription doesn't match : %s != %s", initialMessage.ProposalDescription, decodedMessage.ProposalDescription)
-	}
-
-	// ProposalDocumentHash (bin)
-	if initialMessage.ProposalDocumentHash != decodedMessage.ProposalDocumentHash {
-		t.Errorf("ProposalDocumentHash doesn't match : %v != %v", initialMessage.ProposalDocumentHash, decodedMessage.ProposalDocumentHash)
-	}
-
-	// VoteCutOffTimestamp (Timestamp)
-	// Timestamp test compare not setup
-}
-
-func TestReferendum(t *testing.T) {
-	// Create a randomized object
-	initialMessage := Referendum{}
 	// AssetSpecificVote (bool)
 	initialMessage.AssetSpecificVote = true
 
@@ -1611,7 +1503,7 @@ func TestReferendum(t *testing.T) {
 	{
 		text := make([]byte, 0, 3)
 		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+1))
+			text = append(text, byte(65+i+2))
 		}
 		initialMessage.AssetType = string(text)
 	}
@@ -1622,22 +1514,22 @@ func TestReferendum(t *testing.T) {
 	// VoteSystem (uint)
 	// uint test not setup
 
-	// Proposal (bool)
-	initialMessage.Proposal = true
+	// Specific (bool)
+	initialMessage.Specific = true
 
-	// ProposedChanges (Amendment[])
+	// ProposedAmendments (Amendment[])
 	for i := 0; i < 2; i++ {
-		initialMessage.ProposedChanges = append(initialMessage.ProposedChanges, Amendment{})
+		initialMessage.ProposedAmendments = append(initialMessage.ProposedAmendments, Amendment{})
 	}
 
 	// VoteOptions (varchar)
-	initialMessage.VoteOptions = "Text 6"
+	initialMessage.VoteOptions = "Text 7"
 
 	// VoteMax (uint)
 	// uint test not setup
 
 	// ProposalDescription (varchar)
-	initialMessage.ProposalDescription = "Text 8"
+	initialMessage.ProposalDescription = "Text 9"
 
 	// ProposalDocumentHash (bin)
 	// bin test not setup
@@ -1653,7 +1545,7 @@ func TestReferendum(t *testing.T) {
 	t.Logf("Initial encoding : %d bytes", len(initialEncoding))
 
 	// Decode message
-	decodedMessage := Referendum{}
+	decodedMessage := Proposal{}
 
 	n, err := decodedMessage.write(initialEncoding)
 	if err != nil {
@@ -1680,6 +1572,11 @@ func TestReferendum(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// Initiator (uint)
+	if initialMessage.Initiator != decodedMessage.Initiator {
+		t.Errorf("Initiator doesn't match : %v != %v", initialMessage.Initiator, decodedMessage.Initiator)
+	}
+
 	// AssetSpecificVote (bool)
 	if initialMessage.AssetSpecificVote != decodedMessage.AssetSpecificVote {
 		t.Errorf("AssetSpecificVote doesn't match : %v != %v", initialMessage.AssetSpecificVote, decodedMessage.AssetSpecificVote)
@@ -1698,14 +1595,14 @@ func TestReferendum(t *testing.T) {
 		t.Errorf("VoteSystem doesn't match : %v != %v", initialMessage.VoteSystem, decodedMessage.VoteSystem)
 	}
 
-	// Proposal (bool)
-	if initialMessage.Proposal != decodedMessage.Proposal {
-		t.Errorf("Proposal doesn't match : %v != %v", initialMessage.Proposal, decodedMessage.Proposal)
+	// Specific (bool)
+	if initialMessage.Specific != decodedMessage.Specific {
+		t.Errorf("Specific doesn't match : %v != %v", initialMessage.Specific, decodedMessage.Specific)
 	}
 
-	// ProposedChanges (Amendment[])
-	if len(initialMessage.ProposedChanges) != len(decodedMessage.ProposedChanges) {
-		t.Errorf("ProposedChanges lengths don't match : %d != %d", len(initialMessage.ProposedChanges), len(decodedMessage.ProposedChanges))
+	// ProposedAmendments (Amendment[])
+	if len(initialMessage.ProposedAmendments) != len(decodedMessage.ProposedAmendments) {
+		t.Errorf("ProposedAmendments lengths don't match : %d != %d", len(initialMessage.ProposedAmendments), len(decodedMessage.ProposedAmendments))
 	}
 
 	// VoteOptions (varchar)
@@ -1780,23 +1677,11 @@ func TestVote(t *testing.T) {
 func TestBallotCast(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCast{}
-	// AssetType (fixedchar)
-	{
-		text := make([]byte, 0, 3)
-		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+0))
-		}
-		initialMessage.AssetType = string(text)
-	}
-
-	// AssetCode (AssetCode)
-	initialMessage.AssetCode = AssetCode{}
-
 	// VoteTxID (TxId)
 	initialMessage.VoteTxID = TxId{}
 
 	// Vote (varchar)
-	initialMessage.Vote = "Text 3"
+	initialMessage.Vote = "Text 1"
 
 	// Encode message
 	initialEncoding, err := initialMessage.serialize()
@@ -1833,14 +1718,6 @@ func TestBallotCast(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// AssetType (fixedchar)
-	if initialMessage.AssetType != decodedMessage.AssetType {
-		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
-	}
-
-	// AssetCode (AssetCode)
-	// AssetCode test compare not setup
-
 	// VoteTxID (TxId)
 	// TxId test compare not setup
 
@@ -1853,6 +1730,15 @@ func TestBallotCast(t *testing.T) {
 func TestBallotCounted(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCounted{}
+	// VoteTxID (TxId)
+	initialMessage.VoteTxID = TxId{}
+
+	// Vote (varchar)
+	initialMessage.Vote = "Text 1"
+
+	// TokensHeld (uint)
+	// uint test not setup
+
 	// Timestamp (Timestamp)
 	initialMessage.Timestamp = Timestamp{}
 
@@ -1891,6 +1777,19 @@ func TestBallotCounted(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// VoteTxID (TxId)
+	// TxId test compare not setup
+
+	// Vote (varchar)
+	if initialMessage.Vote != decodedMessage.Vote {
+		t.Errorf("Vote doesn't match : %s != %s", initialMessage.Vote, decodedMessage.Vote)
+	}
+
+	// TokensHeld (uint)
+	if initialMessage.TokensHeld != decodedMessage.TokensHeld {
+		t.Errorf("TokensHeld doesn't match : %v != %v", initialMessage.TokensHeld, decodedMessage.TokensHeld)
+	}
+
 	// Timestamp (Timestamp)
 	// Timestamp test compare not setup
 }
@@ -1898,11 +1797,14 @@ func TestBallotCounted(t *testing.T) {
 func TestResult(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Result{}
+	// AssetSpecificVote (bool)
+	initialMessage.AssetSpecificVote = true
+
 	// AssetType (fixedchar)
 	{
 		text := make([]byte, 0, 3)
 		for i := uint64(0); i < 3; i++ {
-			text = append(text, byte(65+i+0))
+			text = append(text, byte(65+i+1))
 		}
 		initialMessage.AssetType = string(text)
 	}
@@ -1910,22 +1812,22 @@ func TestResult(t *testing.T) {
 	// AssetCode (AssetCode)
 	initialMessage.AssetCode = AssetCode{}
 
-	// Proposal (bool)
-	initialMessage.Proposal = true
+	// Specific (bool)
+	initialMessage.Specific = true
 
-	// ProposedChanges (Amendment[])
+	// ProposedAmendments (Amendment[])
 	for i := 0; i < 2; i++ {
-		initialMessage.ProposedChanges = append(initialMessage.ProposedChanges, Amendment{})
+		initialMessage.ProposedAmendments = append(initialMessage.ProposedAmendments, Amendment{})
 	}
 
 	// VoteTxID (TxId)
 	initialMessage.VoteTxID = TxId{}
 
-	// VoteOptionsCount (uint)
-	// uint test not setup
-
-	// OptionXTally (uint)
-	// uint test not setup
+	// OptionTally (uint64[])
+	for i := 0; i < 5; i++ {
+		var item uint64
+		initialMessage.OptionTally = append(initialMessage.OptionTally, item)
+	}
 
 	// Result (varchar)
 	initialMessage.Result = "Text 7"
@@ -1968,6 +1870,11 @@ func TestResult(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// AssetSpecificVote (bool)
+	if initialMessage.AssetSpecificVote != decodedMessage.AssetSpecificVote {
+		t.Errorf("AssetSpecificVote doesn't match : %v != %v", initialMessage.AssetSpecificVote, decodedMessage.AssetSpecificVote)
+	}
+
 	// AssetType (fixedchar)
 	if initialMessage.AssetType != decodedMessage.AssetType {
 		t.Errorf("AssetType doesn't match : %s != %s", initialMessage.AssetType, decodedMessage.AssetType)
@@ -1976,27 +1883,27 @@ func TestResult(t *testing.T) {
 	// AssetCode (AssetCode)
 	// AssetCode test compare not setup
 
-	// Proposal (bool)
-	if initialMessage.Proposal != decodedMessage.Proposal {
-		t.Errorf("Proposal doesn't match : %v != %v", initialMessage.Proposal, decodedMessage.Proposal)
+	// Specific (bool)
+	if initialMessage.Specific != decodedMessage.Specific {
+		t.Errorf("Specific doesn't match : %v != %v", initialMessage.Specific, decodedMessage.Specific)
 	}
 
-	// ProposedChanges (Amendment[])
-	if len(initialMessage.ProposedChanges) != len(decodedMessage.ProposedChanges) {
-		t.Errorf("ProposedChanges lengths don't match : %d != %d", len(initialMessage.ProposedChanges), len(decodedMessage.ProposedChanges))
+	// ProposedAmendments (Amendment[])
+	if len(initialMessage.ProposedAmendments) != len(decodedMessage.ProposedAmendments) {
+		t.Errorf("ProposedAmendments lengths don't match : %d != %d", len(initialMessage.ProposedAmendments), len(decodedMessage.ProposedAmendments))
 	}
 
 	// VoteTxID (TxId)
 	// TxId test compare not setup
 
-	// VoteOptionsCount (uint)
-	if initialMessage.VoteOptionsCount != decodedMessage.VoteOptionsCount {
-		t.Errorf("VoteOptionsCount doesn't match : %v != %v", initialMessage.VoteOptionsCount, decodedMessage.VoteOptionsCount)
+	// OptionTally (uint64[])
+	if len(initialMessage.OptionTally) != len(decodedMessage.OptionTally) {
+		t.Errorf("OptionTally lengths don't match : %d != %d", len(initialMessage.OptionTally), len(decodedMessage.OptionTally))
 	}
-
-	// OptionXTally (uint)
-	if initialMessage.OptionXTally != decodedMessage.OptionXTally {
-		t.Errorf("OptionXTally doesn't match : %v != %v", initialMessage.OptionXTally, decodedMessage.OptionXTally)
+	for i, value := range initialMessage.OptionTally {
+		if value != decodedMessage.OptionTally[i] {
+			t.Errorf("OptionTally value %d doesn't match : %v != %v", i, value, decodedMessage.OptionTally[i])
+		}
 	}
 
 	// Result (varchar)

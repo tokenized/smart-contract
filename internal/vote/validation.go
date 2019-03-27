@@ -1,64 +1,28 @@
 package vote
 
-import "github.com/tokenized/smart-contract/pkg/protocol"
+import (
+	"time"
 
-// import (
-// "reflect"
+	"github.com/tokenized/smart-contract/pkg/protocol"
+)
 
-// "github.com/tokenized/smart-contract/pkg/protocol"
-// )
+// ValidateProposal returns true if the Proposal is valid.
+func ValidateProposal(msg *protocol.Proposal) bool {
+	if msg.Specific && len(msg.ProposedAmendments) == 0 {
+		return false
+	}
 
-// TODO protocol.Initiative.VoteSystem is now an index into the contract's voting systems
-func ValidateInitiative(msg *protocol.Initiative) bool {
+	if len(msg.VoteOptions) == 0 {
+		return false
+	}
+
+	if msg.VoteMax == 0 {
+		return false
+	}
+
+	if msg.VoteCutOffTimestamp.Nano() < uint64(time.Now().UnixNano()) {
+		return false
+	}
+
 	return true
-	// // An Initiative can never change auth flags.
-	// if msg.VoteType == 'F' {
-	// return false
-	// }
-
-	// // There must be at least 1 option.
-	// if len(msg.VoteOptions) == 0 {
-	// return false
-	// }
-
-	// // Ensure a have a valid vote type was received
-	// vt := msg.VoteType
-
-	// // Invalid vote type
-	// if vt != 'C' && vt != 'A' && vt != 'P' {
-	// return false
-	// }
-
-	// // C, A, F must always be binary options (A, B)
-	// if vt != 'P' && !reflect.DeepEqual(msg.VoteOptions, []byte{'A', 'B'}) {
-	// return false
-	// }
-
-	// // Pass
-	// return true
-}
-
-// TODO Implement ValidateReferendum
-func ValidateReferendum(msg *protocol.Referendum) bool {
-	return true
-	// // There must be at least 1 option.
-	// if msg.VoteOptions.Len == 0 {
-	// return false
-	// }
-
-	// // Ensure a have a valid vote type was received
-	// vt := msg.VoteType
-
-	// // Invalid vote type
-	// if vt != 'C' && vt != 'A' && vt != 'P' && vt != 'F' {
-	// return false
-	// }
-
-	// // C, A, F must always be binary options (A, B)
-	// if vt != 'P' && !reflect.DeepEqual(msg.VoteOptions, []byte{'A', 'B'}) {
-	// return false
-	// }
-
-	// // Pass
-	// return true
 }

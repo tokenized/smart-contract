@@ -15,6 +15,10 @@ import (
 	"go.opencensus.io/trace"
 )
 
+const (
+	FieldCount = 21 // The number of fields that can be changed with amendments.
+)
+
 var (
 	// ErrNotFound abstracts the standard not found error.
 	ErrNotFound = errors.New("Contract not found")
@@ -57,10 +61,10 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	contract.UpdatedAt = now
 
 	if contract.VotingSystems == nil {
-		contract.VotingSystems = []state.VotingSystem{}
+		contract.VotingSystems = []protocol.VotingSystem{}
 	}
 	if contract.Registries == nil {
-		contract.Registries = []state.Registry{}
+		contract.Registries = []protocol.Registry{}
 	}
 
 	logger.Verbose(ctx, "Creating contract :\n%+v", &contract)
@@ -146,22 +150,22 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems
 		if c.VotingSystems == nil {
-			c.VotingSystems = []state.VotingSystem{}
+			c.VotingSystems = []protocol.VotingSystem{}
 		}
 	}
 	if upd.RestrictedQtyAssets != nil {
 		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
 	}
-	if upd.ReferendumProposal != nil {
-		c.ReferendumProposal = *upd.ReferendumProposal
+	if upd.IssuerProposal != nil {
+		c.IssuerProposal = *upd.IssuerProposal
 	}
-	if upd.InitiativeProposal != nil {
-		c.InitiativeProposal = *upd.InitiativeProposal
+	if upd.HolderProposal != nil {
+		c.HolderProposal = *upd.HolderProposal
 	}
 	if upd.Registries != nil {
 		c.Registries = *upd.Registries
 		if c.Registries == nil {
-			c.Registries = []state.Registry{}
+			c.Registries = []protocol.Registry{}
 		}
 	}
 

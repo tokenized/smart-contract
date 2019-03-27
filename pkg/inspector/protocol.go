@@ -159,8 +159,7 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		protocol.CodeAssetDefinition,
 		protocol.CodeAssetModification,
 		protocol.CodeTransfer,
-		protocol.CodeInitiative,
-		protocol.CodeReferendum,
+		protocol.CodeProposal,
 		protocol.CodeBallotCast,
 		protocol.CodeOrder:
 

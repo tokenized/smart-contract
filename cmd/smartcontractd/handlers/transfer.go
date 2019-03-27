@@ -96,14 +96,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	settleTx, err = buildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalFormedTransfer)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	// Create initial settlement data

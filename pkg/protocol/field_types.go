@@ -1243,14 +1243,13 @@ func (m *TokenReceiver) Equal(other TokenReceiver) bool {
 
 // VotingSystem A VotingSystem defines all details of a Voting System.
 type VotingSystem struct {
-	Name                        string  `json:"name,omitempty"`                          // eg. Special Resolutions, Ordinary Resolutions, Fundamental Matters, General Matters, Directors' Vote, Poll, etc.
-	System                      [8]byte `json:"system,omitempty"`                        // Specifies which subfield is subject to this vote system's control.
-	Method                      byte    `json:"method,omitempty"`                        // R - Relative Threshold, A - Absolute Threshold, P - Plurality,  (Relative Threshold means the number of counted votes must exceed the threshold % of total ballots cast.  Abstentations/spoiled votes do not detract from the liklihood of a vote passing as they are not included in the denominator.  Absolute Threshold requires the number of ballots counted to exceed the threshold value when compared to the total outstanding tokens.  Abstentations/spoiled votes detract from the liklihood of the vote passing.  For example, in an absolute threshold vote, if the threshold was 50% and 51% of the total outstanding tokens did not vote, then the vote cannot pass.  50% of all tokens would have had to vote for one vote option for the vote to be successful.
-	Logic                       byte    `json:"logic,omitempty"`                         // 0 - Standard Scoring (+1 * # of tokens owned), 1 - Weighted Scoring (1st choice * Vote Max * # of tokens held, 2nd choice * Vote Max-1 * # of tokens held,..etc.)
-	ThresholdPercentage         uint8   `json:"threshold_percentage,omitempty"`          // 1-100 is valid for relative threshold and absolute threshold. (eg. 75 means 75% and greater). 0 & >=101 is invalid and will be rejected by the smart contract.  Only applicable to Relative and Absolute Threshold vote methods.  The Plurality vote method requires no threshold value (NULL), as the successful vote option is simply selected on the basis of highest ballots cast for it.
-	VoteMultiplierPermitted     byte    `json:"vote_multiplier_permitted,omitempty"`     // Y - Yes, N - No. Where an asset has a vote multiplier, Y must be selected here for the vote multiplier to count, otherwise votes are simply treated as 1x per token.
-	InitiativeThreshold         float32 `json:"initiative_threshold,omitempty"`          // Token Owners must pay the threshold amount to broadcast a valid Initiative.  If the Initiative action is valid, the smart contract will start a vote. 0 is valid.
-	InitiativeThresholdCurrency string  `json:"initiative_threshold_currency,omitempty"` // Currency.  Always paid in BSV or a currency token (CUR) at current market valuations in the currency listed. NULL is valid.
+	Name                    string  `json:"name,omitempty"`                      // eg. Special Resolutions, Ordinary Resolutions, Fundamental Matters, General Matters, Directors' Vote, Poll, etc.
+	System                  [8]byte `json:"system,omitempty"`                    // Specifies which subfield is subject to this vote system's control.
+	VoteType                byte    `json:"vote_type,omitempty"`                 // R - Relative Threshold, A - Absolute Threshold, P - Plurality,  (Relative Threshold means the number of counted votes must exceed the threshold % of total ballots cast.  Abstentations/spoiled votes do not detract from the liklihood of a vote passing as they are not included in the denominator.  Absolute Threshold requires the number of ballots counted to exceed the threshold value when compared to the total outstanding tokens.  Abstentations/spoiled votes detract from the liklihood of the vote passing.  For example, in an absolute threshold vote, if the threshold was 50% and 51% of the total outstanding tokens did not vote, then the vote cannot pass.  50% of all tokens would have had to vote for one vote option for the vote to be successful.
+	TallyLogic              byte    `json:"tally_logic,omitempty"`               // 0 - Standard Scoring (+1 * # of tokens owned), 1 - Weighted Scoring (1st choice * Vote Max * # of tokens held, 2nd choice * Vote Max-1 * # of tokens held,..etc.)
+	ThresholdPercentage     uint8   `json:"threshold_percentage,omitempty"`      // 1-100 is valid for relative threshold and absolute threshold. (eg. 75 means 75% and greater). 0 & >=101 is invalid and will be rejected by the smart contract.  Only applicable to Relative and Absolute Threshold vote methods.  The Plurality vote method requires no threshold value (NULL), as the successful vote option is simply selected on the basis of highest ballots cast for it.
+	VoteMultiplierPermitted byte    `json:"vote_multiplier_permitted,omitempty"` // Y - Yes, N - No. Where an asset has a vote multiplier, Y must be selected here for the vote multiplier to count, otherwise votes are simply treated as 1x per token.
+	InitiativeFee           uint64  `json:"initiative_fee,omitempty"`            // Token Owners must pay the threshold amount to broadcast a valid Initiative.  If the Initiative action is valid, the smart contract will start a vote. 0 is valid.
 }
 
 // NewVotingSystem returns a new VotingSystem with defaults set.
@@ -1273,13 +1272,13 @@ func (m VotingSystem) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// Method (byte)
-	if err := write(buf, m.Method); err != nil {
+	// VoteType (byte)
+	if err := write(buf, m.VoteType); err != nil {
 		return nil, err
 	}
 
-	// Logic (byte)
-	if err := write(buf, m.Logic); err != nil {
+	// TallyLogic (byte)
+	if err := write(buf, m.TallyLogic); err != nil {
 		return nil, err
 	}
 
@@ -1293,13 +1292,8 @@ func (m VotingSystem) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// InitiativeThreshold (float32)
-	if err := write(buf, m.InitiativeThreshold); err != nil {
-		return nil, err
-	}
-
-	// InitiativeThresholdCurrency (string)
-	if err := WriteFixedChar(buf, m.InitiativeThresholdCurrency, 3); err != nil {
+	// InitiativeFee (uint64)
+	if err := write(buf, m.InitiativeFee); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -1321,13 +1315,13 @@ func (m *VotingSystem) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	// Method (byte)
-	if err := read(buf, &m.Method); err != nil {
+	// VoteType (byte)
+	if err := read(buf, &m.VoteType); err != nil {
 		return err
 	}
 
-	// Logic (byte)
-	if err := read(buf, &m.Logic); err != nil {
+	// TallyLogic (byte)
+	if err := read(buf, &m.TallyLogic); err != nil {
 		return err
 	}
 
@@ -1341,18 +1335,9 @@ func (m *VotingSystem) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	// InitiativeThreshold (float32)
-	if err := read(buf, &m.InitiativeThreshold); err != nil {
+	// InitiativeFee (uint64)
+	if err := read(buf, &m.InitiativeFee); err != nil {
 		return err
-	}
-
-	// InitiativeThresholdCurrency (string)
-	{
-		var err error
-		m.InitiativeThresholdCurrency, err = ReadFixedChar(buf, 3)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -1369,13 +1354,13 @@ func (m *VotingSystem) Equal(other VotingSystem) bool {
 		return false
 	}
 
-	// Method (byte)
-	if m.Method != other.Method {
+	// VoteType (byte)
+	if m.VoteType != other.VoteType {
 		return false
 	}
 
-	// Logic (byte)
-	if m.Logic != other.Logic {
+	// TallyLogic (byte)
+	if m.TallyLogic != other.TallyLogic {
 		return false
 	}
 
@@ -1389,13 +1374,8 @@ func (m *VotingSystem) Equal(other VotingSystem) bool {
 		return false
 	}
 
-	// InitiativeThreshold (float32)
-	if m.InitiativeThreshold != other.InitiativeThreshold {
-		return false
-	}
-
-	// InitiativeThresholdCurrency (string)
-	if m.InitiativeThresholdCurrency != other.InitiativeThresholdCurrency {
+	// InitiativeFee (uint64)
+	if m.InitiativeFee != other.InitiativeFee {
 		return false
 	}
 	return true

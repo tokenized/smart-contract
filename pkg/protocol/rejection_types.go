@@ -4,6 +4,9 @@ const (
 	// RejectionCodeOK is not an error
 	RejectionCodeOK uint8 = iota
 
+	// RejectionCodeMalformed is returned when a request is malformed.
+	RejectionCodeMalformed
+
 	// RejectionCodeInsufficientValue is sent when the issuer has sent
 	// insufficient value to fund the transaction.
 	RejectionCodeInsufficientValue
@@ -94,12 +97,5 @@ const (
 	// RejectionCodeContractMissingNewOperator is returned when an operator change was requested, but the new operator was not provided.
 	RejectionCodeContractMissingNewOperator
 
-	// RejectionCodeMissingNewIssuer is returned when an amendment request is malformed.
-	RejectionCodeContractMalformedAmendment
-
-	RejectionCodeInvalidInitiative
-
-	RejectionCodeMalFormedTransfer
-
-	RejectionCodeMalFormedSettle
+	RejectionCodeInvalidProposal
 )

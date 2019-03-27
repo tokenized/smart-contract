@@ -12,13 +12,13 @@ type NewAsset struct {
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   string          `json:"asset_type,omitempty"`
-	AssetAuthFlags              [8]byte         `json:"asset_auth_flags,omitempty"`
+	AssetAuthFlags              []byte          `json:"asset_auth_flags,omitempty"`
 	TransfersPermitted          bool            `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           protocol.Polity `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  bool            `json:"enforcement_orders_permitted,omitempty"`
 	VoteMultiplier              uint8           `json:"vote_multiplier,omitempty"`
-	ReferendumProposal          bool            `json:"referendum_proposal,omitempty"`
-	InitiativeProposal          bool            `json:"initiative_proposal,omitempty"`
+	IssuerProposal              bool            `json:"issuer_proposal,omitempty"`
+	HolderProposal              bool            `json:"holder_proposal,omitempty"`
 	AssetModificationGovernance bool            `json:"asset_modification_governance,omitempty"`
 	TokenQty                    uint64          `json:"token_qty,omitempty"`
 	ContractFeeCurrency         string          `json:"contract_fee_currency,omitempty"`
@@ -38,13 +38,13 @@ type UpdateAsset struct {
 	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   *string          `json:"asset_type,omitempty"`
-	AssetAuthFlags              *[8]byte         `json:"asset_auth_flags,omitempty"`
+	AssetAuthFlags              *[]byte          `json:"asset_auth_flags,omitempty"`
 	TransfersPermitted          *bool            `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           *protocol.Polity `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  *bool            `json:"enforcement_orders_permitted,omitempty"`
 	VoteMultiplier              *uint8           `json:"vote_multiplier,omitempty"`
-	ReferendumProposal          *bool            `json:"referendum_proposal,omitempty"`
-	InitiativeProposal          *bool            `json:"initiative_proposal,omitempty"`
+	IssuerProposal              *bool            `json:"issuer_proposal,omitempty"`
+	HolderProposal              *bool            `json:"holder_proposal,omitempty"`
 	AssetModificationGovernance *bool            `json:"asset_modification_governance,omitempty"`
 	TokenQty                    *uint64          `json:"token_qty,omitempty"`
 	AssetPayload                *[]byte          `json:"asset_payload,omitempty"`

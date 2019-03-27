@@ -19,8 +19,7 @@ var (
 		protocol.CodeAssetDefinition:   true,
 		protocol.CodeAssetModification: true,
 		protocol.CodeTransfer:          true,
-		protocol.CodeInitiative:        true,
-		protocol.CodeReferendum:        true,
+		protocol.CodeProposal:          true,
 		protocol.CodeBallotCast:        true,
 		protocol.CodeOrder:             true,
 	}

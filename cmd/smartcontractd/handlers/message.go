@@ -157,7 +157,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
 		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalFormedTransfer)
+		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
@@ -165,7 +165,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
 		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalFormedTransfer)
+		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	// Serialize received settlement data into OP_RETURN output.

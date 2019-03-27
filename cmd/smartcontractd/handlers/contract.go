@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -60,6 +59,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if err != nil {
 		return err
 	}
+
+	// TODO Validate all fields have valid values.
 
 	cf.ContractRevision = 0
 	cf.Timestamp = v.Now
@@ -390,14 +391,14 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract restricted quantity assets (%s) : %d", v.TraceID, ct.ContractName, *uc.RestrictedQtyAssets)
 		}
 
-		if ct.ReferendumProposal != msg.ReferendumProposal {
-			uc.ReferendumProposal = &msg.ReferendumProposal
-			logger.Info(ctx, "%s : Updating contract referendum proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.ReferendumProposal)
+		if ct.IssuerProposal != msg.IssuerProposal {
+			uc.IssuerProposal = &msg.IssuerProposal
+			logger.Info(ctx, "%s : Updating contract issuer proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.IssuerProposal)
 		}
 
-		if ct.InitiativeProposal != msg.InitiativeProposal {
-			uc.InitiativeProposal = &msg.InitiativeProposal
-			logger.Info(ctx, "%s : Updating contract initiative proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.InitiativeProposal)
+		if ct.HolderProposal != msg.HolderProposal {
+			uc.HolderProposal = &msg.HolderProposal
+			logger.Info(ctx, "%s : Updating contract holder proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.HolderProposal)
 		}
 
 		// Check if registries are different
@@ -414,9 +415,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newRegistries := make([]state.Registry, 0, len(msg.Registries))
+			newRegistries := make([]protocol.Registry, 0, len(msg.Registries))
 			for _, registry := range msg.Registries {
-				var newRegistry state.Registry
+				var newRegistry protocol.Registry
 				err := node.Convert(ctx, &registry, &newRegistry)
 				if err != nil {
 					return err
@@ -430,42 +431,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		different = len(ct.VotingSystems) != len(msg.VotingSystems)
 		if !different {
 			for i, votingSystem := range ct.VotingSystems {
-				if votingSystem.Name != msg.VotingSystems[i].Name {
-					different = true
-					break
-				}
-
-				if !bytes.Equal(votingSystem.System[:], msg.VotingSystems[i].System[:]) {
-					different = true
-					break
-				}
-
-				if votingSystem.Method != msg.VotingSystems[i].Method {
-					different = true
-					break
-				}
-
-				if votingSystem.Logic != msg.VotingSystems[i].Logic {
-					different = true
-					break
-				}
-
-				if votingSystem.ThresholdPercentage != msg.VotingSystems[i].ThresholdPercentage {
-					different = true
-					break
-				}
-
-				if votingSystem.VoteMultiplierPermitted != msg.VotingSystems[i].VoteMultiplierPermitted {
-					different = true
-					break
-				}
-
-				if votingSystem.InitiativeThreshold != msg.VotingSystems[i].InitiativeThreshold {
-					different = true
-					break
-				}
-
-				if votingSystem.InitiativeThresholdCurrency != msg.VotingSystems[i].InitiativeThresholdCurrency {
+				if !votingSystem.Equal(msg.VotingSystems[i]) {
 					different = true
 					break
 				}
@@ -473,9 +439,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newVotingSystems := make([]state.VotingSystem, 0, len(msg.VotingSystems))
+			newVotingSystems := make([]protocol.VotingSystem, 0, len(msg.VotingSystems))
 			for _, votingSystem := range msg.VotingSystems {
-				var newVotingSystem state.VotingSystem
+				var newVotingSystem protocol.VotingSystem
 				err := node.Convert(ctx, &votingSystem, &newVotingSystem)
 				if err != nil {
 					return err

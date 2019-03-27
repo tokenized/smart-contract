@@ -14,6 +14,10 @@ import (
 	"go.opencensus.io/trace"
 )
 
+const (
+	FieldCount = 10 // The number of fields that can be changed with amendments.
+)
+
 var (
 	// ErrNotFound abstracts the standard not found error.
 	ErrNotFound = errors.New("Asset not found")
@@ -114,11 +118,11 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.VoteMultiplier != nil {
 		a.VoteMultiplier = *upd.VoteMultiplier
 	}
-	if upd.ReferendumProposal != nil {
-		a.ReferendumProposal = *upd.ReferendumProposal
+	if upd.IssuerProposal != nil {
+		a.IssuerProposal = *upd.IssuerProposal
 	}
-	if upd.InitiativeProposal != nil {
-		a.InitiativeProposal = *upd.InitiativeProposal
+	if upd.HolderProposal != nil {
+		a.HolderProposal = *upd.HolderProposal
 	}
 	if upd.AssetModificationGovernance != nil {
 		a.AssetModificationGovernance = *upd.AssetModificationGovernance

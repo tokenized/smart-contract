@@ -3,6 +3,7 @@ package protocol
 var (
 	RejectionCodes = map[uint8][]byte{
 		RejectionCodeInsufficientValue:          []byte("Fee Not Paid"),
+		RejectionCodeMalformed:                  []byte("Malformed Request"),
 		RejectionCodeIssuerAddress:              []byte("Issuer Address"),
 		RejectionCodeDuplicateAssetCode:         []byte("Duplicate Asset Code"),
 		RejectionCodeFixedQuantity:              []byte("Fixed Quantity"),
@@ -25,9 +26,6 @@ var (
 		RejectionCodeAssetRevision:              []byte("Asset Revision Incorrect"),
 		RejectionCodeContractMissingNewIssuer:   []byte("Contract Issuer Change Missing"),
 		RejectionCodeContractMissingNewOperator: []byte("Contract Operator Change Missing"),
-		RejectionCodeContractMalformedAmendment: []byte("Contract Malformed Update"),
-		RejectionCodeInvalidInitiative:          []byte("Invalid Initiative"),
-		RejectionCodeMalFormedTransfer:          []byte("MalFormed Transfer"),
-		RejectionCodeMalFormedSettle:            []byte("MalFormed Settle"),
+		RejectionCodeInvalidProposal:            []byte("Invalid Proposal"),
 	}
 )

@@ -77,6 +77,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
+	// TODO Validate all fields have valid values.
+
 	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
 
 	// Asset Creation <- Asset Definition
@@ -265,13 +267,13 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.VoteMultiplier = &msg.VoteMultiplier
 			logger.Info(ctx, "%s : Updating asset vote multiplier (%s) : %02x", v.TraceID, msg.AssetCode.String(), *ua.VoteMultiplier)
 		}
-		if as.ReferendumProposal != msg.ReferendumProposal {
-			ua.ReferendumProposal = &msg.ReferendumProposal
-			logger.Info(ctx, "%s : Updating asset referendum proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.ReferendumProposal)
+		if as.IssuerProposal != msg.IssuerProposal {
+			ua.IssuerProposal = &msg.IssuerProposal
+			logger.Info(ctx, "%s : Updating asset issuer proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.IssuerProposal)
 		}
-		if as.InitiativeProposal != msg.InitiativeProposal {
-			ua.InitiativeProposal = &msg.InitiativeProposal
-			logger.Info(ctx, "%s : Updating asset initiative proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.InitiativeProposal)
+		if as.HolderProposal != msg.HolderProposal {
+			ua.HolderProposal = &msg.HolderProposal
+			logger.Info(ctx, "%s : Updating asset holder proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.HolderProposal)
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
