@@ -13,50 +13,23 @@ import (
 const storageKey = "contracts"
 
 // Put a single vote in storage
-func Save(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, v *state.Vote) error {
-
-	// Fetch the contract
-	key := buildStoragePath(pkh)
-
-	b, err := dbConn.Fetch(ctx, key)
-	if err != nil {
-		if err == db.ErrNotFound {
-			err = ErrNotFound
-		}
-
-		return err
-	}
-
-	// Prepare the contract object
-	c := state.Contract{}
-	if err := json.Unmarshal(b, &c); err != nil {
-		return err
-	}
-
-	// Initialize Vote map
-	if c.Votes == nil {
-		c.Votes = make(map[protocol.TxId]*state.Vote)
-	}
-
-	// Update the vote
-	c.Votes[v.RefTxID] = v
+func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, v *state.Vote) error {
+	key := buildStoragePath(contractPKH, &v.VoteTxId)
 
 	// Save the contract
-	sb, err := json.Marshal(c)
+	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
 
-	return dbConn.Put(ctx, key, sb)
+	return dbConn.Put(ctx, key, data)
 }
 
 // Fetch a single vote from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, voteID *protocol.TxId) (*state.Vote, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, voteTxId *protocol.TxId) (*state.Vote, error) {
+	key := buildStoragePath(contractPKH, voteTxId)
 
-	// Fetch the contract
-	key := buildStoragePath(pkh)
-
-	b, err := dbConn.Fetch(ctx, key)
+	data, err := dbConn.Fetch(ctx, key)
 	if err != nil {
 		if err == db.ErrNotFound {
 			err = ErrNotFound
@@ -66,26 +39,15 @@ func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash, vote
 	}
 
 	// Prepare the contract object
-	c := state.Contract{}
-	if err := json.Unmarshal(b, &c); err != nil {
+	result := state.Vote{}
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
 
-	// Initialize Vote map
-	if c.Votes == nil {
-		c.Votes = make(map[protocol.TxId]*state.Vote)
-	}
-
-	// Locate the vote
-	vote, ok := c.Votes[*voteID]
-	if !ok {
-		return nil, ErrNotFound
-	}
-
-	return vote, nil
+	return &result, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id *protocol.PublicKeyHash) string {
-	return fmt.Sprintf("%v/%x", storageKey, id)
+func buildStoragePath(contractPKH *protocol.PublicKeyHash, txid *protocol.TxId) string {
+	return fmt.Sprintf("%v/%x/%x", storageKey, contractPKH.String(), txid.String())
 }

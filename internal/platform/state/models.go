@@ -1,7 +1,6 @@
 package state
 
 import (
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
@@ -37,8 +36,7 @@ type Contract struct {
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
 	Registries             []protocol.Registry     `json:"registries,omitempty"`
 
-	AssetCodes []protocol.AssetCode
-	Votes      map[protocol.TxId]*Vote `json:"votes,omitempty"`
+	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`
 }
 
 type Asset struct {
@@ -53,6 +51,7 @@ type Asset struct {
 	TransfersPermitted          bool            `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           protocol.Polity `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  bool            `json:"enforcement_orders_permitted,omitempty"`
+	VotingRights                bool            `json:"voting_rights,omitempty"`
 	VoteMultiplier              uint8           `json:"vote_multiplier,omitempty"`
 	IssuerProposal              bool            `json:"issuer_proposal,omitempty"`
 	HolderProposal              bool            `json:"holder_proposal,omitempty"`
@@ -78,31 +77,24 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Address              protocol.PublicKeyHash `json:"address,omit_empty"`
-	AssetType            string                 `json:"asset_type,omit_empty"`
-	AssetCode            protocol.AssetCode     `json:"asset_id,omit_empty"`
-	VoteType             byte                   `json:"vote_type,omit_empty"`
-	VoteOptions          []uint8                `json:"vote_options,omit_empty"`
-	VoteMax              uint8                  `json:"vote_max,omit_empty"`
-	VoteLogic            byte                   `json:"vote_logic,omit_empty"`
-	ProposalDescription  string                 `json:"proposal_description,omit_empty"`
-	ProposalDocumentHash string                 `json:"proposal_document_hash,omit_empty"`
-	VoteCutOffTimestamp  protocol.Timestamp     `json:"vote_cut_off_timestamp,omit_empty"`
-	RefTxID              protocol.TxId          `json:"ref_txn_id_hash,omit_empty"`
-	Ballots              map[string]*Ballot     `json:"ballots,omit_empty,omit_empty"`
-	UTXO                 inspector.UTXO         `json:"utxo,omit_empty,omit_empty"`
-	Result               *Result                `json:"result,omitempty,omit_empty"`
-	UsedBy               string                 `json:"used_by,omit_empty,omit_empty"`
-	CreatedAt            protocol.Timestamp     `json:"created_at,omit_empty,omit_empty"`
+	VoteTxId     protocol.TxId      `json:"vote_tx_id_hash,omit_empty"`
+	ProposalTxId protocol.TxId      `json:"proposal_tx_id_hash,omit_empty"`
+	TokenQty     uint64             `json:"token_qty,omit_empty"`
+	Expires      protocol.Timestamp `json:"expires,omit_empty"`
+	Timestamp    protocol.Timestamp `json:"timestamp,omit_empty"`
+	CreatedAt    protocol.Timestamp `json:"created_at,omit_empty"`
+	UpdatedAt    protocol.Timestamp `json:"updated_at,omit_empty"`
+
+	OptionTally []uint64           `json:"option_tally,omit_empty"`
+	Result      string             `json:"result,omit_empty"`
+	CompletedAt protocol.Timestamp `json:"completed_at,omit_empty"`
+
+	Ballots []*Ballot `json:"ballots,omit_empty"`
 }
 
 type Ballot struct {
-	Address   protocol.PublicKeyHash `json:"address,omit_empty"`
-	AssetType string                 `json:"asset_type,omit_empty"`
-	AssetCode protocol.AssetCode     `json:"asset_id,omit_empty"`
-	VoteTxnID protocol.TxId          `json:"vote_txn_id,omit_empty"`
-	Vote      []uint8                `json:"vote,omit_empty"`
-	CreatedAt protocol.Timestamp     `json:"created_at,omit_empty"`
+	PKH       protocol.PublicKeyHash `json:"pkh,omit_empty"`
+	Vote      string                 `json:"vote,omit_empty"`
+	Quantity  uint64                 `json:"quantity,omit_empty"`
+	Timestamp protocol.Timestamp     `json:"timestamp,omit_empty"`
 }
-
-type Result map[uint8]uint64

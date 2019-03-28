@@ -72,6 +72,7 @@ func API(masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.
 	g := Governance{
 		MasterDB: masterDB,
 		Config:   config,
+		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeProposal, g.ProposalRequest)

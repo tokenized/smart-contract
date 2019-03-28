@@ -49,7 +49,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKe
 
 // Create the asset
 func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
-	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
+	ctx, span := trace.StartSpan(ctx, "internal.asset.Create")
 	defer span.End()
 
 	// Set up asset
@@ -77,10 +77,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		a.AssetPayload = []byte{}
 	}
 
-	if err := Save(ctx, dbConn, contractPKH, &a); err != nil {
-		return err
-	}
-	return nil
+	return Save(ctx, dbConn, contractPKH, &a)
 }
 
 // Update the asset
@@ -170,18 +167,15 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		}
 	}
 
-	a.UpdatedAt = protocol.CurrentTimestamp()
+	a.UpdatedAt = now
 
-	if err := Save(ctx, dbConn, contractPKH, a); err != nil {
-		return err
-	}
-	return nil
+	return Save(ctx, dbConn, contractPKH, a)
 }
 
 // GetHolding will return a users holding or make one for them.
-func GetHolding(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, now protocol.Timestamp) state.Holding {
+func GetHolding(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, now protocol.Timestamp) state.Holding {
 	// Find userPKH
-	for _, holding := range asset.Holdings {
+	for _, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
 			return holding
 		}
@@ -196,25 +190,25 @@ func GetHolding(ctx context.Context, asset *state.Asset, userPKH *protocol.Publi
 }
 
 // SetHolding will return a users holding or make one for them.
-func SetHolding(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, newHolding *state.Holding) {
+func SetHolding(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, newHolding *state.Holding) {
 	// Find userPKH
-	for i, holding := range asset.Holdings {
+	for i, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
-			asset.Holdings[i] = *newHolding
+			as.Holdings[i] = *newHolding
 			return
 		}
 	}
 
 	// Add new holding
-	asset.Holdings = append(asset.Holdings, *newHolding)
+	as.Holdings = append(as.Holdings, *newHolding)
 }
 
 // UpdateBalance will set the balance of a users holdings against the supplied asset.
 // New holdings are created for new users and expired holding statuses are cleared.
-func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
+func UpdateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
 	// TODO Check timestamp against latest timestamp on each holding and only update if the timestamp is newer.
 	// Set balance
-	holding := GetHolding(ctx, asset, userPKH, now)
+	holding := GetHolding(ctx, as, userPKH, now)
 	holding.Balance = balance
 
 	// Clear expired holding status
@@ -234,14 +228,14 @@ func UpdateBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.Pu
 	}
 
 	// Put the holding back on the asset
-	SetHolding(ctx, asset, userPKH, &holding)
+	SetHolding(ctx, as, userPKH, &holding)
 	return nil
 }
 
 // GetBalance returns the balance for a PKH holder
-func GetBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash) uint64 {
+func GetBalance(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash) uint64 {
 	// Find userPKH
-	for _, holding := range asset.Holdings {
+	for _, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
 			return holding.Balance
 		}
@@ -250,10 +244,41 @@ func GetBalance(ctx context.Context, asset *state.Asset, userPKH *protocol.Publi
 	return 0
 }
 
-// CheckHolding checks to see if the user has a holding.
-func CheckHolding(ctx context.Context, asset *state.Asset, userPKH *protocol.PublicKeyHash) bool {
+// GetBalance returns the balance for a PKH holder
+func GetVotingBalance(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+	if !as.VotingRights {
+		return 0
+	}
+
 	// Find userPKH
-	for _, holding := range asset.Holdings {
+	for _, holding := range as.Holdings {
+		if holding.PKH.Equal(*userPKH) {
+			unfrozenBalance := holding.Balance
+			for _, status := range holding.HoldingStatuses {
+				if HoldingStatusExpired(ctx, &status, now) {
+					continue
+				}
+				if status.Balance > unfrozenBalance {
+					unfrozenBalance = 0
+				} else {
+					unfrozenBalance -= status.Balance
+				}
+			}
+
+			if applyMultiplier {
+				return unfrozenBalance * uint64(as.VoteMultiplier)
+			}
+			return unfrozenBalance
+		}
+	}
+
+	return 0
+}
+
+// CheckHolding checks to see if the user has a holding.
+func CheckHolding(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash) bool {
+	// Find userPKH
+	for _, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
 			return true
 		}
@@ -308,4 +333,56 @@ func HoldingStatusExpired(ctx context.Context, hs *state.HoldingStatus, now prot
 		return true
 	}
 	return false
+}
+
+// ValidateVoting returns an error if voting is not allowed.
+func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint8, votingSystem *protocol.VotingSystem) error {
+	switch initiatorType {
+	case 0: // Issuer
+		if !as.IssuerProposal {
+			return errors.New("Issuer proposals not allowed")
+		}
+	case 1: // Holder
+		if !as.HolderProposal {
+			return errors.New("Holder proposals not allowed")
+		}
+	}
+
+	return nil
+}
+
+func ValidatePermissions(ctx context.Context, as *state.Asset, votingSystemCount int,
+	proposedAmendments []protocol.Amendment, viaProposal bool, initiatorType, votingSystem uint8) error {
+	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, FieldCount, votingSystemCount)
+	if err != nil {
+		return err
+	}
+
+	for _, amendment := range proposedAmendments {
+		if amendment.FieldIndex >= FieldCount {
+			return errors.New("Field index out of range")
+		}
+
+		if viaProposal {
+			switch initiatorType {
+			case 0: // Issuer
+				if !permissions[amendment.FieldIndex].IssuerProposal {
+					return fmt.Errorf("Issuer proposals not permitted to amend field %d", amendment.FieldIndex)
+				}
+			case 1: // Holder
+				if !permissions[amendment.FieldIndex].HolderProposal {
+					return fmt.Errorf("Holder proposals not permitted to amend field %d", amendment.FieldIndex)
+				}
+			}
+			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
+				return fmt.Errorf("Voting system %d not permitted to amend field %d", votingSystem, amendment.FieldIndex)
+			}
+		} else {
+			if !permissions[amendment.FieldIndex].Permitted {
+				return fmt.Errorf("Direct amendments not permitted on field %d", amendment.FieldIndex)
+			}
+		}
+	}
+
+	return nil
 }

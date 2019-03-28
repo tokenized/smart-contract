@@ -442,6 +442,11 @@ type Timestamp struct {
 	nanoseconds uint64 // nanoseconds since Unix epoch
 }
 
+// NewTimestamp returns a new timestamp from nanoseconds.
+func NewTimestamp(value uint64) Timestamp {
+	return Timestamp{nanoseconds: value}
+}
+
 // CurrentTimestamp returns a Timestamp containing the current time.
 func CurrentTimestamp() Timestamp {
 	return Timestamp{nanoseconds: uint64(time.Now().UnixNano())}

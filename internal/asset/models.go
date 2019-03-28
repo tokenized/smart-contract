@@ -16,6 +16,7 @@ type NewAsset struct {
 	TransfersPermitted          bool            `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           protocol.Polity `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  bool            `json:"enforcement_orders_permitted,omitempty"`
+	VotingRights                bool            `json:"voting_rights,omitempty"`
 	VoteMultiplier              uint8           `json:"vote_multiplier,omitempty"`
 	IssuerProposal              bool            `json:"issuer_proposal,omitempty"`
 	HolderProposal              bool            `json:"holder_proposal,omitempty"`
@@ -42,6 +43,7 @@ type UpdateAsset struct {
 	TransfersPermitted          *bool            `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           *protocol.Polity `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  *bool            `json:"enforcement_orders_permitted,omitempty"`
+	VotingRights                *bool            `json:"voting_rights,omitempty"`
 	VoteMultiplier              *uint8           `json:"vote_multiplier,omitempty"`
 	IssuerProposal              *bool            `json:"issuer_proposal,omitempty"`
 	HolderProposal              *bool            `json:"holder_proposal,omitempty"`

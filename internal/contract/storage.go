@@ -44,15 +44,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return nil, errors.Wrap(err, "Failed to unmarshal contract")
 	}
 
-	// Initialize Vote map
-	if contract.Votes == nil {
-		contract.Votes = make(map[protocol.TxId]*state.Vote)
-	}
-
 	return &contract, nil
 }
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
-	return fmt.Sprintf("%v/%s/contract", storageKey, contractPKH.String())
+	return fmt.Sprintf("%s/%s/contract", storageKey, contractPKH.String())
 }

@@ -190,7 +190,8 @@ type AssetDefinition struct {
 	TransfersPermitted          bool      `json:"transfers_permitted,omitempty"`           // 1 = Transfers are permitted.  0 = Transfers are not permitted.
 	TradeRestrictions           Polity    `json:"trade_restrictions,omitempty"`            // Asset can only be traded within the trade restrictions.  Eg. AUS - Australian residents only.  EU - European Union residents only.
 	EnforcementOrdersPermitted  bool      `json:"enforcement_orders_permitted,omitempty"`  // 1 = Enforcement Orders are permitted. 0 = Enforcement Orders are not permitted.
-	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies the vote by the integer. 1 token = 1 vote with a 1 for vote multipler (normal).  1 token = 3 votes with a multiplier of 3, for example.
+	VotingRights                bool      `json:"voting_rights,omitempty"`                 // When false holders of this asset will not be able to vote for tokens of this asset even on voting systems in which vote multiplers are not permitted.
+	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies the vote by the integer. 1 token = 1 vote with a 1 for vote multipler (normal).  1 token = 3 votes with a multiplier of 3, for example. If zero, then holders of this asset don't get any votes for their tokens.
 	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // An Issuer is permitted to make proposals (outside of smart contract scope).
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`               // A holder is permitted to make proposals (outside of smart contract scope).
 	AssetModificationGovernance bool      `json:"asset_modification_governance,omitempty"` // 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (all assets vote on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
@@ -277,6 +278,14 @@ func (action *AssetDefinition) serialize() ([]byte, error) {
 	_, skip = excludes["EnforcementOrdersPermitted"]
 	if !skip {
 		if err := write(buf, action.EnforcementOrdersPermitted); err != nil {
+			return nil, err
+		}
+	}
+
+	// VotingRights (bool)
+	_, skip = excludes["VotingRights"]
+	if !skip {
+		if err := write(buf, action.VotingRights); err != nil {
 			return nil, err
 		}
 	}
@@ -397,6 +406,14 @@ func (action *AssetDefinition) write(b []byte) (int, error) {
 		}
 	}
 
+	// VotingRights (bool)
+	_, skip = excludes["VotingRights"]
+	if !skip {
+		if err := read(buf, &action.VotingRights); err != nil {
+			return 0, err
+		}
+	}
+
 	// VoteMultiplier (uint8)
 	_, skip = excludes["VoteMultiplier"]
 	if !skip {
@@ -474,6 +491,7 @@ func (action AssetDefinition) String() string {
 	vals = append(vals, fmt.Sprintf("TransfersPermitted:%#+v", action.TransfersPermitted))
 	vals = append(vals, fmt.Sprintf("TradeRestrictions:%#+v", action.TradeRestrictions))
 	vals = append(vals, fmt.Sprintf("EnforcementOrdersPermitted:%#+v", action.EnforcementOrdersPermitted))
+	vals = append(vals, fmt.Sprintf("VotingRights:%#+v", action.VotingRights))
 	vals = append(vals, fmt.Sprintf("VoteMultiplier:%v", action.VoteMultiplier))
 	vals = append(vals, fmt.Sprintf("IssuerProposal:%#+v", action.IssuerProposal))
 	vals = append(vals, fmt.Sprintf("HolderProposal:%#+v", action.HolderProposal))
@@ -3986,7 +4004,7 @@ func (action Vote) String() string {
 // specified in the relevant Asset Definition action.
 type BallotCast struct {
 	Header   Header `json:"header,omitempty"`     // Common header data for all actions
-	VoteTxID TxId   `json:"vote_tx_id,omitempty"` // Tx ID of the Vote the Ballot Cast is being made for.
+	VoteTxId TxId   `json:"vote_tx_id,omitempty"` // Tx ID of the Vote the Ballot Cast is being made for.
 	Vote     string `json:"vote,omitempty"`       // Length 1-255 bytes. 0 is not valid. Max length is the VoteMax value from the Proposal action. Accept, Reject, Abstain, Spoiled, Multiple Choice, or Preference List. 15 options total. Order of preference. 1st position = 1st choice. 2nd position = 2nd choice, etc. A is always Accept and B is always reject in a Y/N votes.
 }
 
@@ -4015,10 +4033,10 @@ func (action *BallotCast) serialize() ([]byte, error) {
 	excludes := make(map[string]bool)
 	var skip bool
 
-	// VoteTxID (TxId)
-	_, skip = excludes["VoteTxID"]
+	// VoteTxId (TxId)
+	_, skip = excludes["VoteTxId"]
 	if !skip {
-		b, err := action.VoteTxID.Serialize()
+		b, err := action.VoteTxId.Serialize()
 		if err != nil {
 			return nil, err
 		}
@@ -4052,10 +4070,10 @@ func (action *BallotCast) write(b []byte) (int, error) {
 		}
 	}
 
-	// VoteTxID (TxId)
-	_, skip = excludes["VoteTxID"]
+	// VoteTxId (TxId)
+	_, skip = excludes["VoteTxId"]
 	if !skip {
-		if err := action.VoteTxID.Write(buf); err != nil {
+		if err := action.VoteTxId.Write(buf); err != nil {
 			return 0, err
 		}
 	}
@@ -4082,7 +4100,7 @@ func (action BallotCast) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("VoteTxID:%#+v", action.VoteTxID))
+	vals = append(vals, fmt.Sprintf("VoteTxId:%#+v", action.VoteTxId))
 	vals = append(vals, fmt.Sprintf("Vote:%#+v", action.Vote))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -4093,11 +4111,9 @@ func (action BallotCast) String() string {
 // valid. If the Ballot Cast is not valid, then the smart contract will
 // respond with a Rejection Action.
 type BallotCounted struct {
-	Header     Header    `json:"header,omitempty"`      // Common header data for all actions
-	VoteTxID   TxId      `json:"vote_tx_id,omitempty"`  // Tx ID of the Vote the Ballot Cast was being made for.
-	Vote       string    `json:"vote,omitempty"`        // Length 1-255 bytes. 0 is not valid. Max length is the VoteMax value from the Proposal action. Accept, Reject, Abstain, Spoiled, Multiple Choice, or Preference List. 15 options total. Order of preference. 1st position = 1st choice. 2nd position = 2nd choice, etc. A is always Accept and B is always reject in a Y/N votes.
-	TokensHeld uint64    `json:"tokens_held,omitempty"` // Number of tokens voted for in this vote.
-	Timestamp  Timestamp `json:"timestamp,omitempty"`   // Timestamp in nanoseconds of when the smart contract created the action.
+	Header    Header    `json:"header,omitempty"`    // Common header data for all actions
+	Quantity  uint64    `json:"quantity,omitempty"`  // Number of votes counted for this ballot. Factors in vote multipliers if there are any allowed, otherwise it is just quantity of tokens held.
+	Timestamp Timestamp `json:"timestamp,omitempty"` // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -4125,31 +4141,10 @@ func (action *BallotCounted) serialize() ([]byte, error) {
 	excludes := make(map[string]bool)
 	var skip bool
 
-	// VoteTxID (TxId)
-	_, skip = excludes["VoteTxID"]
+	// Quantity (uint64)
+	_, skip = excludes["Quantity"]
 	if !skip {
-		b, err := action.VoteTxID.Serialize()
-		if err != nil {
-			return nil, err
-		}
-
-		if err := write(buf, b); err != nil {
-			return nil, err
-		}
-	}
-
-	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
-		if err := WriteVarChar(buf, action.Vote, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// TokensHeld (uint64)
-	_, skip = excludes["TokensHeld"]
-	if !skip {
-		if err := write(buf, action.TokensHeld); err != nil {
+		if err := write(buf, action.Quantity); err != nil {
 			return nil, err
 		}
 	}
@@ -4183,28 +4178,10 @@ func (action *BallotCounted) write(b []byte) (int, error) {
 		}
 	}
 
-	// VoteTxID (TxId)
-	_, skip = excludes["VoteTxID"]
+	// Quantity (uint64)
+	_, skip = excludes["Quantity"]
 	if !skip {
-		if err := action.VoteTxID.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
-	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
-		var err error
-		action.Vote, err = ReadVarChar(buf, 8)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// TokensHeld (uint64)
-	_, skip = excludes["TokensHeld"]
-	if !skip {
-		if err := read(buf, &action.TokensHeld); err != nil {
+		if err := read(buf, &action.Quantity); err != nil {
 			return 0, err
 		}
 	}
@@ -4229,9 +4206,7 @@ func (action BallotCounted) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("VoteTxID:%#+v", action.VoteTxID))
-	vals = append(vals, fmt.Sprintf("Vote:%#+v", action.Vote))
-	vals = append(vals, fmt.Sprintf("TokensHeld:%v", action.TokensHeld))
+	vals = append(vals, fmt.Sprintf("Quantity:%v", action.Quantity))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))

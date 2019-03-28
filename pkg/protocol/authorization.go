@@ -9,10 +9,10 @@ import (
 
 // Permission represents the permissions assigned to a specific field.
 type Permission struct {
-	Permitted     bool
-	Referendum    bool
-	Initiative    bool
-	VotingSystems []bool
+	Permitted            bool
+	IssuerProposal       bool
+	HolderProposal       bool
+	VotingSystemsAllowed []bool
 }
 
 // ReadAuthFlags reads raw auth flag data into an array of permission structs.
@@ -30,28 +30,28 @@ func ReadAuthFlags(authFlags []byte, fields, votingSystems int) ([]Permission, e
 		}
 		newPermission.Permitted = bool(bit)
 
-		// Referendum
+		// IssuerProposal
 		bit, err = stream.ReadBit()
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to read auth flags")
 		}
-		newPermission.Referendum = bool(bit)
+		newPermission.IssuerProposal = bool(bit)
 
-		// Initiative
+		// HolderProposal
 		bit, err = stream.ReadBit()
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to read auth flags")
 		}
-		newPermission.Initiative = bool(bit)
+		newPermission.HolderProposal = bool(bit)
 
 		// Voting Systems
-		if newPermission.Referendum || newPermission.Initiative {
+		if newPermission.IssuerProposal || newPermission.HolderProposal {
 			for j := 0; j < votingSystems; j++ {
 				bit, err = stream.ReadBit()
 				if err != nil {
 					return nil, errors.Wrap(err, "Failed to read auth flags")
 				}
-				newPermission.VotingSystems = append(newPermission.VotingSystems, bool(bit))
+				newPermission.VotingSystemsAllowed = append(newPermission.VotingSystemsAllowed, bool(bit))
 			}
 		}
 
@@ -74,21 +74,21 @@ func WriteAuthFlags(permissions []Permission) ([]byte, error) {
 			return nil, errors.Wrap(err, "Failed to write auth flags")
 		}
 
-		// Referendum
-		err = stream.WriteBit(bitstream.Bit(permission.Referendum))
+		// IssuerProposal
+		err = stream.WriteBit(bitstream.Bit(permission.IssuerProposal))
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to write auth flags")
 		}
 
-		// Initiative
-		err = stream.WriteBit(bitstream.Bit(permission.Initiative))
+		// HolderProposal
+		err = stream.WriteBit(bitstream.Bit(permission.HolderProposal))
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to write auth flags")
 		}
 
 		// Voting Systems
-		if permission.Referendum || permission.Initiative {
-			for _, votingSystem := range permission.VotingSystems {
+		if permission.IssuerProposal || permission.HolderProposal {
+			for _, votingSystem := range permission.VotingSystemsAllowed {
 				err = stream.WriteBit(bitstream.Bit(votingSystem))
 				if err != nil {
 					return nil, errors.Wrap(err, "Failed to write auth flags")

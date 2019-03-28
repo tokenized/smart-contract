@@ -1,13 +1,11 @@
 package vote
 
 import (
-	"time"
-
 	"github.com/tokenized/smart-contract/pkg/protocol"
 )
 
 // ValidateProposal returns true if the Proposal is valid.
-func ValidateProposal(msg *protocol.Proposal) bool {
+func ValidateProposal(msg *protocol.Proposal, now protocol.Timestamp) bool {
 	if msg.Specific && len(msg.ProposedAmendments) == 0 {
 		return false
 	}
@@ -20,7 +18,7 @@ func ValidateProposal(msg *protocol.Proposal) bool {
 		return false
 	}
 
-	if msg.VoteCutOffTimestamp.Nano() < uint64(time.Now().UnixNano()) {
+	if msg.VoteCutOffTimestamp.Nano() < now.Nano() {
 		return false
 	}
 

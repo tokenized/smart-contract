@@ -11,11 +11,12 @@ import (
 )
 
 // EstimatedResponse calculates information about the contract's response to a request.
+//   fees is the sum of all contract related fees including base contract fee, proposal fee, and others.
 // Returns
 //   estimated size of response tx in bytes
 //   estimated value of outputs of response in satoshis, including dust outputs (not including change)
 //   error if there were any
-func EstimatedResponse(requestTx *wire.MsgTx, dustLimit, contractFee uint64) (int, uint64, error) {
+func EstimatedResponse(requestTx *wire.MsgTx, dustLimit, fees uint64) (int, uint64, error) {
 	// Find Tokenized OP_RETURN
 	var err error
 	var opReturn OpReturnMessage
@@ -45,9 +46,9 @@ func EstimatedResponse(requestTx *wire.MsgTx, dustLimit, contractFee uint64) (in
 		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
 
 		// P2PKH dust output to contract, contract fee, and op return output
-		if contractFee > 0 {
+		if fees > 0 {
 			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
-			value += contractFee
+			value += fees
 		} else {
 			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
 		}
@@ -61,9 +62,25 @@ func EstimatedResponse(requestTx *wire.MsgTx, dustLimit, contractFee uint64) (in
 		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
 
 		// P2PKH dust output to contract, and op return output
-		if contractFee > 0 {
+		if fees > 0 {
 			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
-			value += contractFee
+			value += fees
+		} else {
+			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+		}
+		value += dustLimit
+
+	case *Proposal:
+		vote := Vote{}
+		response = &vote
+
+		// 1 input from contract
+		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
+
+		// P2PKH dust output to contract, and op return output
+		if fees > 0 {
+			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+			value += fees
 		} else {
 			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
 		}

@@ -1,26 +1,24 @@
 package vote
 
-import "github.com/tokenized/smart-contract/pkg/protocol"
+import (
+	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/protocol"
+)
 
-// NewVote defines what we require when creating a Vote record.
+// NewVote defines what information may be provided to create a Vote.
 type NewVote struct {
-	Address              protocol.PublicKeyHash `json:"address,omit_empty"`
-	AssetType            string                 `json:"asset_type,omit_empty"`
-	AssetCode            protocol.AssetCode     `json:"asset_id,omit_empty"`
-	VoteType             byte                   `json:"vote_type,omit_empty"`
-	VoteOptions          []uint8                `json:"vote_options,omit_empty"`
-	VoteMax              uint8                  `json:"vote_max,omit_empty"`
-	VoteLogic            byte                   `json:"vote_logic,omit_empty"`
-	ProposalDescription  string                 `json:"proposal_description,omit_empty"`
-	ProposalDocumentHash string                 `json:"proposal_document_hash,omit_empty"`
-	VoteCutOffTimestamp  protocol.Timestamp     `json:"vote_cut_off_timestamp,omit_empty"`
+	VoteTxId     protocol.TxId      `json:"vote_tx_id_hash,omit_empty"`
+	ProposalTxId protocol.TxId      `json:"proposal_tx_id_hash,omit_empty"`
+	TokenQty     uint64             `json:"token_qty,omit_empty"`
+	Expires      protocol.Timestamp `json:"expires,omit_empty"`
+	Timestamp    protocol.Timestamp `json:"timestamp,omit_empty"`
 }
 
-// UpdateVote defines what information may be provided to modify an existing
-// Vote. All fields are optional so clients can send just the fields they want
-// changed. It uses pointer fields so we can differentiate between a field that
-// was not provided and a field that was provided as explicitly blank. Normally
-// we do not want to use pointers to basic types but we make exceptions around
-// marshalling/unmarshalling.
+// UpdateVote struct { defines what information may be provided to modify an
+// existing Vote.
 type UpdateVote struct {
+	CompletedAt *protocol.Timestamp `json:"completed_at,omit_empty"`
+	OptionTally *[]uint64           `json:"option_tally,omit_empty"`
+	Result      *string             `json:"result,omit_empty"`
+	NewBallot   *state.Ballot       `json:"new_ballot,omit_empty"`
 }

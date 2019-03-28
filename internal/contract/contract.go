@@ -3,6 +3,7 @@ package contract
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -69,11 +70,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 
 	logger.Verbose(ctx, "Creating contract :\n%+v", &contract)
 
-	if err := Save(ctx, dbConn, &contract); err != nil {
-		return errors.Wrap(err, "Failed to create contract")
-	}
-
-	return nil
+	return Save(ctx, dbConn, &contract)
 }
 
 // Update the contract
@@ -171,11 +168,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 
 	c.UpdatedAt = now
 
-	if err := Save(ctx, dbConn, c); err != nil {
-		return errors.Wrap(err, "Failed to update contract")
-	}
-
-	return nil
+	return Save(ctx, dbConn, c)
 }
 
 // AddAssetCode adds an asset code to a contract
@@ -184,15 +177,15 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractPKH *protocol.Publ
 	defer span.End()
 
 	// Find contract
-	contract, err := Fetch(ctx, dbConn, contractPKH)
+	ct, err := Fetch(ctx, dbConn, contractPKH)
 	if err != nil {
 		return ErrNotFound
 	}
 
-	contract.AssetCodes = append(contract.AssetCodes, *assetCode)
-	contract.UpdatedAt = now
+	ct.AssetCodes = append(ct.AssetCodes, *assetCode)
+	ct.UpdatedAt = now
 
-	if err := Save(ctx, dbConn, contract); err != nil {
+	if err := Save(ctx, dbConn, ct); err != nil {
 		return errors.Wrap(err, "Failed to add asset to contract")
 	}
 
@@ -204,23 +197,23 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractPKH *protocol.Publ
 //
 // A "dynamic" contract is permitted to have unlimited assets if the
 // contract.Qty == 0.
-func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
-	if contract.RestrictedQtyAssets == 0 {
+func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
+	if ct.RestrictedQtyAssets == 0 {
 		return true
 	}
 
 	// number of current assets
-	total := uint64(len(contract.AssetCodes))
+	total := uint64(len(ct.AssetCodes))
 
 	// more assets can be added if the current total is less than the limit
 	// imposed by the contract.
-	return total < contract.RestrictedQtyAssets
+	return total < ct.RestrictedQtyAssets
 }
 
-// HasAnyBalance checks if the user has any balance of any token across the contract
-func HasAnyBalance(ctx context.Context, dbConn *db.DB, contract *state.Contract, userPKH *protocol.PublicKeyHash) bool {
-	for _, a := range contract.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, &contract.ID, &a)
+// HasAnyBalance checks if the user has any balance of any token across the contract.
+func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash) bool {
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
 		if err != nil {
 			continue
 		}
@@ -233,12 +226,101 @@ func HasAnyBalance(ctx context.Context, dbConn *db.DB, contract *state.Contract,
 	return false
 }
 
-// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
-func IsOperator(ctx context.Context, contract *state.Contract, pkh *protocol.PublicKeyHash) bool {
-	return bytes.Equal(contract.IssuerPKH.Bytes(), pkh.Bytes()) || bytes.Equal(contract.OperatorPKH.Bytes(), pkh.Bytes())
+// GetTokenQty returns the token quantities for all assets.
+func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMultiplier bool) uint64 {
+	result := uint64(0)
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		if err != nil {
+			continue
+		}
+
+		if !as.VotingRights {
+			continue
+		}
+
+		if applyMultiplier {
+			result += as.TokenQty * uint64(as.VoteMultiplier)
+		} else {
+			result += as.TokenQty
+		}
+	}
+
+	return result
 }
 
-// IsVotingPermitted returns true if contract allows voting
-func IsVotingPermitted(ctx context.Context, contract *state.Contract) bool {
-	return len(contract.VotingSystems) != 0
+// GetVotingBalance returns the tokens held across all of the contract's assets.
+func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+	result := uint64(0)
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		if err != nil {
+			continue
+		}
+
+		result += asset.GetVotingBalance(ctx, as, userPKH, applyMultiplier, now)
+	}
+
+	return result
+}
+
+// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
+func IsOperator(ctx context.Context, ct *state.Contract, pkh *protocol.PublicKeyHash) bool {
+	return bytes.Equal(ct.IssuerPKH.Bytes(), pkh.Bytes()) || bytes.Equal(ct.OperatorPKH.Bytes(), pkh.Bytes())
+}
+
+// ValidateVoting returns an error if voting is not allowed.
+func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint8) error {
+	if len(ct.VotingSystems) == 0 {
+		return errors.New("No voting systems")
+	}
+
+	switch initiatorType {
+	case 0: // Issuer
+		if !ct.IssuerProposal {
+			return errors.New("Issuer proposals not allowed")
+		}
+	case 1: // Holder
+		if !ct.HolderProposal {
+			return errors.New("Holder proposals not allowed")
+		}
+	}
+
+	return nil
+}
+
+func ValidatePermissions(ctx context.Context, ct *state.Contract, proposedAmendments []protocol.Amendment,
+	viaProposal bool, initiatorType, votingSystem uint8) error {
+	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, FieldCount, len(ct.VotingSystems))
+	if err != nil {
+		return err
+	}
+
+	for _, amendment := range proposedAmendments {
+		if amendment.FieldIndex >= FieldCount {
+			return errors.New("Field index out of range")
+		}
+
+		if viaProposal {
+			switch initiatorType {
+			case 0: // Issuer
+				if !permissions[amendment.FieldIndex].IssuerProposal {
+					return fmt.Errorf("Issuer proposals not permitted to amend field %d", amendment.FieldIndex)
+				}
+			case 1: // Holder
+				if !permissions[amendment.FieldIndex].HolderProposal {
+					return fmt.Errorf("Holder proposals not permitted to amend field %d", amendment.FieldIndex)
+				}
+			}
+			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
+				return fmt.Errorf("Voting system %d not permitted to amend field %d", votingSystem, amendment.FieldIndex)
+			}
+		} else {
+			if !permissions[amendment.FieldIndex].Permitted {
+				return fmt.Errorf("Direct amendments not permitted on field %d", amendment.FieldIndex)
+			}
+		}
+	}
+
+	return nil
 }

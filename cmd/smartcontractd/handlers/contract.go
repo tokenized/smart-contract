@@ -9,6 +9,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -50,6 +51,46 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
 	}
 
+	// TODO Validate all fields have valid values.
+
+	if msg.BodyOfAgreementType == 1 {
+		if len(msg.BodyOfAgreement) != 32 {
+			logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %s : %d", v.TraceID, contractAddr.String(), len(msg.BodyOfAgreement))
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		}
+	} else if msg.BodyOfAgreementType != 0 {
+		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractAddr.String(), msg.BodyOfAgreementType)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	if msg.SupportingDocsFileType == 1 {
+		if len(msg.SupportingDocs) != 32 {
+			logger.Warn(ctx, "%s : Contract supporting docs hash is incorrect length : %s : %d", v.TraceID, contractAddr.String(), len(msg.SupportingDocs))
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		}
+	} else if msg.SupportingDocsFileType != 0 {
+		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractAddr.String(), msg.SupportingDocsFileType)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "%s : Expiration already passed : %s : %d", v.TraceID, contractAddr.String(), msg.ContractExpiration.Nano())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
+		logger.Warn(ctx, "%s : Invalid contract auth flags : %s : %s", v.TraceID, contractAddr.String(), err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	// Validate voting systems are all valid.
+	for _, votingSystem := range msg.VotingSystems {
+		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
+			logger.Warn(ctx, "%s : Invalid voting system : %s : %s", v.TraceID, contractAddr.String(), err)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		}
+	}
+
 	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
 
 	// Contract Formation <- Contract Offer
@@ -59,8 +100,6 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if err != nil {
 		return err
 	}
-
-	// TODO Validate all fields have valid values.
 
 	cf.ContractRevision = 0
 	cf.Timestamp = v.Now
@@ -209,14 +248,14 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractAddr.Bytes()) {
-		return errors.New("Contract Formation not from contract")
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
+		logger.Warn(ctx, "%s : Response not from contract : %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractAddress)
 	}
 
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	ct, err := contract.Retrieve(ctx, dbConn, contractPKH)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -262,11 +301,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[1].Address.ScriptAddress()) // Second input of offer tx
 		}
 
-		if err := contract.Create(ctx, dbConn, contractAddr, &nc, v.Now); err != nil {
+		if err := contract.Create(ctx, dbConn, contractPKH, &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
 		}
-		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractAddr.String())
+		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractPKH.String())
 	} else {
 		// TODO Pull from ammendment tx.
 		// // TODO Issuer change. New issuer in second input
@@ -451,11 +490,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			uc.VotingSystems = &newVotingSystems
 		}
 
-		if err := contract.Update(ctx, dbConn, contractAddr, &uc, v.Now); err != nil {
+		if err := contract.Update(ctx, dbConn, contractPKH, &uc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
 			return err
 		}
-		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
+		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
 	}
 
 	return nil

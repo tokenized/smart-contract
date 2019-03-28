@@ -35,6 +35,9 @@ func TestAssetDefinition(t *testing.T) {
 	// EnforcementOrdersPermitted (bool)
 	initialMessage.EnforcementOrdersPermitted = true
 
+	// VotingRights (bool)
+	initialMessage.VotingRights = true
+
 	// VoteMultiplier (uint)
 	// uint test not setup
 
@@ -53,7 +56,7 @@ func TestAssetDefinition(t *testing.T) {
 	// AssetPayload (varbin)
 	initialMessage.AssetPayload = make([]byte, 0, 16)
 	for i := uint64(0); i < 16; i++ {
-		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+11))
+		initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+12))
 	}
 
 	// Encode message
@@ -122,6 +125,11 @@ func TestAssetDefinition(t *testing.T) {
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
 		t.Errorf("EnforcementOrdersPermitted doesn't match : %v != %v", initialMessage.EnforcementOrdersPermitted, decodedMessage.EnforcementOrdersPermitted)
+	}
+
+	// VotingRights (bool)
+	if initialMessage.VotingRights != decodedMessage.VotingRights {
+		t.Errorf("VotingRights doesn't match : %v != %v", initialMessage.VotingRights, decodedMessage.VotingRights)
 	}
 
 	// VoteMultiplier (uint)
@@ -1677,8 +1685,8 @@ func TestVote(t *testing.T) {
 func TestBallotCast(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCast{}
-	// VoteTxID (TxId)
-	initialMessage.VoteTxID = TxId{}
+	// VoteTxId (TxId)
+	initialMessage.VoteTxId = TxId{}
 
 	// Vote (varchar)
 	initialMessage.Vote = "Text 1"
@@ -1718,7 +1726,7 @@ func TestBallotCast(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// VoteTxID (TxId)
+	// VoteTxId (TxId)
 	// TxId test compare not setup
 
 	// Vote (varchar)
@@ -1730,13 +1738,7 @@ func TestBallotCast(t *testing.T) {
 func TestBallotCounted(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCounted{}
-	// VoteTxID (TxId)
-	initialMessage.VoteTxID = TxId{}
-
-	// Vote (varchar)
-	initialMessage.Vote = "Text 1"
-
-	// TokensHeld (uint)
+	// Quantity (uint)
 	// uint test not setup
 
 	// Timestamp (Timestamp)
@@ -1777,17 +1779,9 @@ func TestBallotCounted(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// VoteTxID (TxId)
-	// TxId test compare not setup
-
-	// Vote (varchar)
-	if initialMessage.Vote != decodedMessage.Vote {
-		t.Errorf("Vote doesn't match : %s != %s", initialMessage.Vote, decodedMessage.Vote)
-	}
-
-	// TokensHeld (uint)
-	if initialMessage.TokensHeld != decodedMessage.TokensHeld {
-		t.Errorf("TokensHeld doesn't match : %v != %v", initialMessage.TokensHeld, decodedMessage.TokensHeld)
+	// Quantity (uint)
+	if initialMessage.Quantity != decodedMessage.Quantity {
+		t.Errorf("Quantity doesn't match : %v != %v", initialMessage.Quantity, decodedMessage.Quantity)
 	}
 
 	// Timestamp (Timestamp)

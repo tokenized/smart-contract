@@ -11,6 +11,8 @@ const (
 	// insufficient value to fund the transaction.
 	RejectionCodeInsufficientValue
 
+	RejectionCodeContractAddress
+
 	// RejectionCodeIssuerAddress is sent when the message was received from
 	// a PKH not associated with the Contract.
 	RejectionCodeIssuerAddress
@@ -36,10 +38,13 @@ const (
 	// the number of assets below the number of assets the contract has.
 	RejectionCodeContractQtyReduction
 
-	// RejectionCodeContractAuthFlags is sent when a CA tries to change the
-	// authorization flags, but the authorization flags do not permit the
-	// change.
+	// RejectionCodeContractAuthFlags is sent when a proposal or amendment
+	//   for a contract tries to change fields not allowed by the auth flags.
 	RejectionCodeContractAuthFlags
+
+	// RejectionCodeAssetAuthFlags is sent when a proposal or amendment
+	//   for an asset tries to change fields not allowed by the auth flags.
+	RejectionCodeAssetAuthFlags
 
 	// RejectionCodeContractExpiration is sent when a CA tries to modify the
 	// Contract, but the auth flags do not permit the update.
@@ -59,6 +64,10 @@ const (
 	// RejectionCodeVoteClosed is returned when a vote is received after the
 	// cutoff time.
 	RejectionCodeVoteClosed
+
+	// RejectionCodeBallotCounted is returned when the ballot has already been
+	//   counted for this address.
+	RejectionCodeBallotCounted
 
 	// RejectionCodeAssetNotFound is returned when a specified asset is not
 	// found.
