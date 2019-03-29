@@ -255,7 +255,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
-	if node.stopping {
+	if node.stopping || node.stopped {
 		return nil
 	}
 	node.stopping = true

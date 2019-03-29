@@ -798,5 +798,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 	}
 
+	// Remove cached tx
+	t.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
 	return nil
 }

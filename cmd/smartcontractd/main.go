@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
@@ -23,11 +24,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -186,10 +187,15 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Register Hooks
+	sch := scheduler.Scheduler{}
+	txCache := listeners.NewTxCache()
 
-	appHandlers := handlers.API(masterWallet, appConfig, masterDB, handlers.NewTxCache())
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, &sch)
+	if err != nil {
+		logger.Fatal(ctx, "Generate API : %s", apiErr)
+	}
 
-	node := listeners.NewServer(appConfig, rpcNode, spyNode, appHandlers, rawPKHs[0])
+	node := listeners.NewServer(appConfig, masterDB, rpcNode, spyNode, &sch, txCache, appHandlers, rawPKHs[0])
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -198,8 +204,12 @@ func main() {
 	// buffered channel so the goroutine can exit if we don't collect this error.
 	serverErrors := make(chan error, 1)
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
 	// Start the service listening for requests.
 	go func() {
+		defer wg.Done()
 		logger.Info(ctx, "Node Running")
 		serverErrors <- node.Run(ctx)
 	}()
@@ -230,6 +240,9 @@ func main() {
 			logger.Fatal(ctx, "Could not stop server: %s", err)
 		}
 	}
+
+	// Block until goroutines finish as a result of Stop()
+	wg.Wait()
 }
 
 var (
@@ -276,12 +289,11 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 	// Check if relevant to contract
 	for _, output := range tx.TxOut {
-		// TODO Remove extra logic in this. Should only check if P2PKH and get raw 20 bytes for PKH
-		class, addresses, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, filter.chainParams)
+		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err != nil {
 			continue
 		}
-		if class == txscript.PubKeyHashTy && bytes.Equal(addresses[0].ScriptAddress(), filter.contractPKH) {
+		if bytes.Equal(pkh, filter.contractPKH) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true
@@ -291,20 +303,10 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	// Check if txin is from contract
 	// Reject responses don't go to the contract. They are from contract to request sender.
 	for _, input := range tx.TxIn {
-		pushes, err := txscript.PushedData(input.SignatureScript)
+		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
-		if len(pushes) != 2 {
-			continue
-		}
-
-		// Calculate RIPEMD160(SHA256(PublicKey))
-		filter.hash256.Reset()
-		filter.hash256.Write(pushes[1])
-		filter.hash160.Reset()
-		filter.hash160.Write(filter.hash256.Sum(nil))
-		pkh := filter.hash160.Sum(nil)
 
 		if bytes.Equal(pkh, filter.contractPKH) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,

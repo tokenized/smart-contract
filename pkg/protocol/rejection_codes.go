@@ -18,6 +18,7 @@ var (
 		RejectionCodeVoteExists:                 []byte("Vote Exists"),
 		RejectionCodeVoteNotFound:               []byte("Vote Not Found"),
 		RejectionCodeVoteClosed:                 []byte("Vote Closed"),
+		RejectionCodeVoteConflicts:              []byte("Vote Conflicts"),
 		RejectionCodeBallotCounted:              []byte("Ballot Counted"),
 		RejectionCodeAssetNotFound:              []byte("Asset Not Found"),
 		RejectionCodeInsufficientAssets:         []byte("Insufficient Assets"),

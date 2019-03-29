@@ -19,6 +19,7 @@ import (
 type WalletInterface interface {
 	Get(string) (*RootKey, error)
 	List([]string) ([]*RootKey, error)
+	ListAll() []*RootKey
 }
 
 type Wallet struct {
@@ -76,6 +77,10 @@ func (w Wallet) List(addrs []string) ([]*RootKey, error) {
 	}
 
 	return rks, nil
+}
+
+func (w Wallet) ListAll() []*RootKey {
+	return w.KeyStore.GetAll()
 }
 
 func (w Wallet) Get(addr string) (*RootKey, error) {

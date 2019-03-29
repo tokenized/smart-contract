@@ -74,6 +74,9 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if uv.CompletedAt != nil {
 		v.CompletedAt = *uv.CompletedAt
 	}
+	if uv.AppliedTxId != nil {
+		v.AppliedTxId = *uv.AppliedTxId
+	}
 	if uv.NewBallot != nil {
 		v.Ballots = append(v.Ballots, uv.NewBallot)
 	}
@@ -111,9 +114,8 @@ func AddBallot(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicK
 	return nil
 }
 
-// CreateResult calculates the result of a completed vote.
-func CreateResult(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	vt *state.Vote, proposal *protocol.Proposal, votingSystem *protocol.VotingSystem) ([]uint64, string, error) {
+// CalculateResults calculates the result of a completed vote.
+func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Proposal, votingSystem *protocol.VotingSystem) ([]uint64, string, error) {
 
 	results := make([]uint64, proposal.VoteMax)
 	votedQuantity := uint64(0)

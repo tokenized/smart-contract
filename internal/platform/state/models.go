@@ -77,6 +77,12 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
+	AssetSpecificVote  bool                 `json:"asset_specific_vote,omit_empty"`
+	AssetType          string               `json:"asset_type,omit_empty"`
+	AssetCode          protocol.AssetCode   `json:"asset_code,omit_empty"`
+	Specific           bool                 `json:"specific,omit_empty"`
+	ProposedAmendments []protocol.Amendment `json:"proposed_amendments,omit_empty"`
+
 	VoteTxId     protocol.TxId      `json:"vote_tx_id_hash,omit_empty"`
 	ProposalTxId protocol.TxId      `json:"proposal_tx_id_hash,omit_empty"`
 	TokenQty     uint64             `json:"token_qty,omit_empty"`
@@ -87,6 +93,7 @@ type Vote struct {
 
 	OptionTally []uint64           `json:"option_tally,omit_empty"`
 	Result      string             `json:"result,omit_empty"`
+	AppliedTxId protocol.TxId      `json:"applied_tx_id,omit_empty"`
 	CompletedAt protocol.Timestamp `json:"completed_at,omit_empty"`
 
 	Ballots []*Ballot `json:"ballots,omit_empty"`

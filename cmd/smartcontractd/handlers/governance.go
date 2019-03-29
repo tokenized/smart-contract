@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
@@ -22,9 +23,11 @@ import (
 )
 
 type Governance struct {
-	MasterDB *db.DB
-	Config   *node.Config
-	TxCache  InspectorTxCache
+	handler   *node.App
+	MasterDB  *db.DB
+	Config    *node.Config
+	TxCache   InspectorTxCache
+	Scheduler *scheduler.Scheduler
 }
 
 // ProposalRequest handles an incoming proposal request and prepares a Vote response
@@ -44,6 +47,13 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
 		return err
+	}
+
+	// Verify first two outputs are to contract
+	if len(itx.Outputs) < 2 || !bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), contractPKH.Bytes()) ||
+		!bytes.Equal(itx.Outputs[1].Address.ScriptAddress(), contractPKH.Bytes()) {
+		logger.Warn(ctx, "%s : Proposal failed to fund vote and result txs : %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientValue)
 	}
 
 	var senderPKH *protocol.PublicKeyHash
@@ -126,6 +136,40 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		}
 	}
 
+	if msg.Specific {
+		// TODO Check existing votes that have not been applied yet for conflicting fields.
+		votes, err := vote.List(ctx, g.MasterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to list votes")
+		}
+		for _, vt := range votes {
+			if !vt.AppliedTxId.IsZero() || !vt.Specific {
+				continue // Already applied or doesn't contain specific amendments
+			}
+
+			if msg.AssetSpecificVote {
+				if !vt.AssetSpecificVote || msg.AssetType != vt.AssetType || !bytes.Equal(msg.AssetCode.Bytes(), vt.AssetCode.Bytes()) {
+					continue // Not an asset amendment
+				}
+			} else {
+				if vt.AssetSpecificVote {
+					continue // Not a contract amendment
+				}
+			}
+
+			// Determine if any fields conflict
+			for _, field := range msg.ProposedAmendments {
+				for _, otherField := range vt.ProposedAmendments {
+					if field.FieldIndex == otherField.FieldIndex {
+						// Reject because of conflicting field amendment on unapplied vote.
+						logger.Warn(ctx, "%s : Proposed amendment conflicts with unapplied vote : %s %s", v.TraceID, contractPKH.String())
+						return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeVoteConflicts)
+					}
+				}
+			}
+		}
+	}
+
 	// Build Response
 	vote := protocol.Vote{Timestamp: v.Now}
 
@@ -134,6 +178,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	if err != nil {
 		return err
 	}
+
+	// Fund with first output of proposal tx. Second is reserved for vote result tx.
+	w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[0].UTXO})
 
 	// Build outputs
 	// 1 - Contract Address (change)
@@ -204,7 +251,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	nv := vote.NewVote{}
-	err = node.Convert(ctx, msg, &nv)
+	err = node.Convert(ctx, proposal, &nv)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert vote message to new vote")
 	}
@@ -212,6 +259,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	nv.VoteTxId = *voteTxId
 	nv.ProposalTxId = *protocol.TxIdFromBytes(proposalTx.Hash[:])
 	nv.Expires = proposal.VoteCutOffTimestamp
+	nv.Timestamp = msg.Timestamp
 
 	if proposal.AssetSpecificVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
@@ -231,6 +279,10 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	if err := vote.Create(ctx, g.MasterDB, contractPKH, voteTxId, &nv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to save vote")
+	}
+
+	if err := g.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(g.handler, itx, proposal.VoteCutOffTimestamp)); err != nil {
+		return errors.Wrap(err, "Failed to schedule vote finalizer")
 	}
 
 	return nil
@@ -339,10 +391,13 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Build Response
-	ballotCounted := protocol.BallotCounted{
-		Quantity:  quantity,
-		Timestamp: v.Now,
+	ballotCounted := protocol.BallotCounted{}
+	err = node.Convert(ctx, msg, &ballotCounted)
+	if err != nil {
+		return errors.Wrap(err, "Failed to convert ballot cast to counted")
 	}
+	ballotCounted.Quantity = quantity
+	ballotCounted.Timestamp = v.Now
 
 	// Convert to btcutil.Address
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &g.Config.ChainParams)
@@ -352,7 +407,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Build outputs
 	// 1 - Contract Address (change)
-	// 2 - Contract/Proposal Fee
+	// 2 - Contract Fee
 	w.AddChangeOutput(ctx, contractAddress)
 	w.AddContractFee(ctx, ct.ContractFee)
 
@@ -415,6 +470,87 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	return nil
 }
 
+// FinalizeVote is called when a vote expires and sends the result response.
+func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Governance.FinalizeVote")
+	defer span.End()
+
+	_, ok := itx.MsgProto.(*protocol.Vote)
+	if !ok {
+		return errors.New("Could not assert as *protocol.Vote")
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+
+	// Retrieve contract
+	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	if err != nil {
+		return err
+	}
+
+	// Retrieve vote
+	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
+	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
+	}
+
+	// Get Proposal
+	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	proposalTx := g.TxCache.GetTx(ctx, hash)
+	if proposalTx == nil {
+		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
+	if !ok {
+		logger.Warn(ctx, "%s : Proposal invalid for vote : %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	// Build Response
+	voteResult := protocol.Result{}
+	err = node.Convert(ctx, proposal, &voteResult)
+	if err != nil {
+		return errors.Wrap(err, "Failed to convert vote proposal to result")
+	}
+
+	voteResult.VoteTxId = *voteTxId
+	voteResult.Timestamp = v.Now
+
+	// Calculate Results
+	voteResult.OptionTally, voteResult.Result, err = vote.CalculateResults(ctx, vt, proposal, &ct.VotingSystems[proposal.VoteSystem])
+	if err != nil {
+		return errors.Wrap(err, "Failed to calculate vote results")
+	}
+
+	// Convert to btcutil.Address
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &g.Config.ChainParams)
+	if err != nil {
+		return err
+	}
+
+	// Fund with second output of proposal tx.
+	w.SetUTXOs(ctx, []inspector.UTXO{proposalTx.Outputs[1].UTXO})
+
+	// Build outputs
+	// 1 - Contract Address (change)
+	// 2 - Contract Fee
+	w.AddChangeOutput(ctx, contractAddress)
+	w.AddContractFee(ctx, ct.ContractFee)
+
+	// Save Tx for response.
+	g.TxCache.SaveTx(ctx, itx)
+
+	// Respond with a vote
+	return node.RespondSuccess(ctx, w, itx, rk, &voteResult)
+
+	return errors.New("FinalizeVote not implemented")
+}
+
 // ResultResponse handles an outgoing Result action and writes it to the state
 func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ResultResponse")
@@ -433,16 +569,27 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractAddress)
 	}
 
+	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &msg.VoteTxId)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
+	}
+
 	uv := vote.UpdateVote{}
-	err := node.Convert(ctx, msg, &uv)
+	err = node.Convert(ctx, msg, &uv)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert result message to update vote")
 	}
 
 	uv.CompletedAt = &msg.Timestamp
 
-	if err := vote.Update(ctx, g.MasterDB, contractPKH, &msg.VoteTxID, &uv, v.Now); err != nil {
+	if err := vote.Update(ctx, g.MasterDB, contractPKH, &msg.VoteTxId, &uv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to update vote")
 	}
+
+	// Remove cached txs
+	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	g.TxCache.RemoveTx(ctx, hash)
+	hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
+	g.TxCache.RemoveTx(ctx, hash)
 	return nil
 }

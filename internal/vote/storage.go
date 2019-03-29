@@ -47,7 +47,29 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	return &result, nil
 }
 
+// List all votes for a specified contract.
+func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) ([]*state.Vote, error) {
+
+	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%x", storageKey, contractPKH.String()))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*state.Vote, 0, len(data))
+	for _, b := range data {
+		vote := state.Vote{}
+
+		if err := json.Unmarshal(b, &vote); err != nil {
+			return nil, err
+		}
+
+		result = append(result, &vote)
+	}
+
+	return result, nil
+}
+
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractPKH *protocol.PublicKeyHash, txid *protocol.TxId) string {
-	return fmt.Sprintf("%v/%x/%x", storageKey, contractPKH.String(), txid.String())
+	return fmt.Sprintf("%s/%x/%x", storageKey, contractPKH.String(), txid.String())
 }

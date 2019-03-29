@@ -945,9 +945,9 @@ func (m *QuantityIndex) Equal(other QuantityIndex) bool {
 
 // Registry A Registry defines the details of a public Registry.
 type Registry struct {
-	Name      string        `json:"name,omitempty"`       // Length 0-255 bytes. 0 is valid. Registry X Name (eg. Coinbase, Tokenized, etc.)
-	URL       string        `json:"url,omitempty"`        // Length 0-255 bytes. 0 is valid. If applicable: URL for REST/RPC Endpoint
-	PublicKey PublicKeyHash `json:"public_key,omitempty"` // Length 0-255 bytes. 0 is not valid. Registry Public Key (eg. Bitcoin Public key), used to confirm digital signed proofs for transfers.  Can also be the same public address that controls a Tokenized Registry.
+	Name      string `json:"name,omitempty"`       // Length 0-255 bytes. 0 is valid. Registry X Name (eg. Coinbase, Tokenized, etc.)
+	URL       string `json:"url,omitempty"`        // Length 0-255 bytes. 0 is valid. If applicable: URL for REST/RPC Endpoint
+	PublicKey []byte `json:"public_key,omitempty"` // Length 0-255 bytes. 0 is not valid. Registry Public Key (eg. Bitcoin Public key), used to confirm digital signed proofs for transfers.  Can also be the same public address that controls a Tokenized Registry.
 }
 
 // Serialize returns the byte representation of the message.
@@ -964,16 +964,9 @@ func (m Registry) Serialize() ([]byte, error) {
 		return nil, err
 	}
 
-	// PublicKey (PublicKeyHash)
-	{
-		b, err := m.PublicKey.Serialize()
-		if err != nil {
-			return nil, err
-		}
-
-		if err := write(buf, b); err != nil {
-			return nil, err
-		}
+	// PublicKey ([]byte)
+	if err := WriteVarBin(buf, m.PublicKey, 8); err != nil {
+		return nil, err
 	}
 	return buf.Bytes(), nil
 }
@@ -998,9 +991,13 @@ func (m *Registry) Write(buf *bytes.Buffer) error {
 		}
 	}
 
-	// PublicKey (PublicKeyHash)
-	if err := m.PublicKey.Write(buf); err != nil {
-		return err
+	// PublicKey ([]byte)
+	{
+		var err error
+		m.PublicKey, err = ReadVarBin(buf, 8)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1017,8 +1014,8 @@ func (m *Registry) Equal(other Registry) bool {
 		return false
 	}
 
-	// PublicKey (PublicKeyHash)
-	if !m.PublicKey.Equal(other.PublicKey) {
+	// PublicKey ([]byte)
+	if !bytes.Equal(m.PublicKey, other.PublicKey) {
 		return false
 	}
 	return true

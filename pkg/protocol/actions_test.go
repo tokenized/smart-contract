@@ -1152,20 +1152,26 @@ func TestOrder(t *testing.T) {
 	// AuthorityName (varchar)
 	initialMessage.AuthorityName = "Text 5"
 
-	// SigAlgoAddressList (uint)
+	// AuthorityPublicKey (varchar)
+	initialMessage.AuthorityPublicKey = "Text 6"
+
+	// SignatureAlgorithm (uint)
 	// uint test not setup
 
-	// AuthorityPublicKey (varchar)
-	initialMessage.AuthorityPublicKey = "Text 7"
+	// OrderSignature (varbin)
+	initialMessage.OrderSignature = make([]byte, 0, 8)
+	for i := uint64(0); i < 8; i++ {
+		initialMessage.OrderSignature = append(initialMessage.OrderSignature, byte(65+i+8))
+	}
 
-	// OrderSignature (varchar)
-	initialMessage.OrderSignature = "Text 8"
+	// SupportingEvidenceHash (bin)
+	// bin test not setup
 
-	// SupportingEvidenceTxId (TxId)
-	initialMessage.SupportingEvidenceTxId = TxId{}
-
-	// RefTxns (TxId)
-	initialMessage.RefTxns = TxId{}
+	// RefTxs (varbin)
+	initialMessage.RefTxs = make([]byte, 0, 32)
+	for i := uint64(0); i < 32; i++ {
+		initialMessage.RefTxs = append(initialMessage.RefTxs, byte(65+i+10))
+	}
 
 	// FreezePeriod (Timestamp)
 	initialMessage.FreezePeriod = Timestamp{}
@@ -1234,26 +1240,30 @@ func TestOrder(t *testing.T) {
 		t.Errorf("AuthorityName doesn't match : %s != %s", initialMessage.AuthorityName, decodedMessage.AuthorityName)
 	}
 
-	// SigAlgoAddressList (uint)
-	if initialMessage.SigAlgoAddressList != decodedMessage.SigAlgoAddressList {
-		t.Errorf("SigAlgoAddressList doesn't match : %v != %v", initialMessage.SigAlgoAddressList, decodedMessage.SigAlgoAddressList)
-	}
-
 	// AuthorityPublicKey (varchar)
 	if initialMessage.AuthorityPublicKey != decodedMessage.AuthorityPublicKey {
 		t.Errorf("AuthorityPublicKey doesn't match : %s != %s", initialMessage.AuthorityPublicKey, decodedMessage.AuthorityPublicKey)
 	}
 
-	// OrderSignature (varchar)
-	if initialMessage.OrderSignature != decodedMessage.OrderSignature {
-		t.Errorf("OrderSignature doesn't match : %s != %s", initialMessage.OrderSignature, decodedMessage.OrderSignature)
+	// SignatureAlgorithm (uint)
+	if initialMessage.SignatureAlgorithm != decodedMessage.SignatureAlgorithm {
+		t.Errorf("SignatureAlgorithm doesn't match : %v != %v", initialMessage.SignatureAlgorithm, decodedMessage.SignatureAlgorithm)
 	}
 
-	// SupportingEvidenceTxId (TxId)
-	// TxId test compare not setup
+	// OrderSignature (varbin)
+	if !bytes.Equal(initialMessage.OrderSignature, decodedMessage.OrderSignature) {
+		t.Errorf("OrderSignature doesn't match : %x != %x", initialMessage.OrderSignature, decodedMessage.OrderSignature)
+	}
 
-	// RefTxns (TxId)
-	// TxId test compare not setup
+	// SupportingEvidenceHash (bin)
+	if initialMessage.SupportingEvidenceHash != decodedMessage.SupportingEvidenceHash {
+		t.Errorf("SupportingEvidenceHash doesn't match : %v != %v", initialMessage.SupportingEvidenceHash, decodedMessage.SupportingEvidenceHash)
+	}
+
+	// RefTxs (varbin)
+	if !bytes.Equal(initialMessage.RefTxs, decodedMessage.RefTxs) {
+		t.Errorf("RefTxs doesn't match : %x != %x", initialMessage.RefTxs, decodedMessage.RefTxs)
+	}
 
 	// FreezePeriod (Timestamp)
 	// Timestamp test compare not setup
@@ -1738,6 +1748,12 @@ func TestBallotCast(t *testing.T) {
 func TestBallotCounted(t *testing.T) {
 	// Create a randomized object
 	initialMessage := BallotCounted{}
+	// VoteTxId (TxId)
+	initialMessage.VoteTxId = TxId{}
+
+	// Vote (varchar)
+	initialMessage.Vote = "Text 1"
+
 	// Quantity (uint)
 	// uint test not setup
 
@@ -1779,6 +1795,14 @@ func TestBallotCounted(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// VoteTxId (TxId)
+	// TxId test compare not setup
+
+	// Vote (varchar)
+	if initialMessage.Vote != decodedMessage.Vote {
+		t.Errorf("Vote doesn't match : %s != %s", initialMessage.Vote, decodedMessage.Vote)
+	}
+
 	// Quantity (uint)
 	if initialMessage.Quantity != decodedMessage.Quantity {
 		t.Errorf("Quantity doesn't match : %v != %v", initialMessage.Quantity, decodedMessage.Quantity)
@@ -1814,8 +1838,8 @@ func TestResult(t *testing.T) {
 		initialMessage.ProposedAmendments = append(initialMessage.ProposedAmendments, Amendment{})
 	}
 
-	// VoteTxID (TxId)
-	initialMessage.VoteTxID = TxId{}
+	// VoteTxId (TxId)
+	initialMessage.VoteTxId = TxId{}
 
 	// OptionTally (uint64[])
 	for i := 0; i < 5; i++ {
@@ -1887,7 +1911,7 @@ func TestResult(t *testing.T) {
 		t.Errorf("ProposedAmendments lengths don't match : %d != %d", len(initialMessage.ProposedAmendments), len(decodedMessage.ProposedAmendments))
 	}
 
-	// VoteTxID (TxId)
+	// VoteTxId (TxId)
 	// TxId test compare not setup
 
 	// OptionTally (uint64[])

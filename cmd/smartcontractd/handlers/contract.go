@@ -229,6 +229,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
+	// Save Tx.
+	c.TxCache.SaveTx(ctx, itx)
+
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
 }
@@ -246,6 +249,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	dbConn := c.MasterDB
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// TODO Fetch and remove request tx
+	// hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
+	// c.TxCache.RemoveTx(ctx, hash)
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -446,7 +453,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			for i, registry := range ct.Registries {
 				if registry.Name != msg.Registries[i].Name ||
 					registry.URL != msg.Registries[i].URL ||
-					!bytes.Equal(registry.PublicKey.Bytes(), msg.Registries[i].PublicKey.Bytes()) {
+					!bytes.Equal(registry.PublicKey, msg.Registries[i].PublicKey) {
 					different = true
 					break
 				}
@@ -495,6 +502,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return err
 		}
 		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
+
+		// TODO Mark vote as "applied" if this amendment was a result of a vote.
+		// Pull
 	}
 
 	return nil

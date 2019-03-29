@@ -199,10 +199,17 @@ type TxId struct {
 	data [32]byte
 }
 
+var zeroTxId TxId
+
 func TxIdFromBytes(data []byte) *TxId {
 	var result TxId
 	copy(result.data[:], data)
 	return &result
+}
+
+// IsZero returns true if the tx id is all zeros.
+func (id *TxId) IsZero() bool {
+	return bytes.Equal(id.data[:], zeroTxId.data[:])
 }
 
 // Equal returns true if the specified values are the same.

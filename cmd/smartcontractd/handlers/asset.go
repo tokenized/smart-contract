@@ -21,6 +21,7 @@ import (
 type Asset struct {
 	MasterDB *db.DB
 	Config   *node.Config
+	TxCache  InspectorTxCache
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
@@ -40,6 +41,10 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	dbConn := a.MasterDB
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// TODO Fetch and remove request tx
+	// hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
+	// a.TxCache.RemoveTx(ctx, hash)
 
 	// Locate Contract
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -102,6 +107,9 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// 2 - Contract Fee
 	w.AddChangeOutput(ctx, contractAddress)
 	w.AddContractFee(ctx, ct.ContractFee)
+
+	// Save Tx.
+	a.TxCache.SaveTx(ctx, itx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -189,6 +197,9 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// 2 - Contract Fee
 	w.AddChangeOutput(ctx, contractAddress)
 	w.AddContractFee(ctx, ct.ContractFee)
+
+	// Save Tx.
+	a.TxCache.SaveTx(ctx, itx)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -312,6 +323,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return err
 		}
 		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractAddr, msg.AssetCode.String())
+
+		// TODO Mark vote as "applied" if this amendment was a result of a vote.
 	}
 
 	return nil

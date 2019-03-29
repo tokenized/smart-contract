@@ -20,6 +20,9 @@ const (
 
 	// STOLE is used for double spends
 	STOLE = "STOLE"
+
+	// REPROCESS is used to call back finalization of a tx
+	REPROCESS = "REPROCESS"
 )
 
 // Handler is the interface for this Protocol Mux
@@ -36,17 +39,19 @@ type HandlerFunc func(ctx context.Context, itx *inspector.Transaction, pkhs []st
 type ResponderFunc func(ctx context.Context, tx *wire.MsgTx) error
 
 type ProtoMux struct {
-	Responder     ResponderFunc
-	SeeHandlers   map[string][]HandlerFunc
-	LostHandlers  map[string][]HandlerFunc
-	StoleHandlers map[string][]HandlerFunc
+	Responder         ResponderFunc
+	SeeHandlers       map[string][]HandlerFunc
+	LostHandlers      map[string][]HandlerFunc
+	StoleHandlers     map[string][]HandlerFunc
+	ReprocessHandlers map[string][]HandlerFunc
 }
 
 func New() *ProtoMux {
 	pm := &ProtoMux{
-		SeeHandlers:   make(map[string][]HandlerFunc),
-		LostHandlers:  make(map[string][]HandlerFunc),
-		StoleHandlers: make(map[string][]HandlerFunc),
+		SeeHandlers:       make(map[string][]HandlerFunc),
+		LostHandlers:      make(map[string][]HandlerFunc),
+		StoleHandlers:     make(map[string][]HandlerFunc),
+		ReprocessHandlers: make(map[string][]HandlerFunc),
 	}
 
 	return pm
@@ -61,6 +66,8 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 		p.LostHandlers[event] = append(p.LostHandlers[event], handler)
 	case STOLE:
 		p.StoleHandlers[event] = append(p.StoleHandlers[event], handler)
+	case REPROCESS:
+		p.ReprocessHandlers[event] = append(p.ReprocessHandlers[event], handler)
 	default:
 		panic("Unknown handler type")
 	}
@@ -78,6 +85,8 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 		group = p.LostHandlers
 	case STOLE:
 		group = p.StoleHandlers
+	case REPROCESS:
+		group = p.ReprocessHandlers
 	default:
 		return errors.New("Unknown handler type")
 	}

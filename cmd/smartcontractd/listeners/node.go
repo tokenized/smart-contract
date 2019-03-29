@@ -4,20 +4,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"sync"
 
+	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Server struct {
 	Config           *node.Config
+	MasterDB         *db.DB
 	RpcNode          *rpcnode.RPCNode
 	SpyNode          *spynode.Node
+	Scheduler        *scheduler.Scheduler
+	TxCache          *TxCache
 	Handler          protomux.Handler
 	contractPKH      []byte // Used to determine which txs will be needed again
 	pendingRequests  []*inspector.Transaction
@@ -27,11 +34,15 @@ type Server struct {
 	inSync           bool
 }
 
-func NewServer(config *node.Config, rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, handler protomux.Handler, contractPKH []byte) *Server {
+func NewServer(config *node.Config, masterDB *db.DB, rpcNode *rpcnode.RPCNode, spyNode *spynode.Node,
+	scheduler *scheduler.Scheduler, txCache *TxCache, handler protomux.Handler, contractPKH []byte) *Server {
 	result := Server{
 		Config:           config,
+		MasterDB:         masterDB,
 		RpcNode:          rpcNode,
 		SpyNode:          spyNode,
+		Scheduler:        scheduler,
+		TxCache:          txCache,
 		Handler:          handler,
 		contractPKH:      contractPKH,
 		pendingRequests:  make([]*inspector.Transaction, 0),
@@ -51,16 +62,53 @@ func (server *Server) Run(ctx context.Context) error {
 	// Register listeners
 	server.SpyNode.RegisterListener(server)
 
-	if err := server.SpyNode.Run(ctx); err != nil {
+	err := server.TxCache.Load(ctx, server.MasterDB)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if err := server.SpyNode.Run(ctx); err != nil {
+			logger.Error(ctx, "Spynode failed : %s", err)
+			server.Scheduler.Stop(ctx)
+		}
+		logger.Debug(ctx, "Spynode finished")
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := server.Scheduler.Run(ctx); err != nil {
+			logger.Error(ctx, "Scheduler failed : %s", err)
+			server.SpyNode.Stop(ctx)
+		}
+		logger.Debug(ctx, "Scheduler finished")
+	}()
+
+	// Block until goroutines finish as a result of Stop()
+	wg.Wait()
+
+	return server.TxCache.Save(ctx, server.MasterDB)
 }
 
 func (server *Server) Stop(ctx context.Context) error {
 	// TODO: This action should unregister listeners
-	return server.SpyNode.Stop(ctx)
+	spynodeErr := server.SpyNode.Stop(ctx)
+	schedulerErr := server.Scheduler.Stop(ctx)
+
+	if spynodeErr != nil && schedulerErr != nil {
+		return errors.Wrap(errors.Wrap(spynodeErr, schedulerErr.Error()), "SpyNode and Scheduler failed")
+	}
+	if spynodeErr != nil {
+		return errors.Wrap(spynodeErr, "Spynode failed to stop")
+	}
+	if schedulerErr != nil {
+		return errors.Wrap(schedulerErr, "Scheduler failed to stop")
+	}
+	return nil
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
@@ -126,4 +174,8 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 	}
 
 	return server.Handler.Trigger(ctx, protomux.SEE, itx)
+}
+
+func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {
+	return server.Handler.Trigger(ctx, protomux.REPROCESS, itx)
 }

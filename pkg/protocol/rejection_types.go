@@ -65,6 +65,10 @@ const (
 	// cutoff time.
 	RejectionCodeVoteClosed
 
+	// RejectionCodeVoteConflicts is returned when a vote is proposing changes
+	// to the same field as a previous vote that has not been applied yet.
+	RejectionCodeVoteConflicts
+
 	// RejectionCodeBallotCounted is returned when the ballot has already been
 	//   counted for this address.
 	RejectionCodeBallotCounted
