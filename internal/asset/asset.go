@@ -3,7 +3,6 @@ package asset
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -11,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -71,6 +71,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		PKH:       nu.IssuerPKH,
 		Balance:   nu.TokenQty,
 		CreatedAt: a.CreatedAt,
+		UpdatedAt: a.UpdatedAt,
 	})
 
 	if a.AssetPayload == nil {
@@ -130,40 +131,34 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.AssetPayload != nil {
 		a.AssetPayload = *upd.AssetPayload
 	}
+	if upd.FreezePeriod != nil {
+		a.FreezePeriod = *upd.FreezePeriod
+	}
 
 	// Update balances
 	if upd.NewBalances != nil {
 		for pkh, balance := range upd.NewBalances {
-			UpdateBalance(ctx, a, &pkh, balance, now)
+			if err := updateBalance(ctx, a, &pkh, balance, now); err != nil {
+				return errors.Wrap(err, "Failed to update balance")
+			}
 		}
 	}
 
 	// Update holding statuses
 	if upd.NewHoldingStatuses != nil {
 		for pkh, status := range upd.NewHoldingStatuses {
-			holding := GetHolding(ctx, a, &pkh, now)
-			holding.HoldingStatuses = append(holding.HoldingStatuses, status)
-			SetHolding(ctx, a, &pkh, &holding)
+			if err := addHoldingStatus(ctx, a, &pkh, &status); err != nil {
+				return errors.Wrap(err, "Failed to add holding status")
+			}
 		}
 	}
 
 	// Clear holding statuses
 	if upd.ClearHoldingStatuses != nil {
 		for pkh, txid := range upd.ClearHoldingStatuses {
-			holding := GetHolding(ctx, a, &pkh, now)
-			found := false
-			for i, status := range holding.HoldingStatuses {
-				if bytes.Equal(status.TxId.Bytes(), txid.Bytes()) {
-					// Remove holding status
-					holding.HoldingStatuses = append(holding.HoldingStatuses[:i], holding.HoldingStatuses[i+1:]...)
-					found = true
-					break
-				}
+			if err := removeHoldingStatus(ctx, a, &pkh, &txid); err != nil {
+				return errors.Wrap(err, "Failed to remove holding status")
 			}
-			if !found {
-				return errors.New(fmt.Sprintf("Matching hold not found : address %s txid %s", pkh, txid))
-			}
-			SetHolding(ctx, a, &pkh, &holding)
 		}
 	}
 
@@ -172,64 +167,92 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	return Save(ctx, dbConn, contractPKH, a)
 }
 
-// GetHolding will return a users holding or make one for them.
-func GetHolding(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, now protocol.Timestamp) state.Holding {
+// UpdateBalance will set the balance of a users holdings against the supplied asset.
+// New holdings are created for new users and expired holding statuses are cleared.
+func updateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
 	// Find userPKH
-	for _, holding := range as.Holdings {
+	for i, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
-			return holding
+			updated := false
+			// Clear expired holding statuses.
+			for {
+				removed := false
+				for j, status := range holding.HoldingStatuses {
+					if HoldingStatusExpired(ctx, &status, now) {
+						// Remove expired status
+						holding.HoldingStatuses = append(holding.HoldingStatuses[:j], holding.HoldingStatuses[j+1:]...)
+						removed = true
+						updated = true
+						break
+					}
+				}
+				if !removed {
+					break
+				}
+			}
+
+			// Only update if this is the latest update.
+			if now.Nano() > holding.UpdatedAt.Nano() {
+				holding.Balance = balance
+				updated = true
+			}
+
+			if updated {
+				as.Holdings[i] = holding
+			}
+
+			return nil
 		}
 	}
 
 	// New holding
-	return state.Holding{
+	as.Holdings = append(as.Holdings, state.Holding{
 		PKH:       *userPKH,
-		Balance:   0,
+		Balance:   balance,
 		CreatedAt: now,
-	}
+		UpdatedAt: now,
+	})
+
+	return nil
 }
 
-// SetHolding will return a users holding or make one for them.
-func SetHolding(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, newHolding *state.Holding) {
+func addHoldingStatus(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, st *state.HoldingStatus) error {
 	// Find userPKH
 	for i, holding := range as.Holdings {
 		if holding.PKH.Equal(*userPKH) {
-			as.Holdings[i] = *newHolding
-			return
+			for _, status := range holding.HoldingStatuses {
+				if status.Code == st.Code && bytes.Equal(status.TxId.Bytes(), st.TxId.Bytes()) {
+					return errors.New("already exists")
+				}
+			}
+
+			holding.HoldingStatuses = append(holding.HoldingStatuses, *st)
+			as.Holdings[i] = holding
+			return nil
 		}
 	}
 
-	// Add new holding
-	as.Holdings = append(as.Holdings, *newHolding)
+	return errors.New("holding not found")
 }
 
-// UpdateBalance will set the balance of a users holdings against the supplied asset.
-// New holdings are created for new users and expired holding statuses are cleared.
-func UpdateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, balance uint64, now protocol.Timestamp) error {
-	// TODO Check timestamp against latest timestamp on each holding and only update if the timestamp is newer.
-	// Set balance
-	holding := GetHolding(ctx, as, userPKH, now)
-	holding.Balance = balance
-
-	// Clear expired holding status
-	for {
-		removed := false
-		for i, status := range holding.HoldingStatuses {
-			if HoldingStatusExpired(ctx, &status, now) {
-				// Remove expired status
-				holding.HoldingStatuses = append(holding.HoldingStatuses[:i], holding.HoldingStatuses[i+1:]...)
-				removed = true
-				break
+func removeHoldingStatus(ctx context.Context, as *state.Asset, userPKH *protocol.PublicKeyHash, txid *protocol.TxId) error {
+	// Find userPKH
+	for i, holding := range as.Holdings {
+		if holding.PKH.Equal(*userPKH) {
+			// Clear expired holding statuses.
+			for j, status := range holding.HoldingStatuses {
+				if bytes.Equal(status.TxId.Bytes(), txid.Bytes()) {
+					holding.HoldingStatuses = append(holding.HoldingStatuses[:j], holding.HoldingStatuses[j+1:]...)
+					as.Holdings[i] = holding
+					return nil
+				}
 			}
-		}
-		if !removed {
-			break
+
+			return errors.New("status not found")
 		}
 	}
 
-	// Put the holding back on the asset
-	SetHolding(ctx, as, userPKH, &holding)
-	return nil
+	return errors.New("holding not found")
 }
 
 // GetBalance returns the balance for a PKH holder

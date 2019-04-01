@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -135,6 +136,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
+
+	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	if !contract.IsOperator(ctx, ct, requestorPKH) {
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
+	}
+
 	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
 	if err != nil {
 		return err
@@ -152,12 +160,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
-	// @TODO: When reducing an assets available supply, the amount must
-	// be deducted from the issuers balance, otherwise the action cannot
-	// be performed. i.e: Reduction amount must not be in circulation.
+	// @TODO: When reducing an assets available supply, the amount must be deducted from the
+	// issuer's balance, even if the operator requests the modification, otherwise the action
+	// cannot be performed. i.e: Reduction amount must not be in circulation.
 
-	// @TODO: Likewise when the asset quantity is increased, the amount
-	// must be added to the issuers holding balance.
+	// @TODO: Likewise when the asset quantity is increased, the amount must be added to the
+	// issuer's holding balance, even if the operator requests the modification.
 
 	// Asset Creation <- Asset Modification
 	ac := protocol.AssetCreation{}
@@ -220,13 +228,12 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractAddr.Bytes()) {
-		return errors.New("Asset Creation not from contract")
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
+		return fmt.Errorf("Asset Creation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
+	as, err := asset.Retrieve(ctx, dbConn, contractPKH, &msg.AssetCode)
 	if err != nil && err != asset.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve asset")
 	}
@@ -240,14 +247,14 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return err
 		}
 
-		if err := contract.AddAssetCode(ctx, dbConn, contractAddr, &msg.AssetCode, v.Now); err != nil {
+		if err := contract.AddAssetCode(ctx, dbConn, contractPKH, &msg.AssetCode, v.Now); err != nil {
 			return err
 		}
 
-		if err := asset.Create(ctx, dbConn, contractAddr, &msg.AssetCode, &na, v.Now); err != nil {
+		if err := asset.Create(ctx, dbConn, contractPKH, &msg.AssetCode, &na, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to create asset")
 		}
-		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -318,11 +325,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.TradeRestrictions = &newTradeRestrictions
 		}
 
-		if err := asset.Update(ctx, dbConn, contractAddr, &msg.AssetCode, &ua, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractAddr, msg.AssetCode.String())
+		if err := asset.Update(ctx, dbConn, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
+			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 			return err
 		}
-		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractAddr, msg.AssetCode.String())
+		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractPKH, msg.AssetCode.String())
 
 		// TODO Mark vote as "applied" if this amendment was a result of a vote.
 	}

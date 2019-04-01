@@ -17,6 +17,10 @@ const (
 	// a PKH not associated with the Contract.
 	RejectionCodeIssuerAddress
 
+	// RejectionCodeOperatorAddress is sent when the message was received from
+	// a PKH that is not the issuer or operator.
+	RejectionCodeOperatorAddress
+
 	// RejectionCodeDuplicateAssetCode is sent when the issuer attempted to
 	// add a duplicate Asset Code.
 	RejectionCodeDuplicateAssetCode
@@ -49,10 +53,6 @@ const (
 	// RejectionCodeContractExpiration is sent when a CA tries to modify the
 	// Contract, but the auth flags do not permit the update.
 	RejectionCodeContractExpiration
-
-	// RejectionCodeContractUpdate is sent when a CA tries to modify the
-	// Contract, but the auth flags do not permit the update.
-	RejectionCodeContractUpdate
 
 	// RejectionCodeVoteExists is returned when an existing proposal
 	// already exists.
@@ -111,4 +111,6 @@ const (
 	RejectionCodeContractMissingNewOperator
 
 	RejectionCodeInvalidProposal
+
+	RejectionCodeInvalidSig
 )

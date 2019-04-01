@@ -221,20 +221,15 @@ func (action *AssetDefinition) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *AssetDefinition) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -246,24 +241,21 @@ func (action *AssetDefinition) serialize() ([]byte, error) {
 	}
 
 	// AssetAuthFlags ([]byte)
-	_, skip = excludes["AssetAuthFlags"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.AssetAuthFlags, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// TransfersPermitted (bool)
-	_, skip = excludes["TransfersPermitted"]
-	if !skip {
+	{
 		if err := write(buf, action.TransfersPermitted); err != nil {
 			return nil, err
 		}
 	}
 
 	// TradeRestrictions (Polity)
-	_, skip = excludes["TradeRestrictions"]
-	if !skip {
+	{
 		b, err := action.TradeRestrictions.Serialize()
 		if err != nil {
 			return nil, err
@@ -275,64 +267,56 @@ func (action *AssetDefinition) serialize() ([]byte, error) {
 	}
 
 	// EnforcementOrdersPermitted (bool)
-	_, skip = excludes["EnforcementOrdersPermitted"]
-	if !skip {
+	{
 		if err := write(buf, action.EnforcementOrdersPermitted); err != nil {
 			return nil, err
 		}
 	}
 
 	// VotingRights (bool)
-	_, skip = excludes["VotingRights"]
-	if !skip {
+	{
 		if err := write(buf, action.VotingRights); err != nil {
 			return nil, err
 		}
 	}
 
 	// VoteMultiplier (uint8)
-	_, skip = excludes["VoteMultiplier"]
-	if !skip {
+	{
 		if err := write(buf, action.VoteMultiplier); err != nil {
 			return nil, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.IssuerProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.HolderProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetModificationGovernance (bool)
-	_, skip = excludes["AssetModificationGovernance"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetModificationGovernance); err != nil {
 			return nil, err
 		}
 	}
 
 	// TokenQty (uint64)
-	_, skip = excludes["TokenQty"]
-	if !skip {
+	{
 		if err := write(buf, action.TokenQty); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetPayload ([]byte)
-	_, skip = excludes["AssetPayload"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.AssetPayload, 16); err != nil {
 			return nil, err
 		}
@@ -344,19 +328,8 @@ func (action *AssetDefinition) serialize() ([]byte, error) {
 // write populates the fields in AssetDefinition from the byte slice
 func (action *AssetDefinition) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -365,16 +338,14 @@ func (action *AssetDefinition) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetAuthFlags ([]byte)
-	_, skip = excludes["AssetAuthFlags"]
-	if !skip {
+	{
 		var err error
 		action.AssetAuthFlags, err = ReadVarBin(buf, 8)
 		if err != nil {
@@ -383,80 +354,70 @@ func (action *AssetDefinition) write(b []byte) (int, error) {
 	}
 
 	// TransfersPermitted (bool)
-	_, skip = excludes["TransfersPermitted"]
-	if !skip {
+	{
 		if err := read(buf, &action.TransfersPermitted); err != nil {
 			return 0, err
 		}
 	}
 
 	// TradeRestrictions (Polity)
-	_, skip = excludes["TradeRestrictions"]
-	if !skip {
+	{
 		if err := action.TradeRestrictions.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
-	_, skip = excludes["EnforcementOrdersPermitted"]
-	if !skip {
+	{
 		if err := read(buf, &action.EnforcementOrdersPermitted); err != nil {
 			return 0, err
 		}
 	}
 
 	// VotingRights (bool)
-	_, skip = excludes["VotingRights"]
-	if !skip {
+	{
 		if err := read(buf, &action.VotingRights); err != nil {
 			return 0, err
 		}
 	}
 
 	// VoteMultiplier (uint8)
-	_, skip = excludes["VoteMultiplier"]
-	if !skip {
+	{
 		if err := read(buf, &action.VoteMultiplier); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.IssuerProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.HolderProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetModificationGovernance (bool)
-	_, skip = excludes["AssetModificationGovernance"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetModificationGovernance); err != nil {
 			return 0, err
 		}
 	}
 
 	// TokenQty (uint64)
-	_, skip = excludes["TokenQty"]
-	if !skip {
+	{
 		if err := read(buf, &action.TokenQty); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetPayload ([]byte)
-	_, skip = excludes["AssetPayload"]
-	if !skip {
+	{
 		var err error
 		action.AssetPayload, err = ReadVarBin(buf, 16)
 		if err != nil {
@@ -544,20 +505,15 @@ func (action *AssetCreation) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *AssetCreation) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -569,24 +525,21 @@ func (action *AssetCreation) serialize() ([]byte, error) {
 	}
 
 	// AssetAuthFlags ([]byte)
-	_, skip = excludes["AssetAuthFlags"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.AssetAuthFlags, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// TransfersPermitted (bool)
-	_, skip = excludes["TransfersPermitted"]
-	if !skip {
+	{
 		if err := write(buf, action.TransfersPermitted); err != nil {
 			return nil, err
 		}
 	}
 
 	// TradeRestrictions (Polity)
-	_, skip = excludes["TradeRestrictions"]
-	if !skip {
+	{
 		b, err := action.TradeRestrictions.Serialize()
 		if err != nil {
 			return nil, err
@@ -598,72 +551,63 @@ func (action *AssetCreation) serialize() ([]byte, error) {
 	}
 
 	// EnforcementOrdersPermitted (bool)
-	_, skip = excludes["EnforcementOrdersPermitted"]
-	if !skip {
+	{
 		if err := write(buf, action.EnforcementOrdersPermitted); err != nil {
 			return nil, err
 		}
 	}
 
 	// VoteMultiplier (uint8)
-	_, skip = excludes["VoteMultiplier"]
-	if !skip {
+	{
 		if err := write(buf, action.VoteMultiplier); err != nil {
 			return nil, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.IssuerProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.HolderProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetModificationGovernance (bool)
-	_, skip = excludes["AssetModificationGovernance"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetModificationGovernance); err != nil {
 			return nil, err
 		}
 	}
 
 	// TokenQty (uint64)
-	_, skip = excludes["TokenQty"]
-	if !skip {
+	{
 		if err := write(buf, action.TokenQty); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetPayload ([]byte)
-	_, skip = excludes["AssetPayload"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.AssetPayload, 16); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetRevision (uint32)
-	_, skip = excludes["AssetRevision"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetRevision); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -680,19 +624,8 @@ func (action *AssetCreation) serialize() ([]byte, error) {
 // write populates the fields in AssetCreation from the byte slice
 func (action *AssetCreation) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -701,16 +634,14 @@ func (action *AssetCreation) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetAuthFlags ([]byte)
-	_, skip = excludes["AssetAuthFlags"]
-	if !skip {
+	{
 		var err error
 		action.AssetAuthFlags, err = ReadVarBin(buf, 8)
 		if err != nil {
@@ -719,72 +650,63 @@ func (action *AssetCreation) write(b []byte) (int, error) {
 	}
 
 	// TransfersPermitted (bool)
-	_, skip = excludes["TransfersPermitted"]
-	if !skip {
+	{
 		if err := read(buf, &action.TransfersPermitted); err != nil {
 			return 0, err
 		}
 	}
 
 	// TradeRestrictions (Polity)
-	_, skip = excludes["TradeRestrictions"]
-	if !skip {
+	{
 		if err := action.TradeRestrictions.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
-	_, skip = excludes["EnforcementOrdersPermitted"]
-	if !skip {
+	{
 		if err := read(buf, &action.EnforcementOrdersPermitted); err != nil {
 			return 0, err
 		}
 	}
 
 	// VoteMultiplier (uint8)
-	_, skip = excludes["VoteMultiplier"]
-	if !skip {
+	{
 		if err := read(buf, &action.VoteMultiplier); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.IssuerProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.HolderProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetModificationGovernance (bool)
-	_, skip = excludes["AssetModificationGovernance"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetModificationGovernance); err != nil {
 			return 0, err
 		}
 	}
 
 	// TokenQty (uint64)
-	_, skip = excludes["TokenQty"]
-	if !skip {
+	{
 		if err := read(buf, &action.TokenQty); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetPayload ([]byte)
-	_, skip = excludes["AssetPayload"]
-	if !skip {
+	{
 		var err error
 		action.AssetPayload, err = ReadVarBin(buf, 16)
 		if err != nil {
@@ -793,16 +715,14 @@ func (action *AssetCreation) write(b []byte) (int, error) {
 	}
 
 	// AssetRevision (uint32)
-	_, skip = excludes["AssetRevision"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetRevision); err != nil {
 			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -880,20 +800,15 @@ func (action *AssetModification) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *AssetModification) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -905,16 +820,14 @@ func (action *AssetModification) serialize() ([]byte, error) {
 	}
 
 	// AssetRevision (uint32)
-	_, skip = excludes["AssetRevision"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetRevision); err != nil {
 			return nil, err
 		}
 	}
 
 	// Modifications ([]Amendment)
-	_, skip = excludes["Modifications"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Modifications)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -931,8 +844,7 @@ func (action *AssetModification) serialize() ([]byte, error) {
 	}
 
 	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
+	{
 		b, err := action.RefTxID.Serialize()
 		if err != nil {
 			return nil, err
@@ -949,19 +861,8 @@ func (action *AssetModification) serialize() ([]byte, error) {
 // write populates the fields in AssetModification from the byte slice
 func (action *AssetModification) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	{
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -970,24 +871,21 @@ func (action *AssetModification) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	{
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetRevision (uint32)
-	_, skip = excludes["AssetRevision"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetRevision); err != nil {
 			return 0, err
 		}
 	}
 
 	// Modifications ([]Amendment)
-	_, skip = excludes["Modifications"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -1004,8 +902,7 @@ func (action *AssetModification) write(b []byte) (int, error) {
 	}
 
 	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
+	{
 		if err := action.RefTxID.Write(buf); err != nil {
 			return 0, err
 		}
@@ -1086,76 +983,64 @@ func (action *ContractOffer) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *ContractOffer) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractName, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := write(buf, action.SupportingDocsFileType); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocs ([]byte)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.SupportingDocs, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.GoverningLaw, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.Jurisdiction, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		b, err := action.ContractExpiration.Serialize()
 		if err != nil {
 			return nil, err
@@ -1167,16 +1052,14 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractURI, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// Issuer (Entity)
-	_, skip = excludes["Issuer"]
-	if !skip {
+	{
 		b, err := action.Issuer.Serialize()
 		if err != nil {
 			return nil, err
@@ -1188,27 +1071,21 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 	}
 
 	// IssuerLogoURL (string)
-	_, skip = excludes["IssuerLogoURL"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.IssuerLogoURL, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractOperatorIncluded (bool)
-	_, skip = excludes["ContractOperatorIncluded"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractOperatorIncluded); err != nil {
 			return nil, err
-		}
-		if !action.ContractOperatorIncluded {
-			excludes["ContractOperator"] = true
 		}
 	}
 
 	// ContractOperator (Entity)
-	_, skip = excludes["ContractOperator"]
-	if !skip {
+	if action.ContractOperatorIncluded {
 		b, err := action.ContractOperator.Serialize()
 		if err != nil {
 			return nil, err
@@ -1220,24 +1097,21 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 	}
 
 	// ContractAuthFlags ([]byte)
-	_, skip = excludes["ContractAuthFlags"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.ContractAuthFlags, 16); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractFee (uint64)
-	_, skip = excludes["ContractFee"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractFee); err != nil {
 			return nil, err
 		}
 	}
 
 	// VotingSystems ([]VotingSystem)
-	_, skip = excludes["VotingSystems"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.VotingSystems)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -1254,32 +1128,28 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 	}
 
 	// RestrictedQtyAssets (uint64)
-	_, skip = excludes["RestrictedQtyAssets"]
-	if !skip {
+	{
 		if err := write(buf, action.RestrictedQtyAssets); err != nil {
 			return nil, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.IssuerProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.HolderProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// Registries ([]Registry)
-	_, skip = excludes["Registries"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Registries)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -1301,19 +1171,8 @@ func (action *ContractOffer) serialize() ([]byte, error) {
 // write populates the fields in ContractOffer from the byte slice
 func (action *ContractOffer) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		var err error
 		action.ContractName, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1322,16 +1181,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		var err error
 		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -1340,8 +1197,7 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		var err error
 		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1350,16 +1206,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := read(buf, &action.SupportingDocsFileType); err != nil {
 			return 0, err
 		}
 	}
 
 	// SupportingDocs ([]byte)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		var err error
 		action.SupportingDocs, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -1368,8 +1222,7 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		var err error
 		action.GoverningLaw, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -1378,8 +1231,7 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		var err error
 		action.Jurisdiction, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -1388,16 +1240,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		if err := action.ContractExpiration.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		var err error
 		action.ContractURI, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1406,16 +1256,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// Issuer (Entity)
-	_, skip = excludes["Issuer"]
-	if !skip {
+	{
 		if err := action.Issuer.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerLogoURL (string)
-	_, skip = excludes["IssuerLogoURL"]
-	if !skip {
+	{
 		var err error
 		action.IssuerLogoURL, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1424,27 +1272,21 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// ContractOperatorIncluded (bool)
-	_, skip = excludes["ContractOperatorIncluded"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractOperatorIncluded); err != nil {
 			return 0, err
-		}
-		if !action.ContractOperatorIncluded {
-			excludes["ContractOperator"] = true
 		}
 	}
 
 	// ContractOperator (Entity)
-	_, skip = excludes["ContractOperator"]
-	if !skip {
+	if action.ContractOperatorIncluded {
 		if err := action.ContractOperator.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractAuthFlags ([]byte)
-	_, skip = excludes["ContractAuthFlags"]
-	if !skip {
+	{
 		var err error
 		action.ContractAuthFlags, err = ReadVarBin(buf, 16)
 		if err != nil {
@@ -1453,16 +1295,14 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// ContractFee (uint64)
-	_, skip = excludes["ContractFee"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractFee); err != nil {
 			return 0, err
 		}
 	}
 
 	// VotingSystems ([]VotingSystem)
-	_, skip = excludes["VotingSystems"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -1479,32 +1319,28 @@ func (action *ContractOffer) write(b []byte) (int, error) {
 	}
 
 	// RestrictedQtyAssets (uint64)
-	_, skip = excludes["RestrictedQtyAssets"]
-	if !skip {
+	{
 		if err := read(buf, &action.RestrictedQtyAssets); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.IssuerProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.HolderProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// Registries ([]Registry)
-	_, skip = excludes["Registries"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -1611,76 +1447,64 @@ func (action *ContractFormation) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *ContractFormation) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractName, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := write(buf, action.SupportingDocsFileType); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocs ([]byte)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.SupportingDocs, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.GoverningLaw, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.Jurisdiction, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		b, err := action.ContractExpiration.Serialize()
 		if err != nil {
 			return nil, err
@@ -1692,16 +1516,14 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractURI, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// Issuer (Entity)
-	_, skip = excludes["Issuer"]
-	if !skip {
+	{
 		b, err := action.Issuer.Serialize()
 		if err != nil {
 			return nil, err
@@ -1713,27 +1535,21 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 	}
 
 	// IssuerLogoURL (string)
-	_, skip = excludes["IssuerLogoURL"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.IssuerLogoURL, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractOperatorIncluded (bool)
-	_, skip = excludes["ContractOperatorIncluded"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractOperatorIncluded); err != nil {
 			return nil, err
-		}
-		if !action.ContractOperatorIncluded {
-			excludes["ContractOperator"] = true
 		}
 	}
 
 	// ContractOperator (Entity)
-	_, skip = excludes["ContractOperator"]
-	if !skip {
+	if action.ContractOperatorIncluded {
 		b, err := action.ContractOperator.Serialize()
 		if err != nil {
 			return nil, err
@@ -1745,24 +1561,21 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 	}
 
 	// ContractAuthFlags ([]byte)
-	_, skip = excludes["ContractAuthFlags"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.ContractAuthFlags, 16); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractFee (uint64)
-	_, skip = excludes["ContractFee"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractFee); err != nil {
 			return nil, err
 		}
 	}
 
 	// VotingSystems ([]VotingSystem)
-	_, skip = excludes["VotingSystems"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.VotingSystems)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -1779,32 +1592,28 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 	}
 
 	// RestrictedQtyAssets (uint64)
-	_, skip = excludes["RestrictedQtyAssets"]
-	if !skip {
+	{
 		if err := write(buf, action.RestrictedQtyAssets); err != nil {
 			return nil, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.IssuerProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := write(buf, action.HolderProposal); err != nil {
 			return nil, err
 		}
 	}
 
 	// Registries ([]Registry)
-	_, skip = excludes["Registries"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Registries)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -1821,16 +1630,14 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractRevision); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -1847,19 +1654,8 @@ func (action *ContractFormation) serialize() ([]byte, error) {
 // write populates the fields in ContractFormation from the byte slice
 func (action *ContractFormation) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		var err error
 		action.ContractName, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1868,16 +1664,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		var err error
 		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -1886,8 +1680,7 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		var err error
 		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1896,16 +1689,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := read(buf, &action.SupportingDocsFileType); err != nil {
 			return 0, err
 		}
 	}
 
 	// SupportingDocs ([]byte)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		var err error
 		action.SupportingDocs, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -1914,8 +1705,7 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		var err error
 		action.GoverningLaw, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -1924,8 +1714,7 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		var err error
 		action.Jurisdiction, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -1934,16 +1723,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		if err := action.ContractExpiration.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		var err error
 		action.ContractURI, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1952,16 +1739,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// Issuer (Entity)
-	_, skip = excludes["Issuer"]
-	if !skip {
+	{
 		if err := action.Issuer.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerLogoURL (string)
-	_, skip = excludes["IssuerLogoURL"]
-	if !skip {
+	{
 		var err error
 		action.IssuerLogoURL, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -1970,27 +1755,21 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractOperatorIncluded (bool)
-	_, skip = excludes["ContractOperatorIncluded"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractOperatorIncluded); err != nil {
 			return 0, err
-		}
-		if !action.ContractOperatorIncluded {
-			excludes["ContractOperator"] = true
 		}
 	}
 
 	// ContractOperator (Entity)
-	_, skip = excludes["ContractOperator"]
-	if !skip {
+	if action.ContractOperatorIncluded {
 		if err := action.ContractOperator.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractAuthFlags ([]byte)
-	_, skip = excludes["ContractAuthFlags"]
-	if !skip {
+	{
 		var err error
 		action.ContractAuthFlags, err = ReadVarBin(buf, 16)
 		if err != nil {
@@ -1999,16 +1778,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractFee (uint64)
-	_, skip = excludes["ContractFee"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractFee); err != nil {
 			return 0, err
 		}
 	}
 
 	// VotingSystems ([]VotingSystem)
-	_, skip = excludes["VotingSystems"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -2025,32 +1802,28 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// RestrictedQtyAssets (uint64)
-	_, skip = excludes["RestrictedQtyAssets"]
-	if !skip {
+	{
 		if err := read(buf, &action.RestrictedQtyAssets); err != nil {
 			return 0, err
 		}
 	}
 
 	// IssuerProposal (bool)
-	_, skip = excludes["IssuerProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.IssuerProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// HolderProposal (bool)
-	_, skip = excludes["HolderProposal"]
-	if !skip {
+	{
 		if err := read(buf, &action.HolderProposal); err != nil {
 			return 0, err
 		}
 	}
 
 	// Registries ([]Registry)
-	_, skip = excludes["Registries"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -2067,16 +1840,14 @@ func (action *ContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractRevision); err != nil {
 			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -2156,36 +1927,29 @@ func (action *ContractAmendment) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *ContractAmendment) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// ChangeIssuerAddress (bool)
-	_, skip = excludes["ChangeIssuerAddress"]
-	if !skip {
+	{
 		if err := write(buf, action.ChangeIssuerAddress); err != nil {
 			return nil, err
 		}
 	}
 
 	// ChangeOperatorAddress (bool)
-	_, skip = excludes["ChangeOperatorAddress"]
-	if !skip {
+	{
 		if err := write(buf, action.ChangeOperatorAddress); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractRevision); err != nil {
 			return nil, err
 		}
 	}
 
 	// Amendments ([]Amendment)
-	_, skip = excludes["Amendments"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Amendments)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -2202,8 +1966,7 @@ func (action *ContractAmendment) serialize() ([]byte, error) {
 	}
 
 	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
+	{
 		b, err := action.RefTxID.Serialize()
 		if err != nil {
 			return nil, err
@@ -2220,43 +1983,29 @@ func (action *ContractAmendment) serialize() ([]byte, error) {
 // write populates the fields in ContractAmendment from the byte slice
 func (action *ContractAmendment) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// ChangeIssuerAddress (bool)
-	_, skip = excludes["ChangeIssuerAddress"]
-	if !skip {
+	{
 		if err := read(buf, &action.ChangeIssuerAddress); err != nil {
 			return 0, err
 		}
 	}
 
 	// ChangeOperatorAddress (bool)
-	_, skip = excludes["ChangeOperatorAddress"]
-	if !skip {
+	{
 		if err := read(buf, &action.ChangeOperatorAddress); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractRevision); err != nil {
 			return 0, err
 		}
 	}
 
 	// Amendments ([]Amendment)
-	_, skip = excludes["Amendments"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -2273,8 +2022,7 @@ func (action *ContractAmendment) write(b []byte) (int, error) {
 	}
 
 	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
+	{
 		if err := action.RefTxID.Write(buf); err != nil {
 			return 0, err
 		}
@@ -2343,20 +2091,15 @@ func (action *StaticContractFormation) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *StaticContractFormation) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractName, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractCode (ContractCode)
-	_, skip = excludes["ContractCode"]
-	if !skip {
+	{
 		b, err := action.ContractCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -2368,72 +2111,63 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := write(buf, action.BodyOfAgreementType); err != nil {
 			return nil, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.BodyOfAgreement, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractType, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := write(buf, action.SupportingDocsFileType); err != nil {
 			return nil, err
 		}
 	}
 
 	// SupportingDocs (string)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.SupportingDocs, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := write(buf, action.ContractRevision); err != nil {
 			return nil, err
 		}
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.GoverningLaw, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.Jurisdiction, 5); err != nil {
 			return nil, err
 		}
 	}
 
 	// EffectiveDate (Timestamp)
-	_, skip = excludes["EffectiveDate"]
-	if !skip {
+	{
 		b, err := action.EffectiveDate.Serialize()
 		if err != nil {
 			return nil, err
@@ -2445,8 +2179,7 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		b, err := action.ContractExpiration.Serialize()
 		if err != nil {
 			return nil, err
@@ -2458,16 +2191,14 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ContractURI, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// PrevRevTxID (TxId)
-	_, skip = excludes["PrevRevTxID"]
-	if !skip {
+	{
 		b, err := action.PrevRevTxID.Serialize()
 		if err != nil {
 			return nil, err
@@ -2479,8 +2210,7 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 	}
 
 	// Entities ([]Entity)
-	_, skip = excludes["Entities"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Entities)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -2502,19 +2232,8 @@ func (action *StaticContractFormation) serialize() ([]byte, error) {
 // write populates the fields in StaticContractFormation from the byte slice
 func (action *StaticContractFormation) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// ContractName (string)
-	_, skip = excludes["ContractName"]
-	if !skip {
+	{
 		var err error
 		action.ContractName, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -2523,24 +2242,21 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractCode (ContractCode)
-	_, skip = excludes["ContractCode"]
-	if !skip {
+	{
 		if err := action.ContractCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// BodyOfAgreementType (uint8)
-	_, skip = excludes["BodyOfAgreementType"]
-	if !skip {
+	{
 		if err := read(buf, &action.BodyOfAgreementType); err != nil {
 			return 0, err
 		}
 	}
 
 	// BodyOfAgreement ([]byte)
-	_, skip = excludes["BodyOfAgreement"]
-	if !skip {
+	{
 		var err error
 		action.BodyOfAgreement, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -2549,8 +2265,7 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractType (string)
-	_, skip = excludes["ContractType"]
-	if !skip {
+	{
 		var err error
 		action.ContractType, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -2559,16 +2274,14 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// SupportingDocsFileType (uint8)
-	_, skip = excludes["SupportingDocsFileType"]
-	if !skip {
+	{
 		if err := read(buf, &action.SupportingDocsFileType); err != nil {
 			return 0, err
 		}
 	}
 
 	// SupportingDocs (string)
-	_, skip = excludes["SupportingDocs"]
-	if !skip {
+	{
 		var err error
 		action.SupportingDocs, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -2577,16 +2290,14 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// ContractRevision (uint32)
-	_, skip = excludes["ContractRevision"]
-	if !skip {
+	{
 		if err := read(buf, &action.ContractRevision); err != nil {
 			return 0, err
 		}
 	}
 
 	// GoverningLaw (string)
-	_, skip = excludes["GoverningLaw"]
-	if !skip {
+	{
 		var err error
 		action.GoverningLaw, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -2595,8 +2306,7 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// Jurisdiction (string)
-	_, skip = excludes["Jurisdiction"]
-	if !skip {
+	{
 		var err error
 		action.Jurisdiction, err = ReadFixedChar(buf, 5)
 		if err != nil {
@@ -2605,24 +2315,21 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// EffectiveDate (Timestamp)
-	_, skip = excludes["EffectiveDate"]
-	if !skip {
+	{
 		if err := action.EffectiveDate.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractExpiration (Timestamp)
-	_, skip = excludes["ContractExpiration"]
-	if !skip {
+	{
 		if err := action.ContractExpiration.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ContractURI (string)
-	_, skip = excludes["ContractURI"]
-	if !skip {
+	{
 		var err error
 		action.ContractURI, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -2631,16 +2338,14 @@ func (action *StaticContractFormation) write(b []byte) (int, error) {
 	}
 
 	// PrevRevTxID (TxId)
-	_, skip = excludes["PrevRevTxID"]
-	if !skip {
+	{
 		if err := action.PrevRevTxID.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// Entities ([]Entity)
-	_, skip = excludes["Entities"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -2692,18 +2397,21 @@ func (action StaticContractFormation) String() string {
 // frozen, thawed or reconciled.
 type Order struct {
 	Header                 Header          `json:"header,omitempty"`                   // Common header data for all actions
+	ComplianceAction       byte            `json:"compliance_action,omitempty"`        // Freeze (F), Thaw (T), Confiscate (C), Reconcile (R)
 	AssetType              string          `json:"asset_type,omitempty"`               // eg. Share, Bond, Ticket
 	AssetCode              AssetCode       `json:"asset_code,omitempty"`               // 32 randomly generated bytes.  Each Asset Code should be unique.  However, an Asset Code is always linked to a Contract that is identified by the public address of the Contract wallet. The Asset Type + Asset Code = Asset Code.  An Asset Code is a human readable identifier that can be used in a similar way to a Bitcoin (BSV) address.
-	ComplianceAction       byte            `json:"compliance_action,omitempty"`        // Freeze (F), Thaw (T), Confiscate (C), Reconciliation (R)
-	TargetAddresses        []TargetAddress `json:"target_addresses,omitempty"`         //
-	DepositAddress         PublicKeyHash   `json:"deposit_address,omitempty"`          // The public address for confiscated tokens to be deposited in.  Null for Freeze, Thaw, actions. For Reconciliation actions the deposit address is who receives bitcoin.
+	TargetAddresses        []TargetAddress `json:"target_addresses,omitempty"`         // The holders and quantities that are effected by the order. For a contract or asset wide freeze only the contract address is specified. Zero quantities are invalid unless it is for the contract address in an asset wide or contract wide freeze. In a thaw order this field is not serialized, because the entire freeze from the FreezeTxId freeze action will be thawed.
+	FreezeTxId             TxId            `json:"freeze_tx_id,omitempty"`             // The tx id of the freeze action that is being thawed. Only serialized for thaw orders.
+	FreezePeriod           Timestamp       `json:"freeze_period,omitempty"`            // Used for a 'time out'.  Tokens are automatically unfrozen after the expiration timestamp without requiring a Thaw Action. Null value for Thaw, Confiscation and Reconciallitaion orders.
+	DepositAddress         PublicKeyHash   `json:"deposit_address,omitempty"`          // The public address for confiscated tokens to be deposited in.  Null for Freeze, Thaw, actions.
+	AuthorityIncluded      bool            `json:"authority_included,omitempty"`       // Specifies if an authority signature is included. For Reconcialitaion actions all authority signature related fields are skipped during serialization.
 	AuthorityName          string          `json:"authority_name,omitempty"`           // Length 0-255 bytes. Enforcement Authority Name (eg. Issuer, Queensland Police Service, Tokenized, etc.)
-	AuthorityPublicKey     string          `json:"authority_public_key,omitempty"`     // Length 0-255 bytes. Public Key associated with the Enforcement Authority
-	SignatureAlgorithm     uint8           `json:"signature_algorithm,omitempty"`      // Algorithm used for order signature. 0 = No Registry-signed Message, 1 = ECDSA+secp256k1
-	OrderSignature         []byte          `json:"order_signature,omitempty"`          // Length 0-255 bytes. Signature for a message that lists out the target addresses and deposit address. Signature of (Contract PKH, Asset Code, Compliance Action, Supporting Evidence Hash, Time Out Expiration, TargetAddress1, TargetAddress1Qty, TargetAddressX, TargetAddressXQty,...,DepositAddress)
+	AuthorityPublicKey     []byte          `json:"authority_public_key,omitempty"`     // Length 0-255 bytes. Public Key associated with the Enforcement Authority
+	SignatureAlgorithm     uint8           `json:"signature_algorithm,omitempty"`      // Algorithm used for order signature. Only valid value is currently 1 = ECDSA+secp256k1
+	OrderSignature         []byte          `json:"order_signature,omitempty"`          // Length 0-255 bytes. Signature for a message that lists out the target addresses and deposit address. Signature of (Contract PKH, Compliance Action, Authority Name, Asset Code, Supporting Evidence Hash, FreezePeriod, TargetAddresses, and DepositAddress)
 	SupportingEvidenceHash [32]byte        `json:"supporting_evidence_hash,omitempty"` // SHA-256: warrant, court order, etc.
 	RefTxs                 []byte          `json:"ref_txs,omitempty"`                  // The request/response actions that were dropped.  The entire txn for both actions is included as evidence that the actions were accepted into the mempool at one point and that the senders (token/Bitcoin) signed their intent to transfer.  The management of this record keeping is off-chain and managed by the issuer or operator to preserve the integrity of the state of the tokens. Only applicable for reconcilliation actions.  No subfield when F, T, R is selected as the Compliance Action subfield.
-	FreezePeriod           Timestamp       `json:"freeze_period,omitempty"`            // Used for a 'time out'.  Tokens are automatically unfrozen after the expiration timestamp without requiring a Thaw Action. Null value for Thaw, Confiscation and Reconciallitaion orders.
+	BitcoinDispersions     []QuantityIndex `json:"bitcoin_dispersions,omitempty"`      // Index of address in TargetAddresses and amount of bitcoin (in satoshis) they are receiving in exchange for their tokens.
 	Message                string          `json:"message,omitempty"`                  //
 }
 
@@ -2729,20 +2437,22 @@ func (action *Order) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Order) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
+	// ComplianceAction (byte)
+	{
+		if err := write(buf, action.ComplianceAction); err != nil {
+			return nil, err
+		}
+	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -2753,17 +2463,8 @@ func (action *Order) serialize() ([]byte, error) {
 		}
 	}
 
-	// ComplianceAction (byte)
-	_, skip = excludes["ComplianceAction"]
-	if !skip {
-		if err := write(buf, action.ComplianceAction); err != nil {
-			return nil, err
-		}
-	}
-
 	// TargetAddresses ([]TargetAddress)
-	_, skip = excludes["TargetAddresses"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		if err := WriteVariableSize(buf, uint64(len(action.TargetAddresses)), 16, 8); err != nil {
 			return nil, err
 		}
@@ -2779,10 +2480,9 @@ func (action *Order) serialize() ([]byte, error) {
 		}
 	}
 
-	// DepositAddress (PublicKeyHash)
-	_, skip = excludes["DepositAddress"]
-	if !skip {
-		b, err := action.DepositAddress.Serialize()
+	// FreezeTxId (TxId)
+	if action.ComplianceAction == 'T' {
+		b, err := action.FreezeTxId.Serialize()
 		if err != nil {
 			return nil, err
 		}
@@ -2792,57 +2492,8 @@ func (action *Order) serialize() ([]byte, error) {
 		}
 	}
 
-	// AuthorityName (string)
-	_, skip = excludes["AuthorityName"]
-	if !skip {
-		if err := WriteVarChar(buf, action.AuthorityName, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// AuthorityPublicKey (string)
-	_, skip = excludes["AuthorityPublicKey"]
-	if !skip {
-		if err := WriteVarChar(buf, action.AuthorityPublicKey, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// SignatureAlgorithm (uint8)
-	_, skip = excludes["SignatureAlgorithm"]
-	if !skip {
-		if err := write(buf, action.SignatureAlgorithm); err != nil {
-			return nil, err
-		}
-	}
-
-	// OrderSignature ([]byte)
-	_, skip = excludes["OrderSignature"]
-	if !skip {
-		if err := WriteVarBin(buf, action.OrderSignature, 8); err != nil {
-			return nil, err
-		}
-	}
-
-	// SupportingEvidenceHash ([32]byte)
-	_, skip = excludes["SupportingEvidenceHash"]
-	if !skip {
-		if err := write(buf, action.SupportingEvidenceHash); err != nil {
-			return nil, err
-		}
-	}
-
-	// RefTxs ([]byte)
-	_, skip = excludes["RefTxs"]
-	if !skip {
-		if err := WriteVarBin(buf, action.RefTxs, 32); err != nil {
-			return nil, err
-		}
-	}
-
 	// FreezePeriod (Timestamp)
-	_, skip = excludes["FreezePeriod"]
-	if !skip {
+	if action.ComplianceAction == 'F' {
 		b, err := action.FreezePeriod.Serialize()
 		if err != nil {
 			return nil, err
@@ -2853,9 +2504,86 @@ func (action *Order) serialize() ([]byte, error) {
 		}
 	}
 
+	// DepositAddress (PublicKeyHash)
+	if action.ComplianceAction == 'C' {
+		b, err := action.DepositAddress.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
+	// AuthorityIncluded (bool)
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'T' || action.ComplianceAction == 'C' {
+		if err := write(buf, action.AuthorityIncluded); err != nil {
+			return nil, err
+		}
+	}
+
+	// AuthorityName (string)
+	if action.AuthorityIncluded {
+		if err := WriteVarChar(buf, action.AuthorityName, 8); err != nil {
+			return nil, err
+		}
+	}
+
+	// AuthorityPublicKey ([]byte)
+	if action.AuthorityIncluded {
+		if err := WriteVarBin(buf, action.AuthorityPublicKey, 8); err != nil {
+			return nil, err
+		}
+	}
+
+	// SignatureAlgorithm (uint8)
+	if action.AuthorityIncluded {
+		if err := write(buf, action.SignatureAlgorithm); err != nil {
+			return nil, err
+		}
+	}
+
+	// OrderSignature ([]byte)
+	if action.AuthorityIncluded {
+		if err := WriteVarBin(buf, action.OrderSignature, 8); err != nil {
+			return nil, err
+		}
+	}
+
+	// SupportingEvidenceHash ([32]byte)
+	{
+		if err := write(buf, action.SupportingEvidenceHash); err != nil {
+			return nil, err
+		}
+	}
+
+	// RefTxs ([]byte)
+	if action.ComplianceAction == 'R' {
+		if err := WriteVarBin(buf, action.RefTxs, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	// BitcoinDispersions ([]QuantityIndex)
+	if action.ComplianceAction == 'R' {
+		if err := WriteVariableSize(buf, uint64(len(action.BitcoinDispersions)), 16, 8); err != nil {
+			return nil, err
+		}
+		for _, value := range action.BitcoinDispersions {
+			b, err := value.Serialize()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Message, 32); err != nil {
 			return nil, err
 		}
@@ -2867,19 +2595,15 @@ func (action *Order) serialize() ([]byte, error) {
 // write populates the fields in Order from the byte slice
 func (action *Order) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
+	// ComplianceAction (byte)
+	{
+		if err := read(buf, &action.ComplianceAction); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -2888,24 +2612,14 @@ func (action *Order) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
-	// ComplianceAction (byte)
-	_, skip = excludes["ComplianceAction"]
-	if !skip {
-		if err := read(buf, &action.ComplianceAction); err != nil {
-			return 0, err
-		}
-	}
-
 	// TargetAddresses ([]TargetAddress)
-	_, skip = excludes["TargetAddresses"]
-	if !skip {
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'C' || action.ComplianceAction == 'R' {
 		size, err := ReadVariableSize(buf, 16, 8)
 		if err != nil {
 			return 0, err
@@ -2921,17 +2635,36 @@ func (action *Order) write(b []byte) (int, error) {
 		}
 	}
 
+	// FreezeTxId (TxId)
+	if action.ComplianceAction == 'T' {
+		if err := action.FreezeTxId.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// FreezePeriod (Timestamp)
+	if action.ComplianceAction == 'F' {
+		if err := action.FreezePeriod.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
 	// DepositAddress (PublicKeyHash)
-	_, skip = excludes["DepositAddress"]
-	if !skip {
+	if action.ComplianceAction == 'C' {
 		if err := action.DepositAddress.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
+	// AuthorityIncluded (bool)
+	if action.ComplianceAction == 'F' || action.ComplianceAction == 'T' || action.ComplianceAction == 'C' {
+		if err := read(buf, &action.AuthorityIncluded); err != nil {
+			return 0, err
+		}
+	}
+
 	// AuthorityName (string)
-	_, skip = excludes["AuthorityName"]
-	if !skip {
+	if action.AuthorityIncluded {
 		var err error
 		action.AuthorityName, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -2939,27 +2672,24 @@ func (action *Order) write(b []byte) (int, error) {
 		}
 	}
 
-	// AuthorityPublicKey (string)
-	_, skip = excludes["AuthorityPublicKey"]
-	if !skip {
+	// AuthorityPublicKey ([]byte)
+	if action.AuthorityIncluded {
 		var err error
-		action.AuthorityPublicKey, err = ReadVarChar(buf, 8)
+		action.AuthorityPublicKey, err = ReadVarBin(buf, 8)
 		if err != nil {
 			return 0, err
 		}
 	}
 
 	// SignatureAlgorithm (uint8)
-	_, skip = excludes["SignatureAlgorithm"]
-	if !skip {
+	if action.AuthorityIncluded {
 		if err := read(buf, &action.SignatureAlgorithm); err != nil {
 			return 0, err
 		}
 	}
 
 	// OrderSignature ([]byte)
-	_, skip = excludes["OrderSignature"]
-	if !skip {
+	if action.AuthorityIncluded {
 		var err error
 		action.OrderSignature, err = ReadVarBin(buf, 8)
 		if err != nil {
@@ -2968,16 +2698,14 @@ func (action *Order) write(b []byte) (int, error) {
 	}
 
 	// SupportingEvidenceHash ([32]byte)
-	_, skip = excludes["SupportingEvidenceHash"]
-	if !skip {
+	{
 		if err := read(buf, &action.SupportingEvidenceHash); err != nil {
 			return 0, err
 		}
 	}
 
 	// RefTxs ([]byte)
-	_, skip = excludes["RefTxs"]
-	if !skip {
+	if action.ComplianceAction == 'R' {
 		var err error
 		action.RefTxs, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -2985,17 +2713,25 @@ func (action *Order) write(b []byte) (int, error) {
 		}
 	}
 
-	// FreezePeriod (Timestamp)
-	_, skip = excludes["FreezePeriod"]
-	if !skip {
-		if err := action.FreezePeriod.Write(buf); err != nil {
+	// BitcoinDispersions ([]QuantityIndex)
+	if action.ComplianceAction == 'R' {
+		size, err := ReadVariableSize(buf, 16, 8)
+		if err != nil {
 			return 0, err
+		}
+		action.BitcoinDispersions = make([]QuantityIndex, 0, size)
+		for i := uint64(0); i < size; i++ {
+			var newValue QuantityIndex
+			if err := newValue.Write(buf); err != nil {
+				return 0, err
+			}
+
+			action.BitcoinDispersions = append(action.BitcoinDispersions, newValue)
 		}
 	}
 
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		var err error
 		action.Message, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -3015,18 +2751,21 @@ func (action Order) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
+	vals = append(vals, fmt.Sprintf("ComplianceAction:%#+v", action.ComplianceAction))
 	vals = append(vals, fmt.Sprintf("AssetType:%#+v", action.AssetType))
 	vals = append(vals, fmt.Sprintf("AssetCode:%#+v", action.AssetCode))
-	vals = append(vals, fmt.Sprintf("ComplianceAction:%#+v", action.ComplianceAction))
 	vals = append(vals, fmt.Sprintf("TargetAddresses:%#+v", action.TargetAddresses))
+	vals = append(vals, fmt.Sprintf("FreezeTxId:%#+v", action.FreezeTxId))
+	vals = append(vals, fmt.Sprintf("FreezePeriod:%#+v", action.FreezePeriod))
 	vals = append(vals, fmt.Sprintf("DepositAddress:%#+v", action.DepositAddress))
+	vals = append(vals, fmt.Sprintf("AuthorityIncluded:%#+v", action.AuthorityIncluded))
 	vals = append(vals, fmt.Sprintf("AuthorityName:%#+v", action.AuthorityName))
-	vals = append(vals, fmt.Sprintf("AuthorityPublicKey:%#+v", action.AuthorityPublicKey))
+	vals = append(vals, fmt.Sprintf("AuthorityPublicKey:%#x", action.AuthorityPublicKey))
 	vals = append(vals, fmt.Sprintf("SignatureAlgorithm:%v", action.SignatureAlgorithm))
 	vals = append(vals, fmt.Sprintf("OrderSignature:%#x", action.OrderSignature))
 	vals = append(vals, fmt.Sprintf("SupportingEvidenceHash:%#+v", action.SupportingEvidenceHash))
 	vals = append(vals, fmt.Sprintf("RefTxs:%#x", action.RefTxs))
-	vals = append(vals, fmt.Sprintf("FreezePeriod:%#+v", action.FreezePeriod))
+	vals = append(vals, fmt.Sprintf("BitcoinDispersions:%#+v", action.BitcoinDispersions))
 	vals = append(vals, fmt.Sprintf("Message:%#+v", action.Message))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -3038,9 +2777,12 @@ func (action Order) String() string {
 // to the public blockchain for transparency. The Contract will not respond
 // to any actions requested by the frozen address.
 type Freeze struct {
-	Header    Header          `json:"header,omitempty"`    // Common header data for all actions
-	Addresses []PublicKeyHash `json:"addresses,omitempty"` // Addresses holding tokens to be frozen.
-	Timestamp Timestamp       `json:"timestamp,omitempty"` // Timestamp in nanoseconds of when the smart contract created the action.
+	Header       Header          `json:"header,omitempty"`        // Common header data for all actions
+	AssetType    string          `json:"asset_type,omitempty"`    // eg. Share, Bond, Ticket
+	AssetCode    AssetCode       `json:"asset_code,omitempty"`    // 32 randomly generated bytes.  Each Asset Code should be unique.  However, an Asset Code is always linked to a Contract that is identified by the public address of the Contract wallet. The Asset Type + Asset Code = Asset Code.  An Asset Code is a human readable identifier that can be used in a similar way to a Bitcoin (BSV) address.
+	Quantities   []QuantityIndex `json:"quantities,omitempty"`    // Indices to addresses in outputs and the quantities being frozen. If the only address is the contract address and the asset code is zeros, then it is a contract wide freeze. If the only address is the contract address and the asset code is specified, then it is an asset wide freeze.
+	FreezePeriod Timestamp       `json:"freeze_period,omitempty"` // Used for a 'time out'.  Tokens are automatically unfrozen after the expiration timestamp without requiring a Thaw Action.
+	Timestamp    Timestamp       `json:"timestamp,omitempty"`     // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -3065,16 +2807,31 @@ func (action *Freeze) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Freeze) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.Addresses)), 16, 8); err != nil {
+	// AssetType (string)
+	{
+		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
-		for _, value := range action.Addresses {
+	}
+
+	// AssetCode (AssetCode)
+	{
+		b, err := action.AssetCode.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
+		if err := WriteVariableSize(buf, uint64(len(action.Quantities)), 16, 8); err != nil {
+			return nil, err
+		}
+		for _, value := range action.Quantities {
 			b, err := value.Serialize()
 			if err != nil {
 				return nil, err
@@ -3086,9 +2843,20 @@ func (action *Freeze) serialize() ([]byte, error) {
 		}
 	}
 
+	// FreezePeriod (Timestamp)
+	{
+		b, err := action.FreezePeriod.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3105,37 +2873,48 @@ func (action *Freeze) serialize() ([]byte, error) {
 // write populates the fields in Freeze from the byte slice
 func (action *Freeze) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
+	// AssetType (string)
+	{
+		var err error
+		action.AssetType, err = ReadFixedChar(buf, 3)
+		if err != nil {
 			return 0, err
 		}
 	}
 
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
+	// AssetCode (AssetCode)
+	{
+		if err := action.AssetCode.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
 		size, err := ReadVariableSize(buf, 16, 8)
 		if err != nil {
 			return 0, err
 		}
-		action.Addresses = make([]PublicKeyHash, 0, size)
+		action.Quantities = make([]QuantityIndex, 0, size)
 		for i := uint64(0); i < size; i++ {
-			var newValue PublicKeyHash
+			var newValue QuantityIndex
 			if err := newValue.Write(buf); err != nil {
 				return 0, err
 			}
 
-			action.Addresses = append(action.Addresses, newValue)
+			action.Quantities = append(action.Quantities, newValue)
+		}
+	}
+
+	// FreezePeriod (Timestamp)
+	{
+		if err := action.FreezePeriod.Write(buf); err != nil {
+			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -3153,7 +2932,10 @@ func (action Freeze) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("Addresses:%#+v", action.Addresses))
+	vals = append(vals, fmt.Sprintf("AssetType:%#+v", action.AssetType))
+	vals = append(vals, fmt.Sprintf("AssetCode:%#+v", action.AssetCode))
+	vals = append(vals, fmt.Sprintf("Quantities:%#+v", action.Quantities))
+	vals = append(vals, fmt.Sprintf("FreezePeriod:%#+v", action.FreezePeriod))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -3163,10 +2945,9 @@ func (action Freeze) String() string {
 // legal requirements. The Alleged Offender's tokens will be unfrozen to
 // allow them to resume normal exchange and governance activities.
 type Thaw struct {
-	Header    Header          `json:"header,omitempty"`    // Common header data for all actions
-	Addresses []PublicKeyHash `json:"addresses,omitempty"` // Addresses holding tokens to be thawed.
-	RefTxID   TxId            `json:"ref_tx_id,omitempty"` // The related freeze action.
-	Timestamp Timestamp       `json:"timestamp,omitempty"` // Timestamp in nanoseconds of when the smart contract created the action.
+	Header     Header    `json:"header,omitempty"`       // Common header data for all actions
+	FreezeTxId TxId      `json:"freeze_tx_id,omitempty"` // The tx id of the freeze action that is being reversed.
+	Timestamp  Timestamp `json:"timestamp,omitempty"`    // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -3191,31 +2972,9 @@ func (action *Thaw) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Thaw) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.Addresses)), 16, 8); err != nil {
-			return nil, err
-		}
-		for _, value := range action.Addresses {
-			b, err := value.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
-		b, err := action.RefTxID.Serialize()
+	// FreezeTxId (TxId)
+	{
+		b, err := action.FreezeTxId.Serialize()
 		if err != nil {
 			return nil, err
 		}
@@ -3226,8 +2985,7 @@ func (action *Thaw) serialize() ([]byte, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3244,45 +3002,15 @@ func (action *Thaw) serialize() ([]byte, error) {
 // write populates the fields in Thaw from the byte slice
 func (action *Thaw) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
-		size, err := ReadVariableSize(buf, 16, 8)
-		if err != nil {
-			return 0, err
-		}
-		action.Addresses = make([]PublicKeyHash, 0, size)
-		for i := uint64(0); i < size; i++ {
-			var newValue PublicKeyHash
-			if err := newValue.Write(buf); err != nil {
-				return 0, err
-			}
-
-			action.Addresses = append(action.Addresses, newValue)
-		}
-	}
-
-	// RefTxID (TxId)
-	_, skip = excludes["RefTxID"]
-	if !skip {
-		if err := action.RefTxID.Write(buf); err != nil {
+	// FreezeTxId (TxId)
+	{
+		if err := action.FreezeTxId.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -3300,8 +3028,7 @@ func (action Thaw) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("Addresses:%#+v", action.Addresses))
-	vals = append(vals, fmt.Sprintf("RefTxID:%#+v", action.RefTxID))
+	vals = append(vals, fmt.Sprintf("FreezeTxId:%#+v", action.FreezeTxId))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -3311,8 +3038,10 @@ func (action Thaw) String() string {
 // obligations, legal and/or issuer requirements.
 type Confiscation struct {
 	Header     Header          `json:"header,omitempty"`      // Common header data for all actions
-	Addresses  []PublicKeyHash `json:"addresses,omitempty"`   // Addresses holding tokens to be confiscated.
-	DepositQty uint64          `json:"deposit_qty,omitempty"` // Custodian's token balance after confiscation.
+	AssetType  string          `json:"asset_type,omitempty"`  // eg. Share, Bond, Ticket
+	AssetCode  AssetCode       `json:"asset_code,omitempty"`  // 32 randomly generated bytes.  Each Asset Code should be unique.  However, an Asset Code is always linked to a Contract that is identified by the public address of the Contract wallet. The Asset Type + Asset Code = Asset Code.  An Asset Code is a human readable identifier that can be used in a similar way to a Bitcoin (BSV) address.
+	Quantities []QuantityIndex `json:"quantities,omitempty"`  // The holders effected by the confiscation and their balance remaining.
+	DepositQty uint64          `json:"deposit_qty,omitempty"` // Deposit address's token balance after confiscation.
 	Timestamp  Timestamp       `json:"timestamp,omitempty"`   // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
@@ -3338,16 +3067,31 @@ func (action *Confiscation) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Confiscation) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.Addresses)), 16, 8); err != nil {
+	// AssetType (string)
+	{
+		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
-		for _, value := range action.Addresses {
+	}
+
+	// AssetCode (AssetCode)
+	{
+		b, err := action.AssetCode.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
+		if err := WriteVariableSize(buf, uint64(len(action.Quantities)), 16, 8); err != nil {
+			return nil, err
+		}
+		for _, value := range action.Quantities {
 			b, err := value.Serialize()
 			if err != nil {
 				return nil, err
@@ -3360,16 +3104,14 @@ func (action *Confiscation) serialize() ([]byte, error) {
 	}
 
 	// DepositQty (uint64)
-	_, skip = excludes["DepositQty"]
-	if !skip {
+	{
 		if err := write(buf, action.DepositQty); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3386,45 +3128,48 @@ func (action *Confiscation) serialize() ([]byte, error) {
 // write populates the fields in Confiscation from the byte slice
 func (action *Confiscation) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
+	// AssetType (string)
+	{
+		var err error
+		action.AssetType, err = ReadFixedChar(buf, 3)
+		if err != nil {
 			return 0, err
 		}
 	}
 
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
+	// AssetCode (AssetCode)
+	{
+		if err := action.AssetCode.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
 		size, err := ReadVariableSize(buf, 16, 8)
 		if err != nil {
 			return 0, err
 		}
-		action.Addresses = make([]PublicKeyHash, 0, size)
+		action.Quantities = make([]QuantityIndex, 0, size)
 		for i := uint64(0); i < size; i++ {
-			var newValue PublicKeyHash
+			var newValue QuantityIndex
 			if err := newValue.Write(buf); err != nil {
 				return 0, err
 			}
 
-			action.Addresses = append(action.Addresses, newValue)
+			action.Quantities = append(action.Quantities, newValue)
 		}
 	}
 
 	// DepositQty (uint64)
-	_, skip = excludes["DepositQty"]
-	if !skip {
+	{
 		if err := read(buf, &action.DepositQty); err != nil {
 			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -3442,7 +3187,9 @@ func (action Confiscation) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("Addresses:%#+v", action.Addresses))
+	vals = append(vals, fmt.Sprintf("AssetType:%#+v", action.AssetType))
+	vals = append(vals, fmt.Sprintf("AssetCode:%#+v", action.AssetCode))
+	vals = append(vals, fmt.Sprintf("Quantities:%#+v", action.Quantities))
 	vals = append(vals, fmt.Sprintf("DepositQty:%v", action.DepositQty))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
@@ -3452,9 +3199,11 @@ func (action Confiscation) String() string {
 // Reconciliation Reconciliation Action - to be used at the direction of
 // the issuer to fix record keeping errors with bitcoin and token balances.
 type Reconciliation struct {
-	Header    Header          `json:"header,omitempty"`    // Common header data for all actions
-	Addresses []PublicKeyHash `json:"addresses,omitempty"` // Addresses holding tokens to be reconciled.
-	Timestamp Timestamp       `json:"timestamp,omitempty"` // Timestamp in nanoseconds of when the smart contract created the action.
+	Header     Header          `json:"header,omitempty"`     // Common header data for all actions
+	AssetType  string          `json:"asset_type,omitempty"` // eg. Share, Bond, Ticket
+	AssetCode  AssetCode       `json:"asset_code,omitempty"` // 32 randomly generated bytes.  Each Asset Code should be unique.  However, an Asset Code is always linked to a Contract that is identified by the public address of the Contract wallet. The Asset Type + Asset Code = Asset Code.  An Asset Code is a human readable identifier that can be used in a similar way to a Bitcoin (BSV) address.
+	Quantities []QuantityIndex `json:"quantities,omitempty"` // The holders effected by the reconciliation and their balance remaining.
+	Timestamp  Timestamp       `json:"timestamp,omitempty"`  // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -3479,16 +3228,31 @@ func (action *Reconciliation) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Reconciliation) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
-		if err := WriteVariableSize(buf, uint64(len(action.Addresses)), 16, 8); err != nil {
+	// AssetType (string)
+	{
+		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
-		for _, value := range action.Addresses {
+	}
+
+	// AssetCode (AssetCode)
+	{
+		b, err := action.AssetCode.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
+		if err := WriteVariableSize(buf, uint64(len(action.Quantities)), 16, 8); err != nil {
+			return nil, err
+		}
+		for _, value := range action.Quantities {
 			b, err := value.Serialize()
 			if err != nil {
 				return nil, err
@@ -3501,8 +3265,7 @@ func (action *Reconciliation) serialize() ([]byte, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3519,37 +3282,41 @@ func (action *Reconciliation) serialize() ([]byte, error) {
 // write populates the fields in Reconciliation from the byte slice
 func (action *Reconciliation) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
+	// AssetType (string)
+	{
+		var err error
+		action.AssetType, err = ReadFixedChar(buf, 3)
+		if err != nil {
 			return 0, err
 		}
 	}
 
-	// Addresses ([]PublicKeyHash)
-	_, skip = excludes["Addresses"]
-	if !skip {
+	// AssetCode (AssetCode)
+	{
+		if err := action.AssetCode.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// Quantities ([]QuantityIndex)
+	{
 		size, err := ReadVariableSize(buf, 16, 8)
 		if err != nil {
 			return 0, err
 		}
-		action.Addresses = make([]PublicKeyHash, 0, size)
+		action.Quantities = make([]QuantityIndex, 0, size)
 		for i := uint64(0); i < size; i++ {
-			var newValue PublicKeyHash
+			var newValue QuantityIndex
 			if err := newValue.Write(buf); err != nil {
 				return 0, err
 			}
 
-			action.Addresses = append(action.Addresses, newValue)
+			action.Quantities = append(action.Quantities, newValue)
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -3567,7 +3334,9 @@ func (action Reconciliation) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("Addresses:%#+v", action.Addresses))
+	vals = append(vals, fmt.Sprintf("AssetType:%#+v", action.AssetType))
+	vals = append(vals, fmt.Sprintf("AssetCode:%#+v", action.AssetCode))
+	vals = append(vals, fmt.Sprintf("Quantities:%#+v", action.Quantities))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -3616,40 +3385,29 @@ func (action *Proposal) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Proposal) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Initiator (uint8)
-	_, skip = excludes["Initiator"]
-	if !skip {
+	{
 		if err := write(buf, action.Initiator); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetSpecificVote (bool)
-	_, skip = excludes["AssetSpecificVote"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetSpecificVote); err != nil {
 			return nil, err
-		}
-		if !action.AssetSpecificVote {
-			excludes["AssetType"] = true
-			excludes["AssetCode"] = true
 		}
 	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.AssetSpecificVote {
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.AssetSpecificVote {
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -3661,27 +3419,21 @@ func (action *Proposal) serialize() ([]byte, error) {
 	}
 
 	// VoteSystem (uint8)
-	_, skip = excludes["VoteSystem"]
-	if !skip {
+	{
 		if err := write(buf, action.VoteSystem); err != nil {
 			return nil, err
 		}
 	}
 
 	// Specific (bool)
-	_, skip = excludes["Specific"]
-	if !skip {
+	{
 		if err := write(buf, action.Specific); err != nil {
 			return nil, err
-		}
-		if !action.Specific {
-			excludes["ProposedAmendments"] = true
 		}
 	}
 
 	// ProposedAmendments ([]Amendment)
-	_, skip = excludes["ProposedAmendments"]
-	if !skip {
+	if action.Specific {
 		if err := WriteVariableSize(buf, uint64(len(action.ProposedAmendments)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -3698,40 +3450,35 @@ func (action *Proposal) serialize() ([]byte, error) {
 	}
 
 	// VoteOptions (string)
-	_, skip = excludes["VoteOptions"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.VoteOptions, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// VoteMax (uint8)
-	_, skip = excludes["VoteMax"]
-	if !skip {
+	{
 		if err := write(buf, action.VoteMax); err != nil {
 			return nil, err
 		}
 	}
 
 	// ProposalDescription (string)
-	_, skip = excludes["ProposalDescription"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.ProposalDescription, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// ProposalDocumentHash ([32]byte)
-	_, skip = excludes["ProposalDocumentHash"]
-	if !skip {
+	{
 		if err := write(buf, action.ProposalDocumentHash); err != nil {
 			return nil, err
 		}
 	}
 
 	// VoteCutOffTimestamp (Timestamp)
-	_, skip = excludes["VoteCutOffTimestamp"]
-	if !skip {
+	{
 		b, err := action.VoteCutOffTimestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3748,39 +3495,22 @@ func (action *Proposal) serialize() ([]byte, error) {
 // write populates the fields in Proposal from the byte slice
 func (action *Proposal) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Initiator (uint8)
-	_, skip = excludes["Initiator"]
-	if !skip {
+	{
 		if err := read(buf, &action.Initiator); err != nil {
 			return 0, err
 		}
 	}
 
 	// AssetSpecificVote (bool)
-	_, skip = excludes["AssetSpecificVote"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetSpecificVote); err != nil {
 			return 0, err
-		}
-		if !action.AssetSpecificVote {
-			excludes["AssetType"] = true
-			excludes["AssetCode"] = true
 		}
 	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.AssetSpecificVote {
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -3789,35 +3519,28 @@ func (action *Proposal) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.AssetSpecificVote {
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// VoteSystem (uint8)
-	_, skip = excludes["VoteSystem"]
-	if !skip {
+	{
 		if err := read(buf, &action.VoteSystem); err != nil {
 			return 0, err
 		}
 	}
 
 	// Specific (bool)
-	_, skip = excludes["Specific"]
-	if !skip {
+	{
 		if err := read(buf, &action.Specific); err != nil {
 			return 0, err
-		}
-		if !action.Specific {
-			excludes["ProposedAmendments"] = true
 		}
 	}
 
 	// ProposedAmendments ([]Amendment)
-	_, skip = excludes["ProposedAmendments"]
-	if !skip {
+	if action.Specific {
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -3834,8 +3557,7 @@ func (action *Proposal) write(b []byte) (int, error) {
 	}
 
 	// VoteOptions (string)
-	_, skip = excludes["VoteOptions"]
-	if !skip {
+	{
 		var err error
 		action.VoteOptions, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -3844,16 +3566,14 @@ func (action *Proposal) write(b []byte) (int, error) {
 	}
 
 	// VoteMax (uint8)
-	_, skip = excludes["VoteMax"]
-	if !skip {
+	{
 		if err := read(buf, &action.VoteMax); err != nil {
 			return 0, err
 		}
 	}
 
 	// ProposalDescription (string)
-	_, skip = excludes["ProposalDescription"]
-	if !skip {
+	{
 		var err error
 		action.ProposalDescription, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -3862,16 +3582,14 @@ func (action *Proposal) write(b []byte) (int, error) {
 	}
 
 	// ProposalDocumentHash ([32]byte)
-	_, skip = excludes["ProposalDocumentHash"]
-	if !skip {
+	{
 		if err := read(buf, &action.ProposalDocumentHash); err != nil {
 			return 0, err
 		}
 	}
 
 	// VoteCutOffTimestamp (Timestamp)
-	_, skip = excludes["VoteCutOffTimestamp"]
-	if !skip {
+	{
 		if err := action.VoteCutOffTimestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -3934,12 +3652,8 @@ func (action *Vote) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Vote) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -3956,19 +3670,8 @@ func (action *Vote) serialize() ([]byte, error) {
 // write populates the fields in Vote from the byte slice
 func (action *Vote) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -4022,12 +3725,8 @@ func (action *BallotCast) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *BallotCast) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		b, err := action.VoteTxId.Serialize()
 		if err != nil {
 			return nil, err
@@ -4039,8 +3738,7 @@ func (action *BallotCast) serialize() ([]byte, error) {
 	}
 
 	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Vote, 8); err != nil {
 			return nil, err
 		}
@@ -4052,27 +3750,15 @@ func (action *BallotCast) serialize() ([]byte, error) {
 // write populates the fields in BallotCast from the byte slice
 func (action *BallotCast) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		if err := action.VoteTxId.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
+	{
 		var err error
 		action.Vote, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -4132,12 +3818,8 @@ func (action *BallotCounted) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *BallotCounted) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		b, err := action.VoteTxId.Serialize()
 		if err != nil {
 			return nil, err
@@ -4149,24 +3831,21 @@ func (action *BallotCounted) serialize() ([]byte, error) {
 	}
 
 	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Vote, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// Quantity (uint64)
-	_, skip = excludes["Quantity"]
-	if !skip {
+	{
 		if err := write(buf, action.Quantity); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -4183,27 +3862,15 @@ func (action *BallotCounted) serialize() ([]byte, error) {
 // write populates the fields in BallotCounted from the byte slice
 func (action *BallotCounted) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		if err := action.VoteTxId.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// Vote (string)
-	_, skip = excludes["Vote"]
-	if !skip {
+	{
 		var err error
 		action.Vote, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -4212,16 +3879,14 @@ func (action *BallotCounted) write(b []byte) (int, error) {
 	}
 
 	// Quantity (uint64)
-	_, skip = excludes["Quantity"]
-	if !skip {
+	{
 		if err := read(buf, &action.Quantity); err != nil {
 			return 0, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -4285,32 +3950,22 @@ func (action *Result) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Result) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// AssetSpecificVote (bool)
-	_, skip = excludes["AssetSpecificVote"]
-	if !skip {
+	{
 		if err := write(buf, action.AssetSpecificVote); err != nil {
 			return nil, err
-		}
-		if !action.AssetSpecificVote {
-			excludes["AssetType"] = true
-			excludes["AssetCode"] = true
 		}
 	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.AssetSpecificVote {
 		if err := WriteFixedChar(buf, action.AssetType, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.AssetSpecificVote {
 		b, err := action.AssetCode.Serialize()
 		if err != nil {
 			return nil, err
@@ -4322,19 +3977,14 @@ func (action *Result) serialize() ([]byte, error) {
 	}
 
 	// Specific (bool)
-	_, skip = excludes["Specific"]
-	if !skip {
+	{
 		if err := write(buf, action.Specific); err != nil {
 			return nil, err
-		}
-		if !action.Specific {
-			excludes["ProposedAmendments"] = true
 		}
 	}
 
 	// ProposedAmendments ([]Amendment)
-	_, skip = excludes["ProposedAmendments"]
-	if !skip {
+	if action.Specific {
 		if err := WriteVariableSize(buf, uint64(len(action.ProposedAmendments)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -4351,8 +4001,7 @@ func (action *Result) serialize() ([]byte, error) {
 	}
 
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		b, err := action.VoteTxId.Serialize()
 		if err != nil {
 			return nil, err
@@ -4364,8 +4013,7 @@ func (action *Result) serialize() ([]byte, error) {
 	}
 
 	// OptionTally ([]uint64)
-	_, skip = excludes["OptionTally"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.OptionTally)), 8, 8); err != nil {
 			return nil, err
 		}
@@ -4377,16 +4025,14 @@ func (action *Result) serialize() ([]byte, error) {
 	}
 
 	// Result (string)
-	_, skip = excludes["Result"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Result, 8); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -4403,31 +4049,15 @@ func (action *Result) serialize() ([]byte, error) {
 // write populates the fields in Result from the byte slice
 func (action *Result) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// AssetSpecificVote (bool)
-	_, skip = excludes["AssetSpecificVote"]
-	if !skip {
+	{
 		if err := read(buf, &action.AssetSpecificVote); err != nil {
 			return 0, err
-		}
-		if !action.AssetSpecificVote {
-			excludes["AssetType"] = true
-			excludes["AssetCode"] = true
 		}
 	}
 
 	// AssetType (string)
-	_, skip = excludes["AssetType"]
-	if !skip {
+	if action.AssetSpecificVote {
 		var err error
 		action.AssetType, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -4436,27 +4066,21 @@ func (action *Result) write(b []byte) (int, error) {
 	}
 
 	// AssetCode (AssetCode)
-	_, skip = excludes["AssetCode"]
-	if !skip {
+	if action.AssetSpecificVote {
 		if err := action.AssetCode.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// Specific (bool)
-	_, skip = excludes["Specific"]
-	if !skip {
+	{
 		if err := read(buf, &action.Specific); err != nil {
 			return 0, err
-		}
-		if !action.Specific {
-			excludes["ProposedAmendments"] = true
 		}
 	}
 
 	// ProposedAmendments ([]Amendment)
-	_, skip = excludes["ProposedAmendments"]
-	if !skip {
+	if action.Specific {
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -4473,16 +4097,14 @@ func (action *Result) write(b []byte) (int, error) {
 	}
 
 	// VoteTxId (TxId)
-	_, skip = excludes["VoteTxId"]
-	if !skip {
+	{
 		if err := action.VoteTxId.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// OptionTally ([]uint64)
-	_, skip = excludes["OptionTally"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 8, 8)
 		if err != nil {
 			return 0, err
@@ -4494,8 +4116,7 @@ func (action *Result) write(b []byte) (int, error) {
 	}
 
 	// Result (string)
-	_, skip = excludes["Result"]
-	if !skip {
+	{
 		var err error
 		action.Result, err = ReadVarChar(buf, 8)
 		if err != nil {
@@ -4504,8 +4125,7 @@ func (action *Result) write(b []byte) (int, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -4573,12 +4193,8 @@ func (action *Message) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Message) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// AddressIndexes ([]uint16)
-	_, skip = excludes["AddressIndexes"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.AddressIndexes)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -4590,16 +4206,14 @@ func (action *Message) serialize() ([]byte, error) {
 	}
 
 	// MessageType (string)
-	_, skip = excludes["MessageType"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.MessageType, 4); err != nil {
 			return nil, err
 		}
 	}
 
 	// MessagePayload ([]byte)
-	_, skip = excludes["MessagePayload"]
-	if !skip {
+	{
 		if err := WriteVarBin(buf, action.MessagePayload, 32); err != nil {
 			return nil, err
 		}
@@ -4611,19 +4225,8 @@ func (action *Message) serialize() ([]byte, error) {
 // write populates the fields in Message from the byte slice
 func (action *Message) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// AddressIndexes ([]uint16)
-	_, skip = excludes["AddressIndexes"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -4635,8 +4238,7 @@ func (action *Message) write(b []byte) (int, error) {
 	}
 
 	// MessageType (string)
-	_, skip = excludes["MessageType"]
-	if !skip {
+	{
 		var err error
 		action.MessageType, err = ReadFixedChar(buf, 4)
 		if err != nil {
@@ -4645,8 +4247,7 @@ func (action *Message) write(b []byte) (int, error) {
 	}
 
 	// MessagePayload ([]byte)
-	_, skip = excludes["MessagePayload"]
-	if !skip {
+	{
 		var err error
 		action.MessagePayload, err = ReadVarBin(buf, 32)
 		if err != nil {
@@ -4721,20 +4322,15 @@ func (action *Rejection) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Rejection) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// QtyReceivingAddresses (uint8)
-	_, skip = excludes["QtyReceivingAddresses"]
-	if !skip {
+	{
 		if err := write(buf, action.QtyReceivingAddresses); err != nil {
 			return nil, err
 		}
 	}
 
 	// AddressIndexes ([]uint16)
-	_, skip = excludes["AddressIndexes"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.AddressIndexes)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -4746,24 +4342,21 @@ func (action *Rejection) serialize() ([]byte, error) {
 	}
 
 	// RejectionType (uint8)
-	_, skip = excludes["RejectionType"]
-	if !skip {
+	{
 		if err := write(buf, action.RejectionType); err != nil {
 			return nil, err
 		}
 	}
 
 	// MessagePayload (string)
-	_, skip = excludes["MessagePayload"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.MessagePayload, 32); err != nil {
 			return nil, err
 		}
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -4780,27 +4373,15 @@ func (action *Rejection) serialize() ([]byte, error) {
 // write populates the fields in Rejection from the byte slice
 func (action *Rejection) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// QtyReceivingAddresses (uint8)
-	_, skip = excludes["QtyReceivingAddresses"]
-	if !skip {
+	{
 		if err := read(buf, &action.QtyReceivingAddresses); err != nil {
 			return 0, err
 		}
 	}
 
 	// AddressIndexes ([]uint16)
-	_, skip = excludes["AddressIndexes"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -4812,16 +4393,14 @@ func (action *Rejection) write(b []byte) (int, error) {
 	}
 
 	// RejectionType (uint8)
-	_, skip = excludes["RejectionType"]
-	if !skip {
+	{
 		if err := read(buf, &action.RejectionType); err != nil {
 			return 0, err
 		}
 	}
 
 	// MessagePayload (string)
-	_, skip = excludes["MessagePayload"]
-	if !skip {
+	{
 		var err error
 		action.MessagePayload, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -4830,8 +4409,7 @@ func (action *Rejection) write(b []byte) (int, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}
@@ -4886,12 +4464,8 @@ func (action *Establishment) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Establishment) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Message, 32); err != nil {
 			return nil, err
 		}
@@ -4903,19 +4477,8 @@ func (action *Establishment) serialize() ([]byte, error) {
 // write populates the fields in Establishment from the byte slice
 func (action *Establishment) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		var err error
 		action.Message, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -4968,12 +4531,8 @@ func (action *Addition) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Addition) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Message, 32); err != nil {
 			return nil, err
 		}
@@ -4985,19 +4544,8 @@ func (action *Addition) serialize() ([]byte, error) {
 // write populates the fields in Addition from the byte slice
 func (action *Addition) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		var err error
 		action.Message, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -5050,12 +4598,8 @@ func (action *Alteration) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Alteration) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Message, 32); err != nil {
 			return nil, err
 		}
@@ -5067,19 +4611,8 @@ func (action *Alteration) serialize() ([]byte, error) {
 // write populates the fields in Alteration from the byte slice
 func (action *Alteration) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		var err error
 		action.Message, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -5132,12 +4665,8 @@ func (action *Removal) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Removal) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		if err := WriteVarChar(buf, action.Message, 32); err != nil {
 			return nil, err
 		}
@@ -5149,19 +4678,8 @@ func (action *Removal) serialize() ([]byte, error) {
 // write populates the fields in Removal from the byte slice
 func (action *Removal) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Message (string)
-	_, skip = excludes["Message"]
-	if !skip {
+	{
 		var err error
 		action.Message, err = ReadVarChar(buf, 32)
 		if err != nil {
@@ -5227,12 +4745,8 @@ func (action *Transfer) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Transfer) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Assets ([]AssetTransfer)
-	_, skip = excludes["Assets"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Assets)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -5249,8 +4763,7 @@ func (action *Transfer) serialize() ([]byte, error) {
 	}
 
 	// OfferExpiry (Timestamp)
-	_, skip = excludes["OfferExpiry"]
-	if !skip {
+	{
 		b, err := action.OfferExpiry.Serialize()
 		if err != nil {
 			return nil, err
@@ -5262,32 +4775,28 @@ func (action *Transfer) serialize() ([]byte, error) {
 	}
 
 	// ExchangeFeeCurrency (string)
-	_, skip = excludes["ExchangeFeeCurrency"]
-	if !skip {
+	{
 		if err := WriteFixedChar(buf, action.ExchangeFeeCurrency, 3); err != nil {
 			return nil, err
 		}
 	}
 
 	// ExchangeFeeVar (float32)
-	_, skip = excludes["ExchangeFeeVar"]
-	if !skip {
+	{
 		if err := write(buf, action.ExchangeFeeVar); err != nil {
 			return nil, err
 		}
 	}
 
 	// ExchangeFeeFixed (float32)
-	_, skip = excludes["ExchangeFeeFixed"]
-	if !skip {
+	{
 		if err := write(buf, action.ExchangeFeeFixed); err != nil {
 			return nil, err
 		}
 	}
 
 	// ExchangeFeeAddress (PublicKeyHash)
-	_, skip = excludes["ExchangeFeeAddress"]
-	if !skip {
+	{
 		b, err := action.ExchangeFeeAddress.Serialize()
 		if err != nil {
 			return nil, err
@@ -5304,19 +4813,8 @@ func (action *Transfer) serialize() ([]byte, error) {
 // write populates the fields in Transfer from the byte slice
 func (action *Transfer) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Assets ([]AssetTransfer)
-	_, skip = excludes["Assets"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -5333,16 +4831,14 @@ func (action *Transfer) write(b []byte) (int, error) {
 	}
 
 	// OfferExpiry (Timestamp)
-	_, skip = excludes["OfferExpiry"]
-	if !skip {
+	{
 		if err := action.OfferExpiry.Write(buf); err != nil {
 			return 0, err
 		}
 	}
 
 	// ExchangeFeeCurrency (string)
-	_, skip = excludes["ExchangeFeeCurrency"]
-	if !skip {
+	{
 		var err error
 		action.ExchangeFeeCurrency, err = ReadFixedChar(buf, 3)
 		if err != nil {
@@ -5351,24 +4847,21 @@ func (action *Transfer) write(b []byte) (int, error) {
 	}
 
 	// ExchangeFeeVar (float32)
-	_, skip = excludes["ExchangeFeeVar"]
-	if !skip {
+	{
 		if err := read(buf, &action.ExchangeFeeVar); err != nil {
 			return 0, err
 		}
 	}
 
 	// ExchangeFeeFixed (float32)
-	_, skip = excludes["ExchangeFeeFixed"]
-	if !skip {
+	{
 		if err := read(buf, &action.ExchangeFeeFixed); err != nil {
 			return 0, err
 		}
 	}
 
 	// ExchangeFeeAddress (PublicKeyHash)
-	_, skip = excludes["ExchangeFeeAddress"]
-	if !skip {
+	{
 		if err := action.ExchangeFeeAddress.Write(buf); err != nil {
 			return 0, err
 		}
@@ -5426,12 +4919,8 @@ func (action *Settlement) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Settlement) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	excludes := make(map[string]bool)
-	var skip bool
-
 	// Assets ([]AssetSettlement)
-	_, skip = excludes["Assets"]
-	if !skip {
+	{
 		if err := WriteVariableSize(buf, uint64(len(action.Assets)), 0, 8); err != nil {
 			return nil, err
 		}
@@ -5448,8 +4937,7 @@ func (action *Settlement) serialize() ([]byte, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		b, err := action.Timestamp.Serialize()
 		if err != nil {
 			return nil, err
@@ -5466,19 +4954,8 @@ func (action *Settlement) serialize() ([]byte, error) {
 // write populates the fields in Settlement from the byte slice
 func (action *Settlement) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	excludes := make(map[string]bool)
-	var skip bool
-	// Header (Header)
-	_, skip = excludes["Header"]
-	if !skip {
-		if err := action.Header.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
 	// Assets ([]AssetSettlement)
-	_, skip = excludes["Assets"]
-	if !skip {
+	{
 		size, err := ReadVariableSize(buf, 0, 8)
 		if err != nil {
 			return 0, err
@@ -5495,8 +4972,7 @@ func (action *Settlement) write(b []byte) (int, error) {
 	}
 
 	// Timestamp (Timestamp)
-	_, skip = excludes["Timestamp"]
-	if !skip {
+	{
 		if err := action.Timestamp.Write(buf); err != nil {
 			return 0, err
 		}

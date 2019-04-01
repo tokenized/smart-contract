@@ -6,6 +6,7 @@ var (
 		RejectionCodeMalformed:                  []byte("Malformed Request"),
 		RejectionCodeContractAddress:            []byte("Contract Address"),
 		RejectionCodeIssuerAddress:              []byte("Issuer Address"),
+		RejectionCodeOperatorAddress:            []byte("Operator Address"),
 		RejectionCodeDuplicateAssetCode:         []byte("Duplicate Asset Code"),
 		RejectionCodeFixedQuantity:              []byte("Fixed Quantity"),
 		RejectionCodeContractExists:             []byte("Contract Exists"),
@@ -14,7 +15,6 @@ var (
 		RejectionCodeContractAuthFlags:          []byte("Contract Auth Flags"),
 		RejectionCodeAssetAuthFlags:             []byte("Asset Auth Flags"),
 		RejectionCodeContractExpiration:         []byte("Contract Expiration"),
-		RejectionCodeContractUpdate:             []byte("Contract Update"),
 		RejectionCodeVoteExists:                 []byte("Vote Exists"),
 		RejectionCodeVoteNotFound:               []byte("Vote Not Found"),
 		RejectionCodeVoteClosed:                 []byte("Vote Closed"),
@@ -31,5 +31,6 @@ var (
 		RejectionCodeContractMissingNewIssuer:   []byte("Contract Issuer Change Missing"),
 		RejectionCodeContractMissingNewOperator: []byte("Contract Operator Change Missing"),
 		RejectionCodeInvalidProposal:            []byte("Invalid Proposal"),
+		RejectionCodeInvalidSig:                 []byte("Invalid Signature"),
 	}
 )

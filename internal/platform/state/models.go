@@ -35,6 +35,7 @@ type Contract struct {
 	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
 	Registries             []protocol.Registry     `json:"registries,omitempty"`
+	FreezePeriod           protocol.Timestamp      `json:"freeze_period,omitempty"`
 
 	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`
 }
@@ -46,18 +47,19 @@ type Asset struct {
 	UpdatedAt protocol.Timestamp `json:"updated_at,omitempty"`
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
-	AssetType                   string          `json:"asset_type,omitempty"`
-	AssetAuthFlags              []byte          `json:"asset_auth_flags,omitempty"`
-	TransfersPermitted          bool            `json:"transfers_permitted,omitempty"`
-	TradeRestrictions           protocol.Polity `json:"trade_restrictions,omitempty"`
-	EnforcementOrdersPermitted  bool            `json:"enforcement_orders_permitted,omitempty"`
-	VotingRights                bool            `json:"voting_rights,omitempty"`
-	VoteMultiplier              uint8           `json:"vote_multiplier,omitempty"`
-	IssuerProposal              bool            `json:"issuer_proposal,omitempty"`
-	HolderProposal              bool            `json:"holder_proposal,omitempty"`
-	AssetModificationGovernance bool            `json:"asset_modification_governance,omitempty"`
-	TokenQty                    uint64          `json:"token_qty,omitempty"`
-	AssetPayload                []byte          `json:"asset_payload,omitempty"`
+	AssetType                   string             `json:"asset_type,omitempty"`
+	AssetAuthFlags              []byte             `json:"asset_auth_flags,omitempty"`
+	TransfersPermitted          bool               `json:"transfers_permitted,omitempty"`
+	TradeRestrictions           protocol.Polity    `json:"trade_restrictions,omitempty"`
+	EnforcementOrdersPermitted  bool               `json:"enforcement_orders_permitted,omitempty"`
+	VotingRights                bool               `json:"voting_rights,omitempty"`
+	VoteMultiplier              uint8              `json:"vote_multiplier,omitempty"`
+	IssuerProposal              bool               `json:"issuer_proposal,omitempty"`
+	HolderProposal              bool               `json:"holder_proposal,omitempty"`
+	AssetModificationGovernance bool               `json:"asset_modification_governance,omitempty"`
+	TokenQty                    uint64             `json:"token_qty,omitempty"`
+	AssetPayload                []byte             `json:"asset_payload,omitempty"`
+	FreezePeriod                protocol.Timestamp `json:"freeze_period,omitempty"`
 
 	Holdings []Holding `json:"holdings,omitempty"`
 }
@@ -67,10 +69,11 @@ type Holding struct {
 	Balance         uint64                 `json:"balance,omit_empty"`
 	HoldingStatuses []HoldingStatus        `json:"order_status,omitempty"`
 	CreatedAt       protocol.Timestamp     `json:"created_at,omit_empty"`
+	UpdatedAt       protocol.Timestamp     `json:"updated_at,omitempty"`
 }
 
 type HoldingStatus struct {
-	Code    string             `json:"code,omit_empty"`
+	Code    byte               `json:"code,omit_empty"`
 	Expires protocol.Timestamp `json:"expires,omitempty"`
 	Balance uint64             `json:"balance,omit_empty"`
 	TxId    protocol.TxId      `json:"tx_id,omit_empty"`

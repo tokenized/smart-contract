@@ -46,7 +46,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retreive contract")
 	}
 
 	// Verify first two outputs are to contract
@@ -56,18 +56,16 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientValue)
 	}
 
-	var senderPKH *protocol.PublicKeyHash
+	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 
 	// Check if sender is allowed to make proposal
 	if msg.Initiator == 0 { // Issuer Proposal
-		if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) &&
-			!bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.OperatorPKH.Bytes()) {
+		if !contract.IsOperator(ctx, ct, senderPKH) {
 			logger.Warn(ctx, "%s : Initiator PKH is not issuer or operator : %s", v.TraceID, contractPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeIssuerAddress)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
 		}
 	} else if msg.Initiator == 1 { // Holder Proposal
 		// Sender must hold balance of at least one asset
-		senderPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, senderPKH) {
 			logger.Warn(ctx, "%s : Sender holds no assets : %s %s", v.TraceID, contractPKH.String(), senderPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientAssets)

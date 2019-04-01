@@ -66,6 +66,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	e := Enforcement{
 		MasterDB: masterDB,
 		Config:   config,
+		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeOrder, e.OrderRequest)

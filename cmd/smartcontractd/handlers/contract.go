@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -141,13 +142,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retreive contract")
 	}
 
-	// Contract could not be found
-	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr.String())
-		return node.ErrNoResponse
+	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	if !contract.IsOperator(ctx, ct, requestorPKH) {
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, contractAddr.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
@@ -257,8 +258,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		logger.Warn(ctx, "%s : Response not from contract : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractAddress)
+		return fmt.Errorf("Contract formation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
 	contractName := msg.ContractName

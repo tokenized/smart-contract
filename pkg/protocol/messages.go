@@ -73,31 +73,34 @@ func (action *PublicMessage) Serialize() ([]byte, error) {
 
 	// Version (uint8)
 	// fmt.Printf("Serializing Version\n")
-	if err := write(buf, action.Version); err != nil {
-		return nil, err
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Version : buf len %d\n", buf.Len())
 
 	// Timestamp (Timestamp)
 	// fmt.Printf("Serializing Timestamp\n")
 	{
-		b, err := action.Timestamp.Serialize()
-		if err != nil {
-			return nil, err
-		}
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
 
-		if err := write(buf, b); err != nil {
-			return nil, err
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
 		}
 	}
-	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
 	// PublicMessage (string)
 	// fmt.Printf("Serializing PublicMessage\n")
-	if err := WriteVarChar(buf, action.PublicMessage, 32); err != nil {
-		return nil, err
+	{
+		if err := WriteVarChar(buf, action.PublicMessage, 32); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized PublicMessage : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -108,23 +111,24 @@ func (action *PublicMessage) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
-	// fmt.Printf("Reading Version : %d bytes remaining\n", buf.Len())
-	if err := read(buf, &action.Version); err != nil {
-		return 0, err
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
 
 	// Timestamp (Timestamp)
-	// fmt.Printf("Reading Timestamp : %d bytes remaining\n", buf.Len())
-	if err := action.Timestamp.Write(buf); err != nil {
-		return 0, err
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
 	// PublicMessage (string)
-	// fmt.Printf("Reading PublicMessage : %d bytes remaining\n", buf.Len())
 	{
 		var err error
 		action.PublicMessage, err = ReadVarChar(buf, 32)
@@ -187,31 +191,34 @@ func (action *PrivateMessage) Serialize() ([]byte, error) {
 
 	// Version (uint8)
 	// fmt.Printf("Serializing Version\n")
-	if err := write(buf, action.Version); err != nil {
-		return nil, err
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Version : buf len %d\n", buf.Len())
 
 	// Timestamp (Timestamp)
 	// fmt.Printf("Serializing Timestamp\n")
 	{
-		b, err := action.Timestamp.Serialize()
-		if err != nil {
-			return nil, err
-		}
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
 
-		if err := write(buf, b); err != nil {
-			return nil, err
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
 		}
 	}
-	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
 	// PrivateMessage ([]byte)
 	// fmt.Printf("Serializing PrivateMessage\n")
-	if err := WriteVarBin(buf, action.PrivateMessage, 32); err != nil {
-		return nil, err
+	{
+		if err := WriteVarBin(buf, action.PrivateMessage, 32); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized PrivateMessage : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -222,23 +229,24 @@ func (action *PrivateMessage) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
-	// fmt.Printf("Reading Version : %d bytes remaining\n", buf.Len())
-	if err := read(buf, &action.Version); err != nil {
-		return 0, err
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
 
 	// Timestamp (Timestamp)
-	// fmt.Printf("Reading Timestamp : %d bytes remaining\n", buf.Len())
-	if err := action.Timestamp.Write(buf); err != nil {
-		return 0, err
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
 	// PrivateMessage ([]byte)
-	// fmt.Printf("Reading PrivateMessage : %d bytes remaining\n", buf.Len())
 	{
 		var err error
 		action.PrivateMessage, err = ReadVarBin(buf, 32)
@@ -313,45 +321,49 @@ func (action *Offer) Serialize() ([]byte, error) {
 
 	// Version (uint8)
 	// fmt.Printf("Serializing Version\n")
-	if err := write(buf, action.Version); err != nil {
-		return nil, err
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Version : buf len %d\n", buf.Len())
 
 	// Timestamp (Timestamp)
 	// fmt.Printf("Serializing Timestamp\n")
 	{
-		b, err := action.Timestamp.Serialize()
-		if err != nil {
-			return nil, err
-		}
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
 
-		if err := write(buf, b); err != nil {
-			return nil, err
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
 		}
 	}
-	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
 	// RefTxId (TxId)
 	// fmt.Printf("Serializing RefTxId\n")
 	{
-		b, err := action.RefTxId.Serialize()
-		if err != nil {
-			return nil, err
-		}
+		{
+			b, err := action.RefTxId.Serialize()
+			if err != nil {
+				return nil, err
+			}
 
-		if err := write(buf, b); err != nil {
-			return nil, err
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
 		}
 	}
-	// fmt.Printf("Serialized RefTxId : buf len %d\n", buf.Len())
 
 	// Payload ([]byte)
 	// fmt.Printf("Serializing Payload\n")
-	if err := WriteVarBin(buf, action.Payload, 32); err != nil {
-		return nil, err
+	{
+		if err := WriteVarBin(buf, action.Payload, 32); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Payload : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -362,31 +374,33 @@ func (action *Offer) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
-	// fmt.Printf("Reading Version : %d bytes remaining\n", buf.Len())
-	if err := read(buf, &action.Version); err != nil {
-		return 0, err
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
 
 	// Timestamp (Timestamp)
-	// fmt.Printf("Reading Timestamp : %d bytes remaining\n", buf.Len())
-	if err := action.Timestamp.Write(buf); err != nil {
-		return 0, err
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
 	// RefTxId (TxId)
-	// fmt.Printf("Reading RefTxId : %d bytes remaining\n", buf.Len())
-	if err := action.RefTxId.Write(buf); err != nil {
-		return 0, err
+	{
+		if err := action.RefTxId.Write(buf); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read RefTxId : %d bytes remaining\n%+v\n", buf.Len(), action.RefTxId)
 
 	// Payload ([]byte)
-	// fmt.Printf("Reading Payload : %d bytes remaining\n", buf.Len())
 	{
 		var err error
 		action.Payload, err = ReadVarBin(buf, 32)
@@ -452,31 +466,34 @@ func (action *SignatureRequest) Serialize() ([]byte, error) {
 
 	// Version (uint8)
 	// fmt.Printf("Serializing Version\n")
-	if err := write(buf, action.Version); err != nil {
-		return nil, err
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Version : buf len %d\n", buf.Len())
 
 	// Timestamp (Timestamp)
 	// fmt.Printf("Serializing Timestamp\n")
 	{
-		b, err := action.Timestamp.Serialize()
-		if err != nil {
-			return nil, err
-		}
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
 
-		if err := write(buf, b); err != nil {
-			return nil, err
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
 		}
 	}
-	// fmt.Printf("Serialized Timestamp : buf len %d\n", buf.Len())
 
 	// Payload ([]byte)
 	// fmt.Printf("Serializing Payload\n")
-	if err := WriteVarBin(buf, action.Payload, 32); err != nil {
-		return nil, err
+	{
+		if err := WriteVarBin(buf, action.Payload, 32); err != nil {
+			return nil, err
+		}
 	}
-	// fmt.Printf("Serialized Payload : buf len %d\n", buf.Len())
 
 	return buf.Bytes(), nil
 }
@@ -487,23 +504,24 @@ func (action *SignatureRequest) Write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
 
 	// Version (uint8)
-	// fmt.Printf("Reading Version : %d bytes remaining\n", buf.Len())
-	if err := read(buf, &action.Version); err != nil {
-		return 0, err
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
 
 	// Timestamp (Timestamp)
-	// fmt.Printf("Reading Timestamp : %d bytes remaining\n", buf.Len())
-	if err := action.Timestamp.Write(buf); err != nil {
-		return 0, err
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
 	}
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
 	// Payload ([]byte)
-	// fmt.Printf("Reading Payload : %d bytes remaining\n", buf.Len())
 	{
 		var err error
 		action.Payload, err = ReadVarBin(buf, 32)

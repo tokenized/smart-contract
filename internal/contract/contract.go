@@ -165,6 +165,9 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 			c.Registries = []protocol.Registry{}
 		}
 	}
+	if upd.FreezePeriod != nil {
+		c.FreezePeriod = *upd.FreezePeriod
+	}
 
 	c.UpdatedAt = now
 
