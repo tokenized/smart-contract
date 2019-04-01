@@ -60,8 +60,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 		}
 
-		var curve btcec.KoblitzCurve
-		authorityPubKey, err := btcec.ParsePubKey(msg.AuthorityPublicKey, &curve)
+		authorityPubKey, err := btcec.ParsePubKey(msg.AuthorityPublicKey, btcec.S256())
 		if err != nil {
 			logger.Warn(ctx, "%s : Failed to parse authority pub key : %s : %s", v.TraceID, contractPKH.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
