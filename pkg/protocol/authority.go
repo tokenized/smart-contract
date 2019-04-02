@@ -15,9 +15,9 @@ func OrderAuthoritySigHash(ctx context.Context, contractPKH *PublicKeyHash, orde
 	// Calculate the hash
 	digest := sha256.New()
 
+	digest.Write([]byte(order.AuthorityName))
 	digest.Write(contractPKH.Bytes())
 	digest.Write([]byte{order.ComplianceAction})
-	digest.Write([]byte(order.AuthorityName))
 	digest.Write(order.AssetCode.Bytes())
 	digest.Write(order.SupportingEvidenceHash[:])
 

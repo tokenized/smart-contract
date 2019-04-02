@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -19,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -46,8 +46,19 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return errors.New("Could not assert as *protocol.Transfer")
 	}
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Transfer invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	if len(msg.Assets) == 0 {
 		return errors.New("protocol.Transfer has no asset transfers")
+	}
+
+	if msg.OfferExpiry.Nano() > v.Now.Nano() {
+		logger.Warn(ctx, "%s : Transfer expired : %s", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeTransferExpired)
 	}
 
 	// Find "first" contract. The "first" contract of a transfer is the one responsible for
@@ -254,8 +265,6 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				}
 			}
 		}
-
-		// TODO Add asset fee
 	}
 
 	return settleTx, nil
@@ -337,6 +346,31 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 
 		if sendBalance != 0 {
 			return fmt.Errorf("Not sending all recieved bitcoins : %d remaining", sendBalance)
+		}
+	}
+
+	// Add exchange fee
+	if !transfer.ExchangeFeeAddress.IsZero() && transfer.ExchangeFee > 0 {
+		// Find output for receiver
+		added := false
+		for i, _ := range settleTx.MsgTx.TxOut {
+			outputPKH, err := settleTx.OutputPKH(i)
+			if err != nil {
+				continue
+			}
+			if bytes.Equal(transfer.ExchangeFeeAddress.Bytes(), outputPKH) {
+				// Add exchange fee to existing output
+				settleTx.AddValueToOutput(uint32(i), transfer.ExchangeFee)
+				added = true
+				break
+			}
+		}
+
+		if !added {
+			// Add new output for exchange fee.
+			if err := settleTx.AddP2PKHOutput(transfer.ExchangeFeeAddress.Bytes(), transfer.ExchangeFee, false); err != nil {
+				return errors.Wrap(err, "Failed to add exchange fee output")
+			}
 		}
 	}
 

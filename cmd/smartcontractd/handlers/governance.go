@@ -42,6 +42,12 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Proposal request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	// Locate Contract
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
@@ -135,7 +141,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if msg.Specific {
-		// TODO Check existing votes that have not been applied yet for conflicting fields.
+		// Check existing votes that have not been applied yet for conflicting fields.
 		votes, err := vote.List(ctx, g.MasterDB, contractPKH)
 		if err != nil {
 			return errors.Wrap(err, "Failed to list votes")
@@ -297,6 +303,12 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Ballot cast request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 

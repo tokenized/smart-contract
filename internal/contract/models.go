@@ -66,5 +66,6 @@ type UpdateContract struct {
 	IssuerProposal         *bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         *bool                    `json:"holder_proposal,omitempty"`
 	Registries             *[]protocol.Registry     `json:"registries,omitempty"`
-	FreezePeriod           *protocol.Timestamp      `json:"freeze_period,omitempty"`
+
+	FreezePeriod *protocol.Timestamp `json:"freeze_period,omitempty"`
 }

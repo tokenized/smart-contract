@@ -35,57 +35,79 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return errors.New("Could not assert as *protocol.AssetDefinition")
 	}
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Asset definition invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	// TODO Check action funding here
 	// Variable depending on the size of the payload.
 	// Fee rate * (response payload size + size of response inputs(average P2PKH input) + size of response outputs(average P2PKH output))
-
-	dbConn := a.MasterDB
-
-	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// TODO Fetch and remove request tx
 	// hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
 	// a.TxCache.RemoveTx(ctx, hash)
 
 	// Locate Contract
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	// Contract could not be found
 	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractPKH.String())
 		return node.ErrNoResponse
 	}
 
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
-		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeIssuerAddress)
 	}
 
 	// Locate Asset
-	_, err = asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
+	_, err = asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
 	if err != asset.ErrNotFound {
-		if err != nil {
-			logger.Warn(ctx, "%s : Error retrieving asset : %s", v.TraceID, msg.AssetCode.String())
-		} else {
+		if err == nil {
 			logger.Warn(ctx, "%s : Asset already exists : %s", v.TraceID, msg.AssetCode.String())
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
+		} else {
+			return errors.Wrap(err, "Failed to retreive asset")
 		}
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
 	}
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		logger.Verbose(ctx, "%s : Number of assets exceeds contract Qty: %s %x", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Warn(ctx, "%s : Number of assets exceeds contract Qty: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFixedQuantity)
 	}
 
 	// TODO Validate all fields have valid values.
 
-	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+	// Validate payload
+	payload := protocol.AssetTypeMapping(msg.AssetType)
+	if payload == nil {
+		logger.Warn(ctx, "%s : Asset payload type unknown : %s", v.TraceID, msg.AssetType)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	_, err = payload.Write(msg.AssetPayload)
+	if err != nil {
+		logger.Warn(ctx, "%s : Failed to parse asset payload : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	if err := payload.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Asset %s payload is invalid : %s", v.TraceID, msg.AssetType, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
@@ -98,7 +120,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.Timestamp = v.Now
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &a.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
 	if err != nil {
 		return err
 	}
@@ -126,37 +148,41 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Could not assert as *protocol.AssetModification")
 	}
 
-	dbConn := a.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Asset modification request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	// Locate Asset
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		logger.Verbose(ctx, "%s : Requestor is not operator : %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
 	}
 
-	as, err := asset.Retrieve(ctx, dbConn, contractAddr, &msg.AssetCode)
+	as, err := asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
 	if err != nil {
 		return err
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractAddr.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetRevision)
 	}
 
@@ -195,7 +221,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// }
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &a.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
 	if err != nil {
 		return err
 	}
@@ -223,8 +249,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		return errors.New("Could not assert as *protocol.AssetCreation")
 	}
 
-	dbConn := a.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Asset
@@ -233,7 +257,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		return fmt.Errorf("Asset Creation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
-	as, err := asset.Retrieve(ctx, dbConn, contractPKH, &msg.AssetCode)
+	as, err := asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
 	if err != nil && err != asset.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve asset")
 	}
@@ -247,11 +271,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return err
 		}
 
-		if err := contract.AddAssetCode(ctx, dbConn, contractPKH, &msg.AssetCode, v.Now); err != nil {
+		if err := contract.AddAssetCode(ctx, a.MasterDB, contractPKH, &msg.AssetCode, v.Now); err != nil {
 			return err
 		}
 
-		if err := asset.Create(ctx, dbConn, contractPKH, &msg.AssetCode, &na, v.Now); err != nil {
+		if err := asset.Create(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &na, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to create asset")
 		}
 		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
@@ -318,14 +342,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 
 		if different {
-			var newTradeRestrictions protocol.Polity
-			for _, tradeRestriction := range msg.TradeRestrictions.Items {
-				newTradeRestrictions.Items = append(newTradeRestrictions.Items, tradeRestriction)
-			}
-			ua.TradeRestrictions = &newTradeRestrictions
+			ua.TradeRestrictions = &msg.TradeRestrictions
 		}
 
-		if err := asset.Update(ctx, dbConn, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
+		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 			return err
 		}

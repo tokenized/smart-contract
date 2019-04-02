@@ -37,9 +37,9 @@ func TestAssetDefinition(t *testing.T) {
 		initialMessage.TransfersPermitted = true
 	}
 
-	// TradeRestrictions (Polity)
+	// TradeRestrictions (Polities)
 	{
-		initialMessage.TradeRestrictions = Polity{}
+		initialMessage.TradeRestrictions = Polities{}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -138,15 +138,8 @@ func TestAssetDefinition(t *testing.T) {
 		t.Errorf("TransfersPermitted doesn't match : %v != %v", initialMessage.TransfersPermitted, decodedMessage.TransfersPermitted)
 	}
 
-	// TradeRestrictions (Polity)
-	if len(initialMessage.TradeRestrictions.Items) != len(decodedMessage.TradeRestrictions.Items) {
-		t.Errorf("TradeRestrictions length doesn't match : %d != %d", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
-	}
-	for i, value := range initialMessage.TradeRestrictions.Items {
-		if !bytes.Equal(value[:], decodedMessage.TradeRestrictions.Items[i][:]) {
-			t.Errorf("TradeRestrictions.Items[%d] doesn't match : %s != %s", i, string(value[:]), string(decodedMessage.TradeRestrictions.Items[i][:]))
-		}
-	}
+	// TradeRestrictions (Polities)
+	// Polities test compare not setup
 
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
@@ -221,9 +214,9 @@ func TestAssetCreation(t *testing.T) {
 		initialMessage.TransfersPermitted = true
 	}
 
-	// TradeRestrictions (Polity)
+	// TradeRestrictions (Polities)
 	{
-		initialMessage.TradeRestrictions = Polity{}
+		initialMessage.TradeRestrictions = Polities{}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -327,15 +320,8 @@ func TestAssetCreation(t *testing.T) {
 		t.Errorf("TransfersPermitted doesn't match : %v != %v", initialMessage.TransfersPermitted, decodedMessage.TransfersPermitted)
 	}
 
-	// TradeRestrictions (Polity)
-	if len(initialMessage.TradeRestrictions.Items) != len(decodedMessage.TradeRestrictions.Items) {
-		t.Errorf("TradeRestrictions length doesn't match : %d != %d", initialMessage.TradeRestrictions, decodedMessage.TradeRestrictions)
-	}
-	for i, value := range initialMessage.TradeRestrictions.Items {
-		if !bytes.Equal(value[:], decodedMessage.TradeRestrictions.Items[i][:]) {
-			t.Errorf("TradeRestrictions.Items[%d] doesn't match : %s != %s", i, string(value[:]), string(decodedMessage.TradeRestrictions.Items[i][:]))
-		}
-	}
+	// TradeRestrictions (Polities)
+	// Polities test compare not setup
 
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
@@ -2339,15 +2325,9 @@ func TestMessage(t *testing.T) {
 		}
 	}
 
-	// MessageType (fixedchar)
+	// MessageType (MessageType)
 	{
-		{
-			text := make([]byte, 0, 4)
-			for i := uint64(0); i < 4; i++ {
-				text = append(text, byte(65+i+1))
-			}
-			initialMessage.MessageType = string(text)
-		}
+		// MessageType test not setup
 	}
 
 	// MessagePayload (varbin)
@@ -2403,9 +2383,9 @@ func TestMessage(t *testing.T) {
 		}
 	}
 
-	// MessageType (fixedchar)
+	// MessageType (MessageType)
 	if initialMessage.MessageType != decodedMessage.MessageType {
-		t.Errorf("MessageType doesn't match : %s != %s", initialMessage.MessageType, decodedMessage.MessageType)
+		t.Errorf("MessageType doesn't match : %v != %v", initialMessage.MessageType, decodedMessage.MessageType)
 	}
 
 	// MessagePayload (varbin)
@@ -2720,25 +2700,9 @@ func TestTransfer(t *testing.T) {
 		initialMessage.OfferExpiry = Timestamp{}
 	}
 
-	// ExchangeFeeCurrency (fixedchar)
+	// ExchangeFee (uint)
 	{
-		{
-			text := make([]byte, 0, 3)
-			for i := uint64(0); i < 3; i++ {
-				text = append(text, byte(65+i+2))
-			}
-			initialMessage.ExchangeFeeCurrency = string(text)
-		}
-	}
-
-	// ExchangeFeeVar (float)
-	{
-		// float test not setup
-	}
-
-	// ExchangeFeeFixed (float)
-	{
-		// float test not setup
+		// uint test not setup
 	}
 
 	// ExchangeFeeAddress (PublicKeyHash)
@@ -2789,19 +2753,9 @@ func TestTransfer(t *testing.T) {
 	// OfferExpiry (Timestamp)
 	// Timestamp test compare not setup
 
-	// ExchangeFeeCurrency (fixedchar)
-	if initialMessage.ExchangeFeeCurrency != decodedMessage.ExchangeFeeCurrency {
-		t.Errorf("ExchangeFeeCurrency doesn't match : %s != %s", initialMessage.ExchangeFeeCurrency, decodedMessage.ExchangeFeeCurrency)
-	}
-
-	// ExchangeFeeVar (float)
-	if initialMessage.ExchangeFeeVar != decodedMessage.ExchangeFeeVar {
-		t.Errorf("ExchangeFeeVar doesn't match : %v != %v", initialMessage.ExchangeFeeVar, decodedMessage.ExchangeFeeVar)
-	}
-
-	// ExchangeFeeFixed (float)
-	if initialMessage.ExchangeFeeFixed != decodedMessage.ExchangeFeeFixed {
-		t.Errorf("ExchangeFeeFixed doesn't match : %v != %v", initialMessage.ExchangeFeeFixed, decodedMessage.ExchangeFeeFixed)
+	// ExchangeFee (uint)
+	if initialMessage.ExchangeFee != decodedMessage.ExchangeFee {
+		t.Errorf("ExchangeFee doesn't match : %v != %v", initialMessage.ExchangeFee, decodedMessage.ExchangeFee)
 	}
 
 	// ExchangeFeeAddress (PublicKeyHash)

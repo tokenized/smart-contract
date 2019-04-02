@@ -41,6 +41,12 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Order request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
 	if err != nil {

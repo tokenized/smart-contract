@@ -1,6 +1,9 @@
 package protocol
 
-import "bytes"
+import (
+	"bytes"
+	"fmt"
+)
 
 // Administrator Administrator is used to refer to a Administration role in
 // an Entity.
@@ -45,6 +48,30 @@ func (m *Administrator) Write(buf *bytes.Buffer) error {
 		m.Name, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Administrator) Validate() error {
+
+	// Type (uint8)
+	{
+		roles, err := GetRoles()
+		if err != nil {
+			return err
+		}
+		_, exists := roles[m.Type]
+		if !exists {
+			return fmt.Errorf("Invalid role value : %d", m.Type)
+		}
+	}
+
+	// Name (string)
+	{
+		if len(m.Name) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Name too long %d/%d", len(m.Name), (2<<8)-1)
 		}
 	}
 
@@ -154,6 +181,34 @@ func (m *Amendment) Write(buf *bytes.Buffer) error {
 		m.Data, err = ReadVarChar(buf, 32)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Amendment) Validate() error {
+
+	// FieldIndex (uint8)
+	{
+	}
+
+	// Element (uint16)
+	{
+	}
+
+	// SubfieldIndex (uint8)
+	{
+	}
+
+	// Operation (uint8)
+	{
+	}
+
+	// Data (string)
+	{
+		if len(m.Data) > (2<<32)-1 {
+			return fmt.Errorf("varchar field Data too long %d/%d", len(m.Data), (2<<32)-1)
 		}
 	}
 
@@ -287,6 +342,43 @@ func (m *AssetSettlement) Write(buf *bytes.Buffer) error {
 			}
 
 			m.Settlements = append(m.Settlements, newValue)
+		}
+	}
+
+	return nil
+}
+
+func (m *AssetSettlement) Validate() error {
+
+	// ContractIndex (uint16)
+	{
+	}
+
+	// AssetType (string)
+	{
+		if len(m.AssetType) > 3 {
+			return fmt.Errorf("fixedchar field AssetType too long %d/%d", len(m.AssetType), 3)
+		}
+	}
+
+	// AssetCode (AssetCode)
+	{
+		if err := m.AssetCode.Validate(); err != nil {
+			return fmt.Errorf("field AssetCode is invalid : %s", err)
+		}
+	}
+
+	// Settlements ([]QuantityIndex)
+	{
+		if len(m.Settlements) > (2<<0)-1 {
+			return fmt.Errorf("list field Settlements has too many items %d/%d", len(m.Settlements), (2<<0)-1)
+		}
+
+		for i, value := range m.Settlements {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field Settlements[%d] is invalid : %s", i, err)
+			}
 		}
 	}
 
@@ -457,6 +549,57 @@ func (m *AssetTransfer) Write(buf *bytes.Buffer) error {
 			}
 
 			m.AssetReceivers = append(m.AssetReceivers, newValue)
+		}
+	}
+
+	return nil
+}
+
+func (m *AssetTransfer) Validate() error {
+
+	// ContractIndex (uint16)
+	{
+	}
+
+	// AssetType (string)
+	{
+		if len(m.AssetType) > 3 {
+			return fmt.Errorf("fixedchar field AssetType too long %d/%d", len(m.AssetType), 3)
+		}
+	}
+
+	// AssetCode (AssetCode)
+	{
+		if err := m.AssetCode.Validate(); err != nil {
+			return fmt.Errorf("field AssetCode is invalid : %s", err)
+		}
+	}
+
+	// AssetSenders ([]QuantityIndex)
+	{
+		if len(m.AssetSenders) > (2<<0)-1 {
+			return fmt.Errorf("list field AssetSenders has too many items %d/%d", len(m.AssetSenders), (2<<0)-1)
+		}
+
+		for i, value := range m.AssetSenders {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field AssetSenders[%d] is invalid : %s", i, err)
+			}
+		}
+	}
+
+	// AssetReceivers ([]TokenReceiver)
+	{
+		if len(m.AssetReceivers) > (2<<0)-1 {
+			return fmt.Errorf("list field AssetReceivers has too many items %d/%d", len(m.AssetReceivers), (2<<0)-1)
+		}
+
+		for i, value := range m.AssetReceivers {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field AssetReceivers[%d] is invalid : %s", i, err)
+			}
 		}
 	}
 
@@ -812,6 +955,124 @@ func (m *Entity) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
+func (m *Entity) Validate() error {
+
+	// Name (string)
+	{
+		if len(m.Name) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Name too long %d/%d", len(m.Name), (2<<8)-1)
+		}
+	}
+
+	// Type (byte)
+	{
+	}
+
+	// LEI (string)
+	{
+		if len(m.LEI) > 20 {
+			return fmt.Errorf("fixedchar field LEI too long %d/%d", len(m.LEI), 20)
+		}
+	}
+
+	// AddressIncluded (bool)
+	{
+	}
+
+	// UnitNumber (string)
+	if m.AddressIncluded {
+		if len(m.UnitNumber) > (2<<8)-1 {
+			return fmt.Errorf("varchar field UnitNumber too long %d/%d", len(m.UnitNumber), (2<<8)-1)
+		}
+	}
+
+	// BuildingNumber (string)
+	if m.AddressIncluded {
+		if len(m.BuildingNumber) > (2<<8)-1 {
+			return fmt.Errorf("varchar field BuildingNumber too long %d/%d", len(m.BuildingNumber), (2<<8)-1)
+		}
+	}
+
+	// Street (string)
+	if m.AddressIncluded {
+		if len(m.Street) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Street too long %d/%d", len(m.Street), (2<<16)-1)
+		}
+	}
+
+	// SuburbCity (string)
+	if m.AddressIncluded {
+		if len(m.SuburbCity) > (2<<8)-1 {
+			return fmt.Errorf("varchar field SuburbCity too long %d/%d", len(m.SuburbCity), (2<<8)-1)
+		}
+	}
+
+	// TerritoryStateProvinceCode (string)
+	if m.AddressIncluded {
+		if len(m.TerritoryStateProvinceCode) > 5 {
+			return fmt.Errorf("fixedchar field TerritoryStateProvinceCode too long %d/%d", len(m.TerritoryStateProvinceCode), 5)
+		}
+	}
+
+	// CountryCode (string)
+	if m.AddressIncluded {
+		if len(m.CountryCode) > 3 {
+			return fmt.Errorf("fixedchar field CountryCode too long %d/%d", len(m.CountryCode), 3)
+		}
+	}
+
+	// PostalZIPCode (string)
+	if m.AddressIncluded {
+		if len(m.PostalZIPCode) > 12 {
+			return fmt.Errorf("fixedchar field PostalZIPCode too long %d/%d", len(m.PostalZIPCode), 12)
+		}
+	}
+
+	// EmailAddress (string)
+	{
+		if len(m.EmailAddress) > (2<<8)-1 {
+			return fmt.Errorf("varchar field EmailAddress too long %d/%d", len(m.EmailAddress), (2<<8)-1)
+		}
+	}
+
+	// PhoneNumber (string)
+	{
+		if len(m.PhoneNumber) > (2<<8)-1 {
+			return fmt.Errorf("varchar field PhoneNumber too long %d/%d", len(m.PhoneNumber), (2<<8)-1)
+		}
+	}
+
+	// Administration ([]Administrator)
+	{
+		if len(m.Administration) > (2<<0)-1 {
+			return fmt.Errorf("list field Administration has too many items %d/%d", len(m.Administration), (2<<0)-1)
+		}
+
+		for i, value := range m.Administration {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field Administration[%d] is invalid : %s", i, err)
+			}
+		}
+	}
+
+	// Management ([]Manager)
+	{
+		if len(m.Management) > (2<<0)-1 {
+			return fmt.Errorf("list field Management has too many items %d/%d", len(m.Management), (2<<0)-1)
+		}
+
+		for i, value := range m.Management {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field Management[%d] is invalid : %s", i, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (m *Entity) Equal(other Entity) bool {
 
 	// Name (string)
@@ -922,6 +1183,10 @@ func (m *Header) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
+func (m *Header) Validate() error {
+	return nil
+}
+
 func (m *Header) Equal(other Header) bool {
 	return true
 }
@@ -969,6 +1234,30 @@ func (m *Manager) Write(buf *bytes.Buffer) error {
 		m.Name, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) Validate() error {
+
+	// Type (uint8)
+	{
+		roles, err := GetRoles()
+		if err != nil {
+			return err
+		}
+		_, exists := roles[m.Type]
+		if !exists {
+			return fmt.Errorf("Invalid role value : %d", m.Type)
+		}
+	}
+
+	// Name (string)
+	{
+		if len(m.Name) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Name too long %d/%d", len(m.Name), (2<<8)-1)
 		}
 	}
 
@@ -1032,6 +1321,19 @@ func (m *QuantityIndex) Write(buf *bytes.Buffer) error {
 		if err := read(buf, &m.Quantity); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *QuantityIndex) Validate() error {
+
+	// Index (uint16)
+	{
+	}
+
+	// Quantity (uint64)
+	{
 	}
 
 	return nil
@@ -1118,6 +1420,32 @@ func (m *Registry) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
+func (m *Registry) Validate() error {
+
+	// Name (string)
+	{
+		if len(m.Name) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Name too long %d/%d", len(m.Name), (2<<8)-1)
+		}
+	}
+
+	// URL (string)
+	{
+		if len(m.URL) > (2<<8)-1 {
+			return fmt.Errorf("varchar field URL too long %d/%d", len(m.URL), (2<<8)-1)
+		}
+	}
+
+	// PublicKey ([]byte)
+	{
+		if len(m.PublicKey) > (2<<8)-1 {
+			return fmt.Errorf("varbin field PublicKey too long %d/%d", len(m.PublicKey), (2<<8)-1)
+		}
+	}
+
+	return nil
+}
+
 func (m *Registry) Equal(other Registry) bool {
 
 	// Name (string)
@@ -1183,6 +1511,22 @@ func (m *TargetAddress) Write(buf *bytes.Buffer) error {
 		if err := read(buf, &m.Quantity); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *TargetAddress) Validate() error {
+
+	// Address (PublicKeyHash)
+	{
+		if err := m.Address.Validate(); err != nil {
+			return fmt.Errorf("field Address is invalid : %s", err)
+		}
+	}
+
+	// Quantity (uint64)
+	{
 	}
 
 	return nil
@@ -1278,6 +1622,30 @@ func (m *TokenReceiver) Write(buf *bytes.Buffer) error {
 		m.RegistryConfirmationSigToken, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *TokenReceiver) Validate() error {
+
+	// Index (uint16)
+	{
+	}
+
+	// Quantity (uint64)
+	{
+	}
+
+	// RegistrySigAlgorithm (uint8)
+	{
+	}
+
+	// RegistryConfirmationSigToken (string)
+	{
+		if len(m.RegistryConfirmationSigToken) > (2<<8)-1 {
+			return fmt.Errorf("varchar field RegistryConfirmationSigToken too long %d/%d", len(m.RegistryConfirmationSigToken), (2<<8)-1)
 		}
 	}
 
@@ -1411,6 +1779,38 @@ func (m *VotingSystem) Write(buf *bytes.Buffer) error {
 		if err := read(buf, &m.HolderProposalFee); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *VotingSystem) Validate() error {
+
+	// Name (string)
+	{
+		if len(m.Name) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Name too long %d/%d", len(m.Name), (2<<8)-1)
+		}
+	}
+
+	// VoteType (byte)
+	{
+	}
+
+	// TallyLogic (byte)
+	{
+	}
+
+	// ThresholdPercentage (uint8)
+	{
+	}
+
+	// VoteMultiplierPermitted (bool)
+	{
+	}
+
+	// HolderProposalFee (uint64)
+	{
 	}
 
 	return nil

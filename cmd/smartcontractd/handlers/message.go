@@ -36,23 +36,45 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessMessage")
 	defer span.End()
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
 	msg, ok := itx.MsgProto.(*protocol.Message)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Message")
 	}
 
-	messagePayload, err := msg.PayloadMessage()
-	if err != nil {
-		return err
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Message invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
+	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
+	if messagePayload == nil {
+		messageTypes, err := protocol.GetMessages()
+		if err != nil {
+			errors.Wrap(err, "Failed to get message type data")
+		}
+		messageType, exists := messageTypes[msg.MessageType]
+		if exists {
+			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
+		} else {
+			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		}
+	}
+
+	_, err := messagePayload.Write(msg.MessagePayload)
+	if err != nil {
+		logger.Warn(ctx, "%s : Failed to parse message payload : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
+	if err := messagePayload.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Message %d payload is invalid : %s", v.TraceID, msg.MessageType, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
 
 	switch payload := messagePayload.(type) {
-	case *protocol.PublicMessage:
-		return errors.New("PublicMessage not implemented")
-	case *protocol.PrivateMessage:
-		return errors.New("PrivateMessage not implemented")
 	case *protocol.Offer:
 		logger.Verbose(ctx, "%s : Processing Offer", v.TraceID)
 		return m.processOffer(ctx, w, itx, rk, payload)
@@ -60,7 +82,16 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		logger.Verbose(ctx, "%s : Processing SignatureRequest", v.TraceID)
 		return m.processSigRequest(ctx, w, itx, rk, payload)
 	default:
-		return fmt.Errorf("Unknown message payload type : %s", messagePayload.Type())
+		messageTypes, err := protocol.GetMessages()
+		if err != nil {
+			errors.Wrap(err, "Failed to get message type data")
+		}
+		messageType, exists := messageTypes[msg.MessageType]
+		if exists {
+			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
+		} else {
+			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		}
 	}
 }
 
@@ -113,22 +144,9 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	}
 
 	// Get transfer from it
-	var transfer *protocol.Transfer
-	for _, output := range transferTx.MsgTx.TxOut {
-		opReturn, err := protocol.Deserialize(output.PkScript)
-		if err != nil {
-			continue
-		}
-
-		var ok bool
-		transfer, ok = opReturn.(*protocol.Transfer)
-		if ok {
-			break
-		}
-	}
-
-	if transfer == nil {
-		return errors.New("Could not find Transfer in transfer tx")
+	transfer, ok := transferTx.MsgProto.(*protocol.Transfer)
+	if !ok {
+		return errors.New("Transfer invalid for transfer tx")
 	}
 
 	// Find "first" contract. The "first" contract of a transfer is the one responsible for
@@ -275,21 +293,10 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Failed to get transfer tx")
 	}
 
-	// Find transfer OP_RETURN
-	var transfer *protocol.Transfer
-	found := false
-	for _, output := range transferTx.Outputs {
-		opReturn, err := protocol.Deserialize(output.UTXO.PkScript)
-		if err == nil {
-			transfer, found = opReturn.(*protocol.Transfer)
-			if found {
-				break
-			}
-		}
-	}
-
-	if !found {
-		return errors.New("Failed fo find transfer OP_RETURN in transfer tx")
+	// Get transfer from tx
+	transfer, ok := transferTx.MsgProto.(*protocol.Transfer)
+	if !ok {
+		return errors.New("Transfer invalid for transfer tx")
 	}
 
 	// Verify all the data for this contract is correct.

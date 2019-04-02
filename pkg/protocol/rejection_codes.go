@@ -32,5 +32,6 @@ var (
 		RejectionCodeContractMissingNewOperator: []byte("Contract Operator Change Missing"),
 		RejectionCodeInvalidProposal:            []byte("Invalid Proposal"),
 		RejectionCodeInvalidSig:                 []byte("Invalid Signature"),
+		RejectionCodeTransferExpired:            []byte("Transfer Expired"),
 	}
 )

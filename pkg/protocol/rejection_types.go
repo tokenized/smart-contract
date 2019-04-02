@@ -113,4 +113,6 @@ const (
 	RejectionCodeInvalidProposal
 
 	RejectionCodeInvalidSig
+
+	RejectionCodeTransferExpired
 )

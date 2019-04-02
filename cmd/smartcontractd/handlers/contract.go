@@ -36,63 +36,65 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return errors.New("Could not assert as *protocol.ContractOffer")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	// Locate Contract
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	_, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != contract.ErrNotFound {
-		if err != nil {
-			logger.Warn(ctx, "%s : Error retreiving contract : %s", v.TraceID, contractAddr.String())
-		} else {
-			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractAddr.String())
-		}
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Contract offer invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
-	// TODO Validate all fields have valid values.
+	// Locate Contract
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	_, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	if err != contract.ErrNotFound {
+		if err == nil {
+			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractPKH.String())
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
+		} else {
+			return errors.Wrap(err, "Failed to retreive contract")
+		}
+	}
 
 	if msg.BodyOfAgreementType == 1 {
 		if len(msg.BodyOfAgreement) != 32 {
-			logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %s : %d", v.TraceID, contractAddr.String(), len(msg.BodyOfAgreement))
+			logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.BodyOfAgreement))
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 		}
 	} else if msg.BodyOfAgreementType != 0 {
-		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractAddr.String(), msg.BodyOfAgreementType)
+		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.BodyOfAgreementType)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	if msg.SupportingDocsFileType == 1 {
 		if len(msg.SupportingDocs) != 32 {
-			logger.Warn(ctx, "%s : Contract supporting docs hash is incorrect length : %s : %d", v.TraceID, contractAddr.String(), len(msg.SupportingDocs))
+			logger.Warn(ctx, "%s : Contract supporting docs hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.SupportingDocs))
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 		}
 	} else if msg.SupportingDocsFileType != 0 {
-		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractAddr.String(), msg.SupportingDocsFileType)
+		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.SupportingDocsFileType)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
-		logger.Warn(ctx, "%s : Expiration already passed : %s : %d", v.TraceID, contractAddr.String(), msg.ContractExpiration.Nano())
+		logger.Warn(ctx, "%s : Expiration already passed : %s : %d", v.TraceID, contractPKH.String(), msg.ContractExpiration.Nano())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
-		logger.Warn(ctx, "%s : Invalid contract auth flags : %s : %s", v.TraceID, contractAddr.String(), err)
+		logger.Warn(ctx, "%s : Invalid contract auth flags : %s : %s", v.TraceID, contractPKH.String(), err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
 		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
-			logger.Warn(ctx, "%s : Invalid voting system : %s : %s", v.TraceID, contractAddr.String(), err)
+			logger.Warn(ctx, "%s : Invalid voting system : %s : %s", v.TraceID, contractPKH.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
 		}
 	}
 
-	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
+	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.ContractFormation{}
@@ -106,7 +108,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	cf.Timestamp = v.Now
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &c.Config.ChainParams)
 	if err != nil {
 		return err
 	}
@@ -134,27 +136,31 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Could not assert as *protocol.ContractAmendment")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Contract amendment request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+	}
+
 	// Locate Contract
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retreive contract")
 	}
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, contractAddr.String())
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
-		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr.String())
+		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractQtyReduction)
 	}
 
@@ -167,7 +173,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// TODO Verify RefTxID data
 	//msg.RefTxID               []byte
 
-	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractAddr.String())
+	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractPKH.String())
 
 	// Contract Formation <- Contract Amendment
 	cf := protocol.ContractFormation{}
@@ -199,7 +205,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// }
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &c.Config.ChainParams)
 	if err != nil {
 		return err
 	}
@@ -247,8 +253,6 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.New("Could not assert as *protocol.ContractFormation")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// TODO Fetch and remove request tx
@@ -262,7 +266,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, dbConn, contractPKH)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -284,22 +288,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return errors.New("ContractOffer tx not found")
 		}
 
-		// Get transfer from it
-		var offer *protocol.ContractOffer
-		for _, output := range offerTx.MsgTx.TxOut {
-			opReturn, err := protocol.Deserialize(output.PkScript)
-			if err != nil {
-				continue
-			}
-
-			var ok bool
-			offer, ok = opReturn.(*protocol.ContractOffer)
-			if ok {
-				break
-			}
-		}
-
-		if offer == nil {
+		// Get offer from it
+		offer, ok := offerTx.MsgProto.(*protocol.ContractOffer)
+		if ok {
 			return errors.New("Could not find ContractOffer in offer tx")
 		}
 
@@ -308,7 +299,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[1].Address.ScriptAddress()) // Second input of offer tx
 		}
 
-		if err := contract.Create(ctx, dbConn, contractPKH, &nc, v.Now); err != nil {
+		if err := contract.Create(ctx, c.MasterDB, contractPKH, &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
 		}
@@ -318,8 +309,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		// // TODO Issuer change. New issuer in second input
 		// if msg.ChangeIssuerAddress {
 		// if len(itx.Inputs) < 2 {
-		// logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-		// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
+		// return errors.New("New issuer specified but not included in inputs")
 		// }
 
 		// cf.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[1].Address.ScriptAddress)
@@ -332,8 +322,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		// index++
 		// }
 		// if index >= len(itx.Inputs) {
-		// logger.Warn(ctx, "%s : New operator specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-		// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewOperator)
+		// return errors.New("New operator specified but not included in inputs")
 		// }
 
 		// cf.OperatorPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[index].Address.ScriptAddress)
@@ -429,7 +418,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		if ct.ContractFee != msg.ContractFee {
 			uc.ContractFee = &msg.ContractFee
-			logger.Info(ctx, "%s : Updating action fee (%s) : %d", v.TraceID, ct.ContractName, *uc.ContractFee)
+			logger.Info(ctx, "%s : Updating contract fee (%s) : %d", v.TraceID, ct.ContractName, *uc.ContractFee)
 		}
 
 		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
@@ -451,9 +440,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		different := len(ct.Registries) != len(msg.Registries)
 		if !different {
 			for i, registry := range ct.Registries {
-				if registry.Name != msg.Registries[i].Name ||
-					registry.URL != msg.Registries[i].URL ||
-					!bytes.Equal(registry.PublicKey, msg.Registries[i].PublicKey) {
+				if !registry.Equal(msg.Registries[i]) {
 					different = true
 					break
 				}
@@ -461,16 +448,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newRegistries := make([]protocol.Registry, 0, len(msg.Registries))
-			for _, registry := range msg.Registries {
-				var newRegistry protocol.Registry
-				err := node.Convert(ctx, &registry, &newRegistry)
-				if err != nil {
-					return err
-				}
-				newRegistries = append(newRegistries, newRegistry)
-			}
-			uc.Registries = &newRegistries
+			logger.Info(ctx, "%s : Updating contract registries (%s)", v.TraceID, ct.ContractName)
+			uc.Registries = &msg.Registries
 		}
 
 		// Check if voting systems are different
@@ -485,21 +464,12 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newVotingSystems := make([]protocol.VotingSystem, 0, len(msg.VotingSystems))
-			for _, votingSystem := range msg.VotingSystems {
-				var newVotingSystem protocol.VotingSystem
-				err := node.Convert(ctx, &votingSystem, &newVotingSystem)
-				if err != nil {
-					return err
-				}
-				newVotingSystems = append(newVotingSystems, newVotingSystem)
-			}
-			uc.VotingSystems = &newVotingSystems
+			logger.Info(ctx, "%s : Updating contract voting systems (%s)", v.TraceID, ct.ContractName)
+			uc.VotingSystems = &msg.VotingSystems
 		}
 
-		if err := contract.Update(ctx, dbConn, contractPKH, &uc, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
-			return err
+		if err := contract.Update(ctx, c.MasterDB, contractPKH, &uc, v.Now); err != nil {
+			return errors.Wrap(err, "Failed to update contract")
 		}
 		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
 

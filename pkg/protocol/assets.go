@@ -29,8 +29,16 @@ const (
 	CodeTicketAdmission = "TIC"
 )
 
+// AssetPayload is the interface for payloads within asset actions.
+type AssetPayload interface {
+	Type() string
+	Serialize() ([]byte, error)
+	Write(b []byte) (int, error)
+	Validate() error
+}
+
 // AssetTypeMapping holds a mapping of asset codes to asset types.
-func AssetTypeMapping(code string) PayloadMessage {
+func AssetTypeMapping(code string) AssetPayload {
 	switch code {
 	case CodeCoupon:
 		result := Coupon{}
@@ -62,7 +70,7 @@ type Coupon struct {
 	IssueDate       Timestamp `json:"issue_date,omitempty"`       //
 	ExpiryDate      Timestamp `json:"expiry_date,omitempty"`      //
 	Value           uint64    `json:"value,omitempty"`            //
-	Currency        string    `json:"currency,omitempty"`         //
+	Currency        [3]byte   `json:"currency,omitempty"`         // Currency for coupon. From resources/currency.
 	Description     string    `json:"description,omitempty"`      //
 }
 
@@ -129,9 +137,9 @@ func (m *Coupon) Serialize() ([]byte, error) {
 		}
 	}
 
-	// Currency (string)
+	// Currency ([3]byte)
 	{
-		if err := WriteFixedChar(buf, m.Currency, 3); err != nil {
+		if err := write(buf, m.Currency); err != nil {
 			return nil, err
 		}
 	}
@@ -191,13 +199,12 @@ func (m *Coupon) Write(b []byte) (int, error) {
 
 	}
 
-	// Currency (string)
+	// Currency ([3]byte)
 	{
-		var err error
-		m.Currency, err = ReadFixedChar(buf, 3)
-		if err != nil {
+		if err := read(buf, &m.Currency); err != nil {
 			return 0, err
 		}
+
 	}
 
 	// Description (string)
@@ -210,6 +217,61 @@ func (m *Coupon) Write(b []byte) (int, error) {
 	}
 
 	return len(b), nil
+}
+
+func (m *Coupon) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// RedeemingEntity (string)
+	{
+		if len(m.RedeemingEntity) > (2<<8)-1 {
+			return fmt.Errorf("varchar field RedeemingEntity too long %d/%d", len(m.RedeemingEntity), (2<<8)-1)
+		}
+	}
+
+	// IssueDate (Timestamp)
+	{
+		if err := m.IssueDate.Validate(); err != nil {
+			return fmt.Errorf("field IssueDate is invalid : %s", err)
+		}
+
+	}
+
+	// ExpiryDate (Timestamp)
+	{
+		if err := m.ExpiryDate.Validate(); err != nil {
+			return fmt.Errorf("field ExpiryDate is invalid : %s", err)
+		}
+
+	}
+
+	// Value (uint64)
+	{
+	}
+
+	// Currency ([3]byte)
+	{
+		currencies, err := GetCurrencies()
+		if err != nil {
+			return err
+		}
+		_, exists := currencies[string(m.Currency[:])]
+		if !exists {
+			return fmt.Errorf("Invalid currency value : %d", m.Currency)
+		}
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
 }
 
 func (m Coupon) String() string {
@@ -228,10 +290,10 @@ func (m Coupon) String() string {
 
 // Currency asset type.
 type Currency struct {
-	Version           uint8  `json:"version,omitempty"`            // Payload Version
-	ISOCode           string `json:"iso_code,omitempty"`           //
-	MonetaryAuthority string `json:"monetary_authority,omitempty"` //
-	Description       string `json:"description,omitempty"`        //
+	Version           uint8   `json:"version,omitempty"`            // Payload Version
+	ISOCode           [3]byte `json:"iso_code,omitempty"`           //
+	MonetaryAuthority string  `json:"monetary_authority,omitempty"` //
+	Description       string  `json:"description,omitempty"`        //
 }
 
 // Type returns the type identifer for this message.
@@ -269,9 +331,9 @@ func (m *Currency) Serialize() ([]byte, error) {
 		}
 	}
 
-	// ISOCode (string)
+	// ISOCode ([3]byte)
 	{
-		if err := WriteFixedChar(buf, m.ISOCode, 3); err != nil {
+		if err := write(buf, m.ISOCode); err != nil {
 			return nil, err
 		}
 	}
@@ -305,13 +367,12 @@ func (m *Currency) Write(b []byte) (int, error) {
 
 	}
 
-	// ISOCode (string)
+	// ISOCode ([3]byte)
 	{
-		var err error
-		m.ISOCode, err = ReadFixedChar(buf, 3)
-		if err != nil {
+		if err := read(buf, &m.ISOCode); err != nil {
 			return 0, err
 		}
+
 	}
 
 	// MonetaryAuthority (string)
@@ -333,6 +394,41 @@ func (m *Currency) Write(b []byte) (int, error) {
 	}
 
 	return len(b), nil
+}
+
+func (m *Currency) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// ISOCode ([3]byte)
+	{
+		currencies, err := GetCurrencies()
+		if err != nil {
+			return err
+		}
+		_, exists := currencies[string(m.ISOCode[:])]
+		if !exists {
+			return fmt.Errorf("Invalid currency value : %d", m.ISOCode)
+		}
+	}
+
+	// MonetaryAuthority (string)
+	{
+		if len(m.MonetaryAuthority) > (2<<8)-1 {
+			return fmt.Errorf("varchar field MonetaryAuthority too long %d/%d", len(m.MonetaryAuthority), (2<<8)-1)
+		}
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
 }
 
 func (m Currency) String() string {
@@ -500,6 +596,53 @@ func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 	}
 
 	return len(b), nil
+}
+
+func (m *LoyaltyPoints) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// AgeRestriction (uint8)
+	{
+	}
+
+	// OfferType (byte)
+	{
+	}
+
+	// OfferName (string)
+	{
+		if len(m.OfferName) > (2<<8)-1 {
+			return fmt.Errorf("varchar field OfferName too long %d/%d", len(m.OfferName), (2<<8)-1)
+		}
+	}
+
+	// ValidFrom (Timestamp)
+	{
+		if err := m.ValidFrom.Validate(); err != nil {
+			return fmt.Errorf("field ValidFrom is invalid : %s", err)
+		}
+
+	}
+
+	// ExpirationTimestamp (Timestamp)
+	{
+		if err := m.ExpirationTimestamp.Validate(); err != nil {
+			return fmt.Errorf("field ExpirationTimestamp is invalid : %s", err)
+		}
+
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
 }
 
 func (m LoyaltyPoints) String() string {
@@ -673,6 +816,56 @@ func (m *Membership) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (m *Membership) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// AgeRestriction (uint8)
+	{
+	}
+
+	// ValidFrom (Timestamp)
+	{
+		if err := m.ValidFrom.Validate(); err != nil {
+			return fmt.Errorf("field ValidFrom is invalid : %s", err)
+		}
+
+	}
+
+	// ExpirationTimestamp (Timestamp)
+	{
+		if err := m.ExpirationTimestamp.Validate(); err != nil {
+			return fmt.Errorf("field ExpirationTimestamp is invalid : %s", err)
+		}
+
+	}
+
+	// ID (string)
+	{
+		if len(m.ID) > (2<<8)-1 {
+			return fmt.Errorf("varchar field ID too long %d/%d", len(m.ID), (2<<8)-1)
+		}
+	}
+
+	// MembershipType (string)
+	{
+		if len(m.MembershipType) > (2<<8)-1 {
+			return fmt.Errorf("varchar field MembershipType too long %d/%d", len(m.MembershipType), (2<<8)-1)
+		}
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
+}
+
 func (m Membership) String() string {
 	vals := []string{}
 
@@ -810,6 +1003,44 @@ func (m *ShareCommon) Write(b []byte) (int, error) {
 	}
 
 	return len(b), nil
+}
+
+func (m *ShareCommon) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// TransferLockout (Timestamp)
+	{
+		if err := m.TransferLockout.Validate(); err != nil {
+			return fmt.Errorf("field TransferLockout is invalid : %s", err)
+		}
+
+	}
+
+	// Ticker (string)
+	{
+		if len(m.Ticker) > 5 {
+			return fmt.Errorf("fixedchar field Ticker too long %d/%d", len(m.Ticker), 5)
+		}
+	}
+
+	// ISIN (string)
+	{
+		if len(m.ISIN) > 12 {
+			return fmt.Errorf("fixedchar field ISIN too long %d/%d", len(m.ISIN), 12)
+		}
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
 }
 
 func (m ShareCommon) String() string {
@@ -1046,6 +1277,85 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 	}
 
 	return len(b), nil
+}
+
+func (m *TicketAdmission) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// AgeRestriction (uint8)
+	{
+	}
+
+	// AdmissionType (string)
+	{
+		if len(m.AdmissionType) > 3 {
+			return fmt.Errorf("fixedchar field AdmissionType too long %d/%d", len(m.AdmissionType), 3)
+		}
+	}
+
+	// Venue (string)
+	{
+		if len(m.Venue) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Venue too long %d/%d", len(m.Venue), (2<<8)-1)
+		}
+	}
+
+	// Class (string)
+	{
+		if len(m.Class) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Class too long %d/%d", len(m.Class), (2<<8)-1)
+		}
+	}
+
+	// Area (string)
+	{
+		if len(m.Area) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Area too long %d/%d", len(m.Area), (2<<8)-1)
+		}
+	}
+
+	// Seat (string)
+	{
+		if len(m.Seat) > (2<<8)-1 {
+			return fmt.Errorf("varchar field Seat too long %d/%d", len(m.Seat), (2<<8)-1)
+		}
+	}
+
+	// StartTimeDate (Timestamp)
+	{
+		if err := m.StartTimeDate.Validate(); err != nil {
+			return fmt.Errorf("field StartTimeDate is invalid : %s", err)
+		}
+
+	}
+
+	// ValidFrom (Timestamp)
+	{
+		if err := m.ValidFrom.Validate(); err != nil {
+			return fmt.Errorf("field ValidFrom is invalid : %s", err)
+		}
+
+	}
+
+	// ExpirationTimestamp (Timestamp)
+	{
+		if err := m.ExpirationTimestamp.Validate(); err != nil {
+			return fmt.Errorf("field ExpirationTimestamp is invalid : %s", err)
+		}
+
+	}
+
+	// Description (string)
+	{
+		if len(m.Description) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Description too long %d/%d", len(m.Description), (2<<16)-1)
+		}
+	}
+
+	return nil
 }
 
 func (m TicketAdmission) String() string {
