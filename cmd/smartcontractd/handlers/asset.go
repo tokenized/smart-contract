@@ -40,7 +40,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Asset definition invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// TODO Check action funding here
@@ -67,7 +67,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
 		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeIssuerAddress)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotIssuer)
 	}
 
 	// Locate Asset
@@ -75,7 +75,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	if err != asset.ErrNotFound {
 		if err == nil {
 			logger.Warn(ctx, "%s : Asset already exists : %s", v.TraceID, msg.AssetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeDuplicateAssetCode)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetCodeExists)
 		} else {
 			return errors.Wrap(err, "Failed to retreive asset")
 		}
@@ -84,7 +84,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
 		logger.Warn(ctx, "%s : Number of assets exceeds contract Qty: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFixedQuantity)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFixedQuantity)
 	}
 
 	// TODO Validate all fields have valid values.
@@ -93,18 +93,18 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	payload := protocol.AssetTypeMapping(msg.AssetType)
 	if payload == nil {
 		logger.Warn(ctx, "%s : Asset payload type unknown : %s", v.TraceID, msg.AssetType)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	_, err = payload.Write(msg.AssetPayload)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to parse asset payload : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if err := payload.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Asset %s payload is invalid : %s", v.TraceID, msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
@@ -153,7 +153,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Asset modification request invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Locate Asset
@@ -166,7 +166,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		logger.Verbose(ctx, "%s : Requestor is not operator : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
 	as, err := asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
@@ -177,13 +177,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Asset could not be found
 	if as == nil {
 		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetNotFound)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
 		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetRevision)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetRevision)
 	}
 
 	// @TODO: When reducing an assets available supply, the amount must be deducted from the
@@ -216,7 +216,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// switch(amendment.FieldIndex) {
 	// default:
 	// logger.Warn(ctx, "%s : Incorrect asset amendment field offset (%s) : %d", v.TraceID, assetCode, amendment.FieldIndex)
-	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeAssetMalformedAmendment)
+	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	// }
 	// }
 

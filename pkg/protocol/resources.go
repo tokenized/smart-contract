@@ -5,6 +5,31 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+type RejectionCode struct {
+	Name        string
+	Text        string
+	Description string
+}
+
+var rejectionCodes map[uint8]RejectionCode
+
+func GetRejectionCodes() (map[uint8]RejectionCode, error) {
+	if rejectionCodes != nil {
+		return rejectionCodes, nil
+	}
+
+	load := struct {
+		Values map[uint8]RejectionCode
+	}{}
+
+	if err := yaml.Unmarshal([]byte(yamlRejectionCodes), &load); err != nil {
+		return nil, errors.Wrap(err, "Failed to unmarshal rejection codes yaml")
+	}
+
+	rejectionCodes = load.Values
+	return rejectionCodes, nil
+}
+
 type CurrencyType struct {
 	Name              string
 	Label             string
@@ -3126,6 +3151,193 @@ values:
     name: Zimbabwe
     states: ~
     flag: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Flag_of_Zimbabwe.svg"
+
+`
+
+// RejectionCodes - Code/Text combinations returned in rejection messages
+// when a request is not accepted.
+var yamlRejectionCodes = `
+
+metadata:
+  name: RejectionCodes
+  description: "Code/Text combinations returned in rejection messages when a request is not accepted."
+  type: RejectionCode
+
+values:
+    #################################### Basic ####################################
+
+    0:
+      name: Success
+      text: Success
+      description: No failure. This code should not be used in a reject message.
+
+    1:
+      name: MsgMalformed
+      text: Message Malformed
+      description: The OP_RETURN message is malformed. It doesn't pass data validation or something about it isn't according to protocol.
+
+    2:
+      name: TxMalformed
+      text: Transaction Malformed
+      description: The Bitcoin tx is malformed. Incorrect inputs/outputs or something similar.
+
+    #################################### Contract ####################################
+
+    10:
+      name: ContractExists
+      text: Contract Already Exists
+      description: The contract already exists and can't be recreated.
+
+    11:
+      name: ContractNotDynamic
+      text: Contract Is Not Dynamic
+      description: 'Sent when a CO is received, but the contract type is not "D" (Dynamic)'
+
+    12:
+      name: ContractAssetQtyReduction
+      text: Contract Asset Quantity Reduction
+      description: Sent when a CA tries to reduce the number of assets below the number of assets the contract has.
+
+    13:
+      name: ContractFixedQuantity
+      text: Contract Fixed Quantity
+      description: Sent when the issuer attempted to increase the quantity of assets in a contract beyond the fixed quantity permitted.
+
+    14:
+      name: ContractAuthFlags
+      text: Contract Auth Flags Prohibit
+      description: The contract auth flags don't permit the action requested.
+
+    15:
+      name: ContractExpired
+      text: Contract Expired
+      description: The contract is expired so can no longer accept requests.
+
+    16:
+      name: ContractFrozen
+      text: Contract Frozen
+      description: The contract is frozen and the request is not permitted while frozen.
+
+    17:
+      name: ContractRevision
+      text: Contract Revision Incorrect
+      description: The revision in a contract amendment is incorrect.
+
+    #################################### Asset ####################################
+
+    20:
+      name: AssetCodeExists
+      text: Asset Code Already Exists
+      description: The asset code specified already exists and can't be reused.
+
+    21:
+      name: AssetNotFound
+      text: Asset Not Found
+      description: The asset code is not found.
+
+    22:
+      name: AssetAuthFlags
+      text: Asset Auth Flags Prohibit
+      description: The asset auth flags don't permit the action requested.
+
+    23:
+      name: AssetFrozen
+      text: Asset Frozen
+      description: The asset is frozen and the request is not permitted while frozen.
+
+    24:
+      name: AssetRevision
+      text: Asset Revision Incorrect
+      description: The revision in an asset amendment is incorrect.
+
+    #################################### Transfer ####################################
+
+    30:
+      name: TransferSelf
+      text: Transfer To Self Prohibited
+      description: Transfers with the sender and receiver addresses the same are not permitted.
+
+    31:
+      name: TransferExpired
+      text: Transfer Expired
+      description: The transfer has expired.
+
+    32:
+      name: HoldingsFrozen
+      text: Holdings Frozen
+      description: Holdings are frozen, so the request can't be completed.
+
+    #################################### Governance ####################################
+
+    40:
+      name: HolderProposalProhibited
+      text: Holder Proposal Prohibited
+      description: Holders are not permitted to make proposals.
+
+    41:
+      name: ProposalConflicts
+      text: Proposal Conflicts
+      description: The proposal conflicts with an unapplied proposal.
+
+    42:
+      name: VoteNotFound
+      text: Vote Not Found
+      description: The vote ID referenced is not found.
+
+    43:
+      name: VoteClosed
+      text: Vote Closed
+      description: The vote has closed and ballots are no longer permitted.
+
+    44:
+      name: BallotAlreadyCounted
+      text: Ballot Already Counted
+      description: The ballot has already been counted for this address.
+
+    #################################### Enforcement ####################################
+
+    #50:
+
+    #################################### Funding ####################################
+
+    60:
+      name: InsufficientTxFeeFunding
+      text: Insufficient Transaction Fee Funding
+      description: Insufficient bitcoin quantities for response transaction fees.
+
+    61:
+      name: InsufficientValue
+      text: Insufficient Value
+      description: Insufficient bitcoin quantity in inputs to fund request.
+
+    62:
+      name: InsufficientQuantity
+      text: Insufficient Quantity
+      description: Insufficient token holdings to for request.
+
+    #################################### Address ####################################
+
+    70:
+      name: NotIssuer
+      text: Requestor Is Not Issuer
+      description: The requestor is not the issuer and is required to be for this request.
+
+    71:
+      name: NotOperator
+      text: Requestor Is Not Operator
+      description: The requestor is not the operator and is required to be for this request.
+
+    72:
+      name: UnauthorizedAddress
+      text: Unauthorized Address
+      description: The address specified is not permitted for this request.
+
+    #################################### Signatures ####################################
+
+    80:
+      name: InvalidSignature
+      text: Invalid Signature
+      description: The signature provided is not valid. This is for signatures included within OP_RETURN data. Not bitcoin transaction signature scripts.
 
 `
 

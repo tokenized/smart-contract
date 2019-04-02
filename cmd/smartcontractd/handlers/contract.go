@@ -41,7 +41,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Contract offer invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Locate Contract
@@ -50,7 +50,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if err != contract.ErrNotFound {
 		if err == nil {
 			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExists)
 		} else {
 			return errors.Wrap(err, "Failed to retreive contract")
 		}
@@ -59,38 +59,38 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if msg.BodyOfAgreementType == 1 {
 		if len(msg.BodyOfAgreement) != 32 {
 			logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.BodyOfAgreement))
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	} else if msg.BodyOfAgreementType != 0 {
 		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.BodyOfAgreementType)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if msg.SupportingDocsFileType == 1 {
 		if len(msg.SupportingDocs) != 32 {
 			logger.Warn(ctx, "%s : Contract supporting docs hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.SupportingDocs))
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	} else if msg.SupportingDocsFileType != 0 {
 		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.SupportingDocsFileType)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
 		logger.Warn(ctx, "%s : Expiration already passed : %s : %d", v.TraceID, contractPKH.String(), msg.ContractExpiration.Nano())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
 		logger.Warn(ctx, "%s : Invalid contract auth flags : %s : %s", v.TraceID, contractPKH.String(), err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
 		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
 			logger.Warn(ctx, "%s : Invalid voting system : %s : %s", v.TraceID, contractPKH.String(), err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	}
 
@@ -141,7 +141,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Contract amendment request invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Locate Contract
@@ -154,19 +154,19 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeOperatorAddress)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
 		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractQtyReduction)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
 	}
 
 	if ct.Revision != msg.ContractRevision {
 		logger.Warn(ctx, "%s : Incorrect contract revision (%s) : specified %d != current %d", v.TraceID, ct.ContractName, msg.ContractRevision, ct.Revision)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractRevision)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractRevision)
 	}
 
 	// TODO Validate that changes are allowed. Check votes, ...
@@ -200,7 +200,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// switch(amendment.FieldIndex) {
 	// default:
 	// logger.Warn(ctx, "%s : Incorrect contract amendment field offset (%s) : %d", v.TraceID, ct.ContractName, amendment.FieldIndex)
-	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMalformedAmendment)
+	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	// }
 	// }
 
@@ -220,7 +220,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	if msg.ChangeIssuerAddress {
 		if len(itx.Inputs) < 2 {
 			logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
 		}
 	}
 
@@ -232,7 +232,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 		if index >= len(itx.Inputs) {
 			logger.Warn(ctx, "%s : New operator specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewOperator)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
 		}
 	}
 

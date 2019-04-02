@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -30,8 +31,10 @@ type Transfer struct {
 }
 
 var (
-	frozenError       = errors.New("Holdings Frozen")
-	insufficientError = errors.New("Holdings Insufficient")
+	holdingsFrozenError = errors.New("Holdings Frozen")
+	assetFrozenError    = errors.New("Asset Frozen")
+	contractFrozenError = errors.New("Contract Frozen")
+	insufficientError   = errors.New("Holdings Insufficient")
 )
 
 // TransferRequest handles an incoming Transfer request.
@@ -49,7 +52,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Transfer invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if len(msg.Assets) == 0 {
@@ -58,7 +61,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
 		logger.Warn(ctx, "%s : Transfer expired : %s", v.TraceID)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeTransferExpired)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTransferExpired)
 	}
 
 	// Find "first" contract. The "first" contract of a transfer is the one responsible for
@@ -107,14 +110,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	settleTx, err = buildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Create initial settlement data
@@ -134,8 +137,17 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Add this contract's data to the settlement op return data
 	err = addSettlementData(ctx, t.MasterDB, rk, itx, msg, settleTx.MsgTx, &settlement)
-	if err == frozenError {
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeFrozen)
+	if err == holdingsFrozenError {
+		logger.Warn(ctx, "%s : Holdings Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectHoldingsFrozen)
+	}
+	if err == assetFrozenError {
+		logger.Warn(ctx, "%s : Asset Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
+	}
+	if err == contractFrozenError {
+		logger.Warn(ctx, "%s : Contract Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
 	}
 	if err != nil {
 		return err
@@ -386,8 +398,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	dbConn := masterDB
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	dataAdded := false
 
 	// Generate public key hashes for all the outputs
@@ -434,27 +445,38 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		}
 
 		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-		if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
+		if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractPKH.Bytes()) {
 			continue // This asset is not ours. Skip it.
 		}
 
+		ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to retrieve contract")
+		}
+		if ct.FreezePeriod.Nano() > v.Now.Nano() {
+			return contractFrozenError
+		}
+
 		// Locate Asset
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &assetTransfer.AssetCode)
-		if err != nil || as == nil {
-			return fmt.Errorf("Asset ID not found : %s %s : %s", contractAddr, assetTransfer.AssetCode, err)
+		as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetTransfer.AssetCode)
+		if err != nil {
+			return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode, err)
+		}
+		if as.FreezePeriod.Nano() > v.Now.Nano() {
+			return assetFrozenError
 		}
 
 		// Find contract input
 		contractInputIndex := uint16(0xffff)
 		for i, input := range settleInputAddresses {
-			if input != nil && bytes.Equal(input.Bytes(), contractAddr.Bytes()) {
+			if input != nil && bytes.Equal(input.Bytes(), contractPKH.Bytes()) {
 				contractInputIndex = uint16(i)
 				break
 			}
 		}
 
 		if contractInputIndex == uint16(0xffff) {
-			return fmt.Errorf("Contract input not found: %s %s", contractAddr, assetTransfer.AssetCode)
+			return fmt.Errorf("Contract input not found: %s %s", contractPKH, assetTransfer.AssetCode)
 		}
 
 		assetSettlement := protocol.AssetSettlement{
@@ -495,8 +517,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
-					contractAddr, assetTransfer.AssetCode, inputAddress)
-				return frozenError
+					contractPKH, assetTransfer.AssetCode, inputAddress)
+				return holdingsFrozenError
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
@@ -507,7 +529,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
 				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
-					contractAddr, assetTransfer.AssetCode, inputAddress)
+					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return insufficientError
 			}
 
@@ -782,7 +804,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	dbConn := t.MasterDB
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 
 	for _, assetSettlement := range msg.Assets {
 		if assetSettlement.AssetType == "CUR" && assetSettlement.AssetCode.IsZero() {
@@ -799,12 +821,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 		if !bytes.Equal(itx.Inputs[assetSettlement.ContractIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
 			continue // Asset not under this contract
-		}
-
-		as, err := asset.Retrieve(ctx, dbConn, contractAddr, &assetSettlement.AssetCode)
-		if err != nil || as == nil {
-			logger.Warn(ctx, "%s : Asset not found: %x %x", v.TraceID, contractAddr, assetSettlement.AssetCode)
-			return node.ErrNoResponse
 		}
 
 		// Create update record
@@ -826,7 +842,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 
 		// Update database
-		err = asset.Update(ctx, dbConn, contractAddr, &assetSettlement.AssetCode, &ua, v.Now)
+		err := asset.Update(ctx, dbConn, contractPKH, &assetSettlement.AssetCode, &ua, v.Now)
 		if err != nil {
 			return err
 		}

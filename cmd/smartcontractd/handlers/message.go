@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -46,7 +47,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Message invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
@@ -66,12 +67,12 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	_, err := messagePayload.Write(msg.MessagePayload)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to parse message payload : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if err := messagePayload.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Message %d payload is invalid : %s", v.TraceID, msg.MessageType, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	switch payload := messagePayload.(type) {
@@ -175,7 +176,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
 		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
@@ -183,7 +184,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
 		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeMalformed)
+		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Serialize received settlement data into OP_RETURN output.
@@ -200,9 +201,17 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 
 	// Add this contract's data to the settlement op return data
 	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement)
-	if err == frozenError {
-		logger.Warn(ctx, "%s : Assets Frozen. Rejecting Transfer", v.TraceID)
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectionCodeFrozen)
+	if err == holdingsFrozenError {
+		logger.Warn(ctx, "%s : Holdings Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectHoldingsFrozen)
+	}
+	if err == assetFrozenError {
+		logger.Warn(ctx, "%s : Asset Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
+	}
+	if err == contractFrozenError {
+		logger.Warn(ctx, "%s : Contract Frozen. Rejecting Transfer", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
 	}
 	if err != nil {
 		return err
@@ -299,9 +308,23 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Transfer invalid for transfer tx")
 	}
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
 	// Verify all the data for this contract is correct.
 	err := verifySettlement(ctx, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement)
 	if err != nil {
+		if err == holdingsFrozenError {
+			logger.Warn(ctx, "%s : Holdings Frozen. Rejecting Transfer", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectHoldingsFrozen)
+		}
+		if err == assetFrozenError {
+			logger.Warn(ctx, "%s : Asset Frozen. Rejecting Transfer", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
+		}
+		if err == contractFrozenError {
+			logger.Warn(ctx, "%s : Contract Frozen. Rejecting Transfer", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
+		}
 		return errors.Wrap(err, "Failed to validate settlement data")
 	}
 
@@ -312,8 +335,6 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	if err != nil {
 		return errors.Wrap(err, "Failed to compose settle tx")
 	}
-
-	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Sign this contracts input of the settle tx.
 	signed := false
@@ -456,27 +477,37 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(hash160.Sum(nil)))
 	}
 
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 
 	for assetOffset, assetTransfer := range transfer.Assets {
 		assetIsBitcoin := assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()
 
-		if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
-			return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
-		}
-
-		contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-		if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractAddr.Bytes()) {
-			continue // This asset is not for this contract.
-		}
-
-		// Locate Asset
 		var as *state.Asset
-		var err error
 		if !assetIsBitcoin {
-			as, err = asset.Retrieve(ctx, masterDB, contractAddr, &assetTransfer.AssetCode)
-			if err != nil || as == nil {
-				return fmt.Errorf("Asset ID not found : %s %s : %s", contractAddr, assetTransfer.AssetCode, err)
+			if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
+				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
+			}
+
+			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
+			if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractPKH.Bytes()) {
+				continue // This asset is not for this contract.
+			}
+
+			ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
+			if err != nil {
+				return errors.Wrap(err, "Failed to retrieve contract")
+			}
+			if ct.FreezePeriod.Nano() > v.Now.Nano() {
+				return contractFrozenError
+			}
+
+			// Locate Asset
+			as, err = asset.Retrieve(ctx, masterDB, contractPKH, &assetTransfer.AssetCode)
+			if err != nil {
+				return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode, err)
+			}
+			if as.FreezePeriod.Nano() > v.Now.Nano() {
+				return assetFrozenError
 			}
 		}
 
@@ -526,8 +557,8 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !assetIsBitcoin && !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
-					contractAddr, assetTransfer.AssetCode, inputAddress)
-				return frozenError
+					contractPKH, assetTransfer.AssetCode, inputAddress)
+				return holdingsFrozenError
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
@@ -543,7 +574,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
 				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
-					contractAddr, assetTransfer.AssetCode, inputAddress)
+					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return insufficientError
 			}
 

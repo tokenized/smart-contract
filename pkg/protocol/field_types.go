@@ -92,6 +92,80 @@ func (m *Administrator) Equal(other Administrator) bool {
 	return true
 }
 
+// AgeRestriction Age restriction is used to specify required ages for
+// asset ownership.
+type AgeRestriction struct {
+	Lower uint8 `json:"lower,omitempty"` // The lowest age valid to own asset. Zero for no restriction.
+	Upper uint8 `json:"upper,omitempty"` // The highest age valid to own asset. Zero for no restriction.
+}
+
+// Serialize returns the byte representation of the message.
+func (m AgeRestriction) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	// Lower (uint8)
+	{
+		if err := write(buf, m.Lower); err != nil {
+			return nil, err
+		}
+	}
+
+	// Upper (uint8)
+	{
+		if err := write(buf, m.Upper); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (m *AgeRestriction) Write(buf *bytes.Buffer) error {
+
+	// Lower (uint8)
+	{
+		if err := read(buf, &m.Lower); err != nil {
+			return err
+		}
+	}
+
+	// Upper (uint8)
+	{
+		if err := read(buf, &m.Upper); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *AgeRestriction) Validate() error {
+
+	// Lower (uint8)
+	{
+	}
+
+	// Upper (uint8)
+	{
+	}
+
+	return nil
+}
+
+func (m *AgeRestriction) Equal(other AgeRestriction) bool {
+
+	// Lower (uint8)
+	if m.Lower != other.Lower {
+		return false
+	}
+
+	// Upper (uint8)
+	if m.Upper != other.Upper {
+		return false
+	}
+	return true
+}
+
 // Amendment An Amendment is used to describe the modification of a single
 // field in a Contract or Asset, as defined in the ContractFormation and
 // AssetCreation messages.

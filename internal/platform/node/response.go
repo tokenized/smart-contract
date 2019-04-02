@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -73,10 +74,22 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	// Add a dust output to the sender, but so they will also receive change.
 	rejectTx.AddP2PKHDustOutput(sender.ScriptAddress(), true)
 
+	rejectionCodes, err := protocol.GetRejectionCodes()
+	if err != nil {
+		Error(ctx, w, err)
+		return ErrNoResponse
+	}
+
+	rejectionCode, exists := rejectionCodes[code]
+	if !exists {
+		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
+		return ErrNoResponse
+	}
+
 	// Build rejection
 	rejection := protocol.Rejection{
 		RejectionType:  code,
-		MessagePayload: string(protocol.RejectionCodes[code]),
+		MessagePayload: string(rejectionCode.Text),
 	}
 
 	// Add the rejection payload
@@ -153,7 +166,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
-			return RespondReject(ctx, w, itx, rk, protocol.RejectionCodeInsufficientValue)
+			return RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse

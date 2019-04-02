@@ -444,13 +444,13 @@ func (m Currency) String() string {
 
 // LoyaltyPoints asset type.
 type LoyaltyPoints struct {
-	Version             uint8     `json:"version,omitempty"`              // Payload Version
-	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
-	OfferType           byte      `json:"offer_type,omitempty"`           //
-	OfferName           string    `json:"offer_name,omitempty"`           //
-	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
-	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
-	Description         string    `json:"description,omitempty"`          //
+	Version             uint8          `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	OfferType           byte           `json:"offer_type,omitempty"`           //
+	OfferName           string         `json:"offer_name,omitempty"`           //
+	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
+	Description         string         `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -488,7 +488,7 @@ func (m *LoyaltyPoints) Serialize() ([]byte, error) {
 		}
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
 		if err := write(buf, m.AgeRestriction); err != nil {
 			return nil, err
@@ -545,9 +545,9 @@ func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
-		if err := read(buf, &m.AgeRestriction); err != nil {
+		if err := m.AgeRestriction.Write(buf); err != nil {
 			return 0, err
 		}
 
@@ -604,8 +604,12 @@ func (m *LoyaltyPoints) Validate() error {
 	{
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
+		if err := m.AgeRestriction.Validate(); err != nil {
+			return fmt.Errorf("field AgeRestriction is invalid : %s", err)
+		}
+
 	}
 
 	// OfferType (byte)
@@ -661,13 +665,13 @@ func (m LoyaltyPoints) String() string {
 
 // Membership asset type.
 type Membership struct {
-	Version             uint8     `json:"version,omitempty"`              // Payload Version
-	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
-	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
-	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
-	ID                  string    `json:"id,omitempty"`                   //
-	MembershipType      string    `json:"membership_type,omitempty"`      //
-	Description         string    `json:"description,omitempty"`          //
+	Version             uint8          `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
+	ID                  string         `json:"id,omitempty"`                   //
+	MembershipType      string         `json:"membership_type,omitempty"`      //
+	Description         string         `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -705,7 +709,7 @@ func (m *Membership) Serialize() ([]byte, error) {
 		}
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
 		if err := write(buf, m.AgeRestriction); err != nil {
 			return nil, err
@@ -762,9 +766,9 @@ func (m *Membership) Write(b []byte) (int, error) {
 
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
-		if err := read(buf, &m.AgeRestriction); err != nil {
+		if err := m.AgeRestriction.Write(buf); err != nil {
 			return 0, err
 		}
 
@@ -822,8 +826,12 @@ func (m *Membership) Validate() error {
 	{
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
+		if err := m.AgeRestriction.Validate(); err != nil {
+			return fmt.Errorf("field AgeRestriction is invalid : %s", err)
+		}
+
 	}
 
 	// ValidFrom (Timestamp)
@@ -1057,17 +1065,17 @@ func (m ShareCommon) String() string {
 
 // TicketAdmission asset type.
 type TicketAdmission struct {
-	Version             uint8     `json:"version,omitempty"`              // Payload Version
-	AgeRestriction      uint8     `json:"age_restriction,omitempty"`      //
-	AdmissionType       string    `json:"admission_type,omitempty"`       //
-	Venue               string    `json:"venue,omitempty"`                //
-	Class               string    `json:"class,omitempty"`                //
-	Area                string    `json:"area,omitempty"`                 //
-	Seat                string    `json:"seat,omitempty"`                 //
-	StartTimeDate       Timestamp `json:"start_time_date,omitempty"`      //
-	ValidFrom           Timestamp `json:"valid_from,omitempty"`           //
-	ExpirationTimestamp Timestamp `json:"expiration_timestamp,omitempty"` //
-	Description         string    `json:"description,omitempty"`          //
+	Version             uint8          `json:"version,omitempty"`              // Payload Version
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	AdmissionType       string         `json:"admission_type,omitempty"`       //
+	Venue               string         `json:"venue,omitempty"`                //
+	Class               string         `json:"class,omitempty"`                //
+	Area                string         `json:"area,omitempty"`                 //
+	Seat                string         `json:"seat,omitempty"`                 //
+	StartTimeDate       Timestamp      `json:"start_time_date,omitempty"`      //
+	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
+	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
+	Description         string         `json:"description,omitempty"`          //
 }
 
 // Type returns the type identifer for this message.
@@ -1105,7 +1113,7 @@ func (m *TicketAdmission) Serialize() ([]byte, error) {
 		}
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
 		if err := write(buf, m.AgeRestriction); err != nil {
 			return nil, err
@@ -1190,9 +1198,9 @@ func (m *TicketAdmission) Write(b []byte) (int, error) {
 
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
-		if err := read(buf, &m.AgeRestriction); err != nil {
+		if err := m.AgeRestriction.Write(buf); err != nil {
 			return 0, err
 		}
 
@@ -1285,8 +1293,12 @@ func (m *TicketAdmission) Validate() error {
 	{
 	}
 
-	// AgeRestriction (uint8)
+	// AgeRestriction (AgeRestriction)
 	{
+		if err := m.AgeRestriction.Validate(); err != nil {
+			return fmt.Errorf("field AgeRestriction is invalid : %s", err)
+		}
+
 	}
 
 	// AdmissionType (string)

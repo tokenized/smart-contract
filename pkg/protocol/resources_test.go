@@ -4,6 +4,20 @@ import (
 	"testing"
 )
 
+func TestRejectionCodes(t *testing.T) {
+	rejectionCodes, err := GetRejectionCodes()
+	if err != nil {
+		t.Fatalf("Failed to get rejection codes : %s\n", err)
+	}
+	t.Logf("Loaded %d rejection codes.\n", len(rejectionCodes))
+
+	msgMalformed, exists := rejectionCodes[1]
+	if !exists {
+		t.Fatalf("MsgMalformed not found in rejection codes\n")
+	}
+	t.Logf("MsgMalformed :\n%+v\n", msgMalformed)
+}
+
 func TestCurrencies(t *testing.T) {
 	currencies, err := GetCurrencies()
 	if err != nil {
