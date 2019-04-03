@@ -84,7 +84,7 @@ func GetEntities() (map[string]EntityType, error) {
 	return entities, nil
 }
 
-type Polity struct {
+type PolityType struct {
 	Name          string
 	States        map[string]string
 	Flag          string
@@ -92,15 +92,15 @@ type Polity struct {
 	GovFiscalYear string `yaml:"gov_fiscal_year"`
 }
 
-var polities map[string]Polity
+var polities map[string]PolityType
 
-func GetPolities() (map[string]Polity, error) {
+func GetPolities() (map[string]PolityType, error) {
 	if polities != nil {
 		return polities, nil
 	}
 
 	load := struct {
-		Values map[string]Polity
+		Values map[string]PolityType
 	}{}
 
 	if err := yaml.Unmarshal([]byte(yamlPolities), &load); err != nil {
@@ -1730,7 +1730,7 @@ var yamlPolities = `
 metadata:
   name: Polities
   description: "Polities (eg. Countries/Nation-States (ISO-3166 Alpha-3), Political Unions, International Organizations, etc.)"
-  type: Polity
+  type: PolityType
 
 
 values:

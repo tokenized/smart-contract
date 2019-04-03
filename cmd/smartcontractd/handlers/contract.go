@@ -3,18 +3,21 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -52,7 +55,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExists)
 		} else {
-			return errors.Wrap(err, "Failed to retreive contract")
+			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 	}
 
@@ -148,7 +151,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
 	if err != nil {
-		return errors.Wrap(err, "Failed to retreive contract")
+		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
@@ -169,9 +172,84 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractRevision)
 	}
 
-	// TODO Validate that changes are allowed. Check votes, ...
-	// TODO Verify RefTxID data
-	//msg.RefTxID               []byte
+	// Check proposal if there was one
+	proposed := false
+	proposalInitiator := uint8(0)
+	votingSystem := uint8(0)
+
+	if !msg.RefTxID.IsZero() { // Vote Result Action allowing these amendments
+		proposed = true
+
+		refTxId, err := chainhash.NewHash(msg.RefTxID.Bytes())
+		if err != nil {
+			return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+		}
+
+		// Retrieve Vote Result
+		voteResultTx := c.TxCache.GetTx(ctx, refTxId)
+		if voteResultTx == nil {
+			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+		if !ok {
+			logger.Warn(ctx, "%s : Vote Result invalid for amendment", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		// Retrieve the vote
+		vt, err := vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+		if err == vote.ErrNotFound {
+			logger.Warn(ctx, "%s : Vote not found : %s", v.TraceID, voteResult.VoteTxId.String())
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
+		} else if err != nil {
+			logger.Warn(ctx, "%s : Failed to retrieve vote : %s : %s", v.TraceID, voteResult.VoteTxId.String(), err)
+			return errors.Wrap(err, "Failed to retrieve vote")
+		}
+
+		if vt.CompletedAt.Nano() == 0 {
+			logger.Warn(ctx, "%s : Vote not complete yet", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if vt.Result != "A" {
+			logger.Warn(ctx, "%s : Vote result not A(Accept)", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if !vt.Specific {
+			logger.Warn(ctx, "%s : Vote was not for specific amendments", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if vt.AssetSpecificVote {
+			logger.Warn(ctx, "%s : Vote was not for contract amendments", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		// Verify proposal amendments match these amendments.
+		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
+			logger.Warn(ctx, "%s : Proposal has different count of amendments : %d != %d",
+				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		for i, amendment := range voteResult.ProposedAmendments {
+			if !amendment.Equal(msg.Amendments[i]) {
+				logger.Warn(ctx, "%s : Proposal amendment %d doesn't match", v.TraceID, i)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			}
+		}
+
+		proposalInitiator = vt.Initiator
+		votingSystem = vt.VoteSystem
+	}
+
+	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
+		logger.Warn(ctx, "%s : Contract amendments not permitted : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+	}
 
 	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractPKH.String())
 
@@ -181,33 +259,22 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Get current state
 	err = node.Convert(ctx, &ct, &cf)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to convert state contract to contract formation")
 	}
 
 	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = v.Now
 
-	// TODO Implement contract amendments
-	// type Amendment struct {
-	// FieldIndex    uint8
-	// Element       uint16
-	// SubfieldIndex uint8
-	// Operation     uint8
-	// Data          []byte
-	// }
-	// for _, amendment := range msg.Amendments {
-	// switch(amendment.FieldIndex) {
-	// default:
-	// logger.Warn(ctx, "%s : Incorrect contract amendment field offset (%s) : %d", v.TraceID, ct.ContractName, amendment.FieldIndex)
-	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	// }
-	// }
+	if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
+		logger.Warn(ctx, "%s : Contract amendments failed : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
 
 	// Convert to btcutil.Address
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &c.Config.ChainParams)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
 
 	// Build outputs
@@ -475,6 +542,465 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// TODO Mark vote as "applied" if this amendment was a result of a vote.
 		// Pull
+	}
+
+	return nil
+}
+
+// checkContractAmendmentsPermissions verifies that the amendments are permitted bases on the auth flags.
+func checkContractAmendmentsPermissions(ct *state.Contract, amendments []protocol.Amendment, proposed bool,
+	proposalInitiator, votingSystem uint8) error {
+
+	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, contract.FieldCount, len(ct.VotingSystems))
+	if err != nil {
+		return fmt.Errorf("Invalid contract auth flags : %s", err)
+	}
+
+	for _, amendment := range amendments {
+		if int(amendment.FieldIndex) >= len(permissions) {
+			return fmt.Errorf("Amendment field index out of range : %d", amendment.FieldIndex)
+		}
+		if proposed {
+			switch proposalInitiator {
+			case 0: // Issuer
+				if !permissions[amendment.FieldIndex].IssuerProposal {
+					return fmt.Errorf("Field %d amendment not permitted by issuer proposal", amendment.FieldIndex)
+				}
+			case 1: // Holder
+				if !permissions[amendment.FieldIndex].HolderProposal {
+					return fmt.Errorf("Field %d amendment not permitted by holder proposal", amendment.FieldIndex)
+				}
+			default:
+				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+			}
+
+			if int(votingSystem) >= len(permissions[amendment.FieldIndex].VotingSystemsAllowed) {
+				return fmt.Errorf("Field %d amendment voting system out of range : %d", amendment.FieldIndex, votingSystem)
+			}
+			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
+				return fmt.Errorf("Field %d amendment not allowed using voting system %d", amendment.FieldIndex, votingSystem)
+			}
+		} else if !permissions[amendment.FieldIndex].Permitted {
+			return fmt.Errorf("Field %d amendment not permitted without proposal", amendment.FieldIndex)
+		}
+	}
+
+	return nil
+}
+
+// applyContractAmendments applies the amendments to the contract formation.
+func applyContractAmendments(cf *protocol.ContractFormation, amendments []protocol.Amendment) error {
+	authFieldsUpdated := false
+	for _, amendment := range amendments {
+		switch amendment.FieldIndex {
+		case 0: // ContractName
+			cf.ContractName = string(amendment.Data)
+
+		case 1: // BodyOfAgreementType
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("BodyOfAgreementType amendment value is wrong size : %d", len(amendment.Data))
+			}
+			cf.BodyOfAgreementType = uint8(amendment.Data[0])
+
+		case 2: // BodyOfAgreement
+			cf.BodyOfAgreement = amendment.Data
+
+		case 3: // ContractType
+			cf.ContractType = string(amendment.Data)
+
+		case 4: // SupportingDocsFileType
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("SupportingDocsFileType amendment value is wrong size : %d", len(amendment.Data))
+			}
+			cf.SupportingDocsFileType = uint8(amendment.Data[0])
+
+		case 5: // SupportingDocs
+			cf.SupportingDocs = amendment.Data
+
+		case 6: // GoverningLaw
+			cf.GoverningLaw = string(amendment.Data)
+
+		case 7: // Jurisdiction
+			cf.Jurisdiction = string(amendment.Data)
+
+		case 8: // ContractExpiration
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := cf.ContractExpiration.Write(buf); err != nil {
+				return fmt.Errorf("ContractExpiration amendment value failed to deserialize : %s", err)
+			}
+
+		case 9: // ContractURI
+			cf.ContractURI = string(amendment.Data)
+
+		case 10: // Issuer
+			switch amendment.SubfieldIndex {
+			case 0: // Name
+				cf.Issuer.Name = string(amendment.Data)
+
+			case 1: // Type
+				if len(amendment.Data) != 1 {
+					return fmt.Errorf("Issuer.Type amendment value is wrong size : %d", len(amendment.Data))
+				}
+				cf.Issuer.Type = amendment.Data[0]
+
+			case 2: // LEI
+				cf.Issuer.LEI = string(amendment.Data)
+
+			case 3: // AddressIncluded
+				return fmt.Errorf("Amendment attempting to change Issuer.AddressIncluded")
+
+			case 4: // UnitNumber
+				cf.Issuer.UnitNumber = string(amendment.Data)
+
+			case 5: // BuildingNumber
+				cf.Issuer.BuildingNumber = string(amendment.Data)
+
+			case 6: // Street
+				cf.Issuer.Street = string(amendment.Data)
+
+			case 7: // SuburbCity
+				cf.Issuer.SuburbCity = string(amendment.Data)
+
+			case 8: // TerritoryStateProvinceCode
+				cf.Issuer.TerritoryStateProvinceCode = string(amendment.Data)
+
+			case 9: // CountryCode
+				cf.Issuer.CountryCode = string(amendment.Data)
+
+			case 10: // PostalZIPCode
+				cf.Issuer.PostalZIPCode = string(amendment.Data)
+
+			case 11: // EmailAddress
+				cf.Issuer.EmailAddress = string(amendment.Data)
+
+			case 12: // PhoneNumber
+				cf.Issuer.PhoneNumber = string(amendment.Data)
+
+			case 13: // Administration []Administrator
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.Issuer.Administration[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment Issuer.Administration[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newAdministrator := protocol.Administrator{}
+					if err := newAdministrator.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to Issuer.Administration failed to deserialize : %s",
+							err)
+					}
+					cf.Issuer.Administration = append(cf.Issuer.Administration, newAdministrator)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
+							amendment.SubfieldElement)
+					}
+					cf.Issuer.Administration = append(cf.Issuer.Administration[:amendment.SubfieldElement],
+						cf.Issuer.Administration[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for Issuer.Administration : %d", amendment.Operation)
+				}
+
+			case 14: // Management []Manager
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.Issuer.Management[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment Issuer.Management[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newManager := protocol.Manager{}
+					if err := newManager.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to Issuer.Management failed to deserialize : %s",
+							err)
+					}
+					cf.Issuer.Management = append(cf.Issuer.Management, newManager)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
+							amendment.SubfieldElement)
+					}
+					cf.Issuer.Management = append(cf.Issuer.Management[:amendment.SubfieldElement],
+						cf.Issuer.Management[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for Issuer.Management : %d", amendment.Operation)
+				}
+
+			default:
+				return fmt.Errorf("Contract amendment subfield offset for Issuer out of range : %d", amendment.SubfieldIndex)
+			}
+
+		case 11: // IssuerLogoURL
+			cf.IssuerLogoURL = string(amendment.Data)
+
+		case 12: // ContractOperatorIncluded
+			return fmt.Errorf("Amendment attempting to change ContractOperatorIncluded")
+
+		case 13: // ContractOperator
+			switch amendment.SubfieldIndex {
+			case 0: // Name
+				cf.ContractOperator.Name = string(amendment.Data)
+
+			case 1: // Type
+				if len(amendment.Data) != 1 {
+					return fmt.Errorf("ContractOperator.Type amendment value is wrong size : %d", len(amendment.Data))
+				}
+				cf.ContractOperator.Type = amendment.Data[0]
+
+			case 2: // LEI
+				cf.ContractOperator.LEI = string(amendment.Data)
+
+			case 3: // AddressIncluded
+				return fmt.Errorf("Amendment attempting to change ContractOperator.AddressIncluded")
+
+			case 4: // UnitNumber
+				cf.ContractOperator.UnitNumber = string(amendment.Data)
+
+			case 5: // BuildingNumber
+				cf.ContractOperator.BuildingNumber = string(amendment.Data)
+
+			case 6: // Street
+				cf.ContractOperator.Street = string(amendment.Data)
+
+			case 7: // SuburbCity
+				cf.ContractOperator.SuburbCity = string(amendment.Data)
+
+			case 8: // TerritoryStateProvinceCode
+				cf.ContractOperator.TerritoryStateProvinceCode = string(amendment.Data)
+
+			case 9: // CountryCode
+				cf.ContractOperator.CountryCode = string(amendment.Data)
+
+			case 10: // PostalZIPCode
+				cf.ContractOperator.PostalZIPCode = string(amendment.Data)
+
+			case 11: // EmailAddress
+				cf.ContractOperator.EmailAddress = string(amendment.Data)
+
+			case 12: // PhoneNumber
+				cf.ContractOperator.PhoneNumber = string(amendment.Data)
+
+			case 13: // Administration []Administrator
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.ContractOperator.Administration[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment ContractOperator.Administration[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newAdministrator := protocol.Administrator{}
+					if err := newAdministrator.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to ContractOperator.Administration failed to deserialize : %s",
+							err)
+					}
+					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration, newAdministrator)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
+							amendment.SubfieldElement)
+					}
+					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration[:amendment.SubfieldElement],
+						cf.ContractOperator.Administration[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Administration : %d", amendment.Operation)
+				}
+
+			case 14: // Management []Manager
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.ContractOperator.Management[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment ContractOperator.Management[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newManager := protocol.Manager{}
+					if err := newManager.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to ContractOperator.Management failed to deserialize : %s",
+							err)
+					}
+					cf.ContractOperator.Management = append(cf.ContractOperator.Management, newManager)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
+							amendment.SubfieldElement)
+					}
+					cf.ContractOperator.Management = append(cf.ContractOperator.Management[:amendment.SubfieldElement],
+						cf.ContractOperator.Management[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Management : %d", amendment.Operation)
+				}
+
+			default:
+				return fmt.Errorf("Contract amendment subfield offset for ContractOperator out of range : %d", amendment.SubfieldIndex)
+			}
+
+		case 14: // ContractAuthFlags
+			cf.ContractAuthFlags = amendment.Data
+			authFieldsUpdated = true
+
+		case 15: // ContractFee
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("ContractFee amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.ContractFee); err != nil {
+				return fmt.Errorf("ContractFee amendment value failed to deserialize : %s", err)
+			}
+
+		case 16: // VotingSystems
+			switch amendment.Operation {
+			case 0: // Modify
+				if int(amendment.Element) >= len(cf.VotingSystems) {
+					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
+						amendment.Element)
+				}
+
+				buf := bytes.NewBuffer(amendment.Data)
+				if err := cf.VotingSystems[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment VotingSystems[%d] failed to deserialize : %s",
+						amendment.Element, err)
+				}
+
+			case 1: // Add element
+				buf := bytes.NewBuffer(amendment.Data)
+				newVotingSystem := protocol.VotingSystem{}
+				if err := newVotingSystem.Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment addition to VotingSystems failed to deserialize : %s",
+						err)
+				}
+				cf.VotingSystems = append(cf.VotingSystems, newVotingSystem)
+
+			case 2: // Delete element
+				if int(amendment.Element) >= len(cf.VotingSystems) {
+					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
+						amendment.Element)
+				}
+				cf.VotingSystems = append(cf.VotingSystems[:amendment.Element],
+					cf.VotingSystems[amendment.Element+1:]...)
+
+			default:
+				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d", amendment.Operation)
+			}
+
+		case 17: // RestrictedQtyAssets
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.RestrictedQtyAssets); err != nil {
+				return fmt.Errorf("RestrictedQtyAssets amendment value failed to deserialize : %s", err)
+			}
+
+		case 18: // IssuerProposal
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("IssuerProposal amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.IssuerProposal); err != nil {
+				return fmt.Errorf("IssuerProposal amendment value failed to deserialize : %s", err)
+			}
+
+		case 19: // HolderProposal
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.HolderProposal); err != nil {
+				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
+			}
+
+		case 20: // Registries
+			switch amendment.Operation {
+			case 0: // Modify
+				if int(amendment.Element) >= len(cf.Registries) {
+					return fmt.Errorf("Contract amendment element out of range for Registries : %d",
+						amendment.Element)
+				}
+
+				buf := bytes.NewBuffer(amendment.Data)
+				if err := cf.Registries[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment Registries[%d] failed to deserialize : %s",
+						amendment.Element, err)
+				}
+
+			case 1: // Add element
+				buf := bytes.NewBuffer(amendment.Data)
+				newRegistry := protocol.Registry{}
+				if err := newRegistry.Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment addition to Registries failed to deserialize : %s",
+						err)
+				}
+				cf.Registries = append(cf.Registries, newRegistry)
+
+			case 2: // Delete element
+				if int(amendment.Element) >= len(cf.Registries) {
+					return fmt.Errorf("Contract amendment element out of range for Registries : %d",
+						amendment.Element)
+				}
+				cf.Registries = append(cf.Registries[:amendment.Element],
+					cf.Registries[amendment.Element+1:]...)
+
+			default:
+				return fmt.Errorf("Invalid contract amendment operation for Registries : %d", amendment.Operation)
+			}
+
+		default:
+			return fmt.Errorf("Contract amendment field offset out of range : %d", amendment.FieldIndex)
+		}
+	}
+
+	if authFieldsUpdated {
+		if _, err := protocol.ReadAuthFlags(cf.ContractAuthFlags, contract.FieldCount, len(cf.VotingSystems)); err != nil {
+			return fmt.Errorf("Invalid contract auth flags : %s", err)
+		}
+	}
+
+	// Check validity of updated contract data
+	if err := cf.Validate(); err != nil {
+		return fmt.Errorf("Contract data invalid after amendments : %s", err)
 	}
 
 	return nil

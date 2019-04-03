@@ -170,11 +170,12 @@ func (m *AgeRestriction) Equal(other AgeRestriction) bool {
 // field in a Contract or Asset, as defined in the ContractFormation and
 // AssetCreation messages.
 type Amendment struct {
-	FieldIndex    uint8  `json:"field_index,omitempty"`    // Index of the field to be amended.
-	Element       uint16 `json:"element,omitempty"`        // Specifies the element of the complex array type to be amended. This only applies to array types, and has no meaning for a simple type such as uint64, string, byte or byte[]. Specifying a value > 0 for a simple type will result in a Rejection.
-	SubfieldIndex uint8  `json:"subfield_index,omitempty"` // Index of the subfield to be amended. This only applies to specific fields of an element in an array. This is used to specify which field of the array element the amendment applies to.
-	Operation     uint8  `json:"operation,omitempty"`      // 0 = Modify. 1 = Add an element to the data to the array of elements. 2 = Delete the element listed in the Element field. The Add and Delete operations only apply to a particilar element of a complex array type. For example, it could be used to remove a particular VotingSystem from a Contract.
-	Data          string `json:"data,omitempty"`           // New data for the amended subfield. Data type depends on the the type of the field being amended.
+	FieldIndex      uint8  `json:"field_index,omitempty"`      // Index of the field to be amended.
+	Element         uint16 `json:"element,omitempty"`          // Specifies the element of the complex array type to be amended. This only applies to array types, and has no meaning for a simple type such as uint64, string, byte or byte[]. Specifying a value > 0 for a simple type will result in a Rejection.
+	SubfieldIndex   uint8  `json:"subfield_index,omitempty"`   // Index of the subfield to be amended. This only applies to specific fields containing complex types with subfields. This is used to specify which field of the object the amendment applies to.
+	SubfieldElement uint16 `json:"subfield_element,omitempty"` // Specifies the element of the complex array type to be amended. This only applies to array types, and has no meaning for a simple type such as uint64, string, byte or byte[]. Specifying a value > 0 for a simple type will result in a Rejection.
+	Operation       uint8  `json:"operation,omitempty"`        // 0 = Modify. 1 = Add an element to the data to the array of elements. 2 = Delete the element listed in the Element field. The Add and Delete operations only apply to a particilar element of a complex array type. For example, it could be used to remove a particular VotingSystem from a Contract.
+	Data            []byte `json:"data,omitempty"`             // New data for the amended subfield. Data type depends on the the type of the field being amended. The value should be serialize as defined by the protocol.
 }
 
 // Serialize returns the byte representation of the message.
@@ -202,6 +203,13 @@ func (m Amendment) Serialize() ([]byte, error) {
 		}
 	}
 
+	// SubfieldElement (uint16)
+	{
+		if err := write(buf, m.SubfieldElement); err != nil {
+			return nil, err
+		}
+	}
+
 	// Operation (uint8)
 	{
 		if err := write(buf, m.Operation); err != nil {
@@ -209,9 +217,9 @@ func (m Amendment) Serialize() ([]byte, error) {
 		}
 	}
 
-	// Data (string)
+	// Data ([]byte)
 	{
-		if err := WriteVarChar(buf, m.Data, 32); err != nil {
+		if err := WriteVarBin(buf, m.Data, 32); err != nil {
 			return nil, err
 		}
 	}
@@ -242,6 +250,13 @@ func (m *Amendment) Write(buf *bytes.Buffer) error {
 		}
 	}
 
+	// SubfieldElement (uint16)
+	{
+		if err := read(buf, &m.SubfieldElement); err != nil {
+			return err
+		}
+	}
+
 	// Operation (uint8)
 	{
 		if err := read(buf, &m.Operation); err != nil {
@@ -249,10 +264,10 @@ func (m *Amendment) Write(buf *bytes.Buffer) error {
 		}
 	}
 
-	// Data (string)
+	// Data ([]byte)
 	{
 		var err error
-		m.Data, err = ReadVarChar(buf, 32)
+		m.Data, err = ReadVarBin(buf, 32)
 		if err != nil {
 			return err
 		}
@@ -275,14 +290,18 @@ func (m *Amendment) Validate() error {
 	{
 	}
 
+	// SubfieldElement (uint16)
+	{
+	}
+
 	// Operation (uint8)
 	{
 	}
 
-	// Data (string)
+	// Data ([]byte)
 	{
 		if len(m.Data) > (2<<32)-1 {
-			return fmt.Errorf("varchar field Data too long %d/%d", len(m.Data), (2<<32)-1)
+			return fmt.Errorf("varbin field Data too long %d/%d", len(m.Data), (2<<32)-1)
 		}
 	}
 
@@ -306,13 +325,18 @@ func (m *Amendment) Equal(other Amendment) bool {
 		return false
 	}
 
+	// SubfieldElement (uint16)
+	if m.SubfieldElement != other.SubfieldElement {
+		return false
+	}
+
 	// Operation (uint8)
 	if m.Operation != other.Operation {
 		return false
 	}
 
-	// Data (string)
-	if m.Data != other.Data {
+	// Data ([]byte)
+	if !bytes.Equal(m.Data, other.Data) {
 		return false
 	}
 	return true

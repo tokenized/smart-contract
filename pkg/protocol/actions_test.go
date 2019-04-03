@@ -37,9 +37,11 @@ func TestAssetDefinition(t *testing.T) {
 		initialMessage.TransfersPermitted = true
 	}
 
-	// TradeRestrictions (Polities)
+	// TradeRestrictions (Polity[])
 	{
-		initialMessage.TradeRestrictions = Polities{}
+		for i := 0; i < 2; i++ {
+			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, Polity{})
+		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -138,8 +140,10 @@ func TestAssetDefinition(t *testing.T) {
 		t.Errorf("TransfersPermitted doesn't match : %v != %v", initialMessage.TransfersPermitted, decodedMessage.TransfersPermitted)
 	}
 
-	// TradeRestrictions (Polities)
-	// Polities test compare not setup
+	// TradeRestrictions (Polity[])
+	if len(initialMessage.TradeRestrictions) != len(decodedMessage.TradeRestrictions) {
+		t.Errorf("TradeRestrictions lengths don't match : %d != %d", len(initialMessage.TradeRestrictions), len(decodedMessage.TradeRestrictions))
+	}
 
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
@@ -214,14 +218,21 @@ func TestAssetCreation(t *testing.T) {
 		initialMessage.TransfersPermitted = true
 	}
 
-	// TradeRestrictions (Polities)
+	// TradeRestrictions (Polity[])
 	{
-		initialMessage.TradeRestrictions = Polities{}
+		for i := 0; i < 2; i++ {
+			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, Polity{})
+		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
 	{
 		initialMessage.EnforcementOrdersPermitted = true
+	}
+
+	// VotingRights (bool)
+	{
+		initialMessage.VotingRights = true
 	}
 
 	// VoteMultiplier (uint)
@@ -253,7 +264,7 @@ func TestAssetCreation(t *testing.T) {
 	{
 		initialMessage.AssetPayload = make([]byte, 0, 16)
 		for i := uint64(0); i < 16; i++ {
-			initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+11))
+			initialMessage.AssetPayload = append(initialMessage.AssetPayload, byte(65+i+12))
 		}
 	}
 
@@ -320,12 +331,19 @@ func TestAssetCreation(t *testing.T) {
 		t.Errorf("TransfersPermitted doesn't match : %v != %v", initialMessage.TransfersPermitted, decodedMessage.TransfersPermitted)
 	}
 
-	// TradeRestrictions (Polities)
-	// Polities test compare not setup
+	// TradeRestrictions (Polity[])
+	if len(initialMessage.TradeRestrictions) != len(decodedMessage.TradeRestrictions) {
+		t.Errorf("TradeRestrictions lengths don't match : %d != %d", len(initialMessage.TradeRestrictions), len(decodedMessage.TradeRestrictions))
+	}
 
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
 		t.Errorf("EnforcementOrdersPermitted doesn't match : %v != %v", initialMessage.EnforcementOrdersPermitted, decodedMessage.EnforcementOrdersPermitted)
+	}
+
+	// VotingRights (bool)
+	if initialMessage.VotingRights != decodedMessage.VotingRights {
+		t.Errorf("VotingRights doesn't match : %v != %v", initialMessage.VotingRights, decodedMessage.VotingRights)
 	}
 
 	// VoteMultiplier (uint)
@@ -391,10 +409,10 @@ func TestAssetModification(t *testing.T) {
 		// uint test not setup
 	}
 
-	// Modifications (Amendment[])
+	// Amendments (Amendment[])
 	{
 		for i := 0; i < 2; i++ {
-			initialMessage.Modifications = append(initialMessage.Modifications, Amendment{})
+			initialMessage.Amendments = append(initialMessage.Amendments, Amendment{})
 		}
 	}
 
@@ -451,9 +469,9 @@ func TestAssetModification(t *testing.T) {
 		t.Errorf("AssetRevision doesn't match : %v != %v", initialMessage.AssetRevision, decodedMessage.AssetRevision)
 	}
 
-	// Modifications (Amendment[])
-	if len(initialMessage.Modifications) != len(decodedMessage.Modifications) {
-		t.Errorf("Modifications lengths don't match : %d != %d", len(initialMessage.Modifications), len(decodedMessage.Modifications))
+	// Amendments (Amendment[])
+	if len(initialMessage.Amendments) != len(decodedMessage.Amendments) {
+		t.Errorf("Amendments lengths don't match : %d != %d", len(initialMessage.Amendments), len(decodedMessage.Amendments))
 	}
 
 	// RefTxID (TxId)

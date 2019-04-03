@@ -53,7 +53,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
-		return errors.Wrap(err, "Failed to retreive contract")
+		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
@@ -124,9 +124,30 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 		if msg.Specific {
 			// Asset amendments vote. Validate permissions for fields being amended.
-			if err := asset.ValidatePermissions(ctx, as, len(ct.VotingSystems), msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
-				logger.Warn(ctx, "%s : Asset amendment not authorized : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+			if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
+				logger.Warn(ctx, "%s : Asset amendments not permitted : %s", v.TraceID, err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
+			}
+
+			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
+				logger.Warn(ctx, "%s : Single option AB votes are required for specific amendments", v.TraceID)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			}
+
+			// Validate proposed amendments.
+			ac := protocol.AssetCreation{}
+
+			err = node.Convert(ctx, &as, &ac)
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert state asset to asset creation")
+			}
+
+			ac.AssetRevision = as.Revision + 1
+			ac.Timestamp = v.Now
+
+			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments); err != nil {
+				logger.Warn(ctx, "%s : Asset amendments failed : %s", v.TraceID, err)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 		}
 	} else {
@@ -138,9 +159,32 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 		if msg.Specific {
 			// Contract amendments vote. Validate permissions for fields being amended.
-			if err := contract.ValidatePermissions(ctx, ct, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
-				logger.Warn(ctx, "%s : Contract amendment not authorized : %s", v.TraceID, contractPKH.String())
+			if err := checkContractAmendmentsPermissions(ct, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
+				logger.Warn(ctx, "%s : Asset amendments not permitted : %s", v.TraceID, err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+			}
+
+			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
+				logger.Warn(ctx, "%s : Single option AB votes are required for specific amendments", v.TraceID)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			}
+
+			// Validate proposed amendments.
+			cf := protocol.ContractFormation{}
+
+			// Get current state
+			err = node.Convert(ctx, &ct, &cf)
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert state contract to contract formation")
+			}
+
+			// Apply modifications
+			cf.ContractRevision = ct.Revision + 1 // Bump the revision
+			cf.Timestamp = v.Now
+
+			if err := applyContractAmendments(&cf, msg.ProposedAmendments); err != nil {
+				logger.Warn(ctx, "%s : Contract amendments failed : %s", v.TraceID, err)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 		}
 
@@ -257,7 +301,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	_, err = vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
 	if err != vote.ErrNotFound {
 		if err != nil {
-			logger.Warn(ctx, "%s : Failed to retreive vote : %s %s : %s", v.TraceID, contractPKH.String(), voteTxId.String(), err)
+			logger.Warn(ctx, "%s : Failed to retrieve vote : %s %s : %s", v.TraceID, contractPKH.String(), voteTxId.String(), err)
 		} else {
 			logger.Warn(ctx, "%s : Vote already exists : %s %s", v.TraceID, contractPKH.String(), voteTxId.String())
 		}
@@ -332,8 +376,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		logger.Warn(ctx, "%s : Vote not found : %s %s", v.TraceID, contractPKH.String(), msg.VoteTxId.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
 	} else if err != nil {
-		logger.Warn(ctx, "%s : Failed to retreive vote : %s %s : %s", v.TraceID, contractPKH.String(), msg.VoteTxId.String(), err)
-		return errors.Wrap(err, "Failed to retreive vote")
+		logger.Warn(ctx, "%s : Failed to retrieve vote : %s %s : %s", v.TraceID, contractPKH.String(), msg.VoteTxId.String(), err)
+		return errors.Wrap(err, "Failed to retrieve vote")
 	}
 
 	if vt.Expires.Nano() <= v.Now.Nano() {
@@ -604,10 +648,23 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to update vote")
 	}
 
+	if msg.Specific {
+		// Save result for amendment action
+		g.TxCache.SaveTx(ctx, itx)
+	}
+
 	// Remove cached txs
-	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	g.TxCache.RemoveTx(ctx, hash)
-	hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
+	if !vt.Specific { // Save proposalTx to check when amendment request is received.
+		hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+		if err != nil {
+			return errors.Wrap(err, "Failed to convert proposal tx id to chainhash")
+		}
+		g.TxCache.RemoveTx(ctx, hash)
+	}
+	hash, err := chainhash.NewHash(msg.VoteTxId.Bytes())
+	if err != nil {
+		return errors.Wrap(err, "Failed to convert vote tx id to chainhash")
+	}
 	g.TxCache.RemoveTx(ctx, hash)
 	return nil
 }

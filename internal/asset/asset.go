@@ -3,7 +3,6 @@ package asset
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -15,7 +14,7 @@ import (
 )
 
 const (
-	FieldCount = 10 // The number of fields that can be changed with amendments.
+	FieldCount = 13 // The number of fields that can be changed with amendments.
 )
 
 var (
@@ -368,42 +367,6 @@ func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint8, v
 	case 1: // Holder
 		if !as.HolderProposal {
 			return errors.New("Holder proposals not allowed")
-		}
-	}
-
-	return nil
-}
-
-func ValidatePermissions(ctx context.Context, as *state.Asset, votingSystemCount int,
-	proposedAmendments []protocol.Amendment, viaProposal bool, initiatorType, votingSystem uint8) error {
-	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, FieldCount, votingSystemCount)
-	if err != nil {
-		return err
-	}
-
-	for _, amendment := range proposedAmendments {
-		if amendment.FieldIndex >= FieldCount {
-			return errors.New("Field index out of range")
-		}
-
-		if viaProposal {
-			switch initiatorType {
-			case 0: // Issuer
-				if !permissions[amendment.FieldIndex].IssuerProposal {
-					return fmt.Errorf("Issuer proposals not permitted to amend field %d", amendment.FieldIndex)
-				}
-			case 1: // Holder
-				if !permissions[amendment.FieldIndex].HolderProposal {
-					return fmt.Errorf("Holder proposals not permitted to amend field %d", amendment.FieldIndex)
-				}
-			}
-			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
-				return fmt.Errorf("Voting system %d not permitted to amend field %d", votingSystem, amendment.FieldIndex)
-			}
-		} else {
-			if !permissions[amendment.FieldIndex].Permitted {
-				return fmt.Errorf("Direct amendments not permitted on field %d", amendment.FieldIndex)
-			}
 		}
 	}
 
