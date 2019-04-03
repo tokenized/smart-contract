@@ -11,11 +11,11 @@ type RejectionCode struct {
 	Description string
 }
 
-var rejectionCodes map[uint8]RejectionCode
+var rejectionTypes map[uint8]RejectionCode
 
 func GetRejectionCodes() (map[uint8]RejectionCode, error) {
-	if rejectionCodes != nil {
-		return rejectionCodes, nil
+	if rejectionTypes != nil {
+		return rejectionTypes, nil
 	}
 
 	load := struct {
@@ -26,8 +26,20 @@ func GetRejectionCodes() (map[uint8]RejectionCode, error) {
 		return nil, errors.Wrap(err, "Failed to unmarshal rejection codes yaml")
 	}
 
-	rejectionCodes = load.Values
-	return rejectionCodes, nil
+	rejectionTypes = load.Values
+	return rejectionTypes, nil
+}
+
+func GetRejectionCode(code uint8) *RejectionCode {
+	types, err := GetRejectionCodes()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[code]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 type CurrencyType struct {
@@ -40,11 +52,11 @@ type CurrencyType struct {
 	MonetaryAuthority string `yaml:"monetary_authority"`
 }
 
-var currencies map[string]CurrencyType
+var currencyTypes map[string]CurrencyType
 
 func GetCurrencies() (map[string]CurrencyType, error) {
-	if currencies != nil {
-		return currencies, nil
+	if currencyTypes != nil {
+		return currencyTypes, nil
 	}
 
 	load := struct {
@@ -52,11 +64,23 @@ func GetCurrencies() (map[string]CurrencyType, error) {
 	}{}
 
 	if err := yaml.Unmarshal([]byte(yamlCurrencies), &load); err != nil {
-		return nil, errors.Wrap(err, "Failed to unmarshal currencies yaml")
+		return nil, errors.Wrap(err, "Failed to unmarshal currencyTypes yaml")
 	}
 
-	currencies = load.Values
-	return currencies, nil
+	currencyTypes = load.Values
+	return currencyTypes, nil
+}
+
+func GetCurrency(cur string) *CurrencyType {
+	types, err := GetCurrencies()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[cur]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 type EntityType struct {
@@ -65,11 +89,11 @@ type EntityType struct {
 	Symbol string
 }
 
-var entities map[string]EntityType
+var entityTypes map[string]EntityType
 
-func GetEntities() (map[string]EntityType, error) {
-	if entities != nil {
-		return entities, nil
+func GetEntityTypes() (map[string]EntityType, error) {
+	if entityTypes != nil {
+		return entityTypes, nil
 	}
 
 	load := struct {
@@ -80,8 +104,20 @@ func GetEntities() (map[string]EntityType, error) {
 		return nil, errors.Wrap(err, "Failed to unmarshal entities yaml")
 	}
 
-	entities = load.Values
-	return entities, nil
+	entityTypes = load.Values
+	return entityTypes, nil
+}
+
+func GetEntityType(ent string) *EntityType {
+	types, err := GetEntityTypes()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[ent]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 type PolityType struct {
@@ -92,11 +128,11 @@ type PolityType struct {
 	GovFiscalYear string `yaml:"gov_fiscal_year"`
 }
 
-var polities map[string]PolityType
+var polityTypes map[string]PolityType
 
-func GetPolities() (map[string]PolityType, error) {
-	if polities != nil {
-		return polities, nil
+func GetPolityTypes() (map[string]PolityType, error) {
+	if polityTypes != nil {
+		return polityTypes, nil
 	}
 
 	load := struct {
@@ -107,19 +143,31 @@ func GetPolities() (map[string]PolityType, error) {
 		return nil, errors.Wrap(err, "Failed to unmarshal polities yaml")
 	}
 
-	polities = load.Values
-	return polities, nil
+	polityTypes = load.Values
+	return polityTypes, nil
+}
+
+func GetPolityType(pol string) *PolityType {
+	types, err := GetPolityTypes()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[pol]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 type MessageType struct {
 	Name string
 }
 
-var messages map[uint16]MessageType
+var messageTypes map[uint16]MessageType
 
-func GetMessages() (map[uint16]MessageType, error) {
-	if messages != nil {
-		return messages, nil
+func GetMessageTypes() (map[uint16]MessageType, error) {
+	if messageTypes != nil {
+		return messageTypes, nil
 	}
 
 	load := struct {
@@ -130,19 +178,31 @@ func GetMessages() (map[uint16]MessageType, error) {
 		return nil, errors.Wrap(err, "Failed to unmarshal messages yaml")
 	}
 
-	messages = load.Values
-	return messages, nil
+	messageTypes = load.Values
+	return messageTypes, nil
+}
+
+func GetMessageType(mes uint16) *MessageType {
+	types, err := GetMessageTypes()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[mes]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 type RoleType struct {
 	Name string
 }
 
-var roles map[uint8]RoleType
+var roleTypes map[uint8]RoleType
 
-func GetRoles() (map[uint8]RoleType, error) {
-	if roles != nil {
-		return roles, nil
+func GetRoleTypes() (map[uint8]RoleType, error) {
+	if roleTypes != nil {
+		return roleTypes, nil
 	}
 
 	load := struct {
@@ -153,8 +213,20 @@ func GetRoles() (map[uint8]RoleType, error) {
 		return nil, errors.Wrap(err, "Failed to unmarshal roles yaml")
 	}
 
-	roles = load.Values
-	return roles, nil
+	roleTypes = load.Values
+	return roleTypes, nil
+}
+
+func GetRoleType(role uint8) *RoleType {
+	types, err := GetRoleTypes()
+	if err != nil {
+		return nil
+	}
+	result, exists := types[role]
+	if !exists {
+		return nil
+	}
+	return &result
 }
 
 // Currencies - Currencies
@@ -3223,6 +3295,11 @@ values:
       text: Contract Revision Incorrect
       description: The revision in a contract amendment is incorrect.
 
+    18:
+      name: ContractNotPermitted
+      text: Contract Not Permitted
+      description: Action not permitted by contract.
+
     #################################### Asset ####################################
 
     20:
@@ -3249,6 +3326,11 @@ values:
       name: AssetRevision
       text: Asset Revision Incorrect
       description: The revision in an asset amendment is incorrect.
+
+    25:
+      name: AssetNotPermitted
+      text: Asset Not Permitted
+      description: Action not permitted by asset.
 
     #################################### Transfer ####################################
 

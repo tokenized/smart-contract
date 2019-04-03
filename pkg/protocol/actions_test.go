@@ -69,9 +69,9 @@ func TestAssetDefinition(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint)
 	{
-		initialMessage.AssetModificationGovernance = true
+		// uint test not setup
 	}
 
 	// TokenQty (uint)
@@ -170,7 +170,7 @@ func TestAssetDefinition(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint)
 	if initialMessage.AssetModificationGovernance != decodedMessage.AssetModificationGovernance {
 		t.Errorf("AssetModificationGovernance doesn't match : %v != %v", initialMessage.AssetModificationGovernance, decodedMessage.AssetModificationGovernance)
 	}
@@ -250,9 +250,9 @@ func TestAssetCreation(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint)
 	{
-		initialMessage.AssetModificationGovernance = true
+		// uint test not setup
 	}
 
 	// TokenQty (uint)
@@ -361,7 +361,7 @@ func TestAssetCreation(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint)
 	if initialMessage.AssetModificationGovernance != decodedMessage.AssetModificationGovernance {
 		t.Errorf("AssetModificationGovernance doesn't match : %v != %v", initialMessage.AssetModificationGovernance, decodedMessage.AssetModificationGovernance)
 	}

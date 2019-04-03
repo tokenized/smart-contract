@@ -39,6 +39,9 @@ const (
 	// ContractRevision - The revision in a contract amendment is incorrect.
 	RejectContractRevision = 17
 
+	// ContractNotPermitted - Action not permitted by contract.
+	RejectContractNotPermitted = 18
+
 	// AssetCodeExists - The asset code specified already exists and can't be reused.
 	RejectAssetCodeExists = 20
 
@@ -53,6 +56,9 @@ const (
 
 	// AssetRevision - The revision in an asset amendment is incorrect.
 	RejectAssetRevision = 24
+
+	// AssetNotPermitted - Action not permitted by asset.
+	RejectAssetNotPermitted = 25
 
 	// TransferSelf - Transfers with the sender and receiver addresses the same are not permitted.
 	RejectTransferSelf = 30

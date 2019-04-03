@@ -52,15 +52,11 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 
 	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
 	if messagePayload == nil {
-		messageTypes, err := protocol.GetMessages()
-		if err != nil {
-			errors.Wrap(err, "Failed to get message type data")
-		}
-		messageType, exists := messageTypes[msg.MessageType]
-		if exists {
-			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
-		} else {
+		messageType := protocol.GetMessageType(msg.MessageType)
+		if messageType == nil {
 			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		} else {
+			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
 		}
 	}
 
@@ -83,15 +79,11 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		logger.Verbose(ctx, "%s : Processing SignatureRequest", v.TraceID)
 		return m.processSigRequest(ctx, w, itx, rk, payload)
 	default:
-		messageTypes, err := protocol.GetMessages()
-		if err != nil {
-			errors.Wrap(err, "Failed to get message type data")
-		}
-		messageType, exists := messageTypes[msg.MessageType]
-		if exists {
-			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
-		} else {
+		messageType := protocol.GetMessageType(msg.MessageType)
+		if messageType == nil {
 			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		} else {
+			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
 		}
 	}
 }
@@ -201,20 +193,14 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 
 	// Add this contract's data to the settlement op return data
 	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement)
-	if err == holdingsFrozenError {
-		logger.Warn(ctx, "%s : Holdings Frozen. Rejecting Transfer", v.TraceID)
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectHoldingsFrozen)
-	}
-	if err == assetFrozenError {
-		logger.Warn(ctx, "%s : Asset Frozen. Rejecting Transfer", v.TraceID)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
-	}
-	if err == contractFrozenError {
-		logger.Warn(ctx, "%s : Contract Frozen. Rejecting Transfer", v.TraceID)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
-	}
 	if err != nil {
-		return err
+		reject, ok := err.(rejectError)
+		if ok {
+			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
+			return node.RespondReject(ctx, w, transferTx, rk, reject.code)
+		} else {
+			return errors.Wrap(err, "Failed to add settlement data")
+		}
 	}
 
 	// Check if settlement data is complete. No other contracts involved
@@ -313,19 +299,13 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	// Verify all the data for this contract is correct.
 	err := verifySettlement(ctx, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement)
 	if err != nil {
-		if err == holdingsFrozenError {
-			logger.Warn(ctx, "%s : Holdings Frozen. Rejecting Transfer", v.TraceID)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectHoldingsFrozen)
+		reject, ok := err.(rejectError)
+		if ok {
+			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
+			return node.RespondReject(ctx, w, transferTx, rk, reject.code)
+		} else {
+			return errors.Wrap(err, "Failed to verify settlement data")
 		}
-		if err == assetFrozenError {
-			logger.Warn(ctx, "%s : Asset Frozen. Rejecting Transfer", v.TraceID)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
-		}
-		if err == contractFrozenError {
-			logger.Warn(ctx, "%s : Contract Frozen. Rejecting Transfer", v.TraceID)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
-		}
-		return errors.Wrap(err, "Failed to validate settlement data")
 	}
 
 	// Convert settle tx to a txbuilder tx
@@ -498,7 +478,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 				return errors.Wrap(err, "Failed to retrieve contract")
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
-				return contractFrozenError
+				return rejectError{code: protocol.RejectContractFrozen}
 			}
 
 			// Locate Asset
@@ -507,7 +487,10 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 				return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
-				return assetFrozenError
+				return rejectError{code: protocol.RejectAssetFrozen}
+			}
+			if !as.TransfersPermitted {
+				return rejectError{code: protocol.RejectAssetNotPermitted}
 			}
 		}
 
@@ -558,7 +541,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			if !assetIsBitcoin && !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
 					contractPKH, assetTransfer.AssetCode, inputAddress)
-				return holdingsFrozenError
+				return rejectError{code: protocol.RejectHoldingsFrozen}
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
@@ -575,7 +558,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
 				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
 					contractPKH, assetTransfer.AssetCode, inputAddress)
-				return insufficientError
+				return rejectError{code: protocol.RejectInsufficientQuantity}
 			}
 
 			*settlementQuantities[settleOutputIndex] -= sender.Quantity

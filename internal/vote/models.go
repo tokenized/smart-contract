@@ -9,6 +9,7 @@ import (
 type NewVote struct {
 	Initiator          uint8                `json:"initiator,omit_empty"`
 	VoteSystem         uint8                `json:"vote_system,omit_empty"`
+	ContractWideVote   bool                 `json:"contract_wide_vote,omit_empty"`
 	AssetSpecificVote  bool                 `json:"asset_specific_vote,omit_empty"`
 	AssetType          string               `json:"asset_type,omit_empty"`
 	AssetCode          protocol.AssetCode   `json:"asset_code,omit_empty"`

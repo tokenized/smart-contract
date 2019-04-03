@@ -58,12 +58,7 @@ func (m *Administrator) Validate() error {
 
 	// Type (uint8)
 	{
-		roles, err := GetRoles()
-		if err != nil {
-			return err
-		}
-		_, exists := roles[m.Type]
-		if !exists {
+		if GetRoleType(m.Type) == nil {
 			return fmt.Errorf("Invalid role value : %d", m.Type)
 		}
 	}
@@ -1342,12 +1337,7 @@ func (m *Manager) Validate() error {
 
 	// Type (uint8)
 	{
-		roles, err := GetRoles()
-		if err != nil {
-			return err
-		}
-		_, exists := roles[m.Type]
-		if !exists {
+		if GetRoleType(m.Type) == nil {
 			return fmt.Errorf("Invalid role value : %d", m.Type)
 		}
 	}

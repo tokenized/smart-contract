@@ -540,12 +540,7 @@ type Polity struct {
 
 // Validate returns an error if the value is invalid
 func (polity *Polity) Validate() error {
-	validValues, err := GetPolities()
-	if err != nil {
-		return err
-	}
-	_, exists := validValues[string(polity.data[:])]
-	if !exists {
+	if GetPolityType(string(polity.data[:])) == nil {
 		return fmt.Errorf("Invalid polity value : %s", string(polity.data[:]))
 	}
 	return nil

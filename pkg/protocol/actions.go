@@ -194,7 +194,7 @@ type AssetDefinition struct {
 	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies the vote by the integer. 1 token = 1 vote with a 1 for vote multipler (normal).  1 token = 3 votes with a multiplier of 3, for example. If zero, then holders of this asset don't get any votes for their tokens.
 	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // An Issuer is permitted to make proposals (outside of smart contract scope).
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`               // A holder is permitted to make proposals (outside of smart contract scope).
-	AssetModificationGovernance bool      `json:"asset_modification_governance,omitempty"` // 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (all assets vote on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
+	AssetModificationGovernance uint8     `json:"asset_modification_governance,omitempty"` // 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (only this asset votes on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
 	TokenQty                    uint64    `json:"token_qty,omitempty"`                     // Quantity of token - 0 is valid. Fungible 'shares' of the Asset. 1 is used for non-fungible tokens.  Asset Codes become the non-fungible Asset Code and many Asset Codes can be associated with a particular Contract.
 	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // Payload length is dependent on the asset type. Each asset is made up of a defined set of information pertaining to the specific asset type, and may contain fields of variable length type (nvarchar8, 16, 32)
 }
@@ -306,7 +306,7 @@ func (action *AssetDefinition) serialize() ([]byte, error) {
 		}
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
 		if err := write(buf, action.AssetModificationGovernance); err != nil {
 			return nil, err
@@ -417,7 +417,7 @@ func (action *AssetDefinition) write(b []byte) (int, error) {
 		}
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
 		if err := read(buf, &action.AssetModificationGovernance); err != nil {
 			return 0, err
@@ -505,8 +505,12 @@ func (m *AssetDefinition) Validate() error {
 	{
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
+		if m.AssetModificationGovernance != 0 && m.AssetModificationGovernance != 1 {
+			return fmt.Errorf("field AssetModificationGovernance value is invalid : %d", m.AssetModificationGovernance)
+		}
+
 	}
 
 	// TokenQty (uint64)
@@ -537,7 +541,7 @@ func (action AssetDefinition) String() string {
 	vals = append(vals, fmt.Sprintf("VoteMultiplier:%v", action.VoteMultiplier))
 	vals = append(vals, fmt.Sprintf("IssuerProposal:%#+v", action.IssuerProposal))
 	vals = append(vals, fmt.Sprintf("HolderProposal:%#+v", action.HolderProposal))
-	vals = append(vals, fmt.Sprintf("AssetModificationGovernance:%#+v", action.AssetModificationGovernance))
+	vals = append(vals, fmt.Sprintf("AssetModificationGovernance:%v", action.AssetModificationGovernance))
 	vals = append(vals, fmt.Sprintf("TokenQty:%v", action.TokenQty))
 	vals = append(vals, fmt.Sprintf("AssetPayload:%#x", action.AssetPayload))
 
@@ -558,7 +562,7 @@ type AssetCreation struct {
 	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies the vote by the integer. 1 token = 1 vote with a 1 for vote multipler (normal).  1 token = 3 votes with a multiplier of 3, for example.
 	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // An Issuer is permitted to make proposals (outside of smart contract scope).
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`               // A holder is permitted to make proposals (outside of smart contract scope).
-	AssetModificationGovernance bool      `json:"asset_modification_governance,omitempty"` // 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (all assets vote on the referendum/initiative).  The voting system specifies the voting rules.
+	AssetModificationGovernance uint8     `json:"asset_modification_governance,omitempty"` // 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (only this asset votes on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
 	TokenQty                    uint64    `json:"token_qty,omitempty"`                     // Quantity of token - 0 is valid. Fungible 'shares' of the Asset. 1 is used for non-fungible tokens.  Asset Codes become the non-fungible Asset Code and many Asset Codes can be associated with a particular Contract.
 	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // Payload length is dependent on the asset type. Each asset is made up of a defined set of information pertaining to the specific asset type, and may contain fields of variable length type (nvarchar8, 16, 32)
 	AssetRevision               uint32    `json:"asset _revision,omitempty"`               // Counter 0 to (2^32)-1
@@ -672,7 +676,7 @@ func (action *AssetCreation) serialize() ([]byte, error) {
 		}
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
 		if err := write(buf, action.AssetModificationGovernance); err != nil {
 			return nil, err
@@ -802,7 +806,7 @@ func (action *AssetCreation) write(b []byte) (int, error) {
 		}
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
 		if err := read(buf, &action.AssetModificationGovernance); err != nil {
 			return 0, err
@@ -904,8 +908,12 @@ func (m *AssetCreation) Validate() error {
 	{
 	}
 
-	// AssetModificationGovernance (bool)
+	// AssetModificationGovernance (uint8)
 	{
+		if m.AssetModificationGovernance != 0 && m.AssetModificationGovernance != 1 {
+			return fmt.Errorf("field AssetModificationGovernance value is invalid : %d", m.AssetModificationGovernance)
+		}
+
 	}
 
 	// TokenQty (uint64)
@@ -948,7 +956,7 @@ func (action AssetCreation) String() string {
 	vals = append(vals, fmt.Sprintf("VoteMultiplier:%v", action.VoteMultiplier))
 	vals = append(vals, fmt.Sprintf("IssuerProposal:%#+v", action.IssuerProposal))
 	vals = append(vals, fmt.Sprintf("HolderProposal:%#+v", action.HolderProposal))
-	vals = append(vals, fmt.Sprintf("AssetModificationGovernance:%#+v", action.AssetModificationGovernance))
+	vals = append(vals, fmt.Sprintf("AssetModificationGovernance:%v", action.AssetModificationGovernance))
 	vals = append(vals, fmt.Sprintf("TokenQty:%v", action.TokenQty))
 	vals = append(vals, fmt.Sprintf("AssetPayload:%#x", action.AssetPayload))
 	vals = append(vals, fmt.Sprintf("AssetRevision:%v", action.AssetRevision))
@@ -5421,12 +5429,7 @@ func (m *Message) Validate() error {
 
 	// MessageType (uint16)
 	{
-		messages, err := GetMessages()
-		if err != nil {
-			return err
-		}
-		_, exists := messages[m.MessageType]
-		if !exists {
+		if GetMessageType(m.MessageType) == nil {
 			return fmt.Errorf("Invalid message value : %d", m.MessageType)
 		}
 	}

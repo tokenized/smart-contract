@@ -326,7 +326,10 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 		}
 
-		if ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted {
+		if as.AssetModificationGovernance == 1 { // Contract wide asset governance
+			nv.ContractWideVote = true
+			nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
+		} else if ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted {
 			nv.TokenQty = as.TokenQty * uint64(as.VoteMultiplier)
 		} else {
 			nv.TokenQty = as.TokenQty
@@ -431,7 +434,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	quantity := uint64(0)
 
 	// Add applicable holdings
-	if proposal.AssetSpecificVote {
+	if proposal.AssetSpecificVote && !vt.ContractWideVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
 		if err != nil {
 			logger.Warn(ctx, "%s : Asset not found : %s %s", v.TraceID, contractPKH.String(), proposal.String())

@@ -33,7 +33,7 @@ func TestCurrencies(t *testing.T) {
 }
 
 func TestEntities(t *testing.T) {
-	entities, err := GetEntities()
+	entities, err := GetEntityTypes()
 	if err != nil {
 		t.Fatalf("Failed to get entities : %s\n", err)
 	}
@@ -47,7 +47,7 @@ func TestEntities(t *testing.T) {
 }
 
 func TestPolities(t *testing.T) {
-	polities, err := GetPolities()
+	polities, err := GetPolityTypes()
 	if err != nil {
 		t.Fatalf("Failed to get polities : %s\n", err)
 	}
@@ -61,7 +61,7 @@ func TestPolities(t *testing.T) {
 }
 
 func TestMessages(t *testing.T) {
-	messages, err := GetMessages()
+	messages, err := GetMessageTypes()
 	if err != nil {
 		t.Fatalf("Failed to get messages : %s\n", err)
 	}
@@ -75,7 +75,7 @@ func TestMessages(t *testing.T) {
 }
 
 func TestRoles(t *testing.T) {
-	roles, err := GetRoles()
+	roles, err := GetRoleTypes()
 	if err != nil {
 		t.Fatalf("Failed to get roles : %s\n", err)
 	}

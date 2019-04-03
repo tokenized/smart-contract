@@ -156,8 +156,13 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	} else {
 		as, err := asset.Retrieve(ctx, e.MasterDB, contractPKH, &msg.AssetCode)
 		if err != nil {
-			logger.Warn(ctx, "%s : Asset ID not found: %s %s : %s", v.TraceID, contractPKH.String(), msg.AssetCode, err)
+			logger.Warn(ctx, "%s : Asset ID not found: %s : %s", v.TraceID, msg.AssetCode, err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+		}
+
+		if !as.EnforcementOrdersPermitted {
+			logger.Warn(ctx, "%s : Enforcement orders not permitted on asset : %s", v.TraceID, msg.AssetCode)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotPermitted)
 		}
 
 		if !full {
@@ -243,6 +248,17 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
+	as, err := asset.Retrieve(ctx, e.MasterDB, contractPKH, &msg.AssetCode)
+	if err != nil {
+		logger.Warn(ctx, "%s : Asset not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+	}
+
+	if !as.EnforcementOrdersPermitted {
+		logger.Warn(ctx, "%s : Enforcement orders not permitted on asset : %s", v.TraceID, msg.AssetCode)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotPermitted)
+	}
+
 	// Thaw <- Order
 	thaw := protocol.Thaw{
 		FreezeTxId: msg.FreezeTxId,
@@ -315,6 +331,11 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	if err != nil {
 		logger.Warn(ctx, "%s : Asset not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+	}
+
+	if !as.EnforcementOrdersPermitted {
+		logger.Warn(ctx, "%s : Enforcement orders not permitted on asset : %s", v.TraceID, msg.AssetCode)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotPermitted)
 	}
 
 	// Confiscation <- Order
@@ -413,6 +434,11 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	if err != nil {
 		logger.Warn(ctx, "%s : Asset not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+	}
+
+	if !as.EnforcementOrdersPermitted {
+		logger.Warn(ctx, "%s : Enforcement orders not permitted on asset : %s", v.TraceID, msg.AssetCode)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotPermitted)
 	}
 
 	// Reconciliation <- Order

@@ -20,7 +20,7 @@ type NewAsset struct {
 	VoteMultiplier              uint8             `json:"vote_multiplier,omitempty"`
 	IssuerProposal              bool              `json:"issuer_proposal,omitempty"`
 	HolderProposal              bool              `json:"holder_proposal,omitempty"`
-	AssetModificationGovernance bool              `json:"asset_modification_governance,omitempty"`
+	AssetModificationGovernance uint8             `json:"asset_modification_governance,omitempty"`
 	TokenQty                    uint64            `json:"token_qty,omitempty"`
 	ContractFeeCurrency         string            `json:"contract_fee_currency,omitempty"`
 	ContractFeeVar              float32           `json:"contract_fee_var,omitempty"`
@@ -47,7 +47,7 @@ type UpdateAsset struct {
 	VoteMultiplier              *uint8              `json:"vote_multiplier,omitempty"`
 	IssuerProposal              *bool               `json:"issuer_proposal,omitempty"`
 	HolderProposal              *bool               `json:"holder_proposal,omitempty"`
-	AssetModificationGovernance *bool               `json:"asset_modification_governance,omitempty"`
+	AssetModificationGovernance *uint8              `json:"asset_modification_governance,omitempty"`
 	TokenQty                    *uint64             `json:"token_qty,omitempty"`
 	AssetPayload                *[]byte             `json:"asset_payload,omitempty"`
 	FreezePeriod                *protocol.Timestamp `json:"freeze_period,omitempty"`

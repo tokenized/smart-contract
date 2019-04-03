@@ -277,9 +277,9 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Check issuer balance for token quantity reductions. Issuer has to hold any tokens being "burned".
 	issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
-	if ac.TokenQty < as.TokenQty && issuerBalance < as.TokenQty - ac.TokenQty {
+	if ac.TokenQty < as.TokenQty && issuerBalance < as.TokenQty-ac.TokenQty {
 		logger.Warn(ctx, "%s : Issuer doesn't hold required amount for token quantity reduction : %d < %d",
-			v.TraceID, issuerBalance, as.TokenQty - ac.TokenQty)
+			v.TraceID, issuerBalance, as.TokenQty-ac.TokenQty)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
