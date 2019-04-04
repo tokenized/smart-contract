@@ -30,7 +30,7 @@ type NewContract struct {
 	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
 	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
-	Registries             []protocol.Registry     `json:"registries,omitempty"`
+	Register               []protocol.Register     `json:"registers,omitempty"`
 }
 
 // UpdateContract defines what information may be provided to modify an existing
@@ -65,7 +65,7 @@ type UpdateContract struct {
 	RestrictedQtyAssets    *uint64                  `json:"restricted_qty_assets,omitempty"`
 	IssuerProposal         *bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         *bool                    `json:"holder_proposal,omitempty"`
-	Registries             *[]protocol.Registry     `json:"registries,omitempty"`
+	Registers              *[]protocol.Register     `json:"registers,omitempty"`
 
 	FreezePeriod *protocol.Timestamp `json:"freeze_period,omitempty"`
 }

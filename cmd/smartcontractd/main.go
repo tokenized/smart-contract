@@ -190,7 +190,7 @@ func main() {
 	sch := scheduler.Scheduler{}
 	txCache := listeners.NewTxCache()
 
-	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, &sch)
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, &sch, spyNode)
 	if err != nil {
 		logger.Fatal(ctx, "Generate API : %s", apiErr)
 	}

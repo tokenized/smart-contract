@@ -74,7 +74,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 
 		authoritySig, err := btcec.ParseSignature(msg.OrderSignature, elliptic.P256())
 		if err != nil {
-			logger.Warn(ctx, "%s : Failed to parse authority pub key : %s : %s", v.TraceID, contractPKH.String(), err)
+			logger.Warn(ctx, "%s : Failed to parse authority signature : %s : %s", v.TraceID, contractPKH.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
@@ -84,7 +84,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 		}
 
 		if !authoritySig.Verify(sigHash, authorityPubKey) {
-			logger.Warn(ctx, "%s : Authorith Sig Verify Failed : %s", v.TraceID, contractPKH.String())
+			logger.Warn(ctx, "%s : Authority Sig Verify Failed : %s", v.TraceID, contractPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInvalidSignature)
 		}
 	}

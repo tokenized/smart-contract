@@ -604,10 +604,10 @@ func TestContractOffer(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// Registries (Registry[])
+	// Registers (Register[])
 	{
 		for i := 0; i < 2; i++ {
-			initialMessage.Registries = append(initialMessage.Registries, Registry{})
+			initialMessage.Registers = append(initialMessage.Registers, Register{})
 		}
 	}
 
@@ -740,9 +740,9 @@ func TestContractOffer(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// Registries (Registry[])
-	if len(initialMessage.Registries) != len(decodedMessage.Registries) {
-		t.Errorf("Registries lengths don't match : %d != %d", len(initialMessage.Registries), len(decodedMessage.Registries))
+	// Registers (Register[])
+	if len(initialMessage.Registers) != len(decodedMessage.Registers) {
+		t.Errorf("Registers lengths don't match : %d != %d", len(initialMessage.Registers), len(decodedMessage.Registers))
 	}
 }
 
@@ -872,10 +872,10 @@ func TestContractFormation(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// Registries (Registry[])
+	// Registers (Register[])
 	{
 		for i := 0; i < 2; i++ {
-			initialMessage.Registries = append(initialMessage.Registries, Registry{})
+			initialMessage.Registers = append(initialMessage.Registers, Register{})
 		}
 	}
 
@@ -1018,9 +1018,9 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// Registries (Registry[])
-	if len(initialMessage.Registries) != len(decodedMessage.Registries) {
-		t.Errorf("Registries lengths don't match : %d != %d", len(initialMessage.Registries), len(decodedMessage.Registries))
+	// Registers (Register[])
+	if len(initialMessage.Registers) != len(decodedMessage.Registers) {
+		t.Errorf("Registers lengths don't match : %d != %d", len(initialMessage.Registers), len(decodedMessage.Registers))
 	}
 
 	// ContractRevision (uint)

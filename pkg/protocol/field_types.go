@@ -1441,15 +1441,15 @@ func (m *QuantityIndex) Equal(other QuantityIndex) bool {
 	return true
 }
 
-// Registry A Registry defines the details of a public Registry.
-type Registry struct {
-	Name      string `json:"name,omitempty"`       // Length 0-255 bytes. 0 is valid. Registry X Name (eg. Coinbase, Tokenized, etc.)
+// Register A Register defines the details of a public Register.
+type Register struct {
+	Name      string `json:"name,omitempty"`       // Length 0-255 bytes. 0 is valid. Register X Name (eg. Coinbase, Tokenized, etc.)
 	URL       string `json:"url,omitempty"`        // Length 0-255 bytes. 0 is valid. If applicable: URL for REST/RPC Endpoint
-	PublicKey []byte `json:"public_key,omitempty"` // Length 0-255 bytes. 0 is not valid. Registry Public Key (eg. Bitcoin Public key), used to confirm digital signed proofs for transfers.  Can also be the same public address that controls a Tokenized Registry.
+	PublicKey []byte `json:"public_key,omitempty"` // Length 0-255 bytes. 0 is not valid. Register Public Key (eg. Bitcoin Public key), used to confirm digital signed proofs for transfers.  Can also be the same public address that controls a Tokenized Register.
 }
 
 // Serialize returns the byte representation of the message.
-func (m Registry) Serialize() ([]byte, error) {
+func (m Register) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// Name (string)
@@ -1476,7 +1476,7 @@ func (m Registry) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (m *Registry) Write(buf *bytes.Buffer) error {
+func (m *Register) Write(buf *bytes.Buffer) error {
 
 	// Name (string)
 	{
@@ -1508,7 +1508,7 @@ func (m *Registry) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (m *Registry) Validate() error {
+func (m *Register) Validate() error {
 
 	// Name (string)
 	{
@@ -1534,7 +1534,7 @@ func (m *Registry) Validate() error {
 	return nil
 }
 
-func (m *Registry) Equal(other Registry) bool {
+func (m *Register) Equal(other Register) bool {
 
 	// Name (string)
 	if m.Name != other.Name {
@@ -1635,15 +1635,14 @@ func (m *TargetAddress) Equal(other TargetAddress) bool {
 }
 
 // TokenReceiver A TokenReceiver is contains a quantity, index, and
-// registry token deails. The quantity could be used to describe a number
-// of tokens, or a value. The index is used to refer to an input index
-// position. The registry token details include the type of algorithm, and
-// the token.
+// register signature. The quantity could be used to describe a number of
+// tokens, or a value. The index is used to refer to an input index
+// position.
 type TokenReceiver struct {
-	Index                        uint16 `json:"index,omitempty"`                           // The index of the output receiving the tokens
-	Quantity                     uint64 `json:"quantity,omitempty"`                        // Number of tokens to be received by address at Output X
-	RegistrySigAlgorithm         uint8  `json:"registry_sig_algorithm,omitempty"`          // 0 = No Registry-signed Message, 1 = ECDSA+secp256k1
-	RegistryConfirmationSigToken string `json:"registry_confirmation_sig_token,omitempty"` // Length 0-255 bytes. IF restricted to a registry (whitelist) or has transfer restrictions (age, location, investor status): ECDSA+secp256k1 (or the like) signed message provided by an approved/trusted registry through an API signature of [Contract Address + Asset Code + Public Address + Blockhash of the Latest Block + Block Height + Confirmed/Rejected Bool]. If no transfer restrictions(trade restriction/age restriction fields in the Asset Type payload. or restricted to a whitelist by the Contract Auth Flags, it is a NULL field.
+	Index                   uint16 `json:"index,omitempty"`                     // The index of the output receiving the tokens
+	Quantity                uint64 `json:"quantity,omitempty"`                  // Number of tokens to be received by address at Output X
+	RegisterSigAlgorithm    uint8  `json:"register_sig_algorithm,omitempty"`    // 0 = No Register-signed Message (RegisterConfirmationSig skipped in serialization), 1 = ECDSA+secp256k1. If the contract for the asset being received has registers, then a signature is required from one of them.
+	RegisterConfirmationSig []byte `json:"register_confirmation_sig,omitempty"` // Length 0-255 bytes. If restricted to a register (whitelist) or has transfer restrictions (age, location, investor status): ECDSA+secp256k1 (or the like) signed message provided by an approved/trusted register through an API signature of the defined message. If no transfer restrictions(trade restriction/age restriction fields in the Asset Type payload. or restricted to a whitelist by the Contract Auth Flags, it is a NULL field.
 }
 
 // Serialize returns the byte representation of the message.
@@ -1664,16 +1663,16 @@ func (m TokenReceiver) Serialize() ([]byte, error) {
 		}
 	}
 
-	// RegistrySigAlgorithm (uint8)
+	// RegisterSigAlgorithm (uint8)
 	{
-		if err := write(buf, m.RegistrySigAlgorithm); err != nil {
+		if err := write(buf, m.RegisterSigAlgorithm); err != nil {
 			return nil, err
 		}
 	}
 
-	// RegistryConfirmationSigToken (string)
-	{
-		if err := WriteVarChar(buf, m.RegistryConfirmationSigToken, 8); err != nil {
+	// RegisterConfirmationSig ([]byte)
+	if m.RegisterSigAlgorithm == 1 {
+		if err := WriteVarBin(buf, m.RegisterConfirmationSig, 8); err != nil {
 			return nil, err
 		}
 	}
@@ -1697,17 +1696,17 @@ func (m *TokenReceiver) Write(buf *bytes.Buffer) error {
 		}
 	}
 
-	// RegistrySigAlgorithm (uint8)
+	// RegisterSigAlgorithm (uint8)
 	{
-		if err := read(buf, &m.RegistrySigAlgorithm); err != nil {
+		if err := read(buf, &m.RegisterSigAlgorithm); err != nil {
 			return err
 		}
 	}
 
-	// RegistryConfirmationSigToken (string)
-	{
+	// RegisterConfirmationSig ([]byte)
+	if m.RegisterSigAlgorithm == 1 {
 		var err error
-		m.RegistryConfirmationSigToken, err = ReadVarChar(buf, 8)
+		m.RegisterConfirmationSig, err = ReadVarBin(buf, 8)
 		if err != nil {
 			return err
 		}
@@ -1726,14 +1725,14 @@ func (m *TokenReceiver) Validate() error {
 	{
 	}
 
-	// RegistrySigAlgorithm (uint8)
+	// RegisterSigAlgorithm (uint8)
 	{
 	}
 
-	// RegistryConfirmationSigToken (string)
+	// RegisterConfirmationSig ([]byte)
 	{
-		if len(m.RegistryConfirmationSigToken) > (2<<8)-1 {
-			return fmt.Errorf("varchar field RegistryConfirmationSigToken too long %d/%d", len(m.RegistryConfirmationSigToken), (2<<8)-1)
+		if len(m.RegisterConfirmationSig) > (2<<8)-1 {
+			return fmt.Errorf("varbin field RegisterConfirmationSig too long %d/%d", len(m.RegisterConfirmationSig), (2<<8)-1)
 		}
 	}
 
@@ -1752,13 +1751,13 @@ func (m *TokenReceiver) Equal(other TokenReceiver) bool {
 		return false
 	}
 
-	// RegistrySigAlgorithm (uint8)
-	if m.RegistrySigAlgorithm != other.RegistrySigAlgorithm {
+	// RegisterSigAlgorithm (uint8)
+	if m.RegisterSigAlgorithm != other.RegisterSigAlgorithm {
 		return false
 	}
 
-	// RegistryConfirmationSigToken (string)
-	if m.RegistryConfirmationSigToken != other.RegistryConfirmationSigToken {
+	// RegisterConfirmationSig ([]byte)
+	if !bytes.Equal(m.RegisterConfirmationSig, other.RegisterConfirmationSig) {
 		return false
 	}
 	return true

@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -14,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/pkg/errors"
 )
 
 type InspectorTxCache interface {
@@ -22,9 +22,17 @@ type InspectorTxCache interface {
 	RemoveTx(ctx context.Context, txid *chainhash.Hash)
 }
 
+// BitcoinHeaders provides functions for retrieving information about headers on the currently
+//   longest chain.
+type BitcoinHeaders interface {
+	LastHeight(ctx context.Context) int
+	Hash(ctx context.Context, height int) (*chainhash.Hash, error)
+	Time(ctx context.Context, height int) (uint32, error)
+}
+
 // API returns a handler for a set of routes for protocol actions.
 func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB,
-	txCache InspectorTxCache, sch *scheduler.Scheduler) (protomux.Handler, error) {
+	txCache InspectorTxCache, sch *scheduler.Scheduler, headers BitcoinHeaders) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
 
@@ -57,6 +65,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		MasterDB: masterDB,
 		Config:   config,
 		TxCache:  txCache,
+		Headers:  headers,
 	}
 
 	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
@@ -96,6 +105,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		MasterDB: masterDB,
 		Config:   config,
 		TxCache:  txCache,
+		Headers:  headers,
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)

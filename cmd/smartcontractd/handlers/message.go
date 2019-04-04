@@ -30,6 +30,7 @@ type Message struct {
 	MasterDB *db.DB
 	Config   *node.Config
 	TxCache  InspectorTxCache
+	Headers  BitcoinHeaders
 }
 
 // ProcessMessage handles an incoming Message OP_RETURN.
@@ -192,7 +193,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement)
+	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -297,7 +298,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Verify all the data for this contract is correct.
-	err := verifySettlement(ctx, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement)
+	err := verifySettlement(ctx, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -417,7 +418,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 // verifySettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
 func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer, settleTx *wire.MsgTx,
-	settlement *protocol.Settlement) error {
+	settlement *protocol.Settlement, headers BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.verifySettlement")
 	defer span.End()
 
@@ -458,6 +459,10 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
 
 	for assetOffset, assetTransfer := range transfer.Assets {
 		assetIsBitcoin := assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero()
@@ -471,11 +476,6 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
 			if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractPKH.Bytes()) {
 				continue // This asset is not for this contract.
-			}
-
-			ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
-			if err != nil {
-				return errors.Wrap(err, "Failed to retrieve contract")
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
 				return rejectError{code: protocol.RejectContractFrozen}
@@ -569,7 +569,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 		// Process receivers
 		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64,
-		//   RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string}
+		//   RegisterSigAlgorithm uint8, RegisterConfirmationSigToken string}
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
 			// Get receiver address from outputs[receiver.Index]
 			if int(receiver.Index) >= len(transferTx.Outputs) {
@@ -577,12 +577,12 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			transferOutputAddress := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
+			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), receiverPKH.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -593,7 +593,11 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			// TODO Process RegistrySignatures
+			// Validate Register Signature
+			if err := validateRegister(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH, &receiver,
+				headers); err != nil {
+				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
+			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
 				// Get receiver's balance
@@ -601,7 +605,7 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					receiverBalance := uint64(0)
 					settlementQuantities[settleOutputIndex] = &receiverBalance
 				} else {
-					receiverBalance := asset.GetBalance(ctx, as, transferOutputAddress)
+					receiverBalance := asset.GetBalance(ctx, as, receiverPKH)
 					settlementQuantities[settleOutputIndex] = &receiverBalance
 				}
 			}

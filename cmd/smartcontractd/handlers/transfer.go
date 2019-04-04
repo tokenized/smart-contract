@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"fmt"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -28,6 +30,7 @@ type Transfer struct {
 	MasterDB *db.DB
 	Config   *node.Config
 	TxCache  InspectorTxCache
+	Headers  BitcoinHeaders
 }
 
 type rejectError struct {
@@ -147,7 +150,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, t.MasterDB, rk, itx, msg, settleTx.MsgTx, &settlement)
+	err = addSettlementData(ctx, t.MasterDB, rk, itx, msg, settleTx.MsgTx, &settlement, t.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -249,8 +252,8 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 
 		for _, tokenReceiver := range assetTransfer.AssetReceivers {
 			assetBalance -= tokenReceiver.Quantity
-			// TODO Handle Registry : RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
 
+			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
 			if assetIsBitcoin {
 				// Debit from contract's bitcoin balance
 				if tokenReceiver.Quantity > contractBalance {
@@ -259,8 +262,7 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				contractBalance -= tokenReceiver.Quantity
 			}
 
-			address := protocol.PublicKeyHashFromBytes(transferTx.Inputs[tokenReceiver.Index].Address.ScriptAddress())
-			outputIndex, exists := addresses[*address]
+			outputIndex, exists := addresses[*receiverPKH]
 			if exists {
 				if assetIsBitcoin {
 					// Add bitcoin quantity to receiver's output
@@ -270,7 +272,7 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				}
 			} else {
 				// Add output to receiver
-				addresses[*address] = uint32(len(settleTx.MsgTx.TxOut))
+				addresses[*receiverPKH] = uint32(len(settleTx.MsgTx.TxOut))
 
 				if assetIsBitcoin {
 					err = settleTx.AddP2PKHOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
@@ -351,9 +353,6 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 				return fmt.Errorf("Receiver bitcoin output missing output data for receiver %d", receiverOffset)
 			}
 
-			// TODO Process RegistrySignatures
-			// RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string
-
 			if receiver.Quantity >= sendBalance {
 				return fmt.Errorf("Sending more bitcoin than received")
 			}
@@ -397,7 +396,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
-	settleTx *wire.MsgTx, settlement *protocol.Settlement) error {
+	settleTx *wire.MsgTx, settlement *protocol.Settlement, headers BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -549,7 +548,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 		// Process receivers
 		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64,
-		//   RegistrySigAlgorithm uint8, RegistryConfirmationSigToken string}
+		//   RegisterSigAlgorithm uint8, RegisterConfirmationSigToken string}
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
 			// Get receiver address from outputs[receiver.Index]
 			if int(receiver.Index) >= len(transferTx.Outputs) {
@@ -557,12 +556,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			transferOutputAddress := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
+			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), transferOutputAddress.Bytes()) {
+				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), receiverPKH.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -573,11 +572,15 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			// TODO Process RegistrySignatures
+			// Check Register Signature
+			if err := validateRegister(ctx, contractPKH, ct, &assetTransfer.AssetCode,
+				receiverPKH, &receiver, headers); err != nil {
+				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
+			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
 				// Get receiver's balance
-				receiverBalance := asset.GetBalance(ctx, as, transferOutputAddress)
+				receiverBalance := asset.GetBalance(ctx, as, receiverPKH)
 				settlementQuantities[settleOutputIndex] = &receiverBalance
 			}
 
@@ -859,4 +862,65 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	// Remove cached tx
 	t.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
 	return nil
+}
+
+func validateRegister(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
+	assetCode *protocol.AssetCode, receiverPKH *protocol.PublicKeyHash, tokenReceiver *protocol.TokenReceiver,
+	headers BitcoinHeaders) error {
+
+	if tokenReceiver.RegisterSigAlgorithm == 0 {
+		if len(ct.Registers) > 0 {
+			return fmt.Errorf("Missing signature")
+		}
+		return nil // No signature required
+	}
+
+	// Parse signature
+	registerSig, err := btcec.ParseSignature(tokenReceiver.RegisterConfirmationSig, elliptic.P256())
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse register signature")
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
+
+	// Check all registers
+	for _, register := range ct.Registers {
+		registerPubKey, err := btcec.ParsePubKey(register.PublicKey, btcec.S256())
+		if err != nil {
+			return errors.Wrap(err, "Failed to parse register pub key")
+		}
+
+		// Check block headers until they are beyond expiration
+		previousExpired := false
+		for blockHeight := headers.LastHeight(ctx); ; blockHeight-- {
+			hash, err := headers.Hash(ctx, blockHeight)
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
+			}
+			sigHash, err := protocol.TransferRegisterSigHash(ctx, contractPKH, assetCode,
+				receiverPKH, tokenReceiver.Quantity, hash)
+			if err != nil {
+				return errors.Wrap(err, "Failed to calculate register sig hash")
+			}
+
+			if registerSig.Verify(sigHash, registerPubKey) {
+				return nil // Valid signature found
+			}
+
+			if previousExpired {
+				break
+			} else {
+				t, err := headers.Time(ctx, blockHeight)
+				if err != nil {
+					return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d", blockHeight))
+				}
+				if t < expire {
+					previousExpired = true
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("Signature invalid")
 }

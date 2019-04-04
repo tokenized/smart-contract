@@ -504,10 +504,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Check if registries are different
-		different := len(ct.Registries) != len(msg.Registries)
+		different := len(ct.Registers) != len(msg.Registers)
 		if !different {
-			for i, registry := range ct.Registries {
-				if !registry.Equal(msg.Registries[i]) {
+			for i, register := range ct.Registers {
+				if !register.Equal(msg.Registers[i]) {
 					different = true
 					break
 				}
@@ -515,8 +515,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			logger.Info(ctx, "%s : Updating contract registries (%s)", v.TraceID, ct.ContractName)
-			uc.Registries = &msg.Registries
+			logger.Info(ctx, "%s : Updating contract registers (%s)", v.TraceID, ct.ContractName)
+			uc.Registers = &msg.Registers
 		}
 
 		// Check if voting systems are different
@@ -952,36 +952,36 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 20: // Registries
+		case 20: // Registers
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(cf.Registries) {
-					return fmt.Errorf("Contract amendment element out of range for Registries : %d",
+				if int(amendment.Element) >= len(cf.Registers) {
+					return fmt.Errorf("Contract amendment element out of range for Registers : %d",
 						amendment.Element)
 				}
 
 				buf := bytes.NewBuffer(amendment.Data)
-				if err := cf.Registries[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment Registries[%d] failed to deserialize : %s",
+				if err := cf.Registers[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment Registers[%d] failed to deserialize : %s",
 						amendment.Element, err)
 				}
 
 			case 1: // Add element
 				buf := bytes.NewBuffer(amendment.Data)
-				newRegistry := protocol.Registry{}
-				if err := newRegistry.Write(buf); err != nil {
+				newRegister := protocol.Register{}
+				if err := newRegister.Write(buf); err != nil {
 					return fmt.Errorf("Contract amendment addition to Registries failed to deserialize : %s",
 						err)
 				}
-				cf.Registries = append(cf.Registries, newRegistry)
+				cf.Registers = append(cf.Registers, newRegister)
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(cf.Registries) {
-					return fmt.Errorf("Contract amendment element out of range for Registries : %d",
+				if int(amendment.Element) >= len(cf.Registers) {
+					return fmt.Errorf("Contract amendment element out of range for Registers : %d",
 						amendment.Element)
 				}
-				cf.Registries = append(cf.Registries[:amendment.Element],
-					cf.Registries[amendment.Element+1:]...)
+				cf.Registers = append(cf.Registers[:amendment.Element],
+					cf.Registers[amendment.Element+1:]...)
 
 			default:
 				return fmt.Errorf("Invalid contract amendment operation for Registries : %d", amendment.Operation)

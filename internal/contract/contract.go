@@ -64,8 +64,8 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if contract.VotingSystems == nil {
 		contract.VotingSystems = []protocol.VotingSystem{}
 	}
-	if contract.Registries == nil {
-		contract.Registries = []protocol.Registry{}
+	if contract.Registers == nil {
+		contract.Registers = []protocol.Register{}
 	}
 
 	logger.Verbose(ctx, "Creating contract :\n%+v", &contract)
@@ -159,10 +159,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.HolderProposal != nil {
 		c.HolderProposal = *upd.HolderProposal
 	}
-	if upd.Registries != nil {
-		c.Registries = *upd.Registries
-		if c.Registries == nil {
-			c.Registries = []protocol.Registry{}
+	if upd.Registers != nil {
+		c.Registers = *upd.Registers
+		if c.Registers == nil {
+			c.Registers = []protocol.Register{}
 		}
 	}
 	if upd.FreezePeriod != nil {
