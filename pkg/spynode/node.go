@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -340,7 +341,7 @@ func (node *Node) sendOutgoing(ctx context.Context) error {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
+			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}
 	}
 
@@ -751,4 +752,18 @@ func (node *Node) sleepUntilStop(seconds int) {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// BitcoinHeaders interface
+func (node *Node) LastHeight(ctx context.Context) int {
+	return node.blocks.LastHeight()
+}
+
+func (node *Node) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+	return node.blocks.Hash(ctx, height)
+}
+
+func (node *Node) Time(ctx context.Context, height int) (uint32, error) {
+	return node.blocks.Time(ctx, height)
 }

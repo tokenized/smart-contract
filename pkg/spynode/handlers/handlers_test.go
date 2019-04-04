@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerStorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
@@ -62,7 +64,7 @@ func TestHandlers(test *testing.T) {
 
 	// Setup config
 	startHash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
-	config, err := data.NewConfig("test", "Tokenized Test", startHash.String(), 8, 2000)
+	config, err := data.NewConfig(&chaincfg.MainNetParams, "test", "Tokenized Test", startHash.String(), 8, 2000)
 	if err != nil {
 		test.Errorf("Failed to create config : %v", err)
 	}
@@ -78,8 +80,9 @@ func TestHandlers(test *testing.T) {
 	}
 
 	// Create block repo
+	t := uint32(time.Now().Unix())
 	blockRepo := handlerStorage.NewBlockRepository(store)
-	if err := blockRepo.Initialize(ctx, *startHash); err != nil {
+	if err := blockRepo.Initialize(ctx, t); err != nil {
 		test.Errorf("Failed to initialize block repo : %v", err)
 	}
 
@@ -108,7 +111,11 @@ func TestHandlers(test *testing.T) {
 	txs := make([]*wire.MsgTx, 0, testBlockCount)
 	headersMsg := wire.NewMsgHeaders()
 	zeroHash, _ := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
-	previousHash := zeroHash
+	previousHash, err := blockRepo.Hash(ctx, 0)
+	if err != nil {
+		test.Errorf("Failed to get genesis hash : %s", err)
+		return
+	}
 	for i := 0; i < testBlockCount; i++ {
 		height := i
 
@@ -127,10 +134,12 @@ func TestHandlers(test *testing.T) {
 		txs = append(txs, tx)
 
 		merkleRoot := tx.TxHash()
-		header := wire.NewBlockHeader(int32(wire.ProtocolVersion), previousHash, &merkleRoot, 0, 0)
+		header := wire.NewBlockHeader(1, previousHash, &merkleRoot, 0, 0)
+		header.Timestamp = time.Unix(int64(t), 0)
+		t += 600
 		block := wire.NewMsgBlock(header)
 		if err := block.AddTransaction(tx); err != nil {
-			test.Errorf(fmt.Sprintf("Failed to add tx to block (%d)", height), err)
+			test.Errorf("Failed to add tx to block (%d) : %s", height, err)
 		}
 
 		blocks = append(blocks, block)

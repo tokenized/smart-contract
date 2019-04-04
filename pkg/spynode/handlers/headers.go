@@ -9,7 +9,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -75,7 +74,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		hash := header.BlockHash()
 
 		if header.PrevBlock == *lastHash {
-			request, err := handler.addHeader(ctx, &hash)
+			request, err := handler.addHeader(ctx, header)
 			if err != nil {
 				return response, err
 			}
@@ -162,7 +161,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 
 			// Add this header after the new top block
-			request, err := handler.addHeader(ctx, &hash)
+			request, err := handler.addHeader(ctx, header)
 			if err != nil {
 				return response, err
 			}
@@ -194,16 +193,16 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	return response, nil
 }
 
-func (handler HeadersHandler) addHeader(ctx context.Context, hash *chainhash.Hash) (bool, error) {
+func (handler HeadersHandler) addHeader(ctx context.Context, header *wire.BlockHeader) (bool, error) {
 	startHeight := handler.state.StartHeight()
 	if startHeight == -1 {
 		// Check if it is the start block
-		if handler.config.StartHash == *hash {
+		if handler.config.StartHash == header.BlockHash() {
 			startHeight = handler.blocks.LastHeight() + 1
 			handler.state.SetStartHeight(startHeight)
 			logger.Verbose(ctx, "Found start block at height %d", startHeight)
 		} else {
-			err := handler.blocks.Add(ctx, *hash) // Just add hashes before the start block
+			err := handler.blocks.Add(ctx, header) // Just add hashes before the start block
 			if err != nil {
 				return false, err
 			}

@@ -1,12 +1,15 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
@@ -24,33 +27,34 @@ type Block struct {
 
 // BlockRepository is used for managing Block data.
 type BlockRepository struct {
-	store      storage.Storage
-	height     int                    // Height of the latest block
-	lastHashes []chainhash.Hash       // Hashes in the latest key/file
-	heights    map[chainhash.Hash]int // Lookup of block height by hash
-	mutex      sync.Mutex
+	store       storage.Storage
+	height      int                    // Height of the latest block
+	lastHeaders []wire.BlockHeader     // Hashes in the latest key/file
+	heights     map[chainhash.Hash]int // Lookup of block height by hash
+	mutex       sync.Mutex
 }
 
 // NewBlockRepository returns a new BlockRepository.
 func NewBlockRepository(store storage.Storage) *BlockRepository {
 	result := BlockRepository{
-		store:      store,
-		height:     -1,
-		lastHashes: make([]chainhash.Hash, 0, blocksPerKey),
-		heights:    make(map[chainhash.Hash]int),
+		store:       store,
+		height:      -1,
+		lastHeaders: make([]wire.BlockHeader, 0, blocksPerKey),
+		heights:     make(map[chainhash.Hash]int),
 	}
 	return &result
 }
 
 // Initialize as empty.
-func (repo *BlockRepository) Initialize(ctx context.Context, genesisHash chainhash.Hash) error {
+func (repo *BlockRepository) Initialize(ctx context.Context, genesisTime uint32) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
-	repo.lastHashes = make([]chainhash.Hash, 0, blocksPerKey)
-	repo.lastHashes = append(repo.lastHashes, genesisHash)
+	repo.lastHeaders = make([]wire.BlockHeader, 0, blocksPerKey)
+	header := wire.BlockHeader{Timestamp: time.Unix(int64(genesisTime), 0)}
+	repo.lastHeaders = append(repo.lastHeaders, header)
 	repo.height = 0
-	repo.heights[genesisHash] = repo.height
+	repo.heights[header.BlockHash()] = repo.height
 	return nil
 }
 
@@ -63,11 +67,11 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 	repo.height = -1
 	repo.heights = make(map[chainhash.Hash]int)
 
-	// Build hash height map from genesis and load lastHashes
+	// Build hash height map from genesis and load lastHeaders
 	previousFileSize := -1
 	filesLoaded := 0
 	for {
-		hashes, err := repo.read(ctx, filesLoaded*blocksPerKey)
+		headers, err := repo.read(ctx, filesLoaded*blocksPerKey)
 		if err == storage.ErrNotFound {
 			break
 		}
@@ -75,7 +79,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 			return errors.Wrap(err, fmt.Sprintf("Failed to open block file : %s",
 				repo.buildPath(repo.height)))
 		}
-		if len(hashes) == 0 {
+		if len(headers) == 0 {
 			break
 		}
 
@@ -84,56 +88,69 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 				repo.buildPath(repo.height-blocksPerKey)))
 		}
 
-		// Add this set of hashes to the heights map
-		for i, hash := range hashes {
-			repo.heights[hash] = repo.height + i + 1
+		// Add this set of headers to the heights map
+		for i, h := range headers {
+			repo.heights[h.BlockHash()] = repo.height + i + 1
 		}
 
-		previousFileSize = len(hashes)
+		previousFileSize = len(headers)
 
 		if filesLoaded == 0 {
-			repo.height = len(hashes) - 1 // Account for genesis block 0
+			repo.height = len(headers) - 1 // Account for genesis block 0
 		} else {
-			repo.height += len(hashes)
+			repo.height += len(headers)
 		}
 
-		repo.lastHashes = hashes
+		repo.lastHeaders = headers
 		filesLoaded++
 	}
 
 	if filesLoaded == 0 {
 		// Add genesis
-		hash, err := chainhash.NewHashFromStr("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+		// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+		prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
 		if err != nil {
-			return errors.Wrap(err, "Failed to create genesis hash")
+			return errors.Wrap(err, "Failed to create genesis prev hash")
 		}
-		repo.lastHashes = append(repo.lastHashes, *hash)
+		merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
+		if err != nil {
+			return errors.Wrap(err, "Failed to create genesis merkle hash")
+		}
+		genesisHeader := wire.BlockHeader{
+			Version:    1,
+			PrevBlock:  *prevhash,
+			MerkleRoot: *merklehash,
+			Timestamp:  time.Unix(1231006505, 0),
+			Bits:       0x1d00ffff,
+			Nonce:      2083236893,
+		}
+		repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
 		repo.height = 0
-		repo.heights[*hash] = repo.height
+		repo.heights[genesisHeader.BlockHash()] = repo.height
 		logger.Verbose(ctx, "Added genesis block")
 	}
 
 	return nil
 }
 
-// Adds a block hash
-func (repo *BlockRepository) Add(ctx context.Context, hash chainhash.Hash) error {
+// Adds a block header
+func (repo *BlockRepository) Add(ctx context.Context, header *wire.BlockHeader) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
-	if len(repo.lastHashes) == blocksPerKey {
+	if len(repo.lastHeaders) == blocksPerKey {
 		// Save latest key
 		if err := repo.save(ctx); err != nil {
-			return err
+			return errors.Wrap(err, "Failed to save")
 		}
 
 		// Start next key
-		repo.lastHashes = make([]chainhash.Hash, 0, blocksPerKey)
+		repo.lastHeaders = make([]wire.BlockHeader, 0, blocksPerKey)
 	}
 
-	repo.lastHashes = append(repo.lastHashes, hash)
+	repo.lastHeaders = append(repo.lastHeaders, *header)
 	repo.height++
-	repo.heights[hash] = repo.height
+	repo.heights[header.BlockHash()] = repo.height
 	return nil
 }
 
@@ -150,7 +167,8 @@ func (repo *BlockRepository) LastHash() *chainhash.Hash {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
-	return &repo.lastHashes[len(repo.lastHashes)-1]
+	result := repo.lastHeaders[len(repo.lastHeaders)-1].BlockHash()
+	return &result
 }
 
 func (repo *BlockRepository) Contains(hash chainhash.Hash) bool {
@@ -183,28 +201,65 @@ func (repo *BlockRepository) Hash(ctx context.Context, height int) (*chainhash.H
 // This function is internal and doesn't lock the mutex so it can be internally without double locking.
 func (repo *BlockRepository) getHash(ctx context.Context, height int) (*chainhash.Hash, error) {
 	if height > repo.height {
-		return nil, nil // We don't know the hash for that height yet
+		return nil, errors.New("Hash height beyond tip") // We don't know the hash for that height yet
 	}
 
-	if repo.height-height < len(repo.lastHashes) {
-		// This height is in the lastHashes set
-		return &repo.lastHashes[len(repo.lastHashes)-1-(repo.height-height)], nil
+	if repo.height-height < len(repo.lastHeaders) {
+		// This height is in the lastHeaders set
+		result := repo.lastHeaders[len(repo.lastHeaders)-1-(repo.height-height)].BlockHash()
+		return &result, nil
 	}
 
 	// Read from storage
-	hashes, err := repo.read(ctx, height)
+	headers, err := repo.read(ctx, height)
 	if err != nil {
-		return nil, nil
+		return nil, errors.Wrap(err, fmt.Sprintf("Failed to read block file for height %d", height))
 	}
 
-	if len(hashes) != blocksPerKey {
+	if len(headers) != blocksPerKey {
 		// This should only be reached on files that are not the latest, and they should all be full
-		return nil, errors.New(fmt.Sprintf("Invalid block file (count %d) : %s", len(hashes),
+		return nil, errors.New(fmt.Sprintf("Invalid block file (count %d) : %s", len(headers),
 			repo.buildPath(repo.height-blocksPerKey)))
 	}
 
 	offset := height % blocksPerKey
-	return &hashes[offset], nil
+	result := headers[offset].BlockHash()
+	return &result, nil
+}
+
+// Return the block time for the specified height
+func (repo *BlockRepository) Time(ctx context.Context, height int) (uint32, error) {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	return repo.getTime(ctx, height)
+}
+
+// This function is internal and doesn't lock the mutex so it can be internally without double locking.
+func (repo *BlockRepository) getTime(ctx context.Context, height int) (uint32, error) {
+	if height > repo.height {
+		return 0, nil // We don't know the hash for that height yet
+	}
+
+	if repo.height-height < len(repo.lastHeaders) {
+		// This height is in the lastHeaders set
+		return uint32(repo.lastHeaders[len(repo.lastHeaders)-1-(repo.height-height)].Timestamp.Unix()), nil
+	}
+
+	// Read from storage
+	headers, err := repo.read(ctx, height)
+	if err != nil {
+		return 0, nil
+	}
+
+	if len(headers) != blocksPerKey {
+		// This should only be reached on files that are not the latest, and they should all be full
+		return 0, errors.New(fmt.Sprintf("Invalid block file (count %d) : %s", len(headers),
+			repo.buildPath(repo.height-blocksPerKey)))
+	}
+
+	offset := height % blocksPerKey
+	return uint32(headers[offset].Timestamp.Unix()), nil
 }
 
 // Revert block repository to the specified height. Saves after
@@ -246,7 +301,7 @@ func (repo *BlockRepository) Revert(ctx context.Context, height int) error {
 	}
 
 	if newCount < blocksPerKey {
-		data = data[:chainhash.HashSize*newCount] // Truncate data
+		data = data[:wire.MaxBlockHeaderPayload*newCount] // Truncate data
 
 		// Re-write file with truncated data
 		if err := repo.store.Write(ctx, path, data, nil); err != nil {
@@ -255,14 +310,15 @@ func (repo *BlockRepository) Revert(ctx context.Context, height int) error {
 	}
 
 	// Cache needs to be reset with last file's data.
-	repo.lastHashes = make([]chainhash.Hash, 0, blocksPerKey)
-	endOffset := len(data)
-	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
-		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
+	repo.lastHeaders = make([]wire.BlockHeader, 0, blocksPerKey)
+	buf := bytes.NewBuffer(data)
+	header := wire.BlockHeader{}
+	for buf.Len() > 0 {
+		err := header.Deserialize(buf)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to parse latest block data during truncate : %s", path))
 		}
-		repo.lastHashes = append(repo.lastHashes, *newhash)
+		repo.lastHeaders = append(repo.lastHeaders, header)
 	}
 	repo.height = height
 	return nil
@@ -279,40 +335,43 @@ func (repo *BlockRepository) Save(ctx context.Context) error {
 // This function is internal and doesn't lock the mutex so it can be internally without double locking.
 func (repo *BlockRepository) save(ctx context.Context) error {
 	// Create contiguous byte slice
-	data := make([]byte, chainhash.HashSize*len(repo.lastHashes))
-	for i, hash := range repo.lastHashes {
-		copy(data[i*chainhash.HashSize:(i*chainhash.HashSize)+chainhash.HashSize], hash[:])
+	data := make([]byte, 0, wire.MaxBlockHeaderPayload*len(repo.lastHeaders))
+	buf := bytes.NewBuffer(data)
+	for _, header := range repo.lastHeaders {
+		err := header.Serialize(buf)
+		if err != nil {
+			return errors.Wrap(err, "Failed to write header")
+		}
 	}
 
-	path := repo.buildPath(repo.height)
-
-	err := repo.store.Write(ctx, path, data, nil)
+	err := repo.store.Write(ctx, repo.buildPath(repo.height), buf.Bytes(), nil)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to write block file %s", path))
+		return errors.Wrap(err, fmt.Sprintf("Failed to write block file %s", repo.buildPath(repo.height)))
 	}
 
 	return nil
 }
 
 // Read reads a key.
-func (repo *BlockRepository) read(ctx context.Context, height int) ([]chainhash.Hash, error) {
+func (repo *BlockRepository) read(ctx context.Context, height int) ([]wire.BlockHeader, error) {
 	data, err := repo.store.Read(ctx, repo.buildPath(height))
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse hashes from key
-	hashes := make([]chainhash.Hash, 0, blocksPerKey)
-	endOffset := len(data)
-	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
-		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
+	// Parse headers from key
+	headers := make([]wire.BlockHeader, 0, blocksPerKey)
+	buf := bytes.NewBuffer(data)
+	header := wire.BlockHeader{}
+	for buf.Len() > 0 {
+		err := header.Deserialize(buf)
 		if err != nil {
-			return hashes, err
+			return headers, err
 		}
-		hashes = append(hashes, *newhash)
+		headers = append(headers, header)
 	}
 
-	return hashes, nil
+	return headers, nil
 }
 
 func (repo *BlockRepository) buildPath(height int) string {

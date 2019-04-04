@@ -298,7 +298,7 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
+			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}
 	}
 
