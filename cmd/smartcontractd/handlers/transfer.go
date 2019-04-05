@@ -21,6 +21,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"golang.org/x/crypto/ripemd160"
@@ -67,45 +68,36 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Transfer invalid : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return t.respondTransferReject(ctx, w, itx, msg, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Find "first" contract. The "first" contract of a transfer is the one responsible for
-	//   creating the initial settlement data and passing it to the next contract if there
-	//   are more than one.
-	firstContractIndex := uint16(0)
-	for _, asset := range msg.Assets {
-		if asset.ContractIndex != uint16(0xffff) {
-			break
-		}
-		// Asset transfer doesn't have a contract (probably BSV transfer).
-		firstContractIndex++
+	// Find "first" contract.
+	first := firstContractOutputIndex(msg.Assets, itx)
+
+	if first == 0xffff {
+		logger.Warn(ctx, "%s : Transfer first contract not found : %s", v.TraceID, rk.Address.String())
+		return errors.New("Transfer first contract not found")
 	}
 
-	if int(msg.Assets[firstContractIndex].ContractIndex) >= len(itx.Outputs) {
-		logger.Warn(ctx, "%s : Transfer contract index out of range : %s", v.TraceID, rk.Address.String())
-		return errors.New("Transfer contract index out of range")
-	}
-
-	if itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Address.String() != rk.Address.String() {
+	if !bytes.Equal(itx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
 		logger.Verbose(ctx, "%s : Not contract for first transfer. Waiting for Message Offer : %s", v.TraceID,
-			itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Address.String())
+			itx.Outputs[first].Address.String())
 		t.TxCache.SaveTx(ctx, itx)
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
 		logger.Warn(ctx, "%s : Transfer expired : %s", v.TraceID, msg.OfferExpiry.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTransferExpired)
+		return t.respondTransferReject(ctx, w, itx, msg, rk, protocol.RejectTransferExpired)
 	}
 
 	if len(msg.Assets) == 0 {
 		logger.Warn(ctx, "%s : Transfer has no asset transfers", v.TraceID)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTransferExpired)
+		return t.respondTransferReject(ctx, w, itx, msg, rk, protocol.RejectTransferExpired)
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
-	contractBalance := uint64(itx.Outputs[msg.Assets[firstContractIndex].ContractIndex].Value)
+	contractBalance := uint64(itx.Outputs[first].Value)
 
 	// Transfer Outputs
 	//   Contract 1 : amount = calculated fee for settlement tx + any bitcoins being transfered
@@ -124,14 +116,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	settleTx, err = buildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return t.respondTransferReject(ctx, w, itx, msg, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return t.respondTransferReject(ctx, w, itx, msg, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Create initial settlement data
@@ -155,7 +147,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		reject, ok := err.(rejectError)
 		if ok {
 			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
-			return node.RespondReject(ctx, w, itx, rk, reject.code)
+			return t.respondTransferReject(ctx, w, itx, msg, rk, reject.code)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -178,6 +170,30 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Send to next contract
 	return sendToNextSettlementContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement)
+}
+
+// firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the one
+//   responsible for creating the initial settlement data and passing it to the next contract if
+//   there are more than one.
+func firstContractOutputIndex(assetTransfers []protocol.AssetTransfer, itx *inspector.Transaction) uint16 {
+	transferIndex := uint16(0)
+	for _, asset := range assetTransfers {
+		if asset.ContractIndex != 0xffff {
+			break
+		}
+		// Asset transfer doesn't have a contract (probably bitcoin transfer).
+		transferIndex++
+	}
+
+	if int(transferIndex) >= len(assetTransfers) {
+		return 0xffff
+	}
+
+	if int(assetTransfers[transferIndex].ContractIndex) >= len(itx.Outputs) {
+		return 0xffff
+	}
+
+	return assetTransfers[transferIndex].ContractIndex
 }
 
 // buildSettlementTx builds the tx for a settlement action.
@@ -547,8 +563,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		}
 
 		// Process receivers
-		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64,
-		//   RegisterSigAlgorithm uint8, RegisterConfirmationSigToken string}
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
 			// Get receiver address from outputs[receiver.Index]
 			if int(receiver.Index) >= len(transferTx.Outputs) {
@@ -853,7 +867,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 
 		// Update database
-		err := asset.Update(ctx, dbConn, contractPKH, &assetSettlement.AssetCode, &ua, v.Now)
+		err := asset.Update(ctx, dbConn, contractPKH, &assetSettlement.AssetCode, &ua, msg.Timestamp)
 		if err != nil {
 			return err
 		}
@@ -923,4 +937,63 @@ func validateRegister(ctx context.Context, contractPKH *protocol.PublicKeyHash, 
 	}
 
 	return fmt.Errorf("Signature invalid")
+}
+
+func (t *Transfer) respondTransferReject(ctx context.Context, w *node.ResponseWriter, transferTx *inspector.Transaction,
+	transfer *protocol.Transfer, rk *wallet.RootKey, code uint8) error {
+
+	first := firstContractOutputIndex(transfer.Assets, transferTx)
+
+	// Determine UTXOs to fund the reject response.
+	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
+	if err != nil {
+		return node.RespondReject(ctx, w, transferTx, rk, code)
+	}
+
+	balance := uint64(0)
+	for _, utxo := range utxos {
+		balance += uint64(utxo.Value)
+	}
+
+	w.SetRejectUTXOs(ctx, utxos)
+
+	// Add refund amounts for all bitcoin senders
+	refund := first != 0xffff && bytes.Equal(transferTx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress())
+	refundBalance := uint64(0)
+	for _, assetTransfer := range transfer.Assets {
+		if refund && assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
+			// Process bitcoin senders refunds
+			for _, sender := range assetTransfer.AssetSenders {
+				if int(sender.Index) >= len(transferTx.Inputs) {
+					continue
+				}
+
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
+				refundBalance += sender.Quantity
+			}
+		} else {
+			// Add all other senders to be notified
+			for _, sender := range assetTransfer.AssetSenders {
+				if int(sender.Index) >= len(transferTx.Inputs) {
+					continue
+				}
+
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, 0)
+			}
+		}
+	}
+
+	if refund && refundBalance > balance {
+		contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		ct, err := contract.Retrieve(ctx, t.MasterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to retrieve contract")
+		}
+
+		// Funding not enough to refund everyone, so don't refund to anyone.
+		issuerAddress, err := btcutil.NewAddressPubKeyHash(ct.IssuerPKH.Bytes(), &t.Config.ChainParams)
+		w.ClearRejectOutputValues(issuerAddress)
+	}
+
+	return node.RespondReject(ctx, w, transferTx, rk, code)
 }

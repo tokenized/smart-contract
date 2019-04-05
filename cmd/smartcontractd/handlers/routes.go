@@ -109,6 +109,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)
+	app.Handle("SEE", protocol.CodeRejection, m.ProcessRejection)
 
 	// -------------------------------------------------------------------------
 	// Schedule vote finalizers

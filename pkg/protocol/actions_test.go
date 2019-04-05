@@ -2415,17 +2415,17 @@ func TestMessage(t *testing.T) {
 func TestRejection(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Rejection{}
-	// QtyReceivingAddresses (uint8)
-	{
-		// uint8 test not setup
-	}
-
 	// AddressIndexes (uint16[])
 	{
 		for i := 0; i < 5; i++ {
 			var item uint16
 			initialMessage.AddressIndexes = append(initialMessage.AddressIndexes, item)
 		}
+	}
+
+	// RejectAddressIndex (uint)
+	{
+		// uint test not setup
 	}
 
 	// RejectionType (uint)
@@ -2478,11 +2478,6 @@ func TestRejection(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
-	// QtyReceivingAddresses (uint8)
-	if initialMessage.QtyReceivingAddresses != decodedMessage.QtyReceivingAddresses {
-		t.Errorf("QtyReceivingAddresses doesn't match : %v != %v", initialMessage.QtyReceivingAddresses, decodedMessage.QtyReceivingAddresses)
-	}
-
 	// AddressIndexes (uint16[])
 	if len(initialMessage.AddressIndexes) != len(decodedMessage.AddressIndexes) {
 		t.Errorf("AddressIndexes lengths don't match : %d != %d", len(initialMessage.AddressIndexes), len(decodedMessage.AddressIndexes))
@@ -2491,6 +2486,11 @@ func TestRejection(t *testing.T) {
 		if value != decodedMessage.AddressIndexes[i] {
 			t.Errorf("AddressIndexes value %d doesn't match : %v != %v", i, value, decodedMessage.AddressIndexes[i])
 		}
+	}
+
+	// RejectAddressIndex (uint)
+	if initialMessage.RejectAddressIndex != decodedMessage.RejectAddressIndex {
+		t.Errorf("RejectAddressIndex doesn't match : %v != %v", initialMessage.RejectAddressIndex, decodedMessage.RejectAddressIndex)
 	}
 
 	// RejectionType (uint)

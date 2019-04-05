@@ -5464,12 +5464,12 @@ func (action Message) String() string {
 // to remain revenue neutral. If not enough fees are attached to pay for
 // the Contract response then the Contract will not respond.
 type Rejection struct {
-	Header                Header    `json:"header,omitempty"`                  // Common header data for all actions
-	QtyReceivingAddresses uint8     `json:"qty_receiving_addresses,omitempty"` // 0-255 Message Receiving Addresses
-	AddressIndexes        []uint16  `json:"address_indexes,omitempty"`         // Associates the message to a particular output by the index.
-	RejectionType         uint8     `json:"rejection_type,omitempty"`          // Classifies the rejection by a type.
-	MessagePayload        string    `json:"message_payload,omitempty"`         // Length 0-65,535 bytes. Message that explains the reasoning for a rejection, if needed.  Most rejection types will be captured by the Rejection Type Subfield.
-	Timestamp             Timestamp `json:"timestamp,omitempty"`               // Timestamp in nanoseconds of when the smart contract created the action.
+	Header             Header    `json:"header,omitempty"`               // Common header data for all actions
+	AddressIndexes     []uint16  `json:"address_indexes,omitempty"`      // Associates the message to a particular output by the index.
+	RejectAddressIndex uint16    `json:"reject_address_index,omitempty"` // The address which is believed to have caused the rejection.
+	RejectionType      uint8     `json:"rejection_type,omitempty"`       // Classifies the rejection by a type.
+	MessagePayload     string    `json:"message_payload,omitempty"`      // Length 0-65,535 bytes. Message that explains the reasoning for a rejection, if needed.  Most rejection types will be captured by the Rejection Type Subfield.
+	Timestamp          Timestamp `json:"timestamp,omitempty"`            // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
 // Type returns the type identifer for this message.
@@ -5494,13 +5494,6 @@ func (action *Rejection) read(b []byte) (int, error) {
 // serialize returns the full OP_RETURN payload bytes.
 func (action *Rejection) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	// QtyReceivingAddresses (uint8)
-	{
-		if err := write(buf, action.QtyReceivingAddresses); err != nil {
-			return nil, err
-		}
-	}
-
 	// AddressIndexes ([]uint16)
 	{
 		if err := WriteVariableSize(buf, uint64(len(action.AddressIndexes)), 0, 8); err != nil {
@@ -5510,6 +5503,13 @@ func (action *Rejection) serialize() ([]byte, error) {
 			if err := write(buf, value); err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	// RejectAddressIndex (uint16)
+	{
+		if err := write(buf, action.RejectAddressIndex); err != nil {
+			return nil, err
 		}
 	}
 
@@ -5545,13 +5545,6 @@ func (action *Rejection) serialize() ([]byte, error) {
 // write populates the fields in Rejection from the byte slice
 func (action *Rejection) write(b []byte) (int, error) {
 	buf := bytes.NewBuffer(b)
-	// QtyReceivingAddresses (uint8)
-	{
-		if err := read(buf, &action.QtyReceivingAddresses); err != nil {
-			return 0, err
-		}
-	}
-
 	// AddressIndexes ([]uint16)
 	{
 		size, err := ReadVariableSize(buf, 0, 8)
@@ -5560,6 +5553,13 @@ func (action *Rejection) write(b []byte) (int, error) {
 		}
 		action.AddressIndexes = make([]uint16, size, size)
 		if err := read(buf, &action.AddressIndexes); err != nil {
+			return 0, err
+		}
+	}
+
+	// RejectAddressIndex (uint16)
+	{
+		if err := read(buf, &action.RejectAddressIndex); err != nil {
 			return 0, err
 		}
 	}
@@ -5592,15 +5592,15 @@ func (action *Rejection) write(b []byte) (int, error) {
 
 func (m *Rejection) Validate() error {
 
-	// QtyReceivingAddresses (uint8)
-	{
-	}
-
 	// AddressIndexes ([]uint16)
 	{
 		if len(m.AddressIndexes) > (2<<0)-1 {
 			return fmt.Errorf("list field AddressIndexes has too many items %d/%d", len(m.AddressIndexes), (2<<0)-1)
 		}
+	}
+
+	// RejectAddressIndex (uint16)
+	{
 	}
 
 	// RejectionType (uint8)
@@ -5629,8 +5629,8 @@ func (action Rejection) String() string {
 	vals := []string{}
 
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
-	vals = append(vals, fmt.Sprintf("QtyReceivingAddresses:%v", action.QtyReceivingAddresses))
 	vals = append(vals, fmt.Sprintf("AddressIndexes:%v", action.AddressIndexes))
+	vals = append(vals, fmt.Sprintf("RejectAddressIndex:%v", action.RejectAddressIndex))
 	vals = append(vals, fmt.Sprintf("RejectionType:%v", action.RejectionType))
 	vals = append(vals, fmt.Sprintf("MessagePayload:%#+v", action.MessagePayload))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))

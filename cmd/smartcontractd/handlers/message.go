@@ -45,6 +45,23 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		return errors.New("Could not assert as *protocol.Message")
 	}
 
+	// Check if message is addressed to contract.
+	found := false
+	for _, outputIndex := range msg.AddressIndexes {
+		if int(outputIndex) >= len(itx.Outputs) {
+			return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
+		}
+
+		if bytes.Equal(rk.Address.ScriptAddress(), itx.Outputs[outputIndex].Address.ScriptAddress()) {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil // Message not addressed to contract.
+	}
+
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Message invalid : %s", v.TraceID, err)
@@ -87,6 +104,16 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
 		}
 	}
+}
+
+// ProcessRejection handles an incoming Rejection OP_RETURN.
+func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessRejection")
+	defer span.End()
+
+	// TODO If this is a cancelled transfer, then refund any funds from the transfer tx to the this contract.
+
+	return nil
 }
 
 // processOffer handles an incoming Message Offer payload.
@@ -168,16 +195,14 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	settleTx, err = buildSettlementTx(ctx, w.Config, transferTx, transfer, rk, contractBalance)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectMsgMalformed)
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, transferTx, transfer, settleTx)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		// TODO How exactly do these rejects work. Do you send a reject based on the Transfer Tx?
-		return node.RespondReject(ctx, w, transferTx, rk, protocol.RejectMsgMalformed)
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Serialize received settlement data into OP_RETURN output.
@@ -198,7 +223,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 		reject, ok := err.(rejectError)
 		if ok {
 			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
-			return node.RespondReject(ctx, w, transferTx, rk, reject.code)
+			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, reject.code)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -303,7 +328,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		reject, ok := err.(rejectError)
 		if ok {
 			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
-			return node.RespondReject(ctx, w, transferTx, rk, reject.code)
+			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, reject.code)
 		} else {
 			return errors.Wrap(err, "Failed to verify settlement data")
 		}
@@ -568,8 +593,6 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 		}
 
 		// Process receivers
-		// assetTransfer.AssetReceivers []TokenReceiver {Index uint16, Quantity uint64,
-		//   RegisterSigAlgorithm uint8, RegisterConfirmationSigToken string}
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
 			// Get receiver address from outputs[receiver.Index]
 			if int(receiver.Index) >= len(transferTx.Outputs) {
@@ -649,4 +672,70 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	}
 
 	return nil
+}
+
+// respondTransferMessageReject responds to an M1 Offer or SigRequest with a rejection message to
+//   all included parties, refunding any bitcoin sent to the contract.
+func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.ResponseWriter,
+	messageTx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
+	rk *wallet.RootKey, code uint8) error {
+
+	first := firstContractOutputIndex(transfer.Assets, transferTx)
+
+	// Determine UTXOs to fund the reject response.
+	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
+	if err != nil {
+		return node.RespondReject(ctx, w, transferTx, rk, code)
+	}
+
+	// TODO Remove utxo spent by first boomerang
+
+	// Add utxo from message tx
+
+	balance := uint64(0)
+	for _, utxo := range utxos {
+		balance += uint64(utxo.Value)
+	}
+
+	w.SetRejectUTXOs(ctx, utxos)
+
+	// Add refund amounts for all bitcoin senders
+	refund := first != 0xffff && bytes.Equal(transferTx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress())
+	refundBalance := uint64(0)
+	for _, assetTransfer := range transfer.Assets {
+		if refund && assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
+			// Process bitcoin senders refunds
+			for _, sender := range assetTransfer.AssetSenders {
+				if int(sender.Index) >= len(transferTx.Inputs) {
+					continue
+				}
+
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
+				refundBalance += sender.Quantity
+			}
+		} else {
+			// Add all other senders to be notified
+			for _, sender := range assetTransfer.AssetSenders {
+				if int(sender.Index) >= len(transferTx.Inputs) {
+					continue
+				}
+
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, 0)
+			}
+		}
+	}
+
+	if refund && refundBalance > balance {
+		contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to retrieve contract")
+		}
+
+		// Funding not enough to refund everyone, so don't refund to anyone.
+		issuerAddress, err := btcutil.NewAddressPubKeyHash(ct.IssuerPKH.Bytes(), &m.Config.ChainParams)
+		w.ClearRejectOutputValues(issuerAddress)
+	}
+
+	return node.RespondReject(ctx, w, transferTx, rk, code)
 }

@@ -38,58 +38,82 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 	logger.Error(ctx, "%s", err)
 }
 
-// RespondReject sends a rejection message
+// RespondReject sends a rejection message.
+// If no reject output data is specified, then the remainder is sent to the PKH of the first input.
+// Since most bitcoins sent to the contract are just for response tx fee funding, this isn't a real
+//   issue.
+// The scenario in which it is important is when there is a multi-party transfer involving
+//   bitcoins. In this scenario inputs send bitcoins to the smart contract to distribute to
+//   receivers based on the transfer request data. We will need to analyze the transfer request
+//   data to determine which inputs were to have funded sending bitcoins, and return the bitcoins
+//   to them.
 func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
-
-	// Sender is the address that sent the message that we are rejecting.
-	sender := itx.Inputs[0].Address
-
-	// Receiver (contract) is the address sending the message (UTXO)
-	var contractOutput *inspector.Output
-	for i, output := range itx.Outputs {
-		if bytes.Equal(output.Address.ScriptAddress(), rk.Address.ScriptAddress()) {
-			contractOutput = &itx.Outputs[i]
-			break
-		}
-	}
-
-	if contractOutput == nil {
-		return errors.New("Contract output not found")
-	}
-
-	// Create reject tx
-	rejectTx := txbuilder.NewTx(contractOutput.Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
-
-	// Find spendable UTXOs
-	utxos, err := itx.UTXOs().ForAddress(contractOutput.Address)
-	if err != nil {
-		Error(ctx, w, ErrInsufficientFunds)
-		return ErrNoResponse
-	}
-
-	for _, utxo := range utxos {
-		rejectTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
-	}
-
-	// Add a dust output to the sender, but so they will also receive change.
-	rejectTx.AddP2PKHDustOutput(sender.ScriptAddress(), true)
-
-	rejectionCodes, err := protocol.GetRejectionCodes()
-	if err != nil {
-		Error(ctx, w, err)
-		return ErrNoResponse
-	}
-
-	rejectionCode, exists := rejectionCodes[code]
-	if !exists {
+	rejectionCode := protocol.GetRejectionCode(code)
+	if rejectionCode == nil {
 		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
 		return ErrNoResponse
 	}
+
+	v := ctx.Value(KeyValues).(*Values)
 
 	// Build rejection
 	rejection := protocol.Rejection{
 		RejectionType:  code,
 		MessagePayload: string(rejectionCode.Text),
+		Timestamp:      v.Now,
+	}
+
+	// Contract address
+	contractAddress := rk.Address
+
+	// Find spendable UTXOs
+	var utxos []inspector.UTXO
+	var err error
+	if len(w.RejectInputs) > 0 {
+		utxos = w.RejectInputs // Custom UTXOs. Just refund anything available to them.
+	} else {
+		utxos, err = itx.UTXOs().ForAddress(contractAddress)
+		if err != nil {
+			Error(ctx, w, err)
+			return ErrNoResponse
+		}
+	}
+
+	if len(utxos) == 0 {
+		return errors.New("Contract UTXOs not found")
+	}
+
+	// Create reject tx. Change goes back to requestor.
+	rejectTx := txbuilder.NewTx(itx.Inputs[0].Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+
+	for _, utxo := range utxos {
+		rejectTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
+	}
+
+	// Add a dust output to the requestor, but so they will also receive change.
+	if len(w.RejectOutputs) > 0 {
+		rejectAddressFound := false
+		for i, output := range w.RejectOutputs {
+			if output.Value < w.Config.DustLimit {
+				output.Value = w.Config.DustLimit
+			}
+			rejectTx.AddP2PKHOutput(output.Address.ScriptAddress(), output.Value, output.Change)
+			rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(i))
+			if bytes.Equal(output.Address.ScriptAddress(), w.RejectPKH.Bytes()) {
+				rejectAddressFound = true
+				rejection.RejectAddressIndex = uint16(i)
+			}
+			if !rejectAddressFound && w.RejectPKH != nil {
+				rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(len(rejectTx.Outputs)))
+				rejectTx.AddP2PKHDustOutput(w.RejectPKH.Bytes(), false)
+			}
+		}
+	} else {
+		// Give it all back to the first input. This is the common scenario when the first input is
+		//   the only requestor involved.
+		rejectTx.AddP2PKHDustOutput(itx.Inputs[0].Address.ScriptAddress(), true)
+		rejection.AddressIndexes = append(rejection.AddressIndexes, 0)
+		rejection.RejectAddressIndex = 0
 	}
 
 	// Add the rejection payload

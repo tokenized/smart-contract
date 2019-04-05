@@ -1,19 +1,25 @@
 package node
 
 import (
+	"bytes"
 	"context"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcutil"
 )
 
 type ResponseWriter struct {
-	Inputs  []inspector.UTXO
-	Outputs []Output
-	Config  *Config
-	Mux     protomux.Handler
+	Inputs        []inspector.UTXO
+	Outputs       []Output
+	RejectInputs  []inspector.UTXO
+	RejectOutputs []Output
+	RejectPKH     *protocol.PublicKeyHash
+	Config        *Config
+	Mux           protomux.Handler
 }
 
 // AddChangeOutput is a helper to add a change output
@@ -43,6 +49,43 @@ func (w *ResponseWriter) AddContractFee(ctx context.Context, value uint64) error
 func (w *ResponseWriter) SetUTXOs(ctx context.Context, utxos []inspector.UTXO) error {
 	w.Inputs = utxos
 	return nil
+}
+
+// SetRejectUTXOs is an optional function that allows explicit UTXOs to be spent in the reject
+// response be sure to remember any remaining UTXOs so they can be spent later.
+func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []inspector.UTXO) error {
+	w.RejectInputs = utxos
+	return nil
+}
+
+// AddRejectValue is a helper to add a refund amount to an address. This is used for multi-party
+//   value transfers when different users input different amounts of bitcoin and need that refunded
+//   if the request is rejected.
+func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr btcutil.Address, value uint64) error {
+	// Look for existing output to this address.
+	for i, output := range w.RejectOutputs {
+		if bytes.Equal(output.Address.ScriptAddress(), addr.ScriptAddress()) {
+			w.RejectOutputs[i].Value += value
+			return nil
+		}
+	}
+
+	// Add a new output for this address. If it is the first output make it the change output.
+	out := Output{
+		Address: addr,
+		Value:   value,
+		Change:  len(w.RejectOutputs) == 0,
+	}
+	w.RejectOutputs = append(w.Outputs, out)
+	return nil
+}
+
+func (w *ResponseWriter) ClearRejectOutputValues(changeAddr btcutil.Address) {
+	for i, _ := range w.RejectOutputs {
+		w.RejectOutputs[i].Change = false
+		w.RejectOutputs[i].Value = 0
+
+	}
 }
 
 // Respond sends the prepared response to the protocol mux
