@@ -242,9 +242,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[0].UTXO})
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract/Proposal Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract/Proposal Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 
 	feeAmount := ct.ContractFee
 	if msg.Initiator > 0 {
@@ -473,9 +473,9 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.
@@ -603,9 +603,9 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	w.SetUTXOs(ctx, []inspector.UTXO{proposalTx.Outputs[1].UTXO})
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.

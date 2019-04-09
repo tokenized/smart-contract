@@ -146,8 +146,8 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	// Outputs
 	// 1..n - Target Addresses
-	// n+1  - Contract Address (Change)
-	// n+2  - Fee
+	// n+1  - Contract Address
+	// n+2  - Contract Fee (change)
 	if msg.AssetCode.IsZero() {
 		if !full {
 			logger.Warn(ctx, "%s : Zero asset code in non-full freeze : %s", v.TraceID, contractPKH.String())
@@ -197,12 +197,12 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		}
 	}
 
-	// Change from/back to contract
+	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
-	w.AddChangeOutput(ctx, contractAddress)
+	w.AddOutput(ctx, contractAddress, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
@@ -275,8 +275,8 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Outputs
 	// 1..n - Target Addresses
-	// n+1  - Contract Address (Change)
-	// n+2  - Fee
+	// n+1  - Contract Address
+	// n+2  - Contract Fee (change)
 	if freeze.AssetCode.IsZero() {
 		if !full {
 			logger.Warn(ctx, "%s : Zero asset code in non-full freeze : %s", v.TraceID, contractPKH.String())
@@ -295,12 +295,12 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		}
 	}
 
-	// Change from/back to contract
+	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
-	w.AddChangeOutput(ctx, contractAddress)
+	w.AddOutput(ctx, contractAddress, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
@@ -352,8 +352,8 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Build outputs
 	// 1..n - Target Addresses
 	// n+1  - Deposit Address
-	// n+2  - Contract Address (Change)
-	// n+3  - Fee
+	// n+2  - Contract Address
+	// n+3  - Contract Fee (change)
 
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
 	depositAddr, err := btcutil.NewAddressPubKeyHash(msg.DepositAddress.Bytes(), &e.Config.ChainParams)
@@ -397,13 +397,13 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Notify deposit address
 	w.AddOutput(ctx, depositAddr, 0)
 
-	// Change from/back to contract
+	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
 		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
 	}
-	w.AddChangeOutput(ctx, contractAddress)
+	w.AddOutput(ctx, contractAddress, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
@@ -454,8 +454,8 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 	// Build outputs
 	// 1..n - Target Addresses
-	// n+1  - Contract Address (Change)
-	// n+2  - Fee
+	// n+1  - Contract Address
+	// n+2  - Contract Fee (change)
 
 	// Validate target addresses
 	outputIndex := uint16(0)
@@ -501,13 +501,13 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 		w.AddOutput(ctx, output.Address, output.Value)
 	}
 
-	// Change from/back to contract
+	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
 		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
 	}
-	w.AddChangeOutput(ctx, contractAddress)
+	w.AddOutput(ctx, contractAddress, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)

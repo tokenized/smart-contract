@@ -43,7 +43,7 @@ type App struct {
 type Config struct {
 	ContractProviderID string
 	Version            string
-	FeeAddress         string
+	FeePKH             *protocol.PublicKeyHash
 	FeeValue           uint64
 	DustLimit          uint64
 	ChainParams        chaincfg.Params

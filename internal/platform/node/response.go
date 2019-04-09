@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcutil"
 )
 
 var (
@@ -84,7 +85,22 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	// Create reject tx. Change goes back to requestor.
-	rejectTx := txbuilder.NewTx(itx.Inputs[0].Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+	var rejectTx *txbuilder.Tx
+	if len(w.RejectOutputs) > 0 {
+		var changeAddress btcutil.Address
+		for _, output := range w.RejectOutputs {
+			if output.Change {
+				changeAddress = output.Address
+				break
+			}
+		}
+		if changeAddress == nil {
+			changeAddress = w.RejectOutputs[0].Address
+		}
+		rejectTx = txbuilder.NewTx(changeAddress.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+	} else {
+		rejectTx = txbuilder.NewTx(itx.Inputs[0].Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+	}
 
 	for _, utxo := range utxos {
 		rejectTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
@@ -103,10 +119,10 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 				rejectAddressFound = true
 				rejection.RejectAddressIndex = uint16(i)
 			}
-			if !rejectAddressFound && w.RejectPKH != nil {
-				rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(len(rejectTx.Outputs)))
-				rejectTx.AddP2PKHDustOutput(w.RejectPKH.Bytes(), false)
-			}
+		}
+		if !rejectAddressFound && w.RejectPKH != nil {
+			rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(len(rejectTx.Outputs)))
+			rejectTx.AddP2PKHDustOutput(w.RejectPKH.Bytes(), false)
 		}
 	} else {
 		// Give it all back to the first input. This is the common scenario when the first input is
@@ -148,7 +164,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
-	respondTx := txbuilder.NewTx(rk.Address.ScriptAddress(), w.Config.DustLimit, w.Config.FeeRate)
+	respondTx := txbuilder.NewTx(w.Config.FeePKH.Bytes(), w.Config.DustLimit, w.Config.FeeRate)
 
 	// Get the specified UTXOs, otherwise look up the spendable
 	// UTXO's received for the contract address

@@ -120,9 +120,9 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -290,9 +290,9 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.

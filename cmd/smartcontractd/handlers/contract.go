@@ -117,9 +117,9 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, msg.ContractFee)
 
 	// Save Tx for when formation is processed.
@@ -278,9 +278,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Build outputs
-	// 1 - Contract Address (change)
-	// 2 - Contract Fee
-	w.AddChangeOutput(ctx, contractAddress)
+	// 1 - Contract Address
+	// 2 - Contract Fee (change)
+	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Issuer change. New issuer in second input

@@ -23,6 +23,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
@@ -32,6 +33,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -103,11 +105,16 @@ func main() {
 	appConfig := &node.Config{
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
-		FeeAddress:         cfg.Contract.FeeAddress,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
 	}
+
+	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "Invalid fee address : %s", err)
+	}
+	appConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeAddress.ScriptAddress())
 
 	// -------------------------------------------------------------------------
 	// SPY Node
