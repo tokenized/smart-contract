@@ -171,29 +171,37 @@ func (m *Message) processOffer(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processOffer")
 	defer span.End()
 
-	offerPayload, err := protocol.Deserialize(offer.Payload)
+	var offerPayloadTx wire.MsgTx
+	buf := bytes.NewBuffer(offer.Payload)
+	err := offerPayloadTx.Deserialize(buf)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to deserialize offer payload tx")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	switch payload := offerPayload.(type) {
-	case *protocol.Settlement:
-		logger.Verbose(ctx, "%s : Processing Settlement Offer", v.TraceID)
-		return m.processSettlementOffer(ctx, w, itx, rk, offer, payload)
-	default:
-		return fmt.Errorf("Unsupported offer payload type : %s", offerPayload.Type())
+	// Find OP_RETURN
+	for index, output := range offerPayloadTx.TxOut {
+		opReturn, err := protocol.Deserialize(output.PkScript)
+		if err == nil {
+			switch offerPayload := opReturn.(type) {
+			case *protocol.Settlement:
+				logger.Verbose(ctx, "%s : Processing Settlement Offer", v.TraceID)
+				return m.processSettlementOffer(ctx, w, itx, rk, offer, &offerPayloadTx, offerPayload, index)
+			default:
+				return fmt.Errorf("Unsupported offer tx payload type : %s", opReturn.Type())
+			}
+		}
 	}
 
-	return nil
+	return errors.New("Offer payload not found")
 }
 
 // processSettlementOffer processes an Offer message containing a Settlement.
 // It is a request to add settlement data relating to this contract.
 func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.RootKey, offer *protocol.Offer,
-	settlement *protocol.Settlement) error {
+	settleTx *wire.MsgTx, settlement *protocol.Settlement, settleOutputIndex int) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processSettlementOffer")
 	defer span.End()
 
@@ -236,38 +244,15 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 		return errors.New("Transfer contract index out of range")
 	}
 
-	// Bitcoin balance of first contract. Funding for bitcoin transfers.
-	contractBalance := uint64(transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex].Value)
-
-	// Build settlement tx
-	var settleTx *txbuilder.Tx
-	settleTx, err = buildSettlementTx(ctx, w.Config, transferTx, transfer, rk, contractBalance)
+	// Convert to txbuilder
+	settleBuilderTx, err := txbuilder.NewTxFromWire(m.Config.FeePKH.Bytes(), m.Config.DustLimit,
+		m.Config.FeeRate, settleTx, []*wire.MsgTx{transferTx.MsgTx})
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectMsgMalformed)
-	}
-
-	// Update outputs to pay bitcoin receivers.
-	err = addBitcoinSettlements(ctx, transferTx, transfer, settleTx)
-	if err != nil {
-		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectMsgMalformed)
-	}
-
-	// Serialize received settlement data into OP_RETURN output.
-	var script []byte
-	script, err = protocol.Serialize(settlement)
-	if err != nil {
-		logger.Warn(ctx, "%s : Failed to serialize empty settlement : %s", v.TraceID, err)
-		return err
-	}
-	err = settleTx.AddOutput(script, 0, false, false)
-	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to convert settle tx from wire to txbuilder")
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement, m.Headers)
+	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -278,12 +263,23 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 		}
 	}
 
+	// Add contract fee output
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if ct.ContractFee > 0 {
+		settleBuilderTx.AddP2PKHOutput(m.Config.FeePKH.Bytes(), ct.ContractFee, false)
+	}
+
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, transfer, settlement) {
 		// Sign this contracts input of the settle tx.
 		signed := false
-		for i, _ := range settleTx.Inputs {
-			err = settleTx.SignInput(i, rk.PrivateKey)
+		for i, _ := range settleBuilderTx.Inputs {
+			err = settleBuilderTx.SignInput(i, rk.PrivateKey)
 			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 				continue
 			}
@@ -300,7 +296,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 
 		// This shouldn't happen because we recieved this from another contract and they couldn't
 		//   have signed it yet since it was incomplete.
-		if settleTx.AllInputsAreSigned() {
+		if settleBuilderTx.AllInputsAreSigned() {
 			// Remove tracer for this request.
 			boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.Address)
 			if boomerangIndex != 0xffffffff {
@@ -310,11 +306,11 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 
 			logger.Info(ctx, "%s : Broadcasting settlement tx", v.TraceID)
 			// Send complete settlement tx as response
-			return node.Respond(ctx, w, settleTx.MsgTx)
+			return node.Respond(ctx, w, settleBuilderTx.MsgTx)
 		}
 
 		// Send back to previous contract via a M1 - 1002 Signature Request
-		return sendToPreviousSettlementContract(ctx, m.Config, w, rk, itx, settleTx)
+		return sendToPreviousSettlementContract(ctx, m.Config, w, rk, itx, settleBuilderTx)
 	}
 
 	// Save tx
@@ -324,7 +320,7 @@ func (m *Message) processSettlementOffer(ctx context.Context, w *node.ResponseWr
 	}
 
 	// Send to next contract
-	return sendToNextSettlementContract(ctx, w, rk, itx, transferTx, transfer, settleTx, settlement, m.Tracer)
+	return sendToNextSettlementContract(ctx, w, rk, itx, transferTx, transfer, settleBuilderTx, settlement, m.Tracer)
 }
 
 // processSigRequest handles an incoming Message SignatureRequest payload.
@@ -379,7 +375,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Verify all the data for this contract is correct.
-	err := verifySettlement(ctx, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement, m.Headers)
+	err := verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transfer, settleWireTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -497,7 +493,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 }
 
 // verifySettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
-func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
+func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer, settleTx *wire.MsgTx,
 	settlement *protocol.Settlement, headers BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.verifySettlement")
@@ -506,13 +502,13 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Generate public key hashes for all the outputs
-	settleOutputAddresses := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
+	settleOutputPKHs := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
 	for _, output := range settleTx.TxOut {
 		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err == nil {
-			settleOutputAddresses = append(settleOutputAddresses, protocol.PublicKeyHashFromBytes(pkh))
+			settleOutputPKHs = append(settleOutputPKHs, protocol.PublicKeyHashFromBytes(pkh))
 		} else {
-			settleOutputAddresses = append(settleOutputAddresses, nil)
+			settleOutputPKHs = append(settleOutputPKHs, nil)
 		}
 	}
 
@@ -554,8 +550,8 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
 			}
 
-			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-			if contractOutputAddress != nil && !bytes.Equal(contractOutputAddress.Bytes(), contractPKH.Bytes()) {
+			contractOutputPKH := settleOutputPKHs[assetTransfer.ContractIndex]
+			if contractOutputPKH != nil && !bytes.Equal(contractOutputPKH.Bytes(), contractPKH.Bytes()) {
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
@@ -605,8 +601,8 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
-			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), inputPKH) {
+			for i, outputPKH := range settleOutputPKHs {
+				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), inputPKH) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -660,8 +656,8 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
-			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && bytes.Equal(outputAddress.Bytes(), receiverPKH.Bytes()) {
+			for i, outputPKH := range settleOutputPKHs {
+				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), receiverPKH.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -724,6 +720,23 @@ func verifySettlement(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					return fmt.Errorf("Asset settlement missing")
 				}
 			}
+		}
+	}
+
+	// Verify contract fee
+	if ct.ContractFee > 0 {
+		found := false
+		for i, outputPKH := range settleOutputPKHs {
+			if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), config.FeePKH.Bytes()) {
+				if uint64(settleTx.TxOut[i].Value) < ct.ContractFee {
+					return fmt.Errorf("Contract fee too low")
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("Contract fee missing")
 		}
 	}
 

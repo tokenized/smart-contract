@@ -120,7 +120,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	//   one output since each asset transfer references the output of it's contract
 	var err error
 	var settleTx *txbuilder.Tx
-	settleTx, err = buildSettlementTx(ctx, t.Config, itx, msg, rk, contractBalance)
+	settleTx, err = buildSettlementTx(ctx, t.MasterDB, t.Config, itx, msg, rk, contractBalance)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed)
@@ -136,11 +136,11 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Create initial settlement data
 	settlement := protocol.Settlement{Timestamp: v.Now}
 
-	// Serialize empty settlement data into OP_RETURN output.
+	// Serialize empty settlement data into OP_RETURN output as a placeholder to be updated by addSettlementData.
 	var script []byte
 	script, err = protocol.Serialize(&settlement)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to serialize empty settlement : %s", v.TraceID, err)
+		logger.Warn(ctx, "%s : Failed to serialize settlement : %s", v.TraceID, err)
 		return err
 	}
 	err = settleTx.AddOutput(script, 0, false, false)
@@ -204,7 +204,7 @@ func firstContractOutputIndex(assetTransfers []protocol.AssetTransfer, itx *insp
 }
 
 // buildSettlementTx builds the tx for a settlement action.
-func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *inspector.Transaction,
+func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config, transferTx *inspector.Transaction,
 	transfer *protocol.Transfer, rk *wallet.RootKey, contractBalance uint64) (*txbuilder.Tx, error) {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
 	defer span.End()
@@ -307,6 +307,16 @@ func buildSettlementTx(ctx context.Context, config *node.Config, transferTx *ins
 				}
 			}
 		}
+	}
+
+	// Add contract fee output
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
+	if err != nil {
+		return settleTx, errors.Wrap(err, "Failed to retrieve contract")
+	}
+	if ct.ContractFee > 0 {
+		settleTx.AddP2PKHOutput(config.FeePKH.Bytes(), ct.ContractFee, false)
 	}
 
 	return settleTx, nil
@@ -782,16 +792,17 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 		return err
 	}
 
-	// Serialize settlement data for Message OP_RETURN.
-	var payload []byte
-	payload, err = protocol.Serialize(settlement)
+	// Serialize settlement tx for Message payload.
+	var buf bytes.Buffer
+	err = settleTx.MsgTx.Serialize(&buf)
 	if err != nil {
 		return err
 	}
+
 	messagePayload := protocol.Offer{
 		Version:   0,
 		Timestamp: v.Now,
-		Payload:   payload,
+		Payload:   buf.Bytes(),
 	}
 
 	err = messagePayload.RefTxId.Set(transferTx.Hash[:])
