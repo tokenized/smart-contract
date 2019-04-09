@@ -58,9 +58,9 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 
 	// Build rejection
 	rejection := protocol.Rejection{
-		RejectionType:  code,
-		MessagePayload: string(rejectionCode.Text),
-		Timestamp:      v.Now,
+		RejectionCode: code,
+		Message:       rejectionCode.Text,
+		Timestamp:     v.Now,
 	}
 
 	// Contract address

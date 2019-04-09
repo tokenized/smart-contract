@@ -165,7 +165,8 @@ func main() {
 	if len(rawPKHs) != 1 {
 		panic("More than one key in wallet")
 	}
-	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0])
+	tracer := listeners.NewTracer()
+	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0], tracer)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -190,12 +191,12 @@ func main() {
 	sch := scheduler.Scheduler{}
 	txCache := listeners.NewTxCache()
 
-	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, &sch, spyNode)
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, tracer, &sch, spyNode)
 	if err != nil {
 		logger.Fatal(ctx, "Generate API : %s", apiErr)
 	}
 
-	node := listeners.NewServer(appConfig, masterDB, rpcNode, spyNode, &sch, txCache, appHandlers, rawPKHs[0])
+	node := listeners.NewServer(appConfig, masterDB, rpcNode, spyNode, &sch, txCache, tracer, appHandlers, rawPKHs[0])
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -257,14 +258,16 @@ var (
 type TxFilter struct {
 	chainParams *chaincfg.Params
 	contractPKH []byte
+	tracer      *listeners.Tracer
 	hash256     hash.Hash
 	hash160     hash.Hash
 }
 
-func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
+func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte, tracer *listeners.Tracer) *TxFilter {
 	result := TxFilter{
 		chainParams: chainParams,
 		contractPKH: contractPKH,
+		tracer:      tracer,
 		hash256:     sha256.New(),
 		hash160:     ripemd160.New(),
 	}
@@ -273,6 +276,12 @@ func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
 }
 
 func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+	if filter.tracer.Contains(ctx, tx) {
+		logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+			"Matches Tracer : %s", tx.TxHash().String())
+		return true
+	}
+
 	containsTokenized := false
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) {

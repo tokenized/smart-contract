@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	storageKey = "tx_cache"
+	txCacheStorageKey = "tx_cache"
 )
 
 type TxCache struct {
@@ -41,11 +41,11 @@ func (txCache *TxCache) Save(ctx context.Context, masterDB *db.DB) error {
 
 	logger.Verbose(ctx, "Saving %d tx from tx cache", len(txCache.cache))
 
-	return masterDB.Put(ctx, storageKey, data)
+	return masterDB.Put(ctx, txCacheStorageKey, data)
 }
 
 func (txCache *TxCache) Load(ctx context.Context, masterDB *db.DB) error {
-	data, err := masterDB.Fetch(ctx, storageKey)
+	data, err := masterDB.Fetch(ctx, txCacheStorageKey)
 	if err != nil {
 		if err == db.ErrNotFound {
 			return nil
@@ -53,7 +53,7 @@ func (txCache *TxCache) Load(ctx context.Context, masterDB *db.DB) error {
 		return err
 	}
 
-	// Prepare the contract object
+	// Unmarshal the list
 	list := make([]*inspector.Transaction, 0)
 	if err := json.Unmarshal(data, &list); err != nil {
 		return err

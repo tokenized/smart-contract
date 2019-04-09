@@ -25,6 +25,7 @@ type Server struct {
 	SpyNode          *spynode.Node
 	Scheduler        *scheduler.Scheduler
 	TxCache          *TxCache
+	Tracer           *Tracer
 	Handler          protomux.Handler
 	contractPKH      []byte // Used to determine which txs will be needed again
 	pendingRequests  []*inspector.Transaction
@@ -35,7 +36,8 @@ type Server struct {
 }
 
 func NewServer(config *node.Config, masterDB *db.DB, rpcNode *rpcnode.RPCNode, spyNode *spynode.Node,
-	scheduler *scheduler.Scheduler, txCache *TxCache, handler protomux.Handler, contractPKH []byte) *Server {
+	scheduler *scheduler.Scheduler, txCache *TxCache, tracer *Tracer, handler protomux.Handler,
+	contractPKH []byte) *Server {
 	result := Server{
 		Config:           config,
 		MasterDB:         masterDB,
@@ -43,6 +45,7 @@ func NewServer(config *node.Config, masterDB *db.DB, rpcNode *rpcnode.RPCNode, s
 		SpyNode:          spyNode,
 		Scheduler:        scheduler,
 		TxCache:          txCache,
+		Tracer:           tracer,
 		Handler:          handler,
 		contractPKH:      contractPKH,
 		pendingRequests:  make([]*inspector.Transaction, 0),
@@ -62,8 +65,11 @@ func (server *Server) Run(ctx context.Context) error {
 	// Register listeners
 	server.SpyNode.RegisterListener(server)
 
-	err := server.TxCache.Load(ctx, server.MasterDB)
-	if err != nil {
+	if err := server.TxCache.Load(ctx, server.MasterDB); err != nil {
+		return err
+	}
+
+	if err := server.Tracer.Load(ctx, server.MasterDB); err != nil {
 		return err
 	}
 
@@ -90,6 +96,10 @@ func (server *Server) Run(ctx context.Context) error {
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
+
+	if err := server.Tracer.Save(ctx, server.MasterDB); err != nil {
+		return err
+	}
 
 	return server.TxCache.Save(ctx, server.MasterDB)
 }

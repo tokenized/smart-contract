@@ -81,7 +81,7 @@ const (
 	CodeTransfer = "T1"
 
 	// CodeSettlement identifies data as a Settlement message.
-	CodeSettlement = "T4"
+	CodeSettlement = "T2"
 
 	// ComplianceActionFreeze identifies a freeze type
 	ComplianceActionFreeze = byte('F')
@@ -5467,8 +5467,8 @@ type Rejection struct {
 	Header             Header    `json:"header,omitempty"`               // Common header data for all actions
 	AddressIndexes     []uint16  `json:"address_indexes,omitempty"`      // Associates the message to a particular output by the index.
 	RejectAddressIndex uint16    `json:"reject_address_index,omitempty"` // The address which is believed to have caused the rejection.
-	RejectionType      uint8     `json:"rejection_type,omitempty"`       // Classifies the rejection by a type.
-	MessagePayload     string    `json:"message_payload,omitempty"`      // Length 0-65,535 bytes. Message that explains the reasoning for a rejection, if needed.  Most rejection types will be captured by the Rejection Type Subfield.
+	RejectionCode      uint8     `json:"rejection_code,omitempty"`       // Classifies the rejection by a type.
+	Message            string    `json:"message,omitempty"`              // Length 0-65,535 bytes. Message that explains the reasoning for a rejection, if needed.  Most rejection types will be captured by the Rejection Type Subfield.
 	Timestamp          Timestamp `json:"timestamp,omitempty"`            // Timestamp in nanoseconds of when the smart contract created the action.
 }
 
@@ -5513,16 +5513,16 @@ func (action *Rejection) serialize() ([]byte, error) {
 		}
 	}
 
-	// RejectionType (uint8)
+	// RejectionCode (uint8)
 	{
-		if err := write(buf, action.RejectionType); err != nil {
+		if err := write(buf, action.RejectionCode); err != nil {
 			return nil, err
 		}
 	}
 
-	// MessagePayload (string)
+	// Message (string)
 	{
-		if err := WriteVarChar(buf, action.MessagePayload, 32); err != nil {
+		if err := WriteVarChar(buf, action.Message, 16); err != nil {
 			return nil, err
 		}
 	}
@@ -5564,17 +5564,17 @@ func (action *Rejection) write(b []byte) (int, error) {
 		}
 	}
 
-	// RejectionType (uint8)
+	// RejectionCode (uint8)
 	{
-		if err := read(buf, &action.RejectionType); err != nil {
+		if err := read(buf, &action.RejectionCode); err != nil {
 			return 0, err
 		}
 	}
 
-	// MessagePayload (string)
+	// Message (string)
 	{
 		var err error
-		action.MessagePayload, err = ReadVarChar(buf, 32)
+		action.Message, err = ReadVarChar(buf, 16)
 		if err != nil {
 			return 0, err
 		}
@@ -5603,14 +5603,17 @@ func (m *Rejection) Validate() error {
 	{
 	}
 
-	// RejectionType (uint8)
+	// RejectionCode (uint8)
 	{
+		if GetRejectionCode(m.RejectionCode) == nil {
+			return fmt.Errorf("Invalid rejection code value : %d", m.RejectionCode)
+		}
 	}
 
-	// MessagePayload (string)
+	// Message (string)
 	{
-		if len(m.MessagePayload) > (2<<32)-1 {
-			return fmt.Errorf("varchar field MessagePayload too long %d/%d", len(m.MessagePayload), (2<<32)-1)
+		if len(m.Message) > (2<<16)-1 {
+			return fmt.Errorf("varchar field Message too long %d/%d", len(m.Message), (2<<16)-1)
 		}
 	}
 
@@ -5631,8 +5634,8 @@ func (action Rejection) String() string {
 	vals = append(vals, fmt.Sprintf("Header:%#+v", action.Header))
 	vals = append(vals, fmt.Sprintf("AddressIndexes:%v", action.AddressIndexes))
 	vals = append(vals, fmt.Sprintf("RejectAddressIndex:%v", action.RejectAddressIndex))
-	vals = append(vals, fmt.Sprintf("RejectionType:%v", action.RejectionType))
-	vals = append(vals, fmt.Sprintf("MessagePayload:%#+v", action.MessagePayload))
+	vals = append(vals, fmt.Sprintf("RejectionCode:%#+v", action.RejectionCode))
+	vals = append(vals, fmt.Sprintf("Message:%#+v", action.Message))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))

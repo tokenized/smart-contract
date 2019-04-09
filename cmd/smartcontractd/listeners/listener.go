@@ -3,6 +3,7 @@ package listeners
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
@@ -61,6 +62,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
+				server.Tracer.AddTx(ctx, itx.MsgTx)
 				err := server.processTx(ctx, itx)
 				if err != nil {
 					logger.Warn(ctx, "Failed to process safe tx : %s", err)
@@ -78,6 +80,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
+				server.Tracer.AddTx(ctx, itx.MsgTx)
 				err := server.processTx(ctx, itx)
 				if err != nil {
 					logger.Warn(ctx, "Failed to process confirm tx : %s", err)
@@ -111,7 +114,9 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		// TODO We have to manually undo or revert action
+		server.Tracer.RevertTx(ctx, &txid)
+
+		// TODO Undo/revert action
 		logger.Error(ctx, "Tx cancel not found : %s", txid.String())
 
 	case handlers.ListenerMsgTxStateUnsafe:
@@ -128,11 +133,12 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		// TODO We have to manually undo or revert action
+		// TODO Undo/revert action
 		logger.Error(ctx, "Tx unsafe not found : %s", txid.String())
 
 	case handlers.ListenerMsgTxStateRevert:
 		logger.Info(ctx, "Tx revert : %s", txid.String())
+		server.Tracer.RevertTx(ctx, &txid)
 	}
 	return nil
 }
@@ -152,7 +158,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			if err != nil {
 				logger.Warn(ctx, "Failed to send tx : %s", err)
 			}
-			return err // TODO Probably a fatal error
+			return errors.Wrap(err, "Failed to send tx") // TODO Probably a fatal error
 		}
 	}
 	return nil

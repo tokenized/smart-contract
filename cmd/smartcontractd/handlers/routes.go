@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -32,7 +33,7 @@ type BitcoinHeaders interface {
 
 // API returns a handler for a set of routes for protocol actions.
 func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB,
-	txCache InspectorTxCache, sch *scheduler.Scheduler, headers BitcoinHeaders) (protomux.Handler, error) {
+	txCache InspectorTxCache, tracer *listeners.Tracer, sch *scheduler.Scheduler, headers BitcoinHeaders) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
 
@@ -66,6 +67,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		Config:   config,
 		TxCache:  txCache,
 		Headers:  headers,
+		Tracer:   tracer,
 	}
 
 	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
@@ -106,6 +108,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		Config:   config,
 		TxCache:  txCache,
 		Headers:  headers,
+		Tracer:   tracer,
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)

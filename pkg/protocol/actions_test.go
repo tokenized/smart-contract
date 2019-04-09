@@ -2428,14 +2428,14 @@ func TestRejection(t *testing.T) {
 		// uint test not setup
 	}
 
-	// RejectionType (uint)
+	// RejectionCode (RejectionCode)
 	{
-		// uint test not setup
+		// RejectionCode test not setup
 	}
 
-	// MessagePayload (varchar)
+	// Message (varchar)
 	{
-		initialMessage.MessagePayload = "Text 3"
+		initialMessage.Message = "Text 3"
 	}
 
 	// Timestamp (Timestamp)
@@ -2493,14 +2493,14 @@ func TestRejection(t *testing.T) {
 		t.Errorf("RejectAddressIndex doesn't match : %v != %v", initialMessage.RejectAddressIndex, decodedMessage.RejectAddressIndex)
 	}
 
-	// RejectionType (uint)
-	if initialMessage.RejectionType != decodedMessage.RejectionType {
-		t.Errorf("RejectionType doesn't match : %v != %v", initialMessage.RejectionType, decodedMessage.RejectionType)
+	// RejectionCode (RejectionCode)
+	if initialMessage.RejectionCode != decodedMessage.RejectionCode {
+		t.Errorf("RejectionCode doesn't match : %v != %v", initialMessage.RejectionCode, decodedMessage.RejectionCode)
 	}
 
-	// MessagePayload (varchar)
-	if initialMessage.MessagePayload != decodedMessage.MessagePayload {
-		t.Errorf("MessagePayload doesn't match : %s != %s", initialMessage.MessagePayload, decodedMessage.MessagePayload)
+	// Message (varchar)
+	if initialMessage.Message != decodedMessage.Message {
+		t.Errorf("Message doesn't match : %s != %s", initialMessage.Message, decodedMessage.Message)
 	}
 
 	// Timestamp (Timestamp)
