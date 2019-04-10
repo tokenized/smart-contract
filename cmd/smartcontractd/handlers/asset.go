@@ -330,6 +330,42 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
+	// Get request tx
+	request := a.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+	var vt *state.Vote
+	var modification *protocol.AssetModification
+	if request != nil {
+		a.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
+		var ok bool
+		modification, ok = request.MsgProto.(*protocol.AssetModification)
+
+		if ok && !modification.RefTxID.IsZero() {
+			refTxId, err := chainhash.NewHash(modification.RefTxID.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+			}
+
+			// Retrieve Vote Result
+			voteResultTx := a.TxCache.GetTx(ctx, refTxId)
+			if voteResultTx != nil {
+				return errors.New("Vote Result tx not found for modification")
+			}
+
+			voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+			if !ok {
+				return errors.New("Vote Result invalid for modification")
+			}
+
+			// Retrieve the vote
+			vt, err = vote.Retrieve(ctx, a.MasterDB, contractPKH, &voteResult.VoteTxId)
+			if err == vote.ErrNotFound {
+				return errors.New("Vote not found for modification")
+			} else if err != nil {
+				return errors.New("Failed to retrieve vote for modification")
+			}
+		}
+	}
+
 	// Create or update Asset
 	if as == nil {
 		// Prepare creation object
@@ -430,7 +466,17 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractPKH, msg.AssetCode.String())
 
-		// TODO Mark vote as "applied" if this amendment was a result of a vote.
+		// Mark vote as "applied" if this amendment was a result of a vote.
+		if vt != nil {
+			uv := vote.UpdateVote{AppliedTxId: protocol.TxIdFromBytes(request.Hash[:])}
+			if err := vote.Update(ctx, a.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
+				return errors.Wrap(err, "Failed to update vote")
+			}
+		}
+
+		if request != nil {
+			a.TxCache.RemoveTx(ctx, &request.Hash)
+		}
 	}
 
 	return nil

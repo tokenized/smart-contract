@@ -322,10 +322,6 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	// TODO Fetch and remove request tx
-	// hash, err = chainhash.NewHash(msg.VoteTxId.Bytes())
-	// c.TxCache.RemoveTx(ctx, hash)
-
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
@@ -336,6 +332,42 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	// Get request tx
+	request := c.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+	var vt *state.Vote
+	var amendment *protocol.ContractAmendment
+	if request != nil {
+		c.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
+		var ok bool
+		amendment, ok = request.MsgProto.(*protocol.ContractAmendment)
+
+		if ok && !amendment.RefTxID.IsZero() {
+			refTxId, err := chainhash.NewHash(amendment.RefTxID.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+			}
+
+			// Retrieve Vote Result
+			voteResultTx := c.TxCache.GetTx(ctx, refTxId)
+			if voteResultTx != nil {
+				return errors.New("Vote Result tx not found for amendment")
+			}
+
+			voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+			if !ok {
+				return errors.New("Vote Result invalid for amendment")
+			}
+
+			// Retrieve the vote
+			vt, err = vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+			if err == vote.ErrNotFound {
+				return errors.New("Vote not found for amendment")
+			} else if err != nil {
+				return errors.New("Failed to retrieve vote for amendment")
+			}
+		}
 	}
 
 	// Create or update Contract
@@ -372,45 +404,43 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractPKH.String())
 	} else {
-		// TODO Pull from ammendment tx.
-		// // TODO Issuer change. New issuer in second input
-		// if msg.ChangeIssuerAddress {
-		// if len(itx.Inputs) < 2 {
-		// return errors.New("New issuer specified but not included in inputs")
-		// }
-
-		// cf.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[1].Address.ScriptAddress)
-		// }
-
-		// // TODO Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
-		// if msg.ChangeOperatorAddress {
-		// index := 1
-		// if msg.ChangeIssuerAddress {
-		// index++
-		// }
-		// if index >= len(itx.Inputs) {
-		// return errors.New("New operator specified but not included in inputs")
-		// }
-
-		// cf.OperatorPKH = protocol.PublicKeyHashFromBytes(itx.Inputs[index].Address.ScriptAddress)
-		// }
-
-		// Required pointers
-		stringPointer := func(s string) *string { return &s }
-
 		// Prepare update object
 		uc := contract.UpdateContract{
 			Revision:  &msg.ContractRevision,
 			Timestamp: &msg.Timestamp,
 		}
 
-		if !bytes.Equal(ct.IssuerPKH.Bytes(), itx.Outputs[1].Address.ScriptAddress()) { // Second output of formation tx
-			// TODO Should asset balances be moved from previous issuer to new issuer.
+		// Pull from amendment tx.
+		// Issuer change. New issuer in second input
+		if amendment != nil && amendment.ChangeIssuerAddress {
+			if len(request.Inputs) < 2 {
+				return errors.New("New issuer specified but not included in inputs")
+			}
+
+			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(request.Inputs[1].Address.ScriptAddress())
+		}
+
+		// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+		if amendment != nil && amendment.ChangeOperatorAddress {
+			index := 1
+			if amendment.ChangeIssuerAddress {
+				index++
+			}
+			if index >= len(request.Inputs) {
+				return errors.New("New operator specified but not included in inputs")
+			}
+
+			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(request.Inputs[index].Address.ScriptAddress())
+		}
+
+		// Required pointers
+		stringPointer := func(s string) *string { return &s }
+
+		if !bytes.Equal(ct.IssuerPKH.Bytes(), uc.IssuerPKH.Bytes()) {
+			// TODO Move asset balances from previous issuer to new issuer.
 			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
 			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
 		}
-
-		// TODO Update operator address - OperatorAddress *string
 
 		if ct.ContractName != msg.ContractName {
 			uc.ContractName = stringPointer(msg.ContractName)
@@ -540,8 +570,17 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
 
-		// TODO Mark vote as "applied" if this amendment was a result of a vote.
-		// Pull
+		// Mark vote as "applied" if this amendment was a result of a vote.
+		if vt != nil {
+			uv := vote.UpdateVote{AppliedTxId: protocol.TxIdFromBytes(request.Hash[:])}
+			if err := vote.Update(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
+				return errors.Wrap(err, "Failed to update vote")
+			}
+		}
+
+		if request != nil {
+			c.TxCache.RemoveTx(ctx, &request.Hash)
+		}
 	}
 
 	return nil
