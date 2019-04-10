@@ -10,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -19,6 +20,7 @@ import (
 )
 
 type Server struct {
+	wallet           wallet.WalletInterface
 	Config           *node.Config
 	MasterDB         *db.DB
 	RpcNode          *rpcnode.RPCNode
@@ -35,15 +37,16 @@ type Server struct {
 	inSync           bool
 }
 
-func NewServer(config *node.Config, masterDB *db.DB, rpcNode *rpcnode.RPCNode, spyNode *spynode.Node,
-	scheduler *scheduler.Scheduler, txCache *TxCache, tracer *Tracer, handler protomux.Handler,
-	contractPKH []byte) *Server {
+func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
+	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler, txCache *TxCache,
+	tracer *Tracer, contractPKH []byte) *Server {
 	result := Server{
+		wallet:           wallet,
 		Config:           config,
 		MasterDB:         masterDB,
 		RpcNode:          rpcNode,
 		SpyNode:          spyNode,
-		Scheduler:        scheduler,
+		Scheduler:        sch,
 		TxCache:          txCache,
 		Tracer:           tracer,
 		Handler:          handler,

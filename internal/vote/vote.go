@@ -117,61 +117,62 @@ func AddBallot(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicK
 // CalculateResults calculates the result of a completed vote.
 func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Proposal, votingSystem *protocol.VotingSystem) ([]uint64, string, error) {
 
-	results := make([]uint64, proposal.VoteMax)
+	floatResults := make([]float32, proposal.VoteMax)
 	votedQuantity := uint64(0)
-	var score uint64
+	var score float32
 	for _, ballot := range vt.Ballots {
 		for i, choice := range ballot.Vote {
 			switch votingSystem.TallyLogic {
 			case 0: // Standard
-				score = ballot.Quantity
+				score = float32(ballot.Quantity)
 			case 1: // Weighted
-				score = ballot.Quantity * uint64(int(proposal.VoteMax)-i)
+				score = float32(ballot.Quantity) * (float32(int(proposal.VoteMax)-i) / float32(proposal.VoteMax))
 			default:
 				return nil, "", fmt.Errorf("Unsupported tally logic : %d", votingSystem.TallyLogic)
 			}
 
 			for j, option := range proposal.VoteOptions {
 				if option == choice {
-					results[j] += score
-					votedQuantity += score
+					floatResults[j] += score
 					break
 				}
 			}
 		}
+
+		votedQuantity += ballot.Quantity
 	}
 
 	var winners bytes.Buffer
 	var highestIndex int
-	var highestScore uint64
+	var highestScore float32
 	scored := make(map[int]bool)
 	for {
 		highestIndex = -1
-		highestScore = 0
-		for i, result := range results {
+		highestScore = 0.0
+		for i, floatResult := range floatResults {
 			_, exists := scored[i]
 			if exists {
 				continue
 			}
 
-			if result <= highestScore {
+			if floatResult <= highestScore {
 				continue
 			}
 
 			switch votingSystem.VoteType {
 			case 'R': // Relative
-				if float32(result)/float32(votedQuantity) >= float32(votingSystem.ThresholdPercentage)/100.0 {
+				if floatResult/float32(votedQuantity) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
-					highestScore = result
+					highestScore = floatResult
 				}
 			case 'A': // Absolute
-				if float32(result)/float32(vt.TokenQty) >= float32(votingSystem.ThresholdPercentage)/100.0 {
+				if floatResult/float32(vt.TokenQty) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
-					highestScore = result
+					highestScore = floatResult
 				}
 			case 'P': // Plurality
 				highestIndex = i
-				highestScore = result
+				highestScore = floatResult
 			}
 		}
 
@@ -180,6 +181,12 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Pr
 		}
 		winners.WriteByte(proposal.VoteOptions[highestIndex])
 		scored[highestIndex] = true
+	}
+
+	// Convert results back to integers
+	results := make([]uint64, proposal.VoteMax)
+	for i, floatResult := range floatResults {
+		results[i] = uint64(floatResult)
 	}
 
 	return results, winners.String(), nil

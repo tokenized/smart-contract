@@ -2,8 +2,13 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
+)
+
+var (
+	NotFound = errors.New("Job not found")
 )
 
 // Scheduler provides the ability to schedule tasks to run at when they are ready.
@@ -24,14 +29,31 @@ type Job interface {
 
 	// IsComplete returns true when a job should be removed from the scheduler.
 	IsComplete(ctx context.Context) bool
+
+	// Equal returns true if another job matches it. Used to cancel jobs.
+	Equal(other Job) bool
 }
 
-// ScheduleJob adds a job to the scheduler.
+// ScheduleJob adds a job to the scheduler. Returns an integer ID for the job.
 func (sch *Scheduler) ScheduleJob(ctx context.Context, job Job) error {
 	sch.lock.Lock()
 	defer sch.lock.Unlock()
 	sch.jobs = append(sch.jobs, job)
 	return nil
+}
+
+// CancelJob removes a job from the scheduler. The job passed in just needs to be equivalent based
+//   on the job's Equal function.
+func (sch *Scheduler) CancelJob(ctx context.Context, job Job) error {
+	sch.lock.Lock()
+	defer sch.lock.Unlock()
+	for i, existing := range sch.jobs {
+		if existing.Equal(job) {
+			sch.jobs = append(sch.jobs[:i], sch.jobs[i+1:]...)
+			return nil
+		}
+	}
+	return NotFound
 }
 
 // Run monitors jobs and runs them when they are ready.

@@ -14,9 +14,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -29,11 +31,13 @@ import (
 )
 
 type Transfer struct {
-	MasterDB *db.DB
-	Config   *node.Config
-	TxCache  InspectorTxCache
-	Headers  BitcoinHeaders
-	Tracer   *listeners.Tracer
+	handler   *node.App
+	MasterDB  *db.DB
+	Config    *node.Config
+	TxCache   InspectorTxCache
+	Headers   BitcoinHeaders
+	Tracer    *listeners.Tracer
+	Scheduler *scheduler.Scheduler
 }
 
 type rejectError struct {
@@ -85,21 +89,31 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
 		logger.Warn(ctx, "%s : Transfer invalid : %s", v.TraceID, err)
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
 		logger.Warn(ctx, "%s : Transfer expired : %s", v.TraceID, msg.OfferExpiry.String())
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
 
 	if len(msg.Assets) == 0 {
 		logger.Warn(ctx, "%s : Transfer has no asset transfers", v.TraceID)
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
 	contractBalance := uint64(itx.Outputs[first].Value)
+
+	settlementRequest := protocol.SettlementRequest{
+		Version:   0,
+		Timestamp: v.Now,
+	}
+
+	err := settlementRequest.TransferTxId.Set(itx.Hash[:])
+	if err != nil {
+		return err
+	}
 
 	// Transfer Outputs
 	//   Contract 1 : amount = calculated fee for settlement tx + any bitcoins being transfered
@@ -118,19 +132,18 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	//
 	// Each contract can be involved in more than one asset in the transfer, but only needs to have
 	//   one output since each asset transfer references the output of it's contract
-	var err error
 	var settleTx *txbuilder.Tx
-	settleTx, err = buildSettlementTx(ctx, t.MasterDB, t.Config, itx, msg, rk, contractBalance)
+	settleTx, err = buildSettlementTx(ctx, t.MasterDB, t.Config, itx, msg, &settlementRequest, contractBalance, rk)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
 	// Create initial settlement data
@@ -154,7 +167,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		reject, ok := err.(rejectError)
 		if ok {
 			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
-			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, reject.code)
+			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, reject.code, false)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -176,7 +189,47 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Send to next contract
-	return sendToNextSettlementContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement, t.Tracer)
+	if err := sendToNextSettlementContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement, &settlementRequest, t.Tracer); err != nil {
+		return err
+	}
+
+	// Save pending transfer
+	timeout := protocol.NewTimestamp(v.Now.Nano() + t.Config.RequestTimeout)
+	pendingTransfer := state.PendingTransfer{TransferTxId: *protocol.TxIdFromBytes(itx.Hash[:]), Timeout: timeout}
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	if err := transfer.Save(ctx, t.MasterDB, contractPKH, &pendingTransfer); err != nil {
+		return errors.Wrap(err, "Failed to save pending transfer")
+	}
+
+	// Schedule timeout for transfer in case the other contract(s) don't respond.
+	if err := t.Scheduler.ScheduleJob(ctx, listeners.NewTransferTimeout(t.handler, itx, timeout)); err != nil {
+		return errors.Wrap(err, "Failed to schedule transfer timeout")
+	}
+
+	return nil
+}
+
+// TransferTimeout is called when a multi-contract transfer times out because the other contracts are not responding.
+func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferTimeout")
+	defer span.End()
+
+	msg, ok := itx.MsgProto.(*protocol.Transfer)
+	if !ok {
+		return errors.New("Could not assert as *protocol.Transfer")
+	}
+
+	// Remove pending transfer
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	if err := transfer.Remove(ctx, t.MasterDB, contractPKH, protocol.TxIdFromBytes(itx.Hash[:])); err != nil {
+		if err != transfer.ErrNotFound {
+			return errors.Wrap(err, "Failed to remove pending transfer")
+		}
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	logger.Warn(ctx, "%s : Transfer timed out", v.TraceID)
+	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTimeout, true)
 }
 
 // firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the one
@@ -205,7 +258,7 @@ func firstContractOutputIndex(assetTransfers []protocol.AssetTransfer, itx *insp
 
 // buildSettlementTx builds the tx for a settlement action.
 func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config, transferTx *inspector.Transaction,
-	transfer *protocol.Transfer, rk *wallet.RootKey, contractBalance uint64) (*txbuilder.Tx, error) {
+	transfer *protocol.Transfer, settlementRequest *protocol.SettlementRequest, contractBalance uint64, rk *wallet.RootKey) (*txbuilder.Tx, error) {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
 	defer span.End()
 
@@ -309,7 +362,12 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 	}
 
-	// Add contract fee output
+	// Add other contract's fees
+	for _, fee := range settlementRequest.ContractFees {
+		settleTx.AddP2PKHOutput(fee.Address.Bytes(), fee.Quantity, false)
+	}
+
+	// Add this contract's fee output
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
 	if err != nil {
@@ -318,6 +376,9 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 	if ct.ContractFee > 0 {
 		settleTx.AddP2PKHOutput(config.FeePKH.Bytes(), ct.ContractFee, false)
 	}
+
+	// Add to settlement request
+	settlementRequest.ContractFees = append(settlementRequest.ContractFees, protocol.TargetAddress{Address: *config.FeePKH, Quantity: ct.ContractFee})
 
 	return settleTx, nil
 }
@@ -720,7 +781,8 @@ func findBoomerangIndex(transferTx *inspector.Transaction, transfer *protocol.Tr
 // sendToNextSettlementContract sends settlement data to the next contract involved so it can add its data.
 func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.RootKey,
 	itx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
-	settleTx *txbuilder.Tx, settlement *protocol.Settlement, tracer *listeners.Tracer) error {
+	settleTx *txbuilder.Tx, settlement *protocol.Settlement, settlementRequest *protocol.SettlementRequest,
+	tracer *listeners.Tracer) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.sendToNextSettlementContract")
 	defer span.End()
 
@@ -799,26 +861,17 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 		return err
 	}
 
-	messagePayload := protocol.Offer{
-		Version:   0,
-		Timestamp: v.Now,
-		Payload:   buf.Bytes(),
-	}
-
-	err = messagePayload.RefTxId.Set(transferTx.Hash[:])
-	if err != nil {
-		return err
-	}
+	settlementRequest.Settlement = buf.Bytes()
 
 	// Setup Message
 	var data []byte
-	data, err = messagePayload.Serialize()
+	data, err = settlementRequest.Serialize()
 	if err != nil {
 		return err
 	}
 	message := protocol.Message{
 		AddressIndexes: []uint16{0}, // First output is receiver of message
-		MessageType:    messagePayload.Type(),
+		MessageType:    settlementRequest.Type(),
 		MessagePayload: data,
 	}
 
@@ -984,12 +1037,35 @@ func validateRegister(ctx context.Context, contractPKH *protocol.PublicKeyHash, 
 //   any bitcoin involved. This can only be done by the first contract, because they hold the
 //   bitcoin to be distributed.
 func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Config, w *node.ResponseWriter,
-	transferTx *inspector.Transaction, transfer *protocol.Transfer, rk *wallet.RootKey, code uint8) error {
+	transferTx *inspector.Transaction, transfer *protocol.Transfer, rk *wallet.RootKey, code uint8, removeBoomerang bool) error {
 
 	// Determine UTXOs to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Transfer UTXOs not found")
+	}
+
+	if removeBoomerang {
+		// Remove utxo spent by boomerang
+		boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.Address)
+		if boomerangIndex == 0xffffffff {
+			return errors.New("Boomerang output index not found")
+		}
+
+		if bytes.Equal(transferTx.Outputs[boomerangIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+			found := false
+			for i, utxo := range utxos {
+				if utxo.Index == boomerangIndex {
+					found = true
+					utxos = append(utxos[:i], utxos[i+1:]...) // Remove
+					break
+				}
+			}
+
+			if !found {
+				return errors.New("Boomerang output not found")
+			}
+		}
 	}
 
 	balance := uint64(0)

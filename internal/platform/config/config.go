@@ -7,12 +7,13 @@ import (
 // Config is used to hold all runtime configuration.
 type Config struct {
 	Contract struct {
-		PrivateKey   string  `envconfig:"PRIV_KEY"`
-		OperatorName string  `envconfig:"OPERATOR_NAME"`
-		Version      string  `envconfig:"VERSION"`
-		FeeAddress   string  `envconfig:"FEE_ADDRESS"`
-		FeeRate      float32 `default:"1.1" envconfig:"FEE_RATE"`
-		DustLimit    uint64  `default:"546" envconfig:"DUST_LIMIT"`
+		PrivateKey     string  `envconfig:"PRIV_KEY"`
+		OperatorName   string  `envconfig:"OPERATOR_NAME"`
+		Version        string  `envconfig:"VERSION"`
+		FeeAddress     string  `envconfig:"FEE_ADDRESS"`
+		FeeRate        float32 `default:"1.1" envconfig:"FEE_RATE"`
+		DustLimit      uint64  `default:"546" envconfig:"DUST_LIMIT"`
+		RequestTimeout uint64  `default:"86400000000000" envconfig:"REQUEST_TIMEOUT"` // Default 24 hours
 	}
 	Bitcoin struct {
 		Network string `default:"mainnet" envconfig:"BITCOIN_CHAIN"`

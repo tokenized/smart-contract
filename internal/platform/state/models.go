@@ -111,3 +111,9 @@ type Ballot struct {
 	Quantity  uint64                 `json:"quantity,omit_empty"`
 	Timestamp protocol.Timestamp     `json:"timestamp,omit_empty"`
 }
+
+// PendingTransfer defines the information required to monitor pending multi-contract transfers.
+type PendingTransfer struct {
+	TransferTxId protocol.TxId      `json:"transfer_tx_id,omit_empty"`
+	Timeout      protocol.Timestamp `json:"timestamp,omit_empty"`
+}

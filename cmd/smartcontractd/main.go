@@ -108,6 +108,7 @@ func main() {
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
+		RequestTimeout:     cfg.Contract.RequestTimeout,
 	}
 
 	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)
@@ -198,12 +199,14 @@ func main() {
 	sch := scheduler.Scheduler{}
 	txCache := listeners.NewTxCache()
 
-	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, tracer, &sch, spyNode)
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, tracer,
+		&sch, spyNode)
 	if err != nil {
 		logger.Fatal(ctx, "Generate API : %s", apiErr)
 	}
 
-	node := listeners.NewServer(appConfig, masterDB, rpcNode, spyNode, &sch, txCache, tracer, appHandlers, rawPKHs[0])
+	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
+		&sch, txCache, tracer, rawPKHs[0])
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

@@ -48,6 +48,7 @@ type Config struct {
 	DustLimit          uint64
 	ChainParams        chaincfg.Params
 	FeeRate            float32
+	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 }
 
 // New creates an App value that handle a set of routes for the application.

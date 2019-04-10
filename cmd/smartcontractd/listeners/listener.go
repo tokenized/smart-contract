@@ -4,8 +4,11 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/internal/transfer"
+	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -161,5 +164,67 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			return errors.Wrap(err, "Failed to send tx") // TODO Probably a fatal error
 		}
 	}
+
+	// -------------------------------------------------------------------------
+	// Schedule vote finalizers
+	// Iterate through votes for each contract and if they aren't complete schedule a finalizer.
+	keys := server.wallet.ListAll()
+	for _, key := range keys {
+		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
+		votes, err := vote.List(ctx, server.MasterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to list votes")
+		}
+		for _, vt := range votes {
+			if vt.CompletedAt.Nano() != 0 {
+				continue // Already complete
+			}
+
+			// Retrieve voteTx
+			var hash *chainhash.Hash
+			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "Failed to create tx hash")
+			}
+			voteTx := server.TxCache.GetTx(ctx, hash)
+			if voteTx == nil {
+				return errors.Wrap(err, "Failed to retrieve vote tx")
+			}
+
+			// Schedule vote finalizer
+			if err = server.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(server.Handler, voteTx, vt.Expires)); err != nil {
+				return errors.Wrap(err, "Failed to schedule vote finalizer")
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Schedule pending transfer timeouts
+	// Iterate through pending transfers for each contract and if they aren't complete schedule a timeout.
+	for _, key := range keys {
+		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
+		transfers, err := transfer.List(ctx, server.MasterDB, contractPKH)
+		if err != nil {
+			return errors.Wrap(err, "Failed to list transfers")
+		}
+		for _, pt := range transfers {
+			// Retrieve transferTx
+			var hash *chainhash.Hash
+			hash, err = chainhash.NewHash(pt.TransferTxId.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "Failed to create tx hash")
+			}
+			transferTx := server.TxCache.GetTx(ctx, hash)
+			if transferTx == nil {
+				return errors.Wrap(err, "Failed to retrieve transfer tx")
+			}
+
+			// Schedule transfer timeout
+			if err = server.Scheduler.ScheduleJob(ctx, NewTransferTimeout(server.Handler, transferTx, pt.Timeout)); err != nil {
+				return errors.Wrap(err, "Failed to schedule transfer timeout")
+			}
+		}
+	}
+
 	return nil
 }

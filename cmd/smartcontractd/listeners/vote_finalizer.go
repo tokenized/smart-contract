@@ -1,12 +1,14 @@
-package handlers
+package listeners
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 )
 
 // VoteFinalizer is a Scheduler job that compiles the vote result when the vote expires.
@@ -40,4 +42,13 @@ func (vf *VoteFinalizer) Run(ctx context.Context) {
 // IsComplete returns true when a job should be removed from the scheduler.
 func (vf *VoteFinalizer) IsComplete(ctx context.Context) bool {
 	return vf.finished
+}
+
+// Equal returns true if another job matches it. Used to cancel jobs.
+func (vf *VoteFinalizer) Equal(other scheduler.Job) bool {
+	otherVF, ok := other.(*VoteFinalizer)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(vf.voteTx.Hash[:], otherVF.voteTx.Hash[:])
 }

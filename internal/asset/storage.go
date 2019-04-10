@@ -13,6 +13,7 @@ import (
 )
 
 const storageKey = "contracts"
+const storageSubKey = "assets"
 
 // Put a single asset in storage
 func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, asset *state.Asset) error {
@@ -37,7 +38,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return nil, errors.Wrap(err, "Failed to fetch asset")
 	}
 
-	// Prepare the contract object
+	// Prepare the asset object
 	asset := state.Asset{}
 	if err := json.Unmarshal(b, &asset); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal asset")
@@ -48,5 +49,5 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractPKH *protocol.PublicKeyHash, asset *protocol.AssetCode) string {
-	return fmt.Sprintf("%v/%s/%s", storageKey, contractPKH.String(), asset.String())
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractPKH.String(), storageSubKey, asset.String())
 }

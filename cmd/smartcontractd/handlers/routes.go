@@ -8,13 +8,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
-	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/pkg/errors"
 )
 
 type InspectorTxCache interface {
@@ -63,15 +61,18 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 
 	// Register transfer based operations.
 	t := Transfer{
-		MasterDB: masterDB,
-		Config:   config,
-		TxCache:  txCache,
-		Headers:  headers,
-		Tracer:   tracer,
+		handler:   app,
+		MasterDB:  masterDB,
+		Config:    config,
+		TxCache:   txCache,
+		Headers:   headers,
+		Tracer:    tracer,
+		Scheduler: sch,
 	}
 
 	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
 	app.Handle("SEE", protocol.CodeSettlement, t.SettlementResponse)
+	app.Handle("REPROCESS", protocol.CodeTransfer, t.TransferTimeout)
 
 	// Register enforcement based events.
 	e := Enforcement{
@@ -104,48 +105,16 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 
 	// Register message based operations.
 	m := Message{
-		MasterDB: masterDB,
-		Config:   config,
-		TxCache:  txCache,
-		Headers:  headers,
-		Tracer:   tracer,
+		MasterDB:  masterDB,
+		Config:    config,
+		TxCache:   txCache,
+		Headers:   headers,
+		Tracer:    tracer,
+		Scheduler: sch,
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)
 	app.Handle("SEE", protocol.CodeRejection, m.ProcessRejection)
-
-	// -------------------------------------------------------------------------
-	// Schedule vote finalizers
-	// Iterate through votes for each contract and if they aren't complete schedule a finalizer.
-	keys := masterWallet.ListAll()
-	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
-		votes, err := vote.List(ctx, masterDB, contractPKH)
-		if err != nil {
-			return app, errors.Wrap(err, "Failed to list votes")
-		}
-		for _, vt := range votes {
-			if vt.CompletedAt.Nano() != 0 {
-				continue // Already complete
-			}
-
-			// Retrieve voteTx
-			var hash *chainhash.Hash
-			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
-			if err != nil {
-				return app, errors.Wrap(err, "Failed to create tx hash")
-			}
-			voteTx := txCache.GetTx(ctx, hash)
-			if voteTx == nil {
-				return app, errors.Wrap(err, "Failed to retrieve vote tx")
-			}
-
-			// Schedule vote finalizer
-			if err = g.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(app, voteTx, vt.Expires)); err != nil {
-				return app, errors.Wrap(err, "Failed to schedule vote finalizer")
-			}
-		}
-	}
 
 	return app, nil
 }

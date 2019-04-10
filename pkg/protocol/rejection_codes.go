@@ -15,6 +15,9 @@ const (
 	// TxMalformed - The Bitcoin tx is malformed. Incorrect inputs/outputs or something similar.
 	RejectTxMalformed = 2
 
+	// Timeout - A dependency, other contract/service, has failed to complete before the smart contract's timeout.
+	RejectTimeout = 3
+
 	// ContractExists - The contract already exists and can't be recreated.
 	RejectContractExists = 10
 

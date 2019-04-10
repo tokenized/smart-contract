@@ -13,6 +13,9 @@ const (
 	// CodeSignatureRequest identifies data as a SignatureRequest message.
 	CodeSignatureRequest = 1002
 
+	// CodeSettlementRequest identifies data as a SettlementRequest message.
+	CodeSettlementRequest = 1003
+
 	// CodePublicMessage identifies data as a PublicMessage message.
 	CodePublicMessage = 2
 
@@ -36,6 +39,9 @@ func MessageTypeMapping(code uint16) MessagePayload {
 		return &result
 	case CodeSignatureRequest:
 		result := SignatureRequest{}
+		return &result
+	case CodeSettlementRequest:
+		result := SettlementRequest{}
 		return &result
 	case CodePublicMessage:
 		result := PublicMessage{}
@@ -63,9 +69,8 @@ func MessageTypeMapping(code uint16) MessagePayload {
 // Signature Request message.
 type Offer struct {
 	Version   uint8     `json:"version,omitempty"`   // Payload Version
-	Timestamp Timestamp `json:"timestamp,omitempty"` // Timestamp in nanoseconds for when the message sender creates the transaction.
-	RefTxId   TxId      `json:"ref_tx_id,omitempty"` // Tx Id of the request transaction referenced by the offer.
-	Payload   []byte    `json:"payload,omitempty"`   // Full serialized op return script containing an offer to another party, usually to exchange tokens/bitcoin. The message needs data added by another party.
+	Timestamp Timestamp `json:"timestamp,omitempty"` // Timestamp in nanoseconds for when the message sender created the offer.
+	Payload   []byte    `json:"payload,omitempty"`   // Serialized Tokenized OP_RETURN message. The message needs data added by another party upon acceptance of offer.
 }
 
 // Type returns the type identifer for this message.
@@ -114,21 +119,6 @@ func (action *Offer) Serialize() ([]byte, error) {
 		}
 	}
 
-	// RefTxId (TxId)
-	// fmt.Printf("Serializing RefTxId\n")
-	{
-		{
-			b, err := action.RefTxId.Serialize()
-			if err != nil {
-				return nil, err
-			}
-
-			if err := write(buf, b); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	// Payload ([]byte)
 	// fmt.Printf("Serializing Payload\n")
 	{
@@ -163,15 +153,6 @@ func (action *Offer) Write(b []byte) (int, error) {
 
 	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
 
-	// RefTxId (TxId)
-	{
-		if err := action.RefTxId.Write(buf); err != nil {
-			return 0, err
-		}
-	}
-
-	// fmt.Printf("Read RefTxId : %d bytes remaining\n%+v\n", buf.Len(), action.RefTxId)
-
 	// Payload ([]byte)
 	{
 		var err error
@@ -201,14 +182,6 @@ func (m *Offer) Validate() error {
 
 	}
 
-	// RefTxId (TxId)
-	{
-		if err := m.RefTxId.Validate(); err != nil {
-			return fmt.Errorf("field RefTxId is invalid : %s", err)
-		}
-
-	}
-
 	// Payload ([]byte)
 	{
 		if len(m.Payload) > (2<<32)-1 {
@@ -224,7 +197,6 @@ func (action Offer) String() string {
 
 	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
-	vals = append(vals, fmt.Sprintf("RefTxId:%#+v", action.RefTxId))
 	vals = append(vals, fmt.Sprintf("Payload:%#x", action.Payload))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
@@ -365,6 +337,231 @@ func (action SignatureRequest) String() string {
 	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
 	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
 	vals = append(vals, fmt.Sprintf("Payload:%#x", action.Payload))
+
+	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
+}
+
+// SettlementRequest A message that contains a multi-contract settlement
+// that needs settlement data added by another contract. Sent to another
+// contract to request data be added.
+type SettlementRequest struct {
+	Version      uint8           `json:"version,omitempty"`        // Payload Version
+	Timestamp    Timestamp       `json:"timestamp,omitempty"`      // Timestamp in nanoseconds for when the message sender creates the transaction.
+	TransferTxId TxId            `json:"transfer_tx_id,omitempty"` // Tx Id of the transfer request transaction that triggered this message.
+	ContractFees []TargetAddress `json:"contract_fees,omitempty"`  // Contract fees (in bitcoin) and addresses(PKHs) where fees should be paid. Added by each contract as settlement data is added.
+	Settlement   []byte          `json:"settlement,omitempty"`     // Serialized settlement OP_RETURN that needs data added by another contract.
+}
+
+// Type returns the type identifer for this message.
+func (action SettlementRequest) Type() uint16 {
+	return CodeSettlementRequest
+}
+
+// Read implements the io.Reader interface, writing the receiver to the
+// []byte.
+func (action *SettlementRequest) Read(b []byte) (int, error) {
+	data, err := action.Serialize()
+
+	if err != nil {
+		return 0, err
+	}
+
+	copy(b, data)
+
+	return len(b), nil
+}
+
+// Serialize returns the full OP_RETURN payload bytes.
+func (action *SettlementRequest) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	// Version (uint8)
+	// fmt.Printf("Serializing Version\n")
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
+	}
+
+	// Timestamp (Timestamp)
+	// fmt.Printf("Serializing Timestamp\n")
+	{
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// TransferTxId (TxId)
+	// fmt.Printf("Serializing TransferTxId\n")
+	{
+		{
+			b, err := action.TransferTxId.Serialize()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// ContractFees ([]TargetAddress)
+	// fmt.Printf("Serializing ContractFees\n")
+	{
+		if err := WriteVariableSize(buf, uint64(len(action.ContractFees)), 8, 8); err != nil {
+			return nil, err
+		}
+		for _, value := range action.ContractFees {
+			b, err := value.Serialize()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Settlement ([]byte)
+	// fmt.Printf("Serializing Settlement\n")
+	{
+		if err := WriteVarBin(buf, action.Settlement, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Write populates the fields in SettlementRequest from the byte slice
+func (action *SettlementRequest) Write(b []byte) (int, error) {
+	// fmt.Printf("Reading SettlementRequest : %d bytes\n", len(b))
+	buf := bytes.NewBuffer(b)
+
+	// Version (uint8)
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
+
+	// Timestamp (Timestamp)
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
+
+	// TransferTxId (TxId)
+	{
+		if err := action.TransferTxId.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read TransferTxId : %d bytes remaining\n%+v\n", buf.Len(), action.TransferTxId)
+
+	// ContractFees ([]TargetAddress)
+	{
+		size, err := ReadVariableSize(buf, 8, 8)
+		if err != nil {
+			return 0, err
+		}
+		action.ContractFees = make([]TargetAddress, 0, size)
+		for i := uint64(0); i < size; i++ {
+			var newValue TargetAddress
+			if err := newValue.Write(buf); err != nil {
+				return 0, err
+			}
+
+			action.ContractFees = append(action.ContractFees, newValue)
+		}
+	}
+
+	// fmt.Printf("Read ContractFees : %d bytes remaining\n%+v\n", buf.Len(), action.ContractFees)
+
+	// Settlement ([]byte)
+	{
+		var err error
+		action.Settlement, err = ReadVarBin(buf, 32)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Settlement : %d bytes remaining\n%+v\n", buf.Len(), action.Settlement)
+
+	// fmt.Printf("Read SettlementRequest : %d bytes remaining\n", buf.Len())
+	return len(b) - buf.Len(), nil
+}
+
+func (m *SettlementRequest) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// Timestamp (Timestamp)
+	{
+		if err := m.Timestamp.Validate(); err != nil {
+			return fmt.Errorf("field Timestamp is invalid : %s", err)
+		}
+
+	}
+
+	// TransferTxId (TxId)
+	{
+		if err := m.TransferTxId.Validate(); err != nil {
+			return fmt.Errorf("field TransferTxId is invalid : %s", err)
+		}
+
+	}
+
+	// ContractFees ([]TargetAddress)
+	{
+		if len(m.ContractFees) > (2<<8)-1 {
+			return fmt.Errorf("list field ContractFees has too many items %d/%d", len(m.ContractFees), (2<<8)-1)
+		}
+
+		for i, value := range m.ContractFees {
+			err := value.Validate()
+			if err != nil {
+				return fmt.Errorf("list field ContractFees[%d] is invalid : %s", i, err)
+			}
+		}
+	}
+
+	// Settlement ([]byte)
+	{
+		if len(m.Settlement) > (2<<32)-1 {
+			return fmt.Errorf("varbin field Settlement too long %d/%d", len(m.Settlement), (2<<32)-1)
+		}
+	}
+
+	return nil
+}
+
+func (action SettlementRequest) String() string {
+	vals := []string{}
+
+	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
+	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
+	vals = append(vals, fmt.Sprintf("TransferTxId:%#+v", action.TransferTxId))
+	vals = append(vals, fmt.Sprintf("ContractFees:%#+v", action.ContractFees))
+	vals = append(vals, fmt.Sprintf("Settlement:%#x", action.Settlement))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }

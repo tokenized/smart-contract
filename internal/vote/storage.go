@@ -11,6 +11,7 @@ import (
 )
 
 const storageKey = "contracts"
+const storageSubKey = "votes"
 
 // Put a single vote in storage
 func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, v *state.Vote) error {
@@ -38,7 +39,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return nil, err
 	}
 
-	// Prepare the contract object
+	// Prepare the vote object
 	result := state.Vote{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
@@ -50,7 +51,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 // List all votes for a specified contract.
 func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) ([]*state.Vote, error) {
 
-	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%x", storageKey, contractPKH.String()))
+	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String(), storageSubKey))
 	if err != nil {
 		return nil, err
 	}
@@ -71,5 +72,5 @@ func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractPKH *protocol.PublicKeyHash, txid *protocol.TxId) string {
-	return fmt.Sprintf("%s/%x/%x", storageKey, contractPKH.String(), txid.String())
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractPKH.String(), storageSubKey, txid.String())
 }

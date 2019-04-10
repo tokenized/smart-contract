@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -342,7 +343,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to save vote")
 	}
 
-	if err := g.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(g.handler, itx, proposal.VoteCutOffTimestamp)); err != nil {
+	if err := g.Scheduler.ScheduleJob(ctx, listeners.NewVoteFinalizer(g.handler, itx, proposal.VoteCutOffTimestamp)); err != nil {
 		return errors.Wrap(err, "Failed to schedule vote finalizer")
 	}
 

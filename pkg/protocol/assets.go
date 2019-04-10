@@ -65,7 +65,7 @@ func AssetTypeMapping(code string) AssetPayload {
 
 // Coupon asset type.
 type Coupon struct {
-	Version         uint8     `json:"version,omitempty"`          // Payload Version
+	Version         uint8     `json:"version,omitempty"`          //
 	RedeemingEntity string    `json:"redeeming_entity,omitempty"` //
 	IssueDate       Timestamp `json:"issue_date,omitempty"`       //
 	ExpiryDate      Timestamp `json:"expiry_date,omitempty"`      //
@@ -290,7 +290,7 @@ func (m Coupon) String() string {
 
 // Currency asset type.
 type Currency struct {
-	Version           uint8   `json:"version,omitempty"`            // Payload Version
+	Version           uint8   `json:"version,omitempty"`            //
 	ISOCode           [3]byte `json:"iso_code,omitempty"`           //
 	MonetaryAuthority string  `json:"monetary_authority,omitempty"` //
 	Description       string  `json:"description,omitempty"`        //
@@ -444,9 +444,8 @@ func (m Currency) String() string {
 
 // LoyaltyPoints asset type.
 type LoyaltyPoints struct {
-	Version             uint8          `json:"version,omitempty"`              // Payload Version
+	Version             uint8          `json:"version,omitempty"`              //
 	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
-	OfferType           byte           `json:"offer_type,omitempty"`           //
 	OfferName           string         `json:"offer_name,omitempty"`           //
 	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
 	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
@@ -491,13 +490,6 @@ func (m *LoyaltyPoints) Serialize() ([]byte, error) {
 	// AgeRestriction (AgeRestriction)
 	{
 		if err := write(buf, m.AgeRestriction); err != nil {
-			return nil, err
-		}
-	}
-
-	// OfferType (byte)
-	{
-		if err := write(buf, m.OfferType); err != nil {
 			return nil, err
 		}
 	}
@@ -548,14 +540,6 @@ func (m *LoyaltyPoints) Write(b []byte) (int, error) {
 	// AgeRestriction (AgeRestriction)
 	{
 		if err := m.AgeRestriction.Write(buf); err != nil {
-			return 0, err
-		}
-
-	}
-
-	// OfferType (byte)
-	{
-		if err := read(buf, &m.OfferType); err != nil {
 			return 0, err
 		}
 
@@ -612,10 +596,6 @@ func (m *LoyaltyPoints) Validate() error {
 
 	}
 
-	// OfferType (byte)
-	{
-	}
-
 	// OfferName (string)
 	{
 		if len(m.OfferName) > (2<<8)-1 {
@@ -654,7 +634,6 @@ func (m LoyaltyPoints) String() string {
 
 	vals = append(vals, fmt.Sprintf("Version:%v", m.Version))
 	vals = append(vals, fmt.Sprintf("AgeRestriction:%#+v", m.AgeRestriction))
-	vals = append(vals, fmt.Sprintf("OfferType:%#+v", m.OfferType))
 	vals = append(vals, fmt.Sprintf("OfferName:%#+v", m.OfferName))
 	vals = append(vals, fmt.Sprintf("ValidFrom:%#+v", m.ValidFrom))
 	vals = append(vals, fmt.Sprintf("ExpirationTimestamp:%#+v", m.ExpirationTimestamp))
@@ -670,6 +649,8 @@ type Membership struct {
 	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
 	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
 	ID                  string         `json:"id,omitempty"`                   //
+	MembershipClass     string         `json:"membership_class,omitempty"`     //
+	RoleType            string         `json:"role_type,omitempty"`            //
 	MembershipType      string         `json:"membership_type,omitempty"`      //
 	Description         string         `json:"description,omitempty"`          //
 }
@@ -737,6 +718,20 @@ func (m *Membership) Serialize() ([]byte, error) {
 		}
 	}
 
+	// MembershipClass (string)
+	{
+		if err := WriteVarChar(buf, m.MembershipClass, 8); err != nil {
+			return nil, err
+		}
+	}
+
+	// RoleType (string)
+	{
+		if err := WriteVarChar(buf, m.RoleType, 8); err != nil {
+			return nil, err
+		}
+	}
+
 	// MembershipType (string)
 	{
 		if err := WriteVarChar(buf, m.MembershipType, 8); err != nil {
@@ -794,6 +789,24 @@ func (m *Membership) Write(b []byte) (int, error) {
 	{
 		var err error
 		m.ID, err = ReadVarChar(buf, 8)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// MembershipClass (string)
+	{
+		var err error
+		m.MembershipClass, err = ReadVarChar(buf, 8)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// RoleType (string)
+	{
+		var err error
+		m.RoleType, err = ReadVarChar(buf, 8)
 		if err != nil {
 			return 0, err
 		}
@@ -857,6 +870,20 @@ func (m *Membership) Validate() error {
 		}
 	}
 
+	// MembershipClass (string)
+	{
+		if len(m.MembershipClass) > (2<<8)-1 {
+			return fmt.Errorf("varchar field MembershipClass too long %d/%d", len(m.MembershipClass), (2<<8)-1)
+		}
+	}
+
+	// RoleType (string)
+	{
+		if len(m.RoleType) > (2<<8)-1 {
+			return fmt.Errorf("varchar field RoleType too long %d/%d", len(m.RoleType), (2<<8)-1)
+		}
+	}
+
 	// MembershipType (string)
 	{
 		if len(m.MembershipType) > (2<<8)-1 {
@@ -882,6 +909,8 @@ func (m Membership) String() string {
 	vals = append(vals, fmt.Sprintf("ValidFrom:%#+v", m.ValidFrom))
 	vals = append(vals, fmt.Sprintf("ExpirationTimestamp:%#+v", m.ExpirationTimestamp))
 	vals = append(vals, fmt.Sprintf("ID:%#+v", m.ID))
+	vals = append(vals, fmt.Sprintf("MembershipClass:%#+v", m.MembershipClass))
+	vals = append(vals, fmt.Sprintf("RoleType:%#+v", m.RoleType))
 	vals = append(vals, fmt.Sprintf("MembershipType:%#+v", m.MembershipType))
 	vals = append(vals, fmt.Sprintf("Description:%#+v", m.Description))
 
