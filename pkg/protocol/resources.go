@@ -3382,6 +3382,11 @@ values:
       text: Ballot Already Counted
       description: The ballot has already been counted for this address.
 
+    45:
+      name: VoteSystemNotPermitted
+      text: Vote System Not Permitted
+      description: "The voting system isn't permitted for this request."
+
     #################################### Enforcement ####################################
 
     #50:

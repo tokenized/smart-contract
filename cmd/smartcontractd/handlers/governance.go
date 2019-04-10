@@ -89,8 +89,13 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if int(msg.VoteSystem) >= len(ct.VotingSystems) {
-		logger.Warn(ctx, "%s : Proposal vote system invalid : %s", v.TraceID, contractPKH.String(), senderPKH.String())
+		logger.Warn(ctx, "%s : Proposal vote system invalid", v.TraceID)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
+	if msg.Specific && ct.VotingSystems[msg.VoteSystem].VoteType == byte('P') {
+		logger.Warn(ctx, "%s : Plurality votes not allowed for specific votes", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteSystemNotPermitted)
 	}
 
 	// Validate messages vote related values

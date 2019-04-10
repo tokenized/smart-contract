@@ -87,6 +87,9 @@ const (
 	// BallotAlreadyCounted - The ballot has already been counted for this address.
 	RejectBallotAlreadyCounted = 44
 
+	// VoteSystemNotPermitted - The voting system isn't permitted for this request.
+	RejectVoteSystemNotPermitted = 45
+
 	// InsufficientTxFeeFunding - Insufficient bitcoin quantities for response transaction fees.
 	RejectInsufficientTxFeeFunding = 60
 
