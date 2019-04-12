@@ -6,6 +6,70 @@ import (
 	"testing"
 )
 
+func TestRevertedTx(t *testing.T) {
+	// Create a randomized object
+	initialMessage := RevertedTx{}
+	// Version (uint)
+	// uint test not setup
+
+	// Timestamp (Timestamp)
+	initialMessage.Timestamp = Timestamp{}
+
+	// Transaction (varbin)
+	initialMessage.Transaction = make([]byte, 0, 32)
+	for i := uint64(0); i < 32; i++ {
+		initialMessage.Transaction = append(initialMessage.Transaction, byte(65+i+2))
+	}
+
+	// Encode message
+	initialEncoding, err := initialMessage.Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Initial encoding : %d bytes", len(initialEncoding))
+
+	// Decode message
+	decodedMessage := RevertedTx{}
+
+	n, err := decodedMessage.Write(initialEncoding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Decoded : %d bytes", n)
+
+	if n != len(initialEncoding) {
+		t.Fatalf("got %v, want %v", n, len(initialEncoding))
+	}
+
+	// Serializing the message should give us the same bytes
+	secondEncoding, err := decodedMessage.Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(initialEncoding, secondEncoding) {
+		t.Errorf("got\n%+v\nwant\n%+v", initialEncoding, secondEncoding)
+	}
+
+	// if !reflect.DeepEqual(initialMessage, decodedMessage) {
+	// 	t.Errorf("\ninitial : %+v\ndecoded : %+v", initialMessage, decodedMessage)
+	// }
+
+	// Compare re-serialized values
+	// Version (uint)
+	// uint test compare not setup
+
+	// Timestamp (Timestamp)
+	if initialMessage.Timestamp != decodedMessage.Timestamp {
+		t.Errorf("Timestamp doesn't match : %v != %v", initialMessage.Timestamp, decodedMessage.Timestamp)
+	}
+
+	// Transaction (varbin)
+	if !bytes.Equal(initialMessage.Transaction, decodedMessage.Transaction) {
+		t.Errorf("Transaction doesn't match : %x != %x", initialMessage.Transaction, decodedMessage.Transaction)
+	}
+}
+
 func TestOffer(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Offer{}

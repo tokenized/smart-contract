@@ -1,6 +1,7 @@
 package inspector
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -268,4 +269,63 @@ func uniqueAddresses(s []btcutil.Address) []btcutil.Address {
 	}
 
 	return u
+}
+
+func (itx *Transaction) Write(buf *bytes.Buffer) error {
+	if err := itx.MsgTx.Serialize(buf); err != nil {
+		return err
+	}
+
+	for i, _ := range itx.Inputs {
+		if err := itx.Inputs[i].Write(buf); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
+	msg := wire.MsgTx{}
+	if err := msg.Deserialize(buf); err != nil {
+		return err
+	}
+	itx.MsgTx = &msg
+	itx.Hash = msg.TxHash()
+
+	// Inputs
+	for i, _ := range itx.Inputs {
+		if err := itx.Inputs[i].Read(buf, netParams); err != nil {
+			return err
+		}
+	}
+
+	// Outputs
+	outputs := []Output{}
+	for n := range itx.MsgTx.TxOut {
+		output, err := buildOutput(itx.MsgTx, n, netParams)
+
+		if err != nil {
+			return err
+		}
+
+		if output == nil {
+			continue
+		}
+
+		outputs = append(outputs, *output)
+	}
+
+	itx.Outputs = outputs
+
+	// Protocol Message
+	var err error
+	for _, txOut := range itx.MsgTx.TxOut {
+		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript)
+		if err == nil {
+			break // Tokenized output found
+		}
+	}
+
+	return nil
 }

@@ -18,16 +18,20 @@ type HeadersHandler struct {
 	state     *data.State
 	blocks    *storage.BlockRepository
 	txs       *storage.TxRepository
+	reorgs    *storage.ReorgRepository
 	listeners []Listener
 }
 
 // NewHeadersHandler returns a new HeadersHandler with the given Config.
-func NewHeadersHandler(config data.Config, state *data.State, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, listeners []Listener) *HeadersHandler {
+func NewHeadersHandler(config data.Config, state *data.State, blockRepo *storage.BlockRepository,
+	txRepo *storage.TxRepository, reorgs *storage.ReorgRepository, listeners []Listener) *HeadersHandler {
+
 	result := HeadersHandler{
 		config:    config,
 		state:     state,
 		blocks:    blockRepo,
 		txs:       txRepo,
+		reorgs:    reorgs,
 		listeners: listeners,
 	}
 	return &result
@@ -109,41 +113,61 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		reorgHeight, exists := handler.blocks.Height(&header.PrevBlock)
 		if exists {
 			logger.Info(ctx, "Reorging to height %d", reorgHeight)
+			handler.state.ClearInSync()
+
+			reorg := storage.Reorg{
+				BlockHeight: reorgHeight,
+			}
 
 			// Call reorg listener for all blocks above reorg height.
 			for height := handler.blocks.LastHeight(); height > reorgHeight; height-- {
+				// Add block to reorg
+				header, err := handler.blocks.Header(ctx, height)
+				if err != nil {
+					return response, errors.Wrap(err, "Failed to get reverted block header")
+				}
+				reorgBlock := storage.ReorgBlock{
+					Header: *header,
+				}
+
+				revertTxs, err := handler.txs.GetBlock(ctx, height)
+				if err != nil {
+					return response, errors.Wrap(err, "Failed to get reverted txs")
+				}
+				for _, tx := range revertTxs {
+					reorgBlock.TxIds = append(reorgBlock.TxIds, tx)
+				}
+
+				reorg.Blocks = append(reorg.Blocks, reorgBlock)
+
 				// Notify listeners
 				if len(handler.listeners) > 0 {
 					// Send block revert notification
-					hash, err := handler.blocks.Hash(ctx, height)
-					if err != nil {
-						return response, errors.Wrap(err, "Failed to get reverted block hash")
-					}
-					blockMessage := BlockMessage{Hash: *hash, Height: height}
+					hash := header.BlockHash()
+					blockMessage := BlockMessage{Hash: hash, Height: height}
 					for _, listener := range handler.listeners {
 						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}
-
-					// Notify of relevant txs in this block that are now reverted.
-					revertTxs, err := handler.txs.GetBlock(ctx, height)
-					if err != nil {
-						return response, errors.Wrap(err, "Failed to get reverted txs")
-					}
-					if len(revertTxs) > 0 {
-						for _, tx := range revertTxs {
-							for _, listener := range handler.listeners {
-								listener.HandleTxState(ctx, ListenerMsgTxStateRevert, tx)
-							}
-						}
-						if err := handler.txs.RemoveBlock(ctx, height); err != nil {
-							return response, errors.Wrap(err, "Failed to remove reverted txs")
-						}
-					} else {
-						if err := handler.txs.ReleaseBlock(ctx, height); err != nil {
-							return response, errors.Wrap(err, "Failed to remove reverted txs")
+					for _, tx := range revertTxs {
+						for _, listener := range handler.listeners {
+							listener.HandleTxState(ctx, ListenerMsgTxStateRevert, tx)
 						}
 					}
 				}
+
+				if len(revertTxs) > 0 {
+					if err := handler.txs.RemoveBlock(ctx, height); err != nil {
+						return response, errors.Wrap(err, "Failed to remove reverted txs")
+					}
+				} else {
+					if err := handler.txs.ReleaseBlock(ctx, height); err != nil {
+						return response, errors.Wrap(err, "Failed to remove reverted txs")
+					}
+				}
+			}
+
+			if err := handler.reorgs.Save(ctx, &reorg); err != nil {
+				return response, err
 			}
 
 			// Revert block repository

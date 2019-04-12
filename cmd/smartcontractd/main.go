@@ -22,6 +22,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -197,16 +198,19 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Register Hooks
 	sch := scheduler.Scheduler{}
-	txCache := listeners.NewTxCache()
+	utxos, err := utxos.Load(ctx, masterDB)
+	if err != nil {
+		logger.Fatal(ctx, "Load UTXOs : %s", err)
+	}
 
-	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, txCache, tracer,
-		&sch, spyNode)
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, tracer,
+		&sch, spyNode, utxos)
 	if err != nil {
 		logger.Fatal(ctx, "Generate API : %s", apiErr)
 	}
 
 	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
-		&sch, txCache, tracer, rawPKHs[0])
+		&sch, tracer, rawPKHs[0], utxos)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -254,6 +258,10 @@ func main() {
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
+	err = utxos.Save(ctx, masterDB)
+	if err != nil {
+		logger.Fatal(ctx, "Save UTXOs : %s", err)
+	}
 }
 
 var (

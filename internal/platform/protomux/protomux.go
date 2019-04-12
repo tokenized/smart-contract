@@ -44,6 +44,11 @@ type ProtoMux struct {
 	LostHandlers      map[string][]HandlerFunc
 	StoleHandlers     map[string][]HandlerFunc
 	ReprocessHandlers map[string][]HandlerFunc
+
+	SeeDefaultHandlers       []HandlerFunc
+	LostDefaultHandlers      []HandlerFunc
+	StoleDefaultHandlers     []HandlerFunc
+	ReprocessDefaultHandlers []HandlerFunc
 }
 
 func New() *ProtoMux {
@@ -73,6 +78,22 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 	}
 }
 
+// Handle registers a new default handler
+func (p *ProtoMux) HandleDefault(verb string, handler HandlerFunc) {
+	switch verb {
+	case SEE:
+		p.SeeDefaultHandlers = append(p.SeeDefaultHandlers, handler)
+	case LOST:
+		p.LostDefaultHandlers = append(p.LostDefaultHandlers, handler)
+	case STOLE:
+		p.StoleDefaultHandlers = append(p.StoleDefaultHandlers, handler)
+	case REPROCESS:
+		p.ReprocessDefaultHandlers = append(p.ReprocessDefaultHandlers, handler)
+	default:
+		panic("Unknown handler type")
+	}
+}
+
 // Trigger fires a handler
 func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Transaction) error {
 
@@ -93,7 +114,22 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 
 	// Locate the handlers from the group
 	txAction := itx.MsgProto.Type()
-	handlers, _ := group[txAction]
+	handlers, exists := group[txAction]
+
+	if !exists {
+		switch verb {
+		case SEE:
+			handlers = p.SeeDefaultHandlers
+		case LOST:
+			handlers = p.LostDefaultHandlers
+		case STOLE:
+			handlers = p.StoleDefaultHandlers
+		case REPROCESS:
+			handlers = p.ReprocessDefaultHandlers
+		default:
+			return errors.New("Unknown handler type")
+		}
+	}
 
 	// Find contract PKHs
 	var pkhs []string

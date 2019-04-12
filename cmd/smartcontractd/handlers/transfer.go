@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -34,7 +35,6 @@ type Transfer struct {
 	handler   *node.App
 	MasterDB  *db.DB
 	Config    *node.Config
-	TxCache   InspectorTxCache
 	Headers   BitcoinHeaders
 	Tracer    *listeners.Tracer
 	Scheduler *scheduler.Scheduler
@@ -82,7 +82,9 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	if !bytes.Equal(itx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
 		logger.Verbose(ctx, "%s : Not contract for first transfer. Waiting for Message Offer : %s", v.TraceID,
 			itx.Outputs[first].Address.String())
-		t.TxCache.SaveTx(ctx, itx)
+		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
+			return errors.Wrap(err, "Failed to save tx")
+		}
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
@@ -116,8 +118,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Transfer Outputs
-	//   Contract 1 : amount = calculated fee for settlement tx + any bitcoins being transfered
-	//   Contract 2 : dust
+	//   Contract 1 : amount = calculated fee for settlement tx + contract fees + any bitcoins being transfered
+	//   Contract 2 : contract fees if applicable or dust
 	//   Boomerang to Contract 1 : amount = ((n-1) * 2) * (calculated fee for data passing tx)
 	//     where n is number of contracts involved
 	// Boomerang is only required when more than one contract is involved.
@@ -183,9 +185,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Save tx
-	err = t.TxCache.SaveTx(ctx, itx)
-	if err != nil {
-		return err
+	if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
 	}
 
 	// Send to next contract
@@ -375,10 +376,10 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 	if ct.ContractFee > 0 {
 		settleTx.AddP2PKHOutput(config.FeePKH.Bytes(), ct.ContractFee, false)
-	}
 
-	// Add to settlement request
-	settlementRequest.ContractFees = append(settlementRequest.ContractFees, protocol.TargetAddress{Address: *config.FeePKH, Quantity: ct.ContractFee})
+		// Add to settlement request
+		settlementRequest.ContractFees = append(settlementRequest.ContractFees, protocol.TargetAddress{Address: *config.FeePKH, Quantity: ct.ContractFee})
+	}
 
 	return settleTx, nil
 }
@@ -967,8 +968,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 	}
 
-	// Remove cached tx
-	t.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
 	return nil
 }
 

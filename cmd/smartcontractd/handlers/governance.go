@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -28,7 +29,6 @@ type Governance struct {
 	handler   *node.App
 	MasterDB  *db.DB
 	Config    *node.Config
-	TxCache   InspectorTxCache
 	Scheduler *scheduler.Scheduler
 }
 
@@ -259,7 +259,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	w.AddContractFee(ctx, feeAmount)
 
 	// Save Tx.
-	g.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, g.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a vote
 	return node.RespondSuccess(ctx, w, itx, rk, &vote)
@@ -290,8 +292,8 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve Proposal
-	proposalTx := g.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
-	if proposalTx == nil {
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
+	if err != nil {
 		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
@@ -396,8 +398,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx := g.TxCache.GetTx(ctx, hash)
-	if proposalTx == nil {
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams)
+	if err != nil {
 		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
@@ -485,7 +487,9 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.
-	g.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, g.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to add tx")
+	}
 
 	// Respond with a vote
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
@@ -508,8 +512,8 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Ballot counted not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
-	castTx := g.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
-	if castTx == nil {
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
+	if err != nil {
 		logger.Warn(ctx, "%s : Ballot cast not found for ballot counted msg : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
@@ -571,8 +575,8 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx := g.TxCache.GetTx(ctx, hash)
-	if proposalTx == nil {
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams)
+	if err != nil {
 		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
@@ -615,12 +619,12 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.
-	g.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, g.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a vote
 	return node.RespondSuccess(ctx, w, itx, rk, &voteResult)
-
-	return errors.New("FinalizeVote not implemented")
 }
 
 // ResultResponse handles an outgoing Result action and writes it to the state
@@ -640,13 +644,8 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
-	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &msg.VoteTxId)
-	if err != nil {
-		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
-	}
-
 	uv := vote.UpdateVote{}
-	err = node.Convert(ctx, msg, &uv)
+	err := node.Convert(ctx, msg, &uv)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert result message to update vote")
 	}
@@ -659,21 +658,10 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if msg.Specific {
 		// Save result for amendment action
-		g.TxCache.SaveTx(ctx, itx)
+		if err := transactions.AddTx(ctx, g.MasterDB, itx); err != nil {
+			return errors.Wrap(err, "Failed to save tx")
+		}
 	}
 
-	// Remove cached txs
-	if !vt.Specific { // Save proposalTx to check when amendment request is received.
-		hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-		if err != nil {
-			return errors.Wrap(err, "Failed to convert proposal tx id to chainhash")
-		}
-		g.TxCache.RemoveTx(ctx, hash)
-	}
-	hash, err := chainhash.NewHash(msg.VoteTxId.Bytes())
-	if err != nil {
-		return errors.Wrap(err, "Failed to convert vote tx id to chainhash")
-	}
-	g.TxCache.RemoveTx(ctx, hash)
 	return nil
 }

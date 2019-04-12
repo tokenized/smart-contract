@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -26,7 +27,6 @@ import (
 type Enforcement struct {
 	MasterDB *db.DB
 	Config   *node.Config
-	TxCache  InspectorTxCache
 }
 
 // OrderRequest handles an incoming Order request and prepares a Confiscation response
@@ -231,10 +231,9 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Freeze Tx
 	hash, err := chainhash.NewHash(msg.FreezeTxId.Bytes())
-	freezeTx := e.TxCache.GetTx(ctx, hash)
-
-	if freezeTx == nil {
-		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s", msg.FreezeTxId.String())
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, &e.Config.ChainParams)
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId.String(), err)
 	}
 
 	// Get Freeze Op Return
@@ -582,7 +581,9 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Save Tx for thaw action.
-	e.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, e.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	logger.Info(ctx, "%s : Processed Freeze : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
 	return nil
@@ -607,10 +608,9 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 
 	// Get Freeze Tx
 	hash, _ := chainhash.NewHash(msg.FreezeTxId.Bytes())
-	freezeTx := e.TxCache.GetTx(ctx, hash)
-
-	if freezeTx == nil {
-		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s", msg.FreezeTxId.String())
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, &e.Config.ChainParams)
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId.String(), err)
 	}
 
 	// Get Freeze Op Return
@@ -664,9 +664,6 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 			}
 		}
 	}
-
-	// Remove Freeze Tx.
-	e.TxCache.RemoveTx(ctx, &freezeTx.Hash)
 
 	logger.Info(ctx, "%s : Processed Thaw : %s %s", v.TraceID, contractPKH.String(), freeze.AssetCode.String())
 	return nil

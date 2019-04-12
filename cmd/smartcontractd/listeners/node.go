@@ -6,17 +6,20 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/pkg/errors"
 )
 
 type Server struct {
@@ -26,20 +29,21 @@ type Server struct {
 	RpcNode          *rpcnode.RPCNode
 	SpyNode          *spynode.Node
 	Scheduler        *scheduler.Scheduler
-	TxCache          *TxCache
 	Tracer           *Tracer
+	utxos            *utxos.UTXOs
 	Handler          protomux.Handler
 	contractPKH      []byte // Used to determine which txs will be needed again
 	pendingRequests  []*inspector.Transaction
 	unsafeRequests   []*inspector.Transaction
 	pendingResponses []*wire.MsgTx
+	revertedTxs      []*chainhash.Hash
 	blockHeight      int // track current block height for confirm messages
 	inSync           bool
 }
 
 func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
-	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler, txCache *TxCache,
-	tracer *Tracer, contractPKH []byte) *Server {
+	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler,
+	tracer *Tracer, contractPKH []byte, utxos *utxos.UTXOs) *Server {
 	result := Server{
 		wallet:           wallet,
 		Config:           config,
@@ -47,10 +51,10 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 		RpcNode:          rpcNode,
 		SpyNode:          spyNode,
 		Scheduler:        sch,
-		TxCache:          txCache,
 		Tracer:           tracer,
 		Handler:          handler,
 		contractPKH:      contractPKH,
+		utxos:            utxos,
 		pendingRequests:  make([]*inspector.Transaction, 0),
 		unsafeRequests:   make([]*inspector.Transaction, 0),
 		pendingResponses: make([]*wire.MsgTx, 0),
@@ -67,10 +71,6 @@ func (server *Server) Run(ctx context.Context) error {
 
 	// Register listeners
 	server.SpyNode.RegisterListener(server)
-
-	if err := server.TxCache.Load(ctx, server.MasterDB); err != nil {
-		return err
-	}
 
 	if err := server.Tracer.Load(ctx, server.MasterDB); err != nil {
 		return err
@@ -100,15 +100,10 @@ func (server *Server) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	if err := server.Tracer.Save(ctx, server.MasterDB); err != nil {
-		return err
-	}
-
-	return server.TxCache.Save(ctx, server.MasterDB)
+	return server.Tracer.Save(ctx, server.MasterDB)
 }
 
 func (server *Server) Stop(ctx context.Context) error {
-	// TODO: This action should unregister listeners
 	spynodeErr := server.SpyNode.Stop(ctx)
 	schedulerErr := server.Scheduler.Stop(ctx)
 
@@ -186,7 +181,21 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 		}
 	}
 
+	server.Tracer.AddTx(ctx, itx.MsgTx)
+	server.utxos.Add(itx.MsgTx, server.contractPKH)
 	return server.Handler.Trigger(ctx, protomux.SEE, itx)
+}
+
+func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) error {
+	server.Tracer.RevertTx(ctx, &itx.Hash)
+	server.utxos.Remove(itx.MsgTx, server.contractPKH)
+	return server.Handler.Trigger(ctx, protomux.STOLE, itx)
+}
+
+func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
+	server.Tracer.RevertTx(ctx, &itx.Hash)
+	server.utxos.Remove(itx.MsgTx, server.contractPKH)
+	return server.Handler.Trigger(ctx, protomux.LOST, itx)
 }
 
 func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {

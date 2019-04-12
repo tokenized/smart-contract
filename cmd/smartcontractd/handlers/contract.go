@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -26,7 +27,6 @@ import (
 type Contract struct {
 	MasterDB *db.DB
 	Config   *node.Config
-	TxCache  InspectorTxCache
 }
 
 // OfferRequest handles an incoming Contract Offer and prepares a Formation response
@@ -123,7 +123,9 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	w.AddContractFee(ctx, msg.ContractFee)
 
 	// Save Tx for when formation is processed.
-	c.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -186,8 +188,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx := c.TxCache.GetTx(ctx, refTxId)
-		if voteResultTx == nil {
+		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+		if err != nil {
 			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
@@ -304,7 +306,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Save Tx.
-	c.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -335,11 +339,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Get request tx
-	request := c.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
 	var vt *state.Vote
 	var amendment *protocol.ContractAmendment
-	if request != nil {
-		c.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
+	if err != nil && request != nil {
 		var ok bool
 		amendment, ok = request.MsgProto.(*protocol.ContractAmendment)
 
@@ -350,8 +353,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Retrieve Vote Result
-			voteResultTx := c.TxCache.GetTx(ctx, refTxId)
-			if voteResultTx != nil {
+			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+			if err != nil {
 				return errors.New("Vote Result tx not found for amendment")
 			}
 
@@ -382,9 +385,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve issuer and operator.
 		var offerTx *inspector.Transaction
-		offerTx = c.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
-		if offerTx == nil {
-			return errors.New("ContractOffer tx not found")
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
+		if err != nil {
+			return errors.Wrap(err, "Contract Offer tx not found")
 		}
 
 		// Get offer from it
@@ -576,10 +579,6 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			if err := vote.Update(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
 				return errors.Wrap(err, "Failed to update vote")
 			}
-		}
-
-		if request != nil {
-			c.TxCache.RemoveTx(ctx, &request.Hash)
 		}
 	}
 

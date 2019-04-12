@@ -1261,29 +1261,6 @@ func (m *Entity) Equal(other Entity) bool {
 	return true
 }
 
-// Header Header contains common details required by every Tokenized
-// message.
-type Header struct {
-}
-
-// Serialize returns the byte representation of the message.
-func (m Header) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	return buf.Bytes(), nil
-}
-
-func (m *Header) Write(buf *bytes.Buffer) error {
-	return nil
-}
-
-func (m *Header) Validate() error {
-	return nil
-}
-
-func (m *Header) Equal(other Header) bool {
-	return true
-}
-
 // Manager Manager is used to refer to a role that is responsible for the
 // Management of an Entity.
 type Manager struct {

@@ -262,6 +262,43 @@ func (repo *BlockRepository) getTime(ctx context.Context, height int) (uint32, e
 	return uint32(headers[offset].Timestamp.Unix()), nil
 }
 
+// Return the block header for the specified height
+func (repo *BlockRepository) Header(ctx context.Context, height int) (*wire.BlockHeader, error) {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	return repo.getHeader(ctx, height)
+}
+
+// This function is internal and doesn't lock the mutex so it can be internally without double locking.
+func (repo *BlockRepository) getHeader(ctx context.Context, height int) (*wire.BlockHeader, error) {
+	if height > repo.height {
+		return nil, errors.New("Hash height beyond tip") // We don't know the hash for that height yet
+	}
+
+	if repo.height-height < len(repo.lastHeaders) {
+		// This height is in the lastHeaders set
+		result := repo.lastHeaders[len(repo.lastHeaders)-1-(repo.height-height)]
+		return &result, nil
+	}
+
+	// Read from storage
+	headers, err := repo.read(ctx, height)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("Failed to read block file for height %d", height))
+	}
+
+	if len(headers) != blocksPerKey {
+		// This should only be reached on files that are not the latest, and they should all be full
+		return nil, errors.New(fmt.Sprintf("Invalid block file (count %d) : %s", len(headers),
+			repo.buildPath(repo.height-blocksPerKey)))
+	}
+
+	offset := height % blocksPerKey
+	result := headers[offset]
+	return &result, nil
+}
+
 // Revert block repository to the specified height. Saves after
 func (repo *BlockRepository) Revert(ctx context.Context, height int) error {
 	repo.mutex.Lock()

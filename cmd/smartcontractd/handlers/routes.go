@@ -8,18 +8,12 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
-	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
-
-type InspectorTxCache interface {
-	GetTx(context.Context, *chainhash.Hash) *inspector.Transaction
-	SaveTx(context.Context, *inspector.Transaction) error
-	RemoveTx(ctx context.Context, txid *chainhash.Hash)
-}
 
 // BitcoinHeaders provides functions for retrieving information about headers on the currently
 //   longest chain.
@@ -31,7 +25,7 @@ type BitcoinHeaders interface {
 
 // API returns a handler for a set of routes for protocol actions.
 func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB,
-	txCache InspectorTxCache, tracer *listeners.Tracer, sch *scheduler.Scheduler, headers BitcoinHeaders) (protomux.Handler, error) {
+	tracer *listeners.Tracer, sch *scheduler.Scheduler, headers BitcoinHeaders, utxos *utxos.UTXOs) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
 
@@ -39,7 +33,6 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	c := Contract{
 		MasterDB: masterDB,
 		Config:   config,
-		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeContractOffer, c.OfferRequest)
@@ -52,7 +45,6 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	a := Asset{
 		MasterDB: masterDB,
 		Config:   config,
-		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeAssetDefinition, a.DefinitionRequest)
@@ -64,7 +56,6 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		handler:   app,
 		MasterDB:  masterDB,
 		Config:    config,
-		TxCache:   txCache,
 		Headers:   headers,
 		Tracer:    tracer,
 		Scheduler: sch,
@@ -78,7 +69,6 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	e := Enforcement{
 		MasterDB: masterDB,
 		Config:   config,
-		TxCache:  txCache,
 	}
 
 	app.Handle("SEE", protocol.CodeOrder, e.OrderRequest)
@@ -92,7 +82,6 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 		handler:   app,
 		MasterDB:  masterDB,
 		Config:    config,
-		TxCache:   txCache,
 		Scheduler: sch,
 	}
 
@@ -107,14 +96,17 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	m := Message{
 		MasterDB:  masterDB,
 		Config:    config,
-		TxCache:   txCache,
 		Headers:   headers,
 		Tracer:    tracer,
 		Scheduler: sch,
+		UTXOs:     utxos,
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)
 	app.Handle("SEE", protocol.CodeRejection, m.ProcessRejection)
+
+	app.HandleDefault("LOST", m.ProcessRevert)
+	app.HandleDefault("STOLE", m.ProcessRevert)
 
 	return app, nil
 }

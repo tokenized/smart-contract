@@ -79,7 +79,11 @@ type StateReady interface {
 }
 
 // NewCommandHandlers returns a mapping of commands and Handler's.
-func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State, peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool, listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) map[string]CommandHandler {
+func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State, peers *storage.PeerRepository,
+	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, reorgRepo *storage.ReorgRepository,
+	tracker *data.TxTracker, memPool *data.MemPool, listeners []Listener, txFilters []TxFilter,
+	blockProcessor BlockProcessor) map[string]CommandHandler {
+
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
 		wire.CmdVersion: NewVersionHandler(state),
@@ -87,13 +91,16 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 		wire.CmdInv:     NewInvHandler(state, tracker, memPool),
 		wire.CmdTx:      NewTXHandler(state, memPool, txRepo, listeners, txFilters),
 		wire.CmdBlock:   NewBlockHandler(state, memPool, blockRepo, txRepo, listeners, txFilters, blockProcessor),
-		wire.CmdHeaders: NewHeadersHandler(config, state, blockRepo, txRepo, listeners),
+		wire.CmdHeaders: NewHeadersHandler(config, state, blockRepo, txRepo, reorgRepo, listeners),
 		wire.CmdReject:  NewRejectHandler(),
 	}
 }
 
 // NewUntrustedCommandHandlers returns a mapping of commands and Handler's.
-func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState, peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool, listeners []Listener, txFilters []TxFilter) map[string]CommandHandler {
+func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState, peers *storage.PeerRepository,
+	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool,
+	listeners []Listener, txFilters []TxFilter) map[string]CommandHandler {
+
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
 		wire.CmdVersion: NewUntrustedVersionHandler(state),

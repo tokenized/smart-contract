@@ -13,7 +13,9 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
+	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -22,6 +24,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
@@ -32,10 +35,10 @@ import (
 type Message struct {
 	MasterDB  *db.DB
 	Config    *node.Config
-	TxCache   InspectorTxCache
 	Headers   BitcoinHeaders
 	Tracer    *listeners.Tracer
 	Scheduler *scheduler.Scheduler
+	UTXOs     *utxos.UTXOs
 }
 
 // ProcessMessage handles an incoming Message OP_RETURN.
@@ -148,12 +151,13 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	// Trace back to original request tx if necessary.
 	hash := m.Tracer.Retrace(ctx, itx.MsgTx)
 	var problemTx *inspector.Transaction
+	var err error
 	if hash != nil {
-		problemTx = m.TxCache.GetTx(ctx, hash)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, &m.Config.ChainParams)
 	} else {
-		problemTx = m.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, &m.Config.ChainParams)
 	}
-	if problemTx == nil {
+	if err != nil {
 		return nil
 	}
 
@@ -166,6 +170,100 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	return nil
+}
+
+// ProcessRevert handles a tx that has been reverted either through a reorg or zero conf double spend.
+func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessRevert")
+	defer span.End()
+
+	// Serialize tx for Message OP_RETURN.
+	var buf bytes.Buffer
+	err := itx.MsgTx.Serialize(&buf)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize revert tx")
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	messagePayload := protocol.RevertedTx{
+		Version:     0,
+		Timestamp:   v.Now,
+		Transaction: buf.Bytes(),
+	}
+
+	// Setup Message
+	var data []byte
+	data, err = messagePayload.Serialize()
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize revert payload")
+	}
+	message := protocol.Message{
+		AddressIndexes: []uint16{0}, // First receiver is issuer
+		MessageType:    messagePayload.Type(),
+		MessagePayload: data,
+	}
+
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	// Create tx
+	tx := txbuilder.NewTx(contractPKH.Bytes(), m.Config.DustLimit, m.Config.FeeRate)
+
+	// Add outputs to issuer/operator
+	tx.AddP2PKHDustOutput(ct.IssuerPKH.Bytes(), false)
+	outputAmount := uint64(m.Config.DustLimit)
+	if !ct.OperatorPKH.IsZero() {
+		// Add operator
+		tx.AddP2PKHDustOutput(ct.OperatorPKH.Bytes(), false)
+		message.AddressIndexes = append(message.AddressIndexes, uint16(1))
+		outputAmount += uint64(m.Config.DustLimit)
+	}
+
+	// Serialize payload
+	payload, err := protocol.Serialize(&message)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize revert message")
+	}
+	tx.AddOutput(payload, 0, false, false)
+
+	// Estimate fee with 2 inputs
+	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedInputSize)
+
+	for {
+		utxos, err := m.UTXOs.Get(amount)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get UTXOs")
+		}
+
+		for _, utxo := range utxos {
+			if err := tx.AddInput(utxo.OutPoint, utxo.Output.PkScript, uint64(utxo.Output.Value)); err != nil {
+				return errors.Wrap(err, "Failed add input")
+			}
+		}
+
+		err = tx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+		if err == nil {
+			break
+		}
+		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+			// Get more utxos
+			amount = uint64(float32(amount) * 1.25)
+			utxos, err = m.UTXOs.Get(amount)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get UTXOs")
+			}
+
+			// Clear inputs
+			tx.Inputs = nil
+		}
+	}
+
+	// Send tx
+	return node.Respond(ctx, w, tx.MsgTx)
 }
 
 // processSettlementRequest handles an incoming Message SettlementRequest payload.
@@ -194,9 +292,9 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	var transferTx *inspector.Transaction
-	transferTx = m.TxCache.GetTx(ctx, transferTxId)
-	if transferTx == nil {
-		return errors.New("Transfer tx not found")
+	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams)
+	if err != nil {
+		return errors.Wrap(err, "Transfer tx not found")
 	}
 
 	// Get transfer from it
@@ -295,9 +393,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Save tx
-	err = m.TxCache.SaveTx(ctx, transferTx)
-	if err != nil {
-		return err
+	if err := transactions.AddTx(ctx, m.MasterDB, transferTx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
 	}
 
 	// Send to next contract
@@ -342,8 +439,8 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	itx *inspector.Transaction, rk *wallet.RootKey, sigRequest *protocol.SignatureRequest,
 	settleWireTx *wire.MsgTx, settlement *protocol.Settlement) error {
 	// Get transfer tx
-	transferTx := m.TxCache.GetTx(ctx, &settleWireTx.TxIn[0].PreviousOutPoint.Hash)
-	if transferTx == nil {
+	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash, &m.Config.ChainParams)
+	if err != nil {
 		return errors.New("Failed to get transfer tx")
 	}
 
@@ -356,7 +453,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Verify all the data for this contract is correct.
-	err := verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx, settlement, m.Headers)
+	err = verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {

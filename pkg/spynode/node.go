@@ -36,6 +36,7 @@ type Node struct {
 	peers          *handlerstorage.PeerRepository     // Peer data
 	blocks         *handlerstorage.BlockRepository    // Block data
 	txs            *handlerstorage.TxRepository       // Tx data
+	reorgs         *handlerstorage.ReorgRepository    // Reorg data
 	txTracker      *data.TxTracker                    // Tracks tx requests to ensure all txs are received
 	memPool        *data.MemPool                      // Tracks which txs have been received and checked
 	handlers       map[string]handlers.CommandHandler // Handlers for messages from trusted node
@@ -64,6 +65,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		peers:          handlerstorage.NewPeerRepository(store),
 		blocks:         handlerstorage.NewBlockRepository(store),
 		txs:            handlerstorage.NewTxRepository(store),
+		reorgs:         handlerstorage.NewReorgRepository(store),
 		txTracker:      data.NewTxTracker(),
 		memPool:        data.NewMemPool(),
 		outgoing:       nil,
@@ -118,7 +120,8 @@ func (node *Node) load(ctx context.Context) error {
 	}
 
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
-		node.blocks, node.txs, node.txTracker, node.memPool, node.listeners, node.txFilters, node)
+		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, node.listeners,
+		node.txFilters, node)
 	return nil
 }
 
@@ -507,12 +510,19 @@ func (node *Node) check(ctx context.Context) error {
 			if node.queueOutgoing(mempool) {
 				node.state.SetMemPoolRequested()
 			}
-		} else if !node.state.NotifiedSync() {
-			// TODO Add method to wait for mempool to sync
-			for _, listener := range node.listeners {
-				listener.HandleInSync(ctx)
+		} else {
+			if !node.state.WasInSync() {
+				node.reorgs.ClearActive(ctx)
+				node.state.SetWasInSync()
 			}
-			node.state.SetNotifiedSync()
+
+			if !node.state.NotifiedSync() {
+				// TODO Add method to wait for mempool to sync
+				for _, listener := range node.listeners {
+					listener.HandleInSync(ctx)
+				}
+				node.state.SetNotifiedSync()
+			}
 		}
 
 		responses, err := node.txTracker.Check(ctx, node.memPool)

@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -26,7 +27,6 @@ import (
 type Asset struct {
 	MasterDB *db.DB
 	Config   *node.Config
-	TxCache  InspectorTxCache
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
@@ -126,7 +126,9 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
-	a.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, a.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -194,8 +196,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx := a.TxCache.GetTx(ctx, refTxId)
-		if voteResultTx == nil {
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams)
+		if err != nil {
 			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
@@ -296,7 +298,9 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
-	a.TxCache.SaveTx(ctx, itx)
+	if err := transactions.AddTx(ctx, a.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &ac)
@@ -331,11 +335,13 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Get request tx
-	request := a.TxCache.GetTx(ctx, &itx.Inputs[0].UTXO.Hash)
+	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, &a.Config.ChainParams)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve request tx")
+	}
 	var vt *state.Vote
 	var modification *protocol.AssetModification
 	if request != nil {
-		a.TxCache.RemoveTx(ctx, &itx.Inputs[0].UTXO.Hash)
 		var ok bool
 		modification, ok = request.MsgProto.(*protocol.AssetModification)
 
@@ -346,9 +352,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			}
 
 			// Retrieve Vote Result
-			voteResultTx := a.TxCache.GetTx(ctx, refTxId)
-			if voteResultTx != nil {
-				return errors.New("Vote Result tx not found for modification")
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams)
+			if err != nil {
+				return errors.Wrap(err, "Failed to retrieve vote result tx")
 			}
 
 			voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
@@ -472,10 +478,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			if err := vote.Update(ctx, a.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
 				return errors.Wrap(err, "Failed to update vote")
 			}
-		}
-
-		if request != nil {
-			a.TxCache.RemoveTx(ctx, &request.Hash)
 		}
 	}
 

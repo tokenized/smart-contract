@@ -7,6 +7,9 @@ import (
 )
 
 const (
+	// CodeRevertedTx identifies data as a RevertedTx message.
+	CodeRevertedTx = 0004
+
 	// CodeOffer identifies data as a Offer message.
 	CodeOffer = 1001
 
@@ -34,6 +37,9 @@ type MessagePayload interface {
 // MessageTypeMapping holds a mapping of message codes to message types.
 func MessageTypeMapping(code uint16) MessagePayload {
 	switch code {
+	case CodeRevertedTx:
+		result := RevertedTx{}
+		return &result
 	case CodeOffer:
 		result := Offer{}
 		return &result
@@ -52,6 +58,145 @@ func MessageTypeMapping(code uint16) MessagePayload {
 	default:
 		return nil
 	}
+}
+
+// RevertedTx A message that contains a bitcoin transaction that was
+// accepted by the network or an agent and then invalidated by a reorg, or
+// zero conf double spend. This serves as on chain evidence of the sending
+// party's signatures and approval for the given transaction.
+type RevertedTx struct {
+	Version     uint8     `json:"version,omitempty"`     // Payload Version
+	Timestamp   Timestamp `json:"timestamp,omitempty"`   // Timestamp in nanoseconds for when the message sender creates the transaction.
+	Transaction []byte    `json:"transaction,omitempty"` // Serialized bitcoin transaction that was reverted/invalidated after being accepted.
+}
+
+// Type returns the type identifer for this message.
+func (action RevertedTx) Type() uint16 {
+	return CodeRevertedTx
+}
+
+// Read implements the io.Reader interface, writing the receiver to the
+// []byte.
+func (action *RevertedTx) Read(b []byte) (int, error) {
+	data, err := action.Serialize()
+
+	if err != nil {
+		return 0, err
+	}
+
+	copy(b, data)
+
+	return len(b), nil
+}
+
+// Serialize returns the full OP_RETURN payload bytes.
+func (action *RevertedTx) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	// Version (uint8)
+	// fmt.Printf("Serializing Version\n")
+	{
+		if err := write(buf, action.Version); err != nil {
+			return nil, err
+		}
+	}
+
+	// Timestamp (Timestamp)
+	// fmt.Printf("Serializing Timestamp\n")
+	{
+		{
+			b, err := action.Timestamp.Serialize()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := write(buf, b); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Transaction ([]byte)
+	// fmt.Printf("Serializing Transaction\n")
+	{
+		if err := WriteVarBin(buf, action.Transaction, 32); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// Write populates the fields in RevertedTx from the byte slice
+func (action *RevertedTx) Write(b []byte) (int, error) {
+	// fmt.Printf("Reading RevertedTx : %d bytes\n", len(b))
+	buf := bytes.NewBuffer(b)
+
+	// Version (uint8)
+	{
+		if err := read(buf, &action.Version); err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Version : %d bytes remaining\n%+v\n", buf.Len(), action.Version)
+
+	// Timestamp (Timestamp)
+	{
+		if err := action.Timestamp.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Timestamp : %d bytes remaining\n%+v\n", buf.Len(), action.Timestamp)
+
+	// Transaction ([]byte)
+	{
+		var err error
+		action.Transaction, err = ReadVarBin(buf, 32)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// fmt.Printf("Read Transaction : %d bytes remaining\n%+v\n", buf.Len(), action.Transaction)
+
+	// fmt.Printf("Read RevertedTx : %d bytes remaining\n", buf.Len())
+	return len(b) - buf.Len(), nil
+}
+
+func (m *RevertedTx) Validate() error {
+
+	// Version (uint8)
+	{
+	}
+
+	// Timestamp (Timestamp)
+	{
+		if err := m.Timestamp.Validate(); err != nil {
+			return fmt.Errorf("field Timestamp is invalid : %s", err)
+		}
+
+	}
+
+	// Transaction ([]byte)
+	{
+		if len(m.Transaction) > (2<<32)-1 {
+			return fmt.Errorf("varbin field Transaction too long %d/%d", len(m.Transaction), (2<<32)-1)
+		}
+	}
+
+	return nil
+}
+
+func (action RevertedTx) String() string {
+	vals := []string{}
+
+	vals = append(vals, fmt.Sprintf("Version:%v", action.Version))
+	vals = append(vals, fmt.Sprintf("Timestamp:%#+v", action.Timestamp))
+	vals = append(vals, fmt.Sprintf("Transaction:%#x", action.Transaction))
+
+	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
 
 // Offer A message that contains all of the details required for an

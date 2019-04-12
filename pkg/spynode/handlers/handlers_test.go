@@ -93,6 +93,9 @@ func TestHandlers(test *testing.T) {
 		txRepo.ClearBlock(ctx, i)
 	}
 
+	// Create reorg repo
+	reorgRepo := handlerStorage.NewReorgRepository(store)
+
 	// TxTracker
 	txTracker := data.NewTxTracker()
 
@@ -104,7 +107,7 @@ func TestHandlers(test *testing.T) {
 	listeners := []Listener{&testListener}
 
 	// Create handlers
-	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo, txTracker, memPool, listeners, nil, &testListener)
+	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo, reorgRepo, txTracker, memPool, listeners, nil, &testListener)
 
 	// Build a bunch of headers
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
@@ -214,6 +217,29 @@ func TestHandlers(test *testing.T) {
 	// Send corresponding reorg blocks
 	if err := sendBlocks(ctx, testHandlers, reorgBlocks, (testBlockCount-reorgDepth)+1); err != nil {
 		test.Errorf("Failed to send reorg block messages : %v", err)
+	}
+
+	// Check reorg
+	activeReorg, err := reorgRepo.GetActive(ctx)
+	if err != nil {
+		test.Errorf("Failed to get active reorg : %v", err)
+	}
+
+	if activeReorg == nil {
+		test.Errorf("No active reorg found")
+	}
+
+	err = reorgRepo.ClearActive(ctx)
+	if err != nil {
+		test.Errorf("Failed to clear active reorg : %v", err)
+	}
+
+	activeReorg, err = reorgRepo.GetActive(ctx)
+	if err != nil {
+		test.Errorf("Failed to get active reorg after clear : %v", err)
+	}
+	if activeReorg != nil {
+		test.Errorf("Active reorg was not cleared")
 	}
 
 	// Update headers array for reorg
