@@ -665,8 +665,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			// Check Register Signature
-			if err := validateRegister(ctx, contractPKH, ct, &assetTransfer.AssetCode,
+			// Check Oracle Signature
+			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode,
 				receiverPKH, &receiver, headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
@@ -971,31 +971,31 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	return nil
 }
 
-func validateRegister(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
+func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
 	assetCode *protocol.AssetCode, receiverPKH *protocol.PublicKeyHash, tokenReceiver *protocol.TokenReceiver,
 	headers BitcoinHeaders) error {
 
-	if tokenReceiver.RegisterSigAlgorithm == 0 {
-		if len(ct.Registers) > 0 {
+	if tokenReceiver.OracleSigAlgorithm == 0 {
+		if len(ct.Oracles) > 0 {
 			return fmt.Errorf("Missing signature")
 		}
 		return nil // No signature required
 	}
 
 	// Parse signature
-	registerSig, err := btcec.ParseSignature(tokenReceiver.RegisterConfirmationSig, elliptic.P256())
+	oracleSig, err := btcec.ParseSignature(tokenReceiver.OracleConfirmationSig, elliptic.P256())
 	if err != nil {
-		return errors.Wrap(err, "Failed to parse register signature")
+		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
 
-	// Check all registers
-	for _, register := range ct.Registers {
-		registerPubKey, err := btcec.ParsePubKey(register.PublicKey, btcec.S256())
+	// Check all oracles
+	for _, oracle := range ct.Oracles {
+		oraclePubKey, err := btcec.ParsePubKey(oracle.PublicKey, btcec.S256())
 		if err != nil {
-			return errors.Wrap(err, "Failed to parse register pub key")
+			return errors.Wrap(err, "Failed to parse oracle pub key")
 		}
 
 		// Check block headers until they are beyond expiration
@@ -1005,13 +1005,13 @@ func validateRegister(ctx context.Context, contractPKH *protocol.PublicKeyHash, 
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
 			}
-			sigHash, err := protocol.TransferRegisterSigHash(ctx, contractPKH, assetCode,
+			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
 				receiverPKH, tokenReceiver.Quantity, hash)
 			if err != nil {
-				return errors.Wrap(err, "Failed to calculate register sig hash")
+				return errors.Wrap(err, "Failed to calculate oracle sig hash")
 			}
 
-			if registerSig.Verify(sigHash, registerPubKey) {
+			if oracleSig.Verify(sigHash, oraclePubKey) {
 				return nil // Valid signature found
 			}
 

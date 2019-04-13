@@ -65,8 +65,8 @@ func AssetTypeMapping(code string) AssetPayload {
 
 // Coupon asset type.
 type Coupon struct {
-	Version         uint8     `json:"version,omitempty"`          //
-	RedeemingEntity string    `json:"redeeming_entity,omitempty"` //
+	Version         uint8     `json:"version,omitempty"`          // The version number that this asset payload adheres to.
+	RedeemingEntity string    `json:"redeeming_entity,omitempty"` // The entity responsible for redemption of this coupon.
 	IssueDate       Timestamp `json:"issue_date,omitempty"`       //
 	ExpiryDate      Timestamp `json:"expiry_date,omitempty"`      //
 	Value           uint64    `json:"value,omitempty"`            //
@@ -290,8 +290,8 @@ func (m Coupon) String() string {
 
 // Currency asset type.
 type Currency struct {
-	Version           uint8   `json:"version,omitempty"`            //
-	ISOCode           [3]byte `json:"iso_code,omitempty"`           //
+	Version           uint8   `json:"version,omitempty"`            // The version number that this asset payload adheres to.
+	ISOCode           [3]byte `json:"iso_code,omitempty"`           // International Organization for Standardization code for Currency.
 	MonetaryAuthority string  `json:"monetary_authority,omitempty"` //
 	Description       string  `json:"description,omitempty"`        //
 }
@@ -444,8 +444,8 @@ func (m Currency) String() string {
 
 // LoyaltyPoints asset type.
 type LoyaltyPoints struct {
-	Version             uint8          `json:"version,omitempty"`              //
-	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	Version             uint8          `json:"version,omitempty"`              // The version number that this asset payload adheres to.
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      // Age restriction is used to specify required ages for asset ownership.
 	OfferName           string         `json:"offer_name,omitempty"`           //
 	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
 	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
@@ -644,8 +644,8 @@ func (m LoyaltyPoints) String() string {
 
 // Membership asset type.
 type Membership struct {
-	Version             uint8          `json:"version,omitempty"`              // Payload Version
-	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	Version             uint8          `json:"version,omitempty"`              // The version number that this asset payload adheres to.
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      // Age restriction is used to specify required ages for asset ownership.
 	ValidFrom           Timestamp      `json:"valid_from,omitempty"`           //
 	ExpirationTimestamp Timestamp      `json:"expiration_timestamp,omitempty"` //
 	ID                  string         `json:"id,omitempty"`                   //
@@ -919,7 +919,7 @@ func (m Membership) String() string {
 
 // ShareCommon asset type.
 type ShareCommon struct {
-	Version         uint8     `json:"version,omitempty"`          // Payload Version
+	Version         uint8     `json:"version,omitempty"`          // The version number that this asset payload adheres to.
 	TransferLockout Timestamp `json:"transfer_lockout,omitempty"` // A period of time where the asset is unable to be transferred.  After the transfer lockout period, the assets can be transferred.
 	Ticker          string    `json:"ticker,omitempty"`           // Ticker symbol assigned by exchanges to represent the asset.
 	ISIN            string    `json:"isin,omitempty"`             // International Securities Identification Number
@@ -1094,8 +1094,8 @@ func (m ShareCommon) String() string {
 
 // TicketAdmission asset type.
 type TicketAdmission struct {
-	Version             uint8          `json:"version,omitempty"`              // Payload Version
-	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      //
+	Version             uint8          `json:"version,omitempty"`              // The version number that this asset payload adheres to.
+	AgeRestriction      AgeRestriction `json:"age_restriction,omitempty"`      // Age restriction is used to specify required ages for asset ownership.
 	AdmissionType       string         `json:"admission_type,omitempty"`       //
 	Venue               string         `json:"venue,omitempty"`                //
 	Class               string         `json:"class,omitempty"`                //

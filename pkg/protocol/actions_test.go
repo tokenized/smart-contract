@@ -604,10 +604,10 @@ func TestContractOffer(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// Registers (Register[])
+	// Oracles (Oracle[])
 	{
 		for i := 0; i < 2; i++ {
-			initialMessage.Registers = append(initialMessage.Registers, Register{})
+			initialMessage.Oracles = append(initialMessage.Oracles, Oracle{})
 		}
 	}
 
@@ -740,9 +740,9 @@ func TestContractOffer(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// Registers (Register[])
-	if len(initialMessage.Registers) != len(decodedMessage.Registers) {
-		t.Errorf("Registers lengths don't match : %d != %d", len(initialMessage.Registers), len(decodedMessage.Registers))
+	// Oracles (Oracle[])
+	if len(initialMessage.Oracles) != len(decodedMessage.Oracles) {
+		t.Errorf("Oracles lengths don't match : %d != %d", len(initialMessage.Oracles), len(decodedMessage.Oracles))
 	}
 }
 
@@ -872,10 +872,10 @@ func TestContractFormation(t *testing.T) {
 		initialMessage.HolderProposal = true
 	}
 
-	// Registers (Register[])
+	// Oracles (Oracle[])
 	{
 		for i := 0; i < 2; i++ {
-			initialMessage.Registers = append(initialMessage.Registers, Register{})
+			initialMessage.Oracles = append(initialMessage.Oracles, Oracle{})
 		}
 	}
 
@@ -1018,9 +1018,9 @@ func TestContractFormation(t *testing.T) {
 		t.Errorf("HolderProposal doesn't match : %v != %v", initialMessage.HolderProposal, decodedMessage.HolderProposal)
 	}
 
-	// Registers (Register[])
-	if len(initialMessage.Registers) != len(decodedMessage.Registers) {
-		t.Errorf("Registers lengths don't match : %d != %d", len(initialMessage.Registers), len(decodedMessage.Registers))
+	// Oracles (Oracle[])
+	if len(initialMessage.Oracles) != len(decodedMessage.Oracles) {
+		t.Errorf("Oracles lengths don't match : %d != %d", len(initialMessage.Oracles), len(decodedMessage.Oracles))
 	}
 
 	// ContractRevision (uint)
@@ -2608,9 +2608,14 @@ func TestAddition(t *testing.T) {
 func TestAlteration(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Alteration{}
+	// EntryTxID (TxId)
+	{
+		initialMessage.EntryTxID = TxId{}
+	}
+
 	// Message (varchar)
 	{
-		initialMessage.Message = "Text 0"
+		initialMessage.Message = "Text 1"
 	}
 
 	// Encode message
@@ -2648,6 +2653,9 @@ func TestAlteration(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// EntryTxID (TxId)
+	// TxId test compare not setup
+
 	// Message (varchar)
 	if initialMessage.Message != decodedMessage.Message {
 		t.Errorf("Message doesn't match : %s != %s", initialMessage.Message, decodedMessage.Message)
@@ -2657,9 +2665,14 @@ func TestAlteration(t *testing.T) {
 func TestRemoval(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Removal{}
+	// EntryTxID (TxId)
+	{
+		initialMessage.EntryTxID = TxId{}
+	}
+
 	// Message (varchar)
 	{
-		initialMessage.Message = "Text 0"
+		initialMessage.Message = "Text 1"
 	}
 
 	// Encode message
@@ -2697,6 +2710,9 @@ func TestRemoval(t *testing.T) {
 	// }
 
 	// Compare re-serialized values
+	// EntryTxID (TxId)
+	// TxId test compare not setup
+
 	// Message (varchar)
 	if initialMessage.Message != decodedMessage.Message {
 		t.Errorf("Message doesn't match : %s != %s", initialMessage.Message, decodedMessage.Message)

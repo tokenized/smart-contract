@@ -8,11 +8,11 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
-// TransferRegisterSigHash returns a Double SHA256 of the data required to identify a
-//   token receiver approval by a register.
+// TransferOracleSigHash returns a Double SHA256 of the data required to identify a
+//   token receiver approval by a oracle.
 // The block hash of the chain tip - 4 should be used. The signature will be considered valid
 //   until 1 hour past the timestamp of the block after the block hash specified (chain tip).
-func TransferRegisterSigHash(ctx context.Context, contractPKH *PublicKeyHash, assetCode *AssetCode,
+func TransferOracleSigHash(ctx context.Context, contractPKH *PublicKeyHash, assetCode *AssetCode,
 	receiverPKH *PublicKeyHash, quantity uint64, blockHash *chainhash.Hash) ([]byte, error) {
 
 	// Calculate the hash

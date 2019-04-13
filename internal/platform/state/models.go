@@ -34,7 +34,7 @@ type Contract struct {
 	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
 	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
-	Registers              []protocol.Register     `json:"registers,omitempty"`
+	Oracles                []protocol.Oracle       `json:"oracles,omitempty"`
 	FreezePeriod           protocol.Timestamp      `json:"freeze_period,omitempty"`
 
 	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`

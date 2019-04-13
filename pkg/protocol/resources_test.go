@@ -60,20 +60,6 @@ func TestPolities(t *testing.T) {
 	t.Logf("AUS :\n%+v\n", aus)
 }
 
-func TestMessages(t *testing.T) {
-	messages, err := GetMessageTypes()
-	if err != nil {
-		t.Fatalf("Failed to get messages : %s\n", err)
-	}
-	t.Logf("Loaded %d messages.\n", len(messages))
-
-	offer, exists := messages[8]
-	if !exists {
-		t.Fatalf("Offer not found in messages\n")
-	}
-	t.Logf("Offer :\n%+v\n", offer)
-}
-
 func TestRoles(t *testing.T) {
 	roles, err := GetRoleTypes()
 	if err != nil {

@@ -537,10 +537,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Check if registries are different
-		different := len(ct.Registers) != len(msg.Registers)
+		different := len(ct.Oracles) != len(msg.Oracles)
 		if !different {
-			for i, register := range ct.Registers {
-				if !register.Equal(msg.Registers[i]) {
+			for i, oracle := range ct.Oracles {
+				if !oracle.Equal(msg.Oracles[i]) {
 					different = true
 					break
 				}
@@ -548,8 +548,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			logger.Info(ctx, "%s : Updating contract registers (%s)", v.TraceID, ct.ContractName)
-			uc.Registers = &msg.Registers
+			logger.Info(ctx, "%s : Updating contract oracles (%s)", v.TraceID, ct.ContractName)
+			uc.Oracles = &msg.Oracles
 		}
 
 		// Check if voting systems are different
@@ -990,36 +990,36 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 20: // Registers
+		case 20: // Oracles
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(cf.Registers) {
-					return fmt.Errorf("Contract amendment element out of range for Registers : %d",
+				if int(amendment.Element) >= len(cf.Oracles) {
+					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
 						amendment.Element)
 				}
 
 				buf := bytes.NewBuffer(amendment.Data)
-				if err := cf.Registers[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment Registers[%d] failed to deserialize : %s",
+				if err := cf.Oracles[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment Oracles[%d] failed to deserialize : %s",
 						amendment.Element, err)
 				}
 
 			case 1: // Add element
 				buf := bytes.NewBuffer(amendment.Data)
-				newRegister := protocol.Register{}
-				if err := newRegister.Write(buf); err != nil {
+				newOracle := protocol.Oracle{}
+				if err := newOracle.Write(buf); err != nil {
 					return fmt.Errorf("Contract amendment addition to Registries failed to deserialize : %s",
 						err)
 				}
-				cf.Registers = append(cf.Registers, newRegister)
+				cf.Oracles = append(cf.Oracles, newOracle)
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(cf.Registers) {
-					return fmt.Errorf("Contract amendment element out of range for Registers : %d",
+				if int(amendment.Element) >= len(cf.Oracles) {
+					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
 						amendment.Element)
 				}
-				cf.Registers = append(cf.Registers[:amendment.Element],
-					cf.Registers[amendment.Element+1:]...)
+				cf.Oracles = append(cf.Oracles[:amendment.Element],
+					cf.Oracles[amendment.Element+1:]...)
 
 			default:
 				return fmt.Errorf("Invalid contract amendment operation for Registries : %d", amendment.Operation)

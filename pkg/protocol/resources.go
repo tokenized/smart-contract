@@ -159,41 +159,6 @@ func GetPolityType(pol string) *PolityType {
 	return &result
 }
 
-type MessageType struct {
-	Name string
-}
-
-var messageTypes map[uint16]MessageType
-
-func GetMessageTypes() (map[uint16]MessageType, error) {
-	if messageTypes != nil {
-		return messageTypes, nil
-	}
-
-	load := struct {
-		Values map[uint16]MessageType
-	}{}
-
-	if err := yaml.Unmarshal([]byte(yamlMessages), &load); err != nil {
-		return nil, errors.Wrap(err, "Failed to unmarshal messages yaml")
-	}
-
-	messageTypes = load.Values
-	return messageTypes, nil
-}
-
-func GetMessageType(mes uint16) *MessageType {
-	types, err := GetMessageTypes()
-	if err != nil {
-		return nil
-	}
-	result, exists := types[mes]
-	if !exists {
-		return nil
-	}
-	return &result
-}
-
 type RoleType struct {
 	Name string
 }
@@ -1503,12 +1468,10 @@ values:
 
 // Entities - Legal Entities & Ownership Structures
 var yamlEntities = `
-
 metadata:
   name: Entities
   description: "Legal Entities & Ownership Structures"
   type: EntityType
-
 
 values:
     I:
@@ -1516,10 +1479,12 @@ values:
       label: "Individual"
       type: Legal
       roles:
-        principal: null
-        legalGuardian: []
-        agent: [] # (granted by the principal)
-        ancillary:
+        owners:
+          principal: null
+        administrators:
+          legalGuardian: []
+          agent: [] # (granted by the principal)
+        general:
           accountant: []
           advisor: []
           lawyer: []
@@ -1530,59 +1495,64 @@ values:
       label: "Public Company Limited by Shares"
       type: Legal
       roles:
-        board:
+        owners:
+          shareholder: []
+          significantShareholder: []
+        administrators: # Board of Directors
           chairman: null
           director: []
-          secretary: null
-        officers:
+        managers: 
           ceo: null
           coo: null
           cfo: null
           cto: null
           executive: []
-        ancillary:
+          secretary: null
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
-        ownership:
-          member: []
-          significantMember: []
     C:
       name: privateCompany
       label: "Private Company Limited by Shares"
       type: Legal
       roles:
-        board:
+        owners:
+          shareholder: []
+          significantShareholder: []
+        administrators:
           chairman: null
           director: []
           secretary: null
-        officers:
+        managers: 
           ceo: null
           coo: null
           cfo: null
           cto: null
           executive: []
-        ancillary:
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
-        ownership:
-          member: []
-          significantMember: []
     L:
       name: limitedPartnership
       label: "Limited Partnership"
       type: Legal
       roles:
-        managingPartner: []
-        partner: []
-        ancillary:
+        owners:
+          partner: []
+        managers:
+          managingPartner: []
+        general: 
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
@@ -1591,11 +1561,14 @@ values:
       label: "Unlimited Partnership" # (General Partnership, Marriage, Civil Union, Common Law Marriage, Domestic Partnership,  )
       type: Legal
       roles:
-        managingPartner: []
-        partner: []
-        ancillary:
+        owners:
+          partner: []
+        managers:
+          managingPartner: []
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
@@ -1604,11 +1577,14 @@ values:
       label: "Sole Proprietorship"
       type: Legal
       roles:
-        proprietor: null
-        agent: [] # (granted by the proprietor)
-        ancillary:
+        owners:
+          proprietor: null
+        administrators:
+          agent: [] # (granted by the proprietor)
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
@@ -1617,19 +1593,21 @@ values:
       label: "Statutory Company"
       type: Legal
       roles:
-        board:
+        administrators:
           chairman: null
           director: []
           secretary: null
-        officers:
+        managers:
           ceo: null
           coo: null
           cfo: null
           cto: null
           executive: []
-        ancillary:
+          secretary: null
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
@@ -1638,19 +1616,20 @@ values:
       label: "Non-Profit Organization"
       type: Legal
       role:
-        board:
+        administrators:
           chairman: null
           director: []
           secretary: null
-        officers:
+        managers:
           ceo: null
           coo: null
           cfo: null
           cto: null
           executive: []
-        ancillary:
+        general:
           accountant: []
           advisor: []
+          employee: []
           lawyer: []
           manager: []
           trader: []
@@ -1667,131 +1646,39 @@ values:
       label: "Unit Trust"
       type: Ownership
       roles:
-        trustee: []
-        beneficiary: []
-        settlor: []
-        protector: []
-        ancillary:
+        owners:
+          unitholder: []
+        administrators:
+          protector: []
+          trustee: []
+        general:
           accountant: []
           advisor: []
           custodian: []
+          employee: []
           lawyer: []
           manager: []
+          settlor: []
           trader: []
     D:
       name: discretionaryTrust
       label: "Discretionary Trust" # (Family Trust)
       type: Ownership
       roles:
-        trustee: []
-        beneficiary: []
-        settlor: []
-        protector: []
-        ancillary:
+        owners:
+          beneficiary: []
+        administrators:
+          protector: []
+          trustee: []
+        general: 
           accountant: []
           advisor: []
           custodian: []
+          employee: []
           lawyer: []
           manager: []
+          settlor: []
           trader: []
-
-`
-
-// Messages - Message types. Used to categorize messages and assign special
-// meaning.
-var yamlMessages = `
-
-metadata:
-  name: Messages
-  description: "Message types. Used to categorize messages and assign special meaning."
-  type: MessageType
-
-
-values:
-
-    # Public message, public announcement. Sent to another PKH or back to the same PKH.  Can be used for an official issuer annoucement.
-    2:
-      name: Public Message (Generic)
-
-    # Generic private message. DH, RSA, etc.
-    3:
-      name: Private Message (Generic)
-
-    # A message that is meant to signal intent or specify an offer to another party (PKH).  The offer can be for a token, or for a static contract.  An offer is effectively a message with no signatures on it, and may have non-standardized communication.  "I'd like to offer you 1000 BCH for your shares in Apple."  It can be the start of a negotiation.  Likely done in a private manner after establishing a secure (DH) communication channel.
-    1001:
-      name: Offer
-
-    # A partially signed transaction or a Payment Request.  Useful for sending transactions that require multiple signatures from different contracting parties such as in the case of bitcoin multisig txns and exchange (token) actions. Also useful for static contract formation.  The Payment Request can be sent along with an Invoice.  The Invoicee can use the Payment Request to actually make the payment.
-    1002:
-      name: Signature Request
-
-    ###############################################################################################################################
-    #                           Message Codes below this are still in flux and should not be used.                                #
-    ###############################################################################################################################
-
-    # The Owner of the address declares the rules (message sent back to itself) by which they are willing to accept messages. Certain types of messages can be excluded, and most importantly the minimum threshold value that must be sent in order to avoid being considered spam.  Different threshold amounts can be applied to different types of messages.  The Public Key (RSA) can also be declared here.
-    0:
-      name: Communication Rules
-
-    # Business Name, Registration Number, Address, Communication Details (Phone/Email/etc.), Key People
-    1:
-      name: Commercial Profile
-
-    # YA is Contract Offered to a PKH that the sender is looking to establish a secure line of communication with. Useful for establishing a secure communication channel for a business-to-business relationship such as a supplier-customer relationship.
-    4:
-      name: Establish Private Messaging (DH) YA (1 of 2)
-
-    # YB is Contract Offered in response to a YA message.  Both parties can now create encrypted messages that they can both read. Useful for establishing a secure communication channel for a business-to-business relationship such as a supplier-customer relationship.
-    5:
-      name: Establish Private Messaging (DH) YB (2 of 2)
-
-    # RSA public key or the like.  This message is sent back to one's self to publicly broadcast the public encryption key associated with the PKH.  This allows for permissionless and anonymous 1-way communication with the owner of the public key.
-    6:
-      name: Public Key
-
-    # The sender sends the PKH that they want to receive all of the messages/payments to.
-    7:
-      name: Trading Address (PKH)
-
-    # Either sent back to yourself, or accompanying a txn. Often encrypted (DH, RSA) to make a note/receipt against a particular output. DH for b2b where both parties can see the receipt/note.  RSA or the like for receipts only visible to one of the transacting parties.
-    8:
-      name: Receipt/Output Note
-
-    # A quote.  Can be used to generate a Purchase Order.
-    9:
-      name: Quote
-
-    # Sent by the customer to the supplier.  Often generated in response to a quote. Can be securitized with a Payable token. (Factoring/Reverse-Factoring)
-    10:
-      name: Purchase Order
-
-    # An official acknowledgement of a purchase order.  May include information such as ETA or material shortfalls.
-    11:
-      name: Purchase Order Acknowledgment
-
-    # Also known as a packing slip.  Sent to customers as an advance notice of what has been shipped.
-    12:
-      name: Advance Ship Notice
-
-    # An invoice. Invoices can be securitized by creating a receivable token.
-    13:
-      name: Invoice
-
-    # An official list of products offered by a supplier.  Can include pricing as well.
-    14:
-      name: Product Catalog
-
-    # A forecast notification from the manufacturer to the relevant supplier of the qty of materials needed and the time period in which they are needed.
-    15:
-      name: Planning Schedule/Material Release
-
-    # An authorization from the manufacturer to the supplier to ship goods according to a specific short-term schedule. It provides detailed shipping requirements and adds more specific instruction to the Planning Schedule/Material Release that may have been provided earlier.
-    16:
-      name: Shipping Schedule
-
-    #
-    17:
-      name: Collateral Call
 
 `
 
@@ -3438,7 +3325,6 @@ values:
 // other entities. These roles have widely-accepted tasks, rights and
 // duties.
 var yamlRoles = `
-
 metadata:
   name: Roles
   description: "Roles that entities play in relation to their interactions with other entities.  These roles have widely-accepted tasks, rights and duties."
@@ -3503,7 +3389,8 @@ values:
       name: Trader
     28:
       name: Trustee
-
+    29:
+      name: Unit Holder
 
 
 `

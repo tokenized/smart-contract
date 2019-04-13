@@ -78,12 +78,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 
 	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
 	if messagePayload == nil {
-		messageType := protocol.GetMessageType(msg.MessageType)
-		if messageType == nil {
-			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
-		} else {
-			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
-		}
+		return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
 	}
 
 	_, err := messagePayload.Write(msg.MessagePayload)
@@ -105,12 +100,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		logger.Verbose(ctx, "%s : Processing Signature Request", v.TraceID)
 		return m.processSigRequest(ctx, w, itx, payload, rk)
 	default:
-		messageType := protocol.GetMessageType(msg.MessageType)
-		if messageType == nil {
-			return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
-		} else {
-			return fmt.Errorf("Message payload type %s is not implemented", messageType.Name)
-		}
+		return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
 	}
 }
 
@@ -762,8 +752,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
 			}
 
-			// Validate Register Signature
-			if err := validateRegister(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH, &receiver,
+			// Validate Oracle Signature
+			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH, &receiver,
 				headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
