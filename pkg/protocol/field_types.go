@@ -748,7 +748,7 @@ func (m *AssetTransfer) Equal(other AssetTransfer) bool {
 // or private company, government agency, or and individual.
 type Entity struct {
 	Name                       string          `json:"name,omitempty"`                          // Length 1-255 bytes (0 is not valid). Issuing entity (company, organization, individual).  Can be any unique identifying string, including human readable names for branding/vanity purposes.
-	Type                       byte            `json:"type,omitempty"`                          // P - Public Company Limited by Shares, C - Private Company Limited by Shares, I - Individual, L - Limited Partnership, U -Unlimited Partnership, T - Sole Proprietorship, S - Statutory Company, O - Non-Profit Organization, N - Nation State, G - Government Agency, U - Unit Trust, D - Discretionary Trust.  Found in 'Entities' (Specification/Resources).
+	Type                       byte            `json:"type,omitempty"`                          // The type of entity. (i.e Public Company, Individual) (Specification/Resources).
 	LEI                        string          `json:"lei,omitempty"`                           // Null is valid. A Legal Entity Identifier (or LEI) is an international identifier made up of a 20-character identifier that identifies distinct legal entities that engage in financial transactions. It is defined by ISO 17442.[1] Natural persons are not required to have an LEI; they’re eligible to have one issued, however, but only if they act in an independent business capacity.[2] The LEI is a global standard, designed to be non-proprietary data that is freely accessible to all.[3] As of December 2018, over 1,300,000 legal entities from more than 200 countries have now been issued with LEIs.
 	AddressIncluded            bool            `json:"address_included,omitempty"`              // Registered/Physical/mailing address(HQ). Y-1/N-0, N means there is no issuer address.
 	UnitNumber                 string          `json:"unit_number,omitempty"`                   // Issuer/Entity/Contracting Party X Address Details (eg. HQ)
@@ -1059,6 +1059,9 @@ func (m *Entity) Validate() error {
 
 	// Type (byte)
 	{
+		if GetEntityType(m.Type) == nil {
+			return fmt.Errorf("Invalid entity type value : %c", m.Type)
+		}
 	}
 
 	// LEI (string)

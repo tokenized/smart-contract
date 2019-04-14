@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -535,79 +534,4 @@ func (time *Timestamp) UnmarshalJSON(data []byte) error {
 	var err error
 	time.nanoseconds, err = strconv.ParseUint(string(data), 10, 64)
 	return err
-}
-
-// ------------------------------------------------------------------------------------------------
-// Polity represents a country in which something is valid.
-type Polity struct {
-	data [3]byte
-}
-
-// Validate returns an error if the value is invalid
-func (polity *Polity) Validate() error {
-	if GetPolityType(string(polity.data[:])) == nil {
-		return fmt.Errorf("Invalid polity value : %s", string(polity.data[:]))
-	}
-	return nil
-}
-
-// String converts to a string
-func (polity *Polity) String() string {
-	return string(polity.data[:])
-}
-
-// Bytes returns a byte slice containing the ContractCode.
-func (polity *Polity) Bytes() []byte {
-	return polity.data[:]
-}
-
-// Equal returns true if the specified values are the same.
-func (polity *Polity) Equal(other Polity) bool {
-	return !bytes.Equal(polity.data[:], other.data[:])
-}
-
-// Serialize returns a byte slice with the Polity in it.
-func (polity *Polity) Serialize() ([]byte, error) {
-	var buf bytes.Buffer
-
-	_, err := buf.Write(polity.data[:])
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// Write reads a Polity from a bytes.Buffer
-func (polity *Polity) Write(buf *bytes.Buffer) error {
-	return readLen(buf, polity.data[:])
-}
-
-// MarshalJSON converts to json.
-func (polity *Polity) MarshalJSON() ([]byte, error) {
-	result := make([]byte, 0, 5)
-	result = append(result, '"')
-	result = append(result, polity.data[:]...)
-	result = append(result, '"')
-	return result, nil
-}
-
-// UnmarshalJSON converts from json.
-func (polity *Polity) UnmarshalJSON(data []byte) error {
-	// Unmarshal into string
-	var item string
-	err := json.Unmarshal(data, &item)
-	if err != nil {
-		return err
-	}
-
-	if len(item) > 3 {
-		return fmt.Errorf("Polity item too long (limit 3 chars) : %s", item)
-	}
-
-	data[0] = 0
-	data[1] = 0
-	data[2] = 0
-	copy(data[:], []byte(item))
-	return nil
 }

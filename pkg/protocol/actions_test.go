@@ -39,8 +39,9 @@ func TestAssetDefinition(t *testing.T) {
 
 	// TradeRestrictions (Polity[])
 	{
-		for i := 0; i < 2; i++ {
-			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, Polity{})
+		for i := 0; i < 5; i++ {
+			var item [3]byte
+			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, item)
 		}
 	}
 
@@ -144,6 +145,11 @@ func TestAssetDefinition(t *testing.T) {
 	if len(initialMessage.TradeRestrictions) != len(decodedMessage.TradeRestrictions) {
 		t.Errorf("TradeRestrictions lengths don't match : %d != %d", len(initialMessage.TradeRestrictions), len(decodedMessage.TradeRestrictions))
 	}
+	for i, value := range initialMessage.TradeRestrictions {
+		if value != decodedMessage.TradeRestrictions[i] {
+			t.Errorf("TradeRestrictions value %d doesn't match : %v != %v", i, value, decodedMessage.TradeRestrictions[i])
+		}
+	}
 
 	// EnforcementOrdersPermitted (bool)
 	if initialMessage.EnforcementOrdersPermitted != decodedMessage.EnforcementOrdersPermitted {
@@ -220,8 +226,9 @@ func TestAssetCreation(t *testing.T) {
 
 	// TradeRestrictions (Polity[])
 	{
-		for i := 0; i < 2; i++ {
-			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, Polity{})
+		for i := 0; i < 5; i++ {
+			var item [3]byte
+			initialMessage.TradeRestrictions = append(initialMessage.TradeRestrictions, item)
 		}
 	}
 
@@ -334,6 +341,11 @@ func TestAssetCreation(t *testing.T) {
 	// TradeRestrictions (Polity[])
 	if len(initialMessage.TradeRestrictions) != len(decodedMessage.TradeRestrictions) {
 		t.Errorf("TradeRestrictions lengths don't match : %d != %d", len(initialMessage.TradeRestrictions), len(decodedMessage.TradeRestrictions))
+	}
+	for i, value := range initialMessage.TradeRestrictions {
+		if value != decodedMessage.TradeRestrictions[i] {
+			t.Errorf("TradeRestrictions value %d doesn't match : %v != %v", i, value, decodedMessage.TradeRestrictions[i])
+		}
 	}
 
 	// EnforcementOrdersPermitted (bool)
@@ -2343,9 +2355,9 @@ func TestMessage(t *testing.T) {
 		}
 	}
 
-	// MessageType (MessageType)
+	// MessageType (uint16)
 	{
-		// MessageType test not setup
+		// uint16 test not setup
 	}
 
 	// MessagePayload (varbin)
@@ -2401,7 +2413,7 @@ func TestMessage(t *testing.T) {
 		}
 	}
 
-	// MessageType (MessageType)
+	// MessageType (uint16)
 	if initialMessage.MessageType != decodedMessage.MessageType {
 		t.Errorf("MessageType doesn't match : %v != %v", initialMessage.MessageType, decodedMessage.MessageType)
 	}

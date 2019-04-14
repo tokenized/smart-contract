@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -11,12 +12,14 @@ import (
 )
 
 func TestContract(t *testing.T) {
+	ctx := context.Background()
+
 	// Offer message
 	offerData := protocol.ContractOffer{
 		ContractName: "Test Name",
-		KeyRoles: []protocol.KeyRole{
-			protocol.KeyRole{Type: 1, Name: "John Smith"},
-		},
+		Issuer: protocol.Entity{Administration: []protocol.Administrator{
+			protocol.Administrator{Type: 1, Name: "John Smith"},
+		}},
 	}
 	offer := &offerData
 
@@ -43,7 +46,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Offer : \n%s\n", string(text))
 
 	// Formation
-	err = node.Convert(offer, formation)
+	err = node.Convert(ctx, offer, formation)
 	if err != nil {
 		t.Errorf("Failed to convert offer to formation : %s", err)
 	}
@@ -52,7 +55,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Formation : \n%s\n", string(text))
 
 	// State
-	err = node.Convert(formation, st)
+	err = node.Convert(ctx, formation, st)
 	if err != nil {
 		t.Errorf("Failed to convert formation to state : %s", err)
 	}
@@ -61,7 +64,7 @@ func TestContract(t *testing.T) {
 	t.Logf("State : \n%s\n", string(text))
 
 	// Create
-	err = node.Convert(formation, create)
+	err = node.Convert(ctx, formation, create)
 	if err != nil {
 		t.Errorf("Failed to convert formation to create : %s", err)
 	}
@@ -70,7 +73,7 @@ func TestContract(t *testing.T) {
 	t.Logf("Create : \n%s\n", string(text))
 
 	// Update
-	err = node.Convert(formation, update)
+	err = node.Convert(ctx, formation, update)
 	if err != nil {
 		t.Errorf("Failed to convert formation to update : %s", err)
 	}

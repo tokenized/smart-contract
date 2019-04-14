@@ -227,7 +227,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 				for _, otherField := range vt.ProposedAmendments {
 					if field.FieldIndex == otherField.FieldIndex {
 						// Reject because of conflicting field amendment on unapplied vote.
-						logger.Warn(ctx, "%s : Proposed amendment conflicts with unapplied vote : %s %s", v.TraceID, contractPKH.String())
+						logger.Warn(ctx, "%s : Proposed amendment conflicts with unapplied vote : %s", v.TraceID, contractPKH.String())
 						return node.RespondReject(ctx, w, itx, rk, protocol.RejectProposalConflicts)
 					}
 				}
@@ -461,7 +461,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// TODO Check issue where two ballots are sent simultaneously and the second received before the first response is processed.
 	if err := vote.CheckBallot(ctx, vt, holderPKH); err != nil {
-		logger.Warn(ctx, "%s : Failed to check ballot : %s", v.TraceID, contractPKH.String(), err)
+		logger.Warn(ctx, "%s : Failed to check ballot : %s", v.TraceID, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectBallotAlreadyCounted)
 	}
 

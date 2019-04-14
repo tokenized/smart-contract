@@ -399,8 +399,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
+		return errors.New("Failed to convert contract pkh to address")
 	}
 	w.AddOutput(ctx, contractAddress, 0)
 
@@ -503,8 +502,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	// Add contract output
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &e.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Invalid contract address: %s %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
+		return errors.Wrap(err, "Failed to convert contract address")
 	}
 	w.AddOutput(ctx, contractAddress, 0)
 

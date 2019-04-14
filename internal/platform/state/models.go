@@ -50,7 +50,7 @@ type Asset struct {
 	AssetType                   string             `json:"asset_type,omitempty"`
 	AssetAuthFlags              []byte             `json:"asset_auth_flags,omitempty"`
 	TransfersPermitted          bool               `json:"transfers_permitted,omitempty"`
-	TradeRestrictions           []protocol.Polity  `json:"trade_restrictions,omitempty"`
+	TradeRestrictions           [][3]byte          `json:"trade_restrictions,omitempty"`
 	EnforcementOrdersPermitted  bool               `json:"enforcement_orders_permitted,omitempty"`
 	VotingRights                bool               `json:"voting_rights,omitempty"`
 	VoteMultiplier              uint8              `json:"vote_multiplier,omitempty"`

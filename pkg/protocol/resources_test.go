@@ -39,7 +39,7 @@ func TestEntities(t *testing.T) {
 	}
 	t.Logf("Loaded %d entities.\n", len(entities))
 
-	lp, exists := entities["L"]
+	lp, exists := entities['L']
 	if !exists {
 		t.Fatalf("L not found in entities\n")
 	}

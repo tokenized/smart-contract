@@ -429,7 +429,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.AssetModificationGovernance)
+			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %d", v.TraceID, msg.AssetCode.String(), *ua.AssetModificationGovernance)
 		}
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
@@ -455,7 +455,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		different := len(as.TradeRestrictions) != len(msg.TradeRestrictions)
 		if !different {
 			for i, tradeRestriction := range as.TradeRestrictions {
-				if !bytes.Equal(tradeRestriction.Bytes(), msg.TradeRestrictions[i].Bytes()) {
+				if !bytes.Equal(tradeRestriction[:], msg.TradeRestrictions[i][:]) {
 					different = true
 					break
 				}
@@ -556,18 +556,22 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 						amendment.Element)
 				}
 
+				if len(amendment.Data) != 3 {
+					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
+				}
 				buf := bytes.NewBuffer(amendment.Data)
-				if err := ac.TradeRestrictions[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to TradeRestrictions failed to deserialize : %s",
-						err)
+				if err := binary.Read(buf, protocol.DefaultEndian, &ac.TradeRestrictions[amendment.Element]); err != nil {
+					return fmt.Errorf("TradeRestrictions amendment value failed to deserialize : %s", err)
 				}
 
 			case 1: // Add element
-				newPolity := protocol.Polity{}
+				var newPolity [3]byte
+				if len(amendment.Data) != 3 {
+					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
+				}
 				buf := bytes.NewBuffer(amendment.Data)
-				if err := newPolity.Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to TradeRestrictions failed to deserialize : %s",
-						err)
+				if err := binary.Read(buf, protocol.DefaultEndian, &newPolity); err != nil {
+					return fmt.Errorf("Contract amendment addition to TradeRestrictions failed to deserialize : %s", err)
 				}
 
 				ac.TradeRestrictions = append(ac.TradeRestrictions, newPolity)

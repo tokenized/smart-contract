@@ -498,7 +498,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		if !ct.Issuer.Equal(msg.Issuer) {
 			uc.Issuer = &msg.Issuer
-			logger.Info(ctx, "%s : Updating contract issuer data (%s) : %02x", v.TraceID, ct.ContractName, *uc.Issuer)
+			logger.Info(ctx, "%s : Updating contract issuer data (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if ct.IssuerLogoURL != msg.IssuerLogoURL {
@@ -508,7 +508,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		if !ct.ContractOperator.Equal(msg.ContractOperator) {
 			uc.ContractOperator = &msg.ContractOperator
-			logger.Info(ctx, "%s : Updating contract operator data (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractOperator)
+			logger.Info(ctx, "%s : Updating contract operator data (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if !bytes.Equal(ct.ContractAuthFlags[:], msg.ContractAuthFlags[:]) {
@@ -536,7 +536,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract holder proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.HolderProposal)
 		}
 
-		// Check if registries are different
+		// Check if oracles are different
 		different := len(ct.Oracles) != len(msg.Oracles)
 		if !different {
 			for i, oracle := range ct.Oracles {

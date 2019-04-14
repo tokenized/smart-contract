@@ -78,7 +78,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 
 	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
 	if messagePayload == nil {
-		return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		return fmt.Errorf("Unknown message payload type : %04d", msg.MessageType)
 	}
 
 	_, err := messagePayload.Write(msg.MessagePayload)
@@ -100,7 +100,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		logger.Verbose(ctx, "%s : Processing Signature Request", v.TraceID)
 		return m.processSigRequest(ctx, w, itx, payload, rk)
 	default:
-		return fmt.Errorf("Unknown message payload type : %s", msg.MessageType)
+		return fmt.Errorf("Unknown message payload type : %04d", msg.MessageType)
 	}
 }
 

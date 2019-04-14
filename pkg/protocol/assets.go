@@ -70,7 +70,7 @@ type Coupon struct {
 	IssueDate       Timestamp `json:"issue_date,omitempty"`       //
 	ExpiryDate      Timestamp `json:"expiry_date,omitempty"`      //
 	Value           uint64    `json:"value,omitempty"`            //
-	Currency        [3]byte   `json:"currency,omitempty"`         // Currency for coupon. From resources/currency.
+	Currency        [3]byte   `json:"currency,omitempty"`         // International Organization for Standardization code for Currency. Currency for coupon. From resources/currency.
 	Description     string    `json:"description,omitempty"`      //
 }
 
@@ -254,12 +254,7 @@ func (m *Coupon) Validate() error {
 
 	// Currency ([3]byte)
 	{
-		currencies, err := GetCurrencies()
-		if err != nil {
-			return err
-		}
-		_, exists := currencies[string(m.Currency[:])]
-		if !exists {
+		if GetCurrency(string(m.Currency[:])) == nil {
 			return fmt.Errorf("Invalid currency value : %d", m.Currency)
 		}
 	}
@@ -291,7 +286,7 @@ func (m Coupon) String() string {
 // Currency asset type.
 type Currency struct {
 	Version           uint8   `json:"version,omitempty"`            // The version number that this asset payload adheres to.
-	ISOCode           [3]byte `json:"iso_code,omitempty"`           // International Organization for Standardization code for Currency.
+	ISOCode           [3]byte `json:"iso_code,omitempty"`           // International Organization for Standardization code for Currency. (Specification/Resources)
 	MonetaryAuthority string  `json:"monetary_authority,omitempty"` //
 	Description       string  `json:"description,omitempty"`        //
 }
@@ -404,12 +399,7 @@ func (m *Currency) Validate() error {
 
 	// ISOCode ([3]byte)
 	{
-		currencies, err := GetCurrencies()
-		if err != nil {
-			return err
-		}
-		_, exists := currencies[string(m.ISOCode[:])]
-		if !exists {
+		if GetCurrency(string(m.ISOCode[:])) == nil {
 			return fmt.Errorf("Invalid currency value : %d", m.ISOCode)
 		}
 	}
