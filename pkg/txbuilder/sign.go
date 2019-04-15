@@ -80,24 +80,25 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	}
 
 	attempt := 3 // Max of 3 fee adjustment attempts
+	var lastError error
 	for {
 		// Sign all inputs
 		for index, _ := range tx.Inputs {
 			signed := false
 			for _, key := range keys {
-				err := tx.SignInput(index, key)
-				if IsErrorCode(err, ErrorCodeWrongPrivateKey) {
+				lastError = tx.SignInput(index, key)
+				if IsErrorCode(lastError, ErrorCodeWrongPrivateKey) {
 					continue
 				}
-				if err != nil {
-					return err
+				if lastError != nil {
+					return lastError
 				}
 				signed = true
 				break
 			}
 
 			if !signed {
-				return newError(ErrorCodeMissingPrivateKey, "")
+				return newError(ErrorCodeMissingPrivateKey, lastError.Error())
 			}
 		}
 

@@ -1,10 +1,5 @@
 package protocol
 
-// ------------------------------------------------------------------------------------------------
-//                                       DO NOT EDIT
-// This file is now generated from "resources/develop/Rejections.yaml"
-// ------------------------------------------------------------------------------------------------
-
 const (
 	// Success - No failure. This code should not be used in a reject message.
 	RejectSuccess = 0

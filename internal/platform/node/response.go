@@ -36,7 +36,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 	// switch errors.Cause(err) {
 	// }
 
-	logger.Error(ctx, "%s", err)
+	logger.LogDepth(ctx, logger.LevelError, 1, "%s", err)
 }
 
 // RespondReject sends a rejection message.
@@ -60,7 +60,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	// Build rejection
 	rejection := protocol.Rejection{
 		RejectionCode: code,
-		Message:       rejectionCode.Text,
+		Message:       rejectionCode.Label,
 		Timestamp:     v.Now,
 	}
 

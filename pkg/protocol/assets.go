@@ -254,7 +254,7 @@ func (m *Coupon) Validate() error {
 
 	// Currency ([3]byte)
 	{
-		if GetCurrency(string(m.Currency[:])) == nil {
+		if GetCurrency(m.Currency) == nil {
 			return fmt.Errorf("Invalid currency value : %d", m.Currency)
 		}
 	}
@@ -399,7 +399,7 @@ func (m *Currency) Validate() error {
 
 	// ISOCode ([3]byte)
 	{
-		if GetCurrency(string(m.ISOCode[:])) == nil {
+		if GetCurrency(m.ISOCode) == nil {
 			return fmt.Errorf("Invalid currency value : %d", m.ISOCode)
 		}
 	}

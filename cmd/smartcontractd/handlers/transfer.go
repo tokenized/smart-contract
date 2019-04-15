@@ -54,9 +54,9 @@ func (err rejectError) Error() string {
 		return err.text
 	}
 	if len(err.text) == 0 {
-		return value.Text
+		return value.Label
 	}
-	return fmt.Sprintf("%s - %s", value.Text, err.text)
+	return fmt.Sprintf("%s - %s", value.Label, err.text)
 }
 
 // TransferRequest handles an incoming Transfer request.

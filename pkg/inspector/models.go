@@ -72,7 +72,7 @@ func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
 	for _, utxo := range u {
 		publicAddress, err := utxo.PublicAddress(&chaincfg.MainNetParams)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		if publicAddress.String() != s {

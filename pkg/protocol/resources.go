@@ -8,9 +8,11 @@ import (
 )
 
 type RejectionCodeData struct {
+	Code        uint8
 	Name        string
-	Text        string
+	Label       string
 	Description string
+	// Metadata string
 }
 
 var rejectionTypes map[uint8]RejectionCodeData
@@ -20,13 +22,16 @@ func GetRejectionCodes() (map[uint8]RejectionCodeData, error) {
 		return rejectionTypes, nil
 	}
 
-	var load map[uint8]RejectionCodeData
+	load := make([]RejectionCodeData, 0)
 
 	if err := yaml.Unmarshal([]byte(yamlRejections), &load); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal rejection codes yaml")
 	}
 
-	rejectionTypes = load
+	rejectionTypes = make(map[uint8]RejectionCodeData)
+	for _, value := range load {
+		rejectionTypes[value.Code] = value
+	}
 	return rejectionTypes, nil
 }
 
@@ -43,33 +48,39 @@ func GetRejectionCode(code uint8) *RejectionCodeData {
 }
 
 type CurrencyTypeData struct {
-	Name              string
-	Label             string
-	Symbol            string
-	Fractions         uint64
-	FractionalUnit    string `yaml:"fractional_unit"`
-	Polity            string
-	MonetaryAuthority string `yaml:"monetary_authority"`
+	Code        string
+	Name        string
+	Label       string
+	Description string
+	// Metadata    string
 }
 
-var currencyTypes map[string]CurrencyTypeData
+var currencyTypes map[[3]byte]CurrencyTypeData
 
-func GetCurrencies() (map[string]CurrencyTypeData, error) {
+func GetCurrencies() (map[[3]byte]CurrencyTypeData, error) {
 	if currencyTypes != nil {
 		return currencyTypes, nil
 	}
 
-	var load map[string]CurrencyTypeData
+	load := make([]CurrencyTypeData, 0)
 
 	if err := yaml.Unmarshal([]byte(yamlCurrencies), &load); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal currencyTypes yaml")
 	}
 
-	currencyTypes = load
+	currencyTypes = make(map[[3]byte]CurrencyTypeData)
+	for _, value := range load {
+		if len(value.Code) != 3 {
+			return nil, fmt.Errorf("Currency type incorrect length : %s", value.Code)
+		}
+		var code [3]byte
+		copy(code[:], []byte(value.Code))
+		currencyTypes[code] = value
+	}
 	return currencyTypes, nil
 }
 
-func GetCurrency(cur string) *CurrencyTypeData {
+func GetCurrency(cur [3]byte) *CurrencyTypeData {
 	types, err := GetCurrencies()
 	if err != nil {
 		return nil
@@ -82,9 +93,11 @@ func GetCurrency(cur string) *CurrencyTypeData {
 }
 
 type EntityTypeData struct {
-	Name   string
-	Label  string
-	Symbol string
+	Code        string
+	Name        string
+	Label       string
+	Description string
+	// Metadata    string
 }
 
 var entityTypes map[byte]EntityTypeData
@@ -94,18 +107,18 @@ func GetEntityTypes() (map[byte]EntityTypeData, error) {
 		return entityTypes, nil
 	}
 
-	var load map[string]EntityTypeData
+	load := make([]EntityTypeData, 0)
 
 	if err := yaml.Unmarshal([]byte(yamlEntities), &load); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal entities yaml")
 	}
 
 	entityTypes = make(map[byte]EntityTypeData)
-	for key, value := range load {
-		if len(key) > 1 {
-			return nil, fmt.Errorf("Entity type too long : %s", key)
+	for _, value := range load {
+		if len(value.Code) > 1 {
+			return nil, fmt.Errorf("Entity type too long : %s", value.Code)
 		}
-		entityTypes[byte(key[0])] = value
+		entityTypes[byte(value.Code[0])] = value
 	}
 	return entityTypes, nil
 }
@@ -123,11 +136,11 @@ func GetEntityType(ent byte) *EntityTypeData {
 }
 
 type PolityType struct {
-	Name          string
-	States        map[string]string
-	Flag          string
-	FiscalYear    string `yaml:"fractional_unit"`
-	GovFiscalYear string `yaml:"gov_fiscal_year"`
+	Code        string
+	Name        string
+	Label       string
+	Description string
+	// Metadata    string
 }
 
 var polityTypes map[string]PolityType
@@ -137,13 +150,16 @@ func GetPolityTypes() (map[string]PolityType, error) {
 		return polityTypes, nil
 	}
 
-	var load map[string]PolityType
+	load := make([]PolityType, 0)
 
 	if err := yaml.Unmarshal([]byte(yamlPolities), &load); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal polities yaml")
 	}
 
-	polityTypes = load
+	polityTypes = make(map[string]PolityType)
+	for _, value := range load {
+		polityTypes[value.Code] = value
+	}
 	return polityTypes, nil
 }
 
@@ -160,7 +176,11 @@ func GetPolityType(pol string) *PolityType {
 }
 
 type RoleType struct {
-	Name string
+	Code        uint8
+	Name        string
+	Label       string
+	Description string
+	// Metadata    string
 }
 
 var roleTypes map[uint8]RoleType
@@ -170,13 +190,16 @@ func GetRoleTypes() (map[uint8]RoleType, error) {
 		return roleTypes, nil
 	}
 
-	var load map[uint8]RoleType
+	load := make([]RoleType, 0)
 
 	if err := yaml.Unmarshal([]byte(yamlRoles), &load); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal roles yaml")
 	}
 
-	roleTypes = load
+	roleTypes = make(map[uint8]RoleType)
+	for _, value := range load {
+		roleTypes[value.Code] = value
+	}
 	return roleTypes, nil
 }
 
@@ -195,2275 +218,3130 @@ func GetRoleType(role uint8) *RoleType {
 // Currencies - International Organization for Standardization code for
 // Currency. 3 character code.
 var yamlCurrencies = `
-  AED:
+  - code: AED
     name: UnitedArabEmiratesDirham
     label: United Arab Emirates dirham
-    symbol: "د.إ"
-    fractions: 100
-    fractional_unit: Fils
-    polity: ARE
-    monetary_authority: Central Bank of the United Arab Emirates
-  AFN:
+    metadata:
+      symbol: "د.إ"
+      fractions: 100
+      fractional_unit: Fils
+      polity:
+        - ARE
+      monetary_authority: Central Bank of the United Arab Emirates
+
+  - code: AFN
     name: AfghanAfghani
     label: Afghan afghani
-    symbol: "؋"
-    fractions: 100
-    fractional_unit: Pul
-    polity: AFG
-    monetary_authority: Central Bank of Afghanistan
-  ALL:
+    metadata:
+      symbol: "؋"
+      fractions: 100
+      fractional_unit: Pul
+      polity:
+        - AFG
+      monetary_authority: Central Bank of Afghanistan
+
+  - code: ALL
     name: AlbanianLek
     label: Albanian lek
-    symbol: "L"
-    fractions: 100
-    fractional_unit: Qindarkë
-    polity: ALB
-    monetary_authority: Bank of Albania
-  AMD:
+    metadata:
+      symbol: "L"
+      fractions: 100
+      fractional_unit: Qindarkë
+      polity:
+        - ALB
+      monetary_authority: Bank of Albania
+
+  - code: AMD
     name: ArmenianDram
     label: Armenian dram
-    symbol: "֏"
-    fractions: 100
-    fractional_unit: Luma
-    polity: ARM
-    monetary_authority: Central Bank of the Republic of Armenia
-  ANG:
+    metadata:
+      symbol: "֏"
+      fractions: 100
+      fractional_unit: Luma
+      polity:
+        - ARM
+      monetary_authority: Central Bank of the Republic of Armenia
+
+  - code: ANG
     name: NetherlandsAntilleanGuilder
     label: Netherlands Antillean guilder
-    symbol: "ƒ"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SXM, CUW
-    monetary_authority: Central Bank of Curaçao and Sint Maarten
-  AOA:
+    metadata:
+      symbol: "ƒ"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SXM
+        - CUW
+      monetary_authority: Central Bank of Curaçao and Sint Maarten
+
+  - code: AOA
     name: AngolanKwanza
     label: Angolan kwanza
-    symbol: "Kz"
-    fractions: 100
-    fractional_unit: Cêntimo
-    polity: AGO
-    monetary_authority: Central Bank of Angola
-  ARS:
+    metadata:
+      symbol: "Kz"
+      fractions: 100
+      fractional_unit: Cêntimo
+      polity:
+        - AGO
+      monetary_authority: Central Bank of Angola
+
+  - code: ARS
     name: ArgentinePeso
     label: Argentine peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: ARG
-    monetary_authority: Central Bank of Argentina
-  AUD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - ARG
+      monetary_authority: Central Bank of Argentina
+
+  - code: AUD
     name: AustralianDollar
     label: Australian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: AUS, NRU, KIR, TUV
-    monetary_authority: Reserve Bank of Australia
-  AWG:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - AUS
+        - NRU
+        - KIR
+        - TUV
+      monetary_authority: Reserve Bank of Australia
+
+  - code: AWG
     name: ArubanFlorin
     label: Aruban florin
-    symbol: "ƒ"
-    fractions: 100
-    fractional_unit: Cent
-    polity: ABW
-    monetary_authority: Central Bank of Aruba
-  AZN:
+    metadata:
+      symbol: "ƒ"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - ABW
+      monetary_authority: Central Bank of Aruba
+
+  - code: AZN
     name: AzerbaijaniManat
     label: Azerbaijani manat
-    symbol: "₼"
-    fractions: 100
-    fractional_unit: Qəpik
-    polity: AZE
-    monetary_authority: Central Bank of Azerbaijan
-  BAM:
+    metadata:
+      symbol: "₼"
+      fractions: 100
+      fractional_unit: Qəpik
+      polity:
+        - AZE
+      monetary_authority: Central Bank of Azerbaijan
+
+  - code: BAM
     name: BosniaHerzegovinaConvertibleMark
     label: Bosnia and Herzegovina convertible mark
-    symbol: "КМ"
-    fractions: 100
-    fractional_unit: Fening
-    polity: BIH
-    monetary_authority: Central Bank of Bosnia and Herzegovina
-  BBD:
+    metadata:
+      symbol: "КМ"
+      fractions: 100
+      fractional_unit: Fening
+      polity:
+        - BIH
+      monetary_authority: Central Bank of Bosnia and Herzegovina
+
+  - code: BBD
     name: BarbadianDollar
     label: Barbadian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: BRB
-    monetary_authority: Central Bank of Barbados
-  BDT:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - BRB
+      monetary_authority: Central Bank of Barbados
+
+  - code: BDT
     name: BangladeshiTaka
     label: Bangladeshi taka
-    symbol: "৳"
-    fractions: 100
-    fractional_unit: Poisha
-    polity: BGD
-    monetary_authority: Bangladesh Bank
-  BGN:
+    metadata:
+      symbol: "৳"
+      fractions: 100
+      fractional_unit: Poisha
+      polity:
+        - BGD
+      monetary_authority: Bangladesh Bank
+
+  - code: BGN
     name: BulgarianLev
     label: Bulgarian lev
-    symbol:	"лв"
-    fractions: 100
-    fractional_unit: Stotinka
-    polity: BGR
-    monetary_authority: Bulgarian National Bank
-  BHD:
+    metadata:
+      symbol: "лв"
+      fractions: 100
+      fractional_unit: Stotinka
+      polity:
+        - BGR
+      monetary_authority: Bulgarian National Bank
+
+  - code: BHD
     name: BahrainiDinar
     label: Bahraini dinar
-    symbol:	".د.ب"
-    fractions: 1000
-    fractional_unit: Fils
-    polity: BHR
-    monetary_authority: Central Bank of Bahrain
-  BIF:
+    metadata:
+      symbol: ".د.ب"
+      fractions: 1000
+      fractional_unit: Fils
+      polity:
+        - BHR
+      monetary_authority: Central Bank of Bahrain
+
+  - code: BIF
     name: BurundianFranc
     label: Burundian franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: BDI
-    monetary_authority: Bank of the Republic of Burundi
-  BMD:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - BDI
+      monetary_authority: Bank of the Republic of Burundi
+
+  - code: BMD
     name: BermudianDollar
     label: Bermudian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: BMU
-    monetary_authority: Bermuda Monetary Authority
-  BND:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - BMU
+      monetary_authority: Bermuda Monetary Authority
+
+  - code: BND
     name: BruneiDollar
     label: Brunei dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Sen
-    polity: BRN
-    monetary_authority: Monetary Authority of Brunei Darussalam
-  BOB:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Sen
+      polity:
+        - BRN
+      monetary_authority: Monetary Authority of Brunei Darussalam
+
+  - code: BOB
     name: BolivianBoliviano
     label: Bolivian boliviano
-    symbol: "Bs."
-    fractions: 100
-    fractional_unit: Centavo
-    polity: BOL
-    monetary_authority: Central Bank of Bolivia
-  BRL:
+    metadata:
+      symbol: "Bs."
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - BOL
+      monetary_authority: Central Bank of Bolivia
+
+  - code: BRL
     name: BrazilianReal
     label: Brazilian real
-    symbol: "R$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: BRA
-    monetary_authority: Central Bank of Brazil
-  BSD:
+    metadata:
+      symbol: "R$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - BRA
+      monetary_authority: Central Bank of Brazil
+
+  - code: BSD
     name: BahamianDollar
     label: Bahamian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: BHS
-    monetary_authority: Central Bank of The Bahamas
-  BSV:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - BHS
+      monetary_authority: Central Bank of The Bahamas
+
+  - code: BSV
     name: Bitcoin
     label: Bitcoin SV
-    symbol: "₿"
-    fractions: 100000000
-    fractional_unit: Satoshis
-    polity: null
-    monetary_authority: Satoshi Nakamoto
-  BTN:
+    metadata:
+      symbol: "₿"
+      fractions: 100000000
+      fractional_unit: Satoshis
+      monetary_authority: Satoshi Nakamoto
+
+  - code: BTN
     name: BhutaneseNgultrum
     label: Bhutanese ngultrum
-    symbol: "Nu."
-    fractions: 100
-    fractional_unit: Chetrum
-    polity: BTN
-    monetary_authority: Royal Monetary Authority of Bhutan
-  BWP:
+    metadata:
+      symbol: "Nu."
+      fractions: 100
+      fractional_unit: Chetrum
+      polity:
+        - BTN
+      monetary_authority: Royal Monetary Authority of Bhutan
+
+  - code: BWP
     name: BotswanaPula
     label: Botswana pula
-    symbol: "P"
-    fractions: 100
-    fractional_unit: Thebe
-    polity: BWA
-    monetary_authority: Bank of Botswana
-  BYN:
+    metadata:
+      symbol: "P"
+      fractions: 100
+      fractional_unit: Thebe
+      polity:
+        - BWA
+      monetary_authority: Bank of Botswana
+
+  - code: BYN
     name: BelarusianRuble
     label: Belarusian ruble
-    symbol: "Br"
-    fractions: 100
-    fractional_unit: Kapyeyka
-    polity: BLR
-    monetary_authority: National Bank of the Republic of Belarus
-  BZD:
+    metadata:
+      symbol: "Br"
+      fractions: 100
+      fractional_unit: Kapyeyka
+      polity:
+        - BLR
+      monetary_authority: National Bank of the Republic of Belarus
+
+  - code: BZD
     name: BelizeDollar
     label: Belize dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: BLZ
-    monetary_authority: Central Bank of Belize
-  CAD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - BLZ
+      monetary_authority: Central Bank of Belize
+
+  - code: CAD
     name: CanadianDollar
     label: Canadian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: CAN
-    monetary_authority: Bank of Canada
-  CDF:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - CAN
+      monetary_authority: Bank of Canada
+
+  - code: CDF
     name: CongoleseFranc
     label: Congolese franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: COD
-    monetary_authority: Central Bank of the Congo
-  CHF:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - COD
+      monetary_authority: Central Bank of the Congo
+
+  - code: CHF
     name: SwissFranc
     label: Swiss franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Rappen
-    polity: CHE, LIE
-    monetary_authority: Swiss National Bank
-  CLP:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Rappen
+      polity:
+        - CHE
+        - LIE
+      monetary_authority: Swiss National Bank
+
+  - code: CLP
     name: ChileanPeso
     label: Chilean peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: CHL
-    monetary_authority: Central Bank of Chile
-  CNY:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - CHL
+      monetary_authority: Central Bank of Chile
+
+  - code: CNY
     name: ChineseYuan
     label: Chinese yuan
-    symbol: "¥"
-    fractions: 100
-    fractional_unit: Fen
-    polity: CHN
-    monetary_authority: People's Bank of China
-  COP:
+    metadata:
+      symbol: "¥"
+      fractions: 100
+      fractional_unit: Fen
+      polity:
+        - CHN
+      monetary_authority: People's Bank of China
+
+  - code: COP
     name: ColombianPeso
     label: Colombian peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: COL
-    monetary_authority: Bank of the Republic
-  CRC:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - COL
+      monetary_authority: Bank of the Republic
+
+  - code: CRC
     name: CostaRicanColon
     label: Costa Rican colon
-    symbol: "₡"
-    fractions: 100
-    fractional_unit: Céntimo
-    polity: CRI
-    monetary_authority: Central Bank of Costa Rica
-  CUC:
+    metadata:
+      symbol: "₡"
+      fractions: 100
+      fractional_unit: Céntimo
+      polity:
+        - CRI
+      monetary_authority: Central Bank of Costa Rica
+
+  - code: CUC
     name: CubanConvertiblePeso
     label: Cuban convertible peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: CUB
-    monetary_authority: Central Bank of Cuba
-  CUP:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - CUB
+      monetary_authority: Central Bank of Cuba
+
+  - code: CUP
     name: CubanConvertiblePeso
     label: Cuban convertible peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: CUB
-    monetary_authority: Central Bank of Cuba
-  CVE:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - CUB
+      monetary_authority: Central Bank of Cuba
+
+  - code: CVE
     name: CapeVerdeanEscudo
     label: Cape Verdean escudo
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: CUB
-    monetary_authority: Bank of Cape Verde
-  CZK:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - CUB
+      monetary_authority: Bank of Cape Verde
+
+  - code: CZK
     name: CzechKoruna
     label: Czech koruna
-    symbol: "Kč"
-    fractions: 100
-    fractional_unit: Haléř
-    polity: CZE
-    monetary_authority: Czech National Bank
-  DJF:
+    metadata:
+      symbol: "Kč"
+      fractions: 100
+      fractional_unit: Haléř
+      polity:
+        - CZE
+      monetary_authority: Czech National Bank
+
+  - code: DJF
     name: DjiboutianFranc
     label: Djiboutian franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: DJI
-    monetary_authority: Central Bank of Djibouti
-  DKK:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - DJI
+      monetary_authority: Central Bank of Djibouti
+
+  - code: DKK
     name: DanishKrone
     label: Danish krone
-    symbol: "kr"
-    fractions: 100
-    fractional_unit: Øre
-    polity: DNK,FRO, GRL
-    monetary_authority: Danmarks Nationalbank
-  DOP:
+    metadata:
+      symbol: "kr"
+      fractions: 100
+      fractional_unit: Øre
+      polity:
+        - DNK
+        - FRO
+        - GRL
+      monetary_authority: Danmarks Nationalbank
+
+  - code: DOP
     name: DominicanPeso
     label: Dominican peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: DOM
-    monetary_authority: Central Bank of the Dominican Republic
-  DZD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - DOM
+      monetary_authority: Central Bank of the Dominican Republic
+
+  - code: DZD
     name: AlgerianDinar
     label: Algerian dinar
-    symbol: "د.ج"
-    fractions: 100
-    fractional_unit: Santeem
-    polity: DZA
-    monetary_authority: Bank of Algeria
-  EGP:
+    metadata:
+      symbol: "د.ج"
+      fractions: 100
+      fractional_unit: Santeem
+      polity:
+        - DZA
+      monetary_authority: Bank of Algeria
+
+  - code: EGP
     name: EgyptianPound
     label: Egyptian pound
-    symbol: "E£"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: EGY
-    monetary_authority: Central Bank of Egypt
-  ERN:
+    metadata:
+      symbol: "E£"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - EGY
+      monetary_authority: Central Bank of Egypt
+
+  - code: ERN
     name: EritreanNakfa
     label: Eritrean nakfa
-    symbol: "Nfk"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: ERI
-    monetary_authority: Bank of Eritrea
-  ETB:
+    metadata:
+      symbol: "Nfk"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - ERI
+      monetary_authority: Bank of Eritrea
+
+  - code: ETB
     name: EthiopianBirr
     label: Ethiopian birr
-    symbol: "Br"
-    fractions: 100
-    fractional_unit: Santim
-    polity: ETH
-    monetary_authority: Bank of Eritrea
-  EUR:
+    metadata:
+      symbol: "Br"
+      fractions: 100
+      fractional_unit: Santim
+      polity:
+        - ETH
+      monetary_authority: Bank of Eritrea
+
+  - code: EUR
     name: Euro
     label: Euro
-    symbol: "€"
-    fractions: 100
-    fractional_unit: Cent
-    polity: EU, ALA, AND, AUT, BEL, CYP, EST, FIN, FRA, ATF, DEU, GRC, GLP, IRL, ITA, LVA, LTU, LUX, MLT, GUF, MTQ, MYT, MCO, MNE, NLD, PRT, REU, BLM, MAF, SPM, SMR, SVK, SVN, ESP
-    monetary_authority: European Central Bank
-  FJD:
+    metadata:
+      symbol: "€"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - EU
+        - ALA
+        - AND
+        - AUT
+        - BEL
+        - CYP
+        - EST
+        - FIN
+        - FRA
+        - ATF
+        - DEU
+        - GRC
+        - GLP
+        - IRL
+        - ITA
+        - LVA
+        - LTU
+        - LUX
+        - MLT
+        - GUF
+        - MTQ
+        - MYT
+        - MCO
+        - MNE
+        - NLD
+        - PRT
+        - REU
+        - BLM
+        - MAF
+        - SPM
+        - SMR
+        - SVK
+        - SVN
+        - ESP
+      monetary_authority: European Central Bank
+
+  - code: FJD
     name: FijianDollar
     label: Fijian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: FJI
-    monetary_authority: Reserve Bank of Fiji
-  FKP:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - FJI
+      monetary_authority: Reserve Bank of Fiji
+
+  - code: FKP
     name: FalklandIslandsPound
     label: Falkland Islands pound
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Penny
-    polity: FLK
-    monetary_authority: Government of the Falkland Islands
-  GBP:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Penny
+      polity:
+        - FLK
+      monetary_authority: Government of the Falkland Islands
+
+  - code: GBP
     name: PoundSterling
     label: Pound sterling
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Penny
-    polity: GBR, IOT, IMN, JEY, GGY
-    monetary_authority: Bank of England
-  GEL:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Penny
+      polity:
+        - GBR
+        - IOT
+        - IMN
+        - JEY
+        - GGY
+      monetary_authority: Bank of England
+
+  - code: GEL
     name: GeorgianLari
     label: Georgian lari
-    symbol: "₾"
-    fractions: 100
-    fractional_unit: Tetri
-    polity: GEO
-    monetary_authority: National Bank of Georgia
-  GHS:
+    metadata:
+      symbol: "₾"
+      fractions: 100
+      fractional_unit: Tetri
+      polity:
+        - GEO
+      monetary_authority: National Bank of Georgia
+
+  - code: GHS
     name: GhanaianCedi
     label: Ghanaian cedi
-    symbol: "₵"
-    fractions: 100
-    fractional_unit: Pesewa
-    polity: GHA
-    monetary_authority: Bank of Ghana
-  GIP:
+    metadata:
+      symbol: "₵"
+      fractions: 100
+      fractional_unit: Pesewa
+      polity:
+        - GHA
+      monetary_authority: Bank of Ghana
+
+  - code: GIP
     name: GibraltarPound
     label: Gibraltar pound
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Penny
-    polity: GIB
-    monetary_authority: Government of Gibraltar
-  GMD:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Penny
+      polity:
+        - GIB
+      monetary_authority: Government of Gibraltar
+
+  - code: GMD
     name: GambianDalasi
     label: Gambian dalasi
-    symbol: "D"
-    fractions: 100
-    fractional_unit: Butut
-    polity: GMB
-    monetary_authority: Central Bank of The Gambia
-  GNF:
+    metadata:
+      symbol: "D"
+      fractions: 100
+      fractional_unit: Butut
+      polity:
+        - GMB
+      monetary_authority: Central Bank of The Gambia
+
+  - code: GNF
     name: GuineanFranc
     label: Guinean franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: GNQ
-    monetary_authority: Government of Gibraltar
-  GTQ:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - GNQ
+      monetary_authority: Government of Gibraltar
+
+  - code: GTQ
     name: GuatemalanQuetzal
     label: Guatemalan quetzal
-    symbol: "Q"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: GTM
-    monetary_authority: Bank of Guatemala
-  GYD:
+    metadata:
+      symbol: "Q"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - GTM
+      monetary_authority: Bank of Guatemala
+
+  - code: GYD
     name: GuyaneseDollar
     label: Guyanese dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: GUY
-    monetary_authority: Bank of Guyana
-  HKD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - GUY
+      monetary_authority: Bank of Guyana
+
+  - code: HKD
     name: HongKongDollar
     label: Hong Kong dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: HKG
-    monetary_authority: Hong Kong Monetary Authority
-  HNL:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - HKG
+      monetary_authority: Hong Kong Monetary Authority
+
+  - code: HNL
     name: HonduranLempira
     label: Honduran lempira
-    symbol: "L"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: HND
-    monetary_authority: Central Bank of Honduras
-  HRK:
+    metadata:
+      symbol: "L"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - HND
+      monetary_authority: Central Bank of Honduras
+
+  - code: HRK
     name: CroatianKuna
     label: Croatian kuna
-    symbol: "kn"
-    fractions: 100
-    fractional_unit: Lipa
-    polity: HRV
-    monetary_authority: Croatian National Bank
-  HTG:
+    metadata:
+      symbol: "kn"
+      fractions: 100
+      fractional_unit: Lipa
+      polity:
+        - HRV
+      monetary_authority: Croatian National Bank
+
+  - code: HTG
     name: HaitianGourde
     label: Haitian gourde
-    symbol: "G"
-    fractions: 100
-    fractional_unit: 	Centime
-    polity: HTI
-    monetary_authority: Bank of the Republic of Haiti
-  HUF:
+    metadata:
+      symbol: "G"
+      fractions: 100
+      fractional_unit: 	Centime
+      polity:
+        - HTI
+      monetary_authority: Bank of the Republic of Haiti
+
+  - code: HUF
     name: HungarianForint
     label: Hungarian forint
-    symbol: "Ft"
-    fractions: 100
-    fractional_unit: 	Fillér
-    polity: HUN
-    monetary_authority: Hungarian National Bank
-  IDR:
+    metadata:
+      symbol: "Ft"
+      fractions: 100
+      fractional_unit: 	Fillér
+      polity:
+        - HUN
+      monetary_authority: Hungarian National Bank
+
+  - code: IDR
     name: IndonesianRupiah
     label: Indonesian rupiah
-    symbol: "Rp"
-    fractions: 100
-    fractional_unit: 	Sen
-    polity: IDN
-    monetary_authority: Bank of Indonesia
-  ILS:
+    metadata:
+      symbol: "Rp"
+      fractions: 100
+      fractional_unit: 	Sen
+      polity:
+        - IDN
+      monetary_authority: Bank of Indonesia
+
+  - code: ILS
     name: IsraeliNewShekel
     label: Israeli new shekel
-    symbol: "₪"
-    fractions: 100
-    fractional_unit: 	Agora
-    polity: ISR, PSE
-    monetary_authority: Bank of Israel
-  INR:
+    metadata:
+      symbol: "₪"
+      fractions: 100
+      fractional_unit: 	Agora
+      polity:
+        - ISR
+        - PSE
+      monetary_authority: Bank of Israel
+
+  - code: INR
     name: IndianRupee
     label: Indian rupee
-    symbol: "₹"
-    fractions: 100
-    fractional_unit: 	Paisa
-    polity: IND, BTN
-    monetary_authority: Reserve Bank of India
-  IQD:
+    metadata:
+      symbol: "₹"
+      fractions: 100
+      fractional_unit: 	Paisa
+      polity:
+        - IND
+        - BTN
+      monetary_authority: Reserve Bank of India
+
+  - code: IQD
     name: IraqiDinar
     label: Iraqi dinar
-    symbol: "ع.د"
-    fractions: 1000
-    fractional_unit: 	Fils
-    polity: IRQ
-    monetary_authority: Central Bank of Iraq
-  IRR:
+    metadata:
+      symbol: "ع.د"
+      fractions: 1000
+      fractional_unit: 	Fils
+      polity:
+        - IRQ
+      monetary_authority: Central Bank of Iraq
+
+  - code: IRR
     name: IranianRial
     label: Iranian rial
-    symbol: "﷼"
-    fractions: 100
-    fractional_unit: Dinar
-    polity: IRN
-    monetary_authority: Central Bank of Iraq
-  ISK:
+    metadata:
+      symbol: "﷼"
+      fractions: 100
+      fractional_unit: Dinar
+      polity:
+        - IRN
+      monetary_authority: Central Bank of Iraq
+
+  - code: ISK
     name: IcelandicKrona
     label: Icelandic króna
-    symbol: "kr"
-    fractions: 100
-    fractional_unit: Eyrir
-    polity: ISL
-    monetary_authority: Central Bank of Iceland
-  JMD:
+    metadata:
+      symbol: "kr"
+      fractions: 100
+      fractional_unit: Eyrir
+      polity:
+        - ISL
+      monetary_authority: Central Bank of Iceland
+
+  - code: JMD
     name: JamaicanDollar
     label: Jamaican dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: JAM
-    monetary_authority: Bank of Jamaica
-  JOD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - JAM
+      monetary_authority: Bank of Jamaica
+
+  - code: JOD
     name: JordanianDinar
     label: Jordanian dinar
-    symbol: "د.ا"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: JOR, PSE
-    monetary_authority: Central Bank of Jordan
-  JPY:
+    metadata:
+      symbol: "د.ا"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - JOR
+        - PSE
+      monetary_authority: Central Bank of Jordan
+
+  - code: JPY
     name: JapaneseYen
     label: Japanese yen
-    symbol: "¥"
-    fractions: 100
-    fractional_unit: Sen
-    polity: JPN
-    monetary_authority: Bank of Japan
-  KES:
+    metadata:
+      symbol: "¥"
+      fractions: 100
+      fractional_unit: Sen
+      polity:
+        - JPN
+      monetary_authority: Bank of Japan
+
+  - code: KES
     name: KenyanShilling
     label: Kenyan shilling
-    symbol: "Sh"
-    fractions: 100
-    fractional_unit: Cent
-    polity: KEN
-    monetary_authority: Central Bank of Kenya
-  KGS:
+    metadata:
+      symbol: "Sh"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - KEN
+      monetary_authority: Central Bank of Kenya
+
+  - code: KGS
     name: KyrgyzstaniSom
     label: Kyrgyzstani som
-    symbol: "с"
-    fractions: 100
-    fractional_unit: Tyiyn
-    polity: KGZ
-    monetary_authority: National Bank of the Kyrgyz Republic
-  KHR:
+    metadata:
+      symbol: "с"
+      fractions: 100
+      fractional_unit: Tyiyn
+      polity:
+        - KGZ
+      monetary_authority: National Bank of the Kyrgyz Republic
+
+  - code: KHR
     name: CambodianRiel
     label: Cambodian riel
-    symbol: "៛"
-    fractions: 100
-    fractional_unit: Sen
-    polity: KHM
-    monetary_authority: National Bank of Cambodia
-  KMF:
+    metadata:
+      symbol: "៛"
+      fractions: 100
+      fractional_unit: Sen
+      polity:
+        - KHM
+      monetary_authority: National Bank of Cambodia
+
+  - code: KMF
     name: ComoroFranc
     label: Comoro franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Sen
-    polity: COM
-    monetary_authority: Central Bank of the Comoros
-  KPW:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Sen
+      polity:
+        - COM
+      monetary_authority: Central Bank of the Comoros
+
+  - code: KPW
     name: NorthKoreanWon
     label: North Korean won
-    symbol: "₩"
-    fractions: 100
-    fractional_unit: Chon
-    polity: PRK
-    monetary_authority: Central Bank of the Democratic People's Republic of Korea
-  KRW:
+    metadata:
+      symbol: "₩"
+      fractions: 100
+      fractional_unit: Chon
+      polity:
+        - PRK
+      monetary_authority: Central Bank of the Democratic People's Republic of Korea
+
+  - code: KRW
     name: SouthKoreanWon
     label: South Korean won
-    symbol: "₩"
-    fractions: 100
-    fractional_unit: Jeon
-    polity: KOR
-    monetary_authority: Bank of Korea
-  KWD:
+    metadata:
+      symbol: "₩"
+      fractions: 100
+      fractional_unit: Jeon
+      polity:
+        - KOR
+      monetary_authority: Bank of Korea
+
+  - code: KWD
     name: KuwaitiDinar
     label: Kuwaiti dinar
-    symbol: "د.ك"
-    fractions: 1000
-    fractional_unit: Fils
-    polity: KWT
-    monetary_authority: Central Bank of Kuwait
-  KYD:
+    metadata:
+      symbol: "د.ك"
+      fractions: 1000
+      fractional_unit: Fils
+      polity:
+        - KWT
+      monetary_authority: Central Bank of Kuwait
+
+  - code: KYD
     name: CaymanIslandsDollar
     label: Cayman Islands dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: CYM
-    monetary_authority: Cayman Islands Monetary Authority
-  KZT:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - CYM
+      monetary_authority: Cayman Islands Monetary Authority
+
+  - code: KZT
     name: KazakhstaniTenge
     label: Kazakhstani tenge
-    symbol: "₸"
-    fractions: 100
-    fractional_unit: Tïın
-    polity: KAZ
-    monetary_authority: National Bank of Kazakhstan
-  LAK:
+    metadata:
+      symbol: "₸"
+      fractions: 100
+      fractional_unit: Tïın
+      polity:
+        - KAZ
+      monetary_authority: National Bank of Kazakhstan
+
+  - code: LAK
     name: LaoKip
     label: Lao kip
-    symbol: "₭"
-    fractions: 100
-    fractional_unit: Att
-    polity: LAO
-    monetary_authority: Bank of the Lao People's Democratic Republic
-  LBP:
+    metadata:
+      symbol: "₭"
+      fractions: 100
+      fractional_unit: Att
+      polity:
+        - LAO
+      monetary_authority: Bank of the Lao People's Democratic Republic
+
+  - code: LBP
     name: LebanesePound
     label: Lebanese pound
-    symbol: "ل.ل"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: LBN
-    monetary_authority: Banque du Liban
-  LKR:
+    metadata:
+      symbol: "ل.ل"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - LBN
+      monetary_authority: Banque du Liban
+
+  - code: LKR
     name: SriLankanRupee
     label: Sri Lankan rupee
-    symbol: "Rs"
-    fractions: 100
-    fractional_unit: Cent
-    polity: LKA
-    monetary_authority: Central Bank of Sri Lanka
-  LRD:
+    metadata:
+      symbol: "Rs"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - LKA
+      monetary_authority: Central Bank of Sri Lanka
+
+  - code: LRD
     name: LiberianDollar
     label: Liberian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: LBR
-    monetary_authority: Central Bank of Liberia
-  LSL:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - LBR
+      monetary_authority: Central Bank of Liberia
+
+  - code: LSL
     name: LesothoLoti
     label: Lesotho loti
-    symbol: "L"
-    fractions: 100
-    fractional_unit: Sente
-    polity: LBR
-    monetary_authority: Central Bank of Lesotho
-  LYD:
+    metadata:
+      symbol: "L"
+      fractions: 100
+      fractional_unit: Sente
+      polity:
+        - LBR
+      monetary_authority: Central Bank of Lesotho
+
+  - code: LYD
     name: LibyanDinar
     label: Libyan dinar
-    symbol: "ل.د"
-    fractions: 1000
-    fractional_unit: Dirham
-    polity: LBY
-    monetary_authority: Central Bank of Libya
-  MAD:
+    metadata:
+      symbol: "ل.د"
+      fractions: 1000
+      fractional_unit: Dirham
+      polity:
+        - LBY
+      monetary_authority: Central Bank of Libya
+
+  - code: MAD
     name: MoroccanDirham
     label: Moroccan dirham
-    symbol: "د.م."
-    fractions: 100
-    fractional_unit: Centime
-    polity: MAR
-    monetary_authority: Bank Al-Maghrib
-  MDL:
+    metadata:
+      symbol: "د.م."
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - MAR
+      monetary_authority: Bank Al-Maghrib
+
+  - code: MDL
     name: MoldovanLeu
     label: Moldovan leu
-    symbol: "L"
-    fractions: 100
-    fractional_unit: Ban
-    polity: MDA
-    monetary_authority: National Bank of Moldova
-  MGA:
+    metadata:
+      symbol: "L"
+      fractions: 100
+      fractional_unit: Ban
+      polity:
+        - MDA
+      monetary_authority: National Bank of Moldova
+
+  - code: MGA
     name: MalagasyAriary
     label: Malagasy ariary
-    symbol: "Ar"
-    fractions: 5
-    fractional_unit: Iraimbilanja
-    polity: MDG
-    monetary_authority: Central Bank of Madagascar
-  MKD:
+    metadata:
+      symbol: "Ar"
+      fractions: 5
+      fractional_unit: Iraimbilanja
+      polity:
+        - MDG
+      monetary_authority: Central Bank of Madagascar
+
+  - code: MKD
     name: MacedonianDenar
     label: Macedonian denar
-    symbol: "ден"
-    fractions: 100
-    fractional_unit: Deni
-    polity: MKD
-    monetary_authority: National Bank of the Republic of Macedonia
-  MMK:
+    metadata:
+      symbol: "ден"
+      fractions: 100
+      fractional_unit: Deni
+      polity:
+        - MKD
+      monetary_authority: National Bank of the Republic of Macedonia
+
+  - code: MMK
     name: MyanmarKyat
     label: Myanmar kyat
-    symbol: "Ks"
-    fractions: 100
-    fractional_unit: Pya
-    polity: MMR
-    monetary_authority: Central Bank of Myanmar
-  MNT:
+    metadata:
+      symbol: "Ks"
+      fractions: 100
+      fractional_unit: Pya
+      polity:
+        - MMR
+      monetary_authority: Central Bank of Myanmar
+
+  - code: MNT
     name: MongolianTogrog
     label: Mongolian tögrög
-    symbol: "₮"
-    fractions: 100
-    fractional_unit: Möngö
-    polity: MNG
-    monetary_authority: Bank of Mongolia
-  MOP:
+    metadata:
+      symbol: "₮"
+      fractions: 100
+      fractional_unit: Möngö
+      polity:
+        - MNG
+      monetary_authority: Bank of Mongolia
+
+  - code: MOP
     name: MacanesePataca
     label: Macanese pataca
-    symbol: "P"
-    fractions: 100
-    fractional_unit: Avo
-    polity: MAC
-    monetary_authority: Monetary Authority of Macau
-  MRU:
+    metadata:
+      symbol: "P"
+      fractions: 100
+      fractional_unit: Avo
+      polity:
+        - MAC
+      monetary_authority: Monetary Authority of Macau
+
+  - code: MRU
     name: MauritanianOuguiya
     label: Mauritanian ouguiya
-    symbol: "UM"
-    fractions: 5
-    fractional_unit: Khoums
-    polity: MRT
-    monetary_authority: Central Bank of Mauritania
-  MUR:
+    metadata:
+      symbol: "UM"
+      fractions: 5
+      fractional_unit: Khoums
+      polity:
+        - MRT
+      monetary_authority: Central Bank of Mauritania
+
+  - code: MUR
     name: MauritianRupee
     label: Mauritian rupee
-    symbol: "₨"
-    fractions: 100
-    fractional_unit: Cent
-    polity: MUS
-    monetary_authority: Bank of Mauritius
-  MVR:
+    metadata:
+      symbol: "₨"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - MUS
+      monetary_authority: Bank of Mauritius
+
+  - code: MVR
     name: MaldivianRufiyaa
     label: Maldivian rufiyaa
-    symbol: ".ރ"
-    fractions: 100
-    fractional_unit: Laari
-    polity: MDV
-    monetary_authority: Maldives Monetary Authority
-  MWK:
+    metadata:
+      symbol: ".ރ"
+      fractions: 100
+      fractional_unit: Laari
+      polity:
+        - MDV
+      monetary_authority: Maldives Monetary Authority
+
+  - code: MWK
     name: MalawianKwacha
     label: Malawian kwacha
-    symbol: "MK"
-    fractions: 100
-    fractional_unit: Tambala
-    polity: MWI
-    monetary_authority: Reserve Bank of Malawi
-  MXN:
+    metadata:
+      symbol: "MK"
+      fractions: 100
+      fractional_unit: Tambala
+      polity:
+        - MWI
+      monetary_authority: Reserve Bank of Malawi
+
+  - code: MXN
     name: MexicanPeso
     label: Mexican peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: MEX
-    monetary_authority: Bank of Mexico
-  MYR:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - MEX
+      monetary_authority: Bank of Mexico
+
+  - code: MYR
     name: MalaysianRinggit
     label: Malaysian ringgit
-    symbol: "RM"
-    fractions: 100
-    fractional_unit: Sen
-    polity: MYS
-    monetary_authority: Central Bank of Malaysia
-  MZN:
+    metadata:
+      symbol: "RM"
+      fractions: 100
+      fractional_unit: Sen
+      polity:
+        - MYS
+      monetary_authority: Central Bank of Malaysia
+
+  - code: MZN
     name: MozambicanMetical
     label: Mozambican metical
-    symbol: "MT"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: MOZ
-    monetary_authority: Bank of Mozambique
-  NAD:
+    metadata:
+      symbol: "MT"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - MOZ
+      monetary_authority: Bank of Mozambique
+
+  - code: NAD
     name: NamibianDollar
     label: Namibian dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: NAM
-    monetary_authority: Bank of Namibia
-  NGN:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - NAM
+      monetary_authority: Bank of Namibia
+
+  - code: NGN
     name: NigerianNaira
     label: Nigerian naira
-    symbol: "₦"
-    fractions: 100
-    fractional_unit: Kobo
-    polity: NGA
-    monetary_authority: Central Bank of Nigeria
-  NIO:
+    metadata:
+      symbol: "₦"
+      fractions: 100
+      fractional_unit: Kobo
+      polity:
+        - NGA
+      monetary_authority: Central Bank of Nigeria
+
+  - code: NIO
     name: NicaraguaCordoba
     label: Nicaraguan córdoba
-    symbol: "C$"
-    fractions: 100
-    fractional_unit: Centavo
-    polity: NIC
-    monetary_authority: Central Bank of Nicaragua
-  NOK:
+    metadata:
+      symbol: "C$"
+      fractions: 100
+      fractional_unit: Centavo
+      polity:
+        - NIC
+      monetary_authority: Central Bank of Nicaragua
+
+  - code: NOK
     name: NorwegianKrone
     label: Norwegian krone
-    symbol: "kr"
-    fractions: 100
-    fractional_unit: Øre
-    polity: NOR, SJM, BVT
-    monetary_authority: Norges Bank
-  NPR:
+    metadata:
+      symbol: "kr"
+      fractions: 100
+      fractional_unit: Øre
+      polity:
+        - NOR, SJM, BVT
+      monetary_authority: Norges Bank
+
+  - code: NPR
     name: NepaleseRupee
     label: Nepalese rupee
-    symbol: "₨"
-    fractions: 100
-    fractional_unit: Paisa
-    polity: NPL
-    monetary_authority: Nepal Rastra Bank
-  NZD:
+    metadata:
+      symbol: "₨"
+      fractions: 100
+      fractional_unit: Paisa
+      polity:
+        - NPL
+      monetary_authority: Nepal Rastra Bank
+
+  - code: NZD
     name: NewZealandDollar
     label: New Zealand dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: NZL, COK, NIU, PCN, TKL
-    monetary_authority: Reserve Bank of New Zealand
-  OMR:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - NZL
+        - COK
+        - NIU
+        - PCN
+        - TKL
+      monetary_authority: Reserve Bank of New Zealand
+
+  - code: OMR
     name: OmaniRial
     label: Omani rial
-    symbol: "ر.ع."
-    fractions: 1000
-    fractional_unit: Baisa
-    polity: OMN
-    monetary_authority: Central Bank of Oman
-  PAB:
+    metadata:
+      symbol: "ر.ع."
+      fractions: 1000
+      fractional_unit: Baisa
+      polity:
+        - OMN
+      monetary_authority: Central Bank of Oman
+
+  - code: PAB
     name: PanamanianBalboa
     label: Panamanian balboa
-    symbol: "B/."
-    fractions: 100
-    fractional_unit: Centésimo
-    polity: PAN
-    monetary_authority: Central Bank of Oman
-  PEN:
+    metadata:
+      symbol: "B/."
+      fractions: 100
+      fractional_unit: Centésimo
+      polity:
+        - PAN
+      monetary_authority: Central Bank of Oman
+
+  - code: PEN
     name: PeruvianSol
     label: Peruvian sol
-    symbol: "S/."
-    fractions: 100
-    fractional_unit: Céntimo
-    polity: PER
-    monetary_authority: Central Reserve Bank of Peru
-  PGK:
+    metadata:
+      symbol: "S/."
+      fractions: 100
+      fractional_unit: Céntimo
+      polity:
+        - PER
+      monetary_authority: Central Reserve Bank of Peru
+
+  - code: PGK
     name: PapuaNewGuineanKina
     label: Papua New Guinean kina
-    symbol: "K"
-    fractions: 100
-    fractional_unit: Toea
-    polity: PNG
-    monetary_authority: Bank of Papua New Guinea
-  PHP:
+    metadata:
+      symbol: "K"
+      fractions: 100
+      fractional_unit: Toea
+      polity:
+        - PNG
+      monetary_authority: Bank of Papua New Guinea
+
+  - code: PHP
     name: PhilippinePeso
     label: Philippine peso
-    symbol: "₱"
-    fractions: 100
-    fractional_unit: Sentimo
-    polity: PHL
-    monetary_authority: Central Bank of the Philippines
-  PKR:
+    metadata:
+      symbol: "₱"
+      fractions: 100
+      fractional_unit: Sentimo
+      polity:
+        - PHL
+      monetary_authority: Central Bank of the Philippines
+
+  - code: PKR
     name: PakistaniRupee
     label: Pakistani rupee
-    symbol: "₨"
-    fractions: 100
-    fractional_unit: Paisa
-    polity: PAK
-    monetary_authority: State Bank of Pakistan
-  PLN:
+    metadata:
+      symbol: "₨"
+      fractions: 100
+      fractional_unit: Paisa
+      polity:
+        - PAK
+      monetary_authority: State Bank of Pakistan
+
+  - code: PLN
     name: PolishZloty
     label: Polish złoty
-    symbol: "zł"
-    fractions: 100
-    fractional_unit: Grosz
-    polity: POL
-    monetary_authority: National Bank of Poland
-  PYG:
+    metadata:
+      symbol: "zł"
+      fractions: 100
+      fractional_unit: Grosz
+      polity:
+        - POL
+      monetary_authority: National Bank of Poland
+
+  - code: PYG
     name: ParaguayanGuarani
     label: Paraguayan guaraní
-    symbol: "₲"
-    fractions: 100
-    fractional_unit: Céntimo
-    polity: PRY
-    monetary_authority: Central Bank of Paraguay
-  QAR:
+    metadata:
+      symbol: "₲"
+      fractions: 100
+      fractional_unit: Céntimo
+      polity:
+        - PRY
+      monetary_authority: Central Bank of Paraguay
+
+  - code: QAR
     name: QatariRiyal
     label: Qatari riyal
-    symbol: "ر.ق"
-    fractions: 100
-    fractional_unit: Dirham
-    polity: QAT
-    monetary_authority: Qatar Central Bank
-  RON:
+    metadata:
+      symbol: "ر.ق"
+      fractions: 100
+      fractional_unit: Dirham
+      polity:
+        - QAT
+      monetary_authority: Qatar Central Bank
+
+  - code: RON
     name: RomanianLeu
     label: Romanian leu
-    symbol: "lei"
-    fractions: 100
-    fractional_unit: Ban
-    polity: ROU
-    monetary_authority: National Bank of Romania
-  RSD:
+    metadata:
+      symbol: "lei"
+      fractions: 100
+      fractional_unit: Ban
+      polity:
+        - ROU
+      monetary_authority: National Bank of Romania
+
+  - code: RSD
     name: SerbianDinar
     label: Serbian dinar
-    symbol: "din"
-    fractions: 100
-    fractional_unit: Para
-    polity: SRB
-    monetary_authority: National Bank of Serbia
-  RUB:
+    metadata:
+      symbol: "din"
+      fractions: 100
+      fractional_unit: Para
+      polity:
+        - SRB
+      monetary_authority: National Bank of Serbia
+
+  - code: RUB
     name: RussianRuble
     label: Russian ruble
-    symbol: "₽"
-    fractions: 100
-    fractional_unit: Kopek
-    polity: RUS
-    monetary_authority: Bank of Russia
-  RWF:
+    metadata:
+      symbol: "₽"
+      fractions: 100
+      fractional_unit: Kopek
+      polity:
+        - RUS
+      monetary_authority: Bank of Russia
+
+  - code: RWF
     name: RwandanFranc
     label: Rwandan franc
-    symbol: "Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: RWA
-    monetary_authority: National Bank of Rwanda
-  SAR:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - RWA
+      monetary_authority: National Bank of Rwanda
+
+  - code: SAR
     name: SaudiRiyal
     label: Saudi riyal
-    symbol: "ر.س"
-    fractions: 100
-    fractional_unit: Halala
-    polity: SAU
-    monetary_authority: Saudi Arabian Monetary Authority
-  SBD:
+    metadata:
+      symbol: "ر.س"
+      fractions: 100
+      fractional_unit: Halala
+      polity:
+        - SAU
+      monetary_authority: Saudi Arabian Monetary Authority
+
+  - code: SBD
     name: SolomonIslandDollar
     label: Solomon Islands dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SLB
-    monetary_authority: Central Bank of Solomon Islands
-  SCR:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SLB
+      monetary_authority: Central Bank of Solomon Islands
+
+  - code: SCR
     name: SeychelloisRupee
     label: Seychellois rupee
-    symbol: "₨"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SYC
-    monetary_authority: Central Bank of Solomon Islands
-  SDG:
+    metadata:
+      symbol: "₨"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SYC
+      monetary_authority: Central Bank of Solomon Islands
+
+  - code: SDG
     name: SudanesePound
     label: Sudanese pound
-    symbol: "ج.س."
-    fractions: 100
-    fractional_unit: Piastre
-    polity: SSD
-    monetary_authority: Bank of Sudan
-  SEK:
+    metadata:
+      symbol: "ج.س."
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - SSD
+      monetary_authority: Bank of Sudan
+
+  - code: SEK
     name: SwedishKrona
     label: Swedish krona
-    symbol: "kr"
-    fractions: 100
-    fractional_unit: Öre
-    polity: SWE
-    monetary_authority: Sveriges Riksbank
-  SGD:
+    metadata:
+      symbol: "kr"
+      fractions: 100
+      fractional_unit: Öre
+      polity:
+        - SWE
+      monetary_authority: Sveriges Riksbank
+
+  - code: SGD
     name: SingaporeDollar
     label: Singapore dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SGP
-    monetary_authority: Monetary Authority of Singapore
-  SHP:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SGP
+      monetary_authority: Monetary Authority of Singapore
+
+  - code: SHP
     name: SaintHelenaPound
     label: Saint Helena pound
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Penny
-    polity: SHN
-    monetary_authority: Government of Saint Helena
-  SLL:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Penny
+      polity:
+        - SHN
+      monetary_authority: Government of Saint Helena
+
+  - code: SLL
     name: SierraLeoneanLeone
     label: Sierra Leonean leone
-    symbol: "Le"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SLE
-    monetary_authority: Bank of Sierra Leone
-  SOS:
+    metadata:
+      symbol: "Le"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SLE
+      monetary_authority: Bank of Sierra Leone
+
+  - code: SOS
     name: SomaliShilling
     label: Somali shilling
-    symbol: "Sl"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SOM
-    monetary_authority: Central Bank of Somalia
-  SRD:
+    metadata:
+      symbol: "Sl"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SOM
+      monetary_authority: Central Bank of Somalia
+
+  - code: SRD
     name: SurilabelseDollar
     label: Surilabelse dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SUR
-    monetary_authority: Central Bank of Surilabel
-  SSP:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SUR
+      monetary_authority: Central Bank of Surilabel
+
+  - code: SSP
     name: SouthSudanesePound
     label: South Sudanese pound
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: SSD
-    monetary_authority: Bank of South Sudan
-  STN:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - SSD
+      monetary_authority: Bank of South Sudan
+
+  - code: STN
     name: SaoTomePrincipeDobra
     label: São Tomé and Príncipe dobra
-    symbol: "Db"
-    fractions: 100
-    fractional_unit: Cêntimo
-    polity: STP
-    monetary_authority: Central Bank of São Tomé and Príncipe
-  SYP:
+    metadata:
+      symbol: "Db"
+      fractions: 100
+      fractional_unit: Cêntimo
+      polity:
+        - STP
+      monetary_authority: Central Bank of São Tomé and Príncipe
+
+  - code: SYP
     name: SyrianPound
     label: Syrian pound
-    symbol: "£"
-    fractions: 100
-    fractional_unit: Piastre
-    polity: SYR
-    monetary_authority: Central Bank of Syria
-  SZL:
+    metadata:
+      symbol: "£"
+      fractions: 100
+      fractional_unit: Piastre
+      polity:
+        - SYR
+      monetary_authority: Central Bank of Syria
+
+  - code: SZL
     name: SwaziLilangeni
     label: Swazi lilangeni
-    symbol: "L"
-    fractions: 100
-    fractional_unit: Cent
-    polity: SWZ
-    monetary_authority: Central Bank of Swaziland
-  THB:
+    metadata:
+      symbol: "L"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - SWZ
+      monetary_authority: Central Bank of Swaziland
+
+  - code: THB
     name: ThaiBaht
     label: Thai baht
-    symbol: "฿"
-    fractions: 100
-    fractional_unit: Satang
-    polity: THA
-    monetary_authority: Bank of Thailand
-  TJS:
+    metadata:
+      symbol: "฿"
+      fractions: 100
+      fractional_unit: Satang
+      polity:
+        - THA
+      monetary_authority: Bank of Thailand
+
+  - code: TJS
     name: TajikistaniSomoni
     label: Tajikistani somoni
-    symbol: "ЅМ"
-    fractions: 100
-    fractional_unit: Diram
-    polity: TJK
-    monetary_authority: National Bank of Tajikistan
-  TMT:
+    metadata:
+      symbol: "ЅМ"
+      fractions: 100
+      fractional_unit: Diram
+      polity:
+        - TJK
+      monetary_authority: National Bank of Tajikistan
+
+  - code: TMT
     name: TurkmenistanManat
     label: Turkmenistan manat
-    symbol: "m"
-    fractions: 100
-    fractional_unit: Tennesi
-    polity: TKM
-    monetary_authority: Central Bank of Turkmenistan
-  TND:
+    metadata:
+      symbol: "m"
+      fractions: 100
+      fractional_unit: Tennesi
+      polity:
+        - TKM
+      monetary_authority: Central Bank of Turkmenistan
+
+  - code: TND
     name: TunisianDinar
     label: Tunisian dinar
-    symbol: "د.ت"
-    fractions: 1000
-    fractional_unit: Millime
-    polity: TUN
-    monetary_authority: Central Bank of Tunisia
-  TOP:
+    metadata:
+      symbol: "د.ت"
+      fractions: 1000
+      fractional_unit: Millime
+      polity:
+        - TUN
+      monetary_authority: Central Bank of Tunisia
+
+  - code: TOP
     name: TonganPaAnga
     label: Tongan paʻanga
-    symbol: "T$"
-    fractions: 100
-    fractional_unit: Seniti
-    polity: TON
-    monetary_authority: National Reserve Bank of Tonga
-  TRY:
+    metadata:
+      symbol: "T$"
+      fractions: 100
+      fractional_unit: Seniti
+      polity:
+        - TON
+      monetary_authority: National Reserve Bank of Tonga
+
+  - code: TRY
     name: TurkishLira
     label: Turkish lira
-    symbol: "₺"
-    fractions: 100
-    fractional_unit: Kuruş
-    polity: TUR
-    monetary_authority: Central Bank of the Republic of Turkey
-  TTD:
+    metadata:
+      symbol: "₺"
+      fractions: 100
+      fractional_unit: Kuruş
+      polity:
+        - TUR
+      monetary_authority: Central Bank of the Republic of Turkey
+
+  - code: TTD
     name: TrinidadTobagoDollar
     label: Trinidad and Tobago dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: TTO
-    monetary_authority: Central Bank of Trinidad and Tobago
-  TWD:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - TTO
+      monetary_authority: Central Bank of Trinidad and Tobago
+
+  - code: TWD
     name: NewTaiwanDollar
     label: New Taiwan dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: TWN
-    monetary_authority: Central Bank of the Republic of China (Taiwan)
-  TZS:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - TWN
+      monetary_authority: Central Bank of the Republic of China (Taiwan)
+
+  - code: TZS
     name: TanzanianShilling
     label: Tanzanian shilling
-    symbol: "Sh"
-    fractions: 100
-    fractional_unit: Cent
-    polity: TZA
-    monetary_authority: Bank of Tanzania
-  UAH:
+    metadata:
+      symbol: "Sh"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - TZA
+      monetary_authority: Bank of Tanzania
+
+  - code: UAH
     name: UkrainianHryvnia
     label: Ukrainian hryvnia
-    symbol: "₴"
-    fractions: 100
-    fractional_unit: Kopiyka
-    polity: UKR
-    monetary_authority: National Bank of Ukraine
-  UGX:
+    metadata:
+      symbol: "₴"
+      fractions: 100
+      fractional_unit: Kopiyka
+      polity:
+        - UKR
+      monetary_authority: National Bank of Ukraine
+
+  - code: UGX
     name: UgandanShilling
     label: Ugandan shilling
-    symbol: "Sh"
-    fractions: 100
-    fractional_unit: Cent
-    polity: UGA
-    monetary_authority: Bank of Uganda
-  USD:
+    metadata:
+      symbol: "Sh"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - UGA
+      monetary_authority: Bank of Uganda
+
+  - code: USD
     name: UnitedStatesDollar
     label: United States dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity: USA, ASM, VGB, BES, ECU, SLV, GUM, HTI, MHL, FSM, MNP, PLW, PAN, PRI, TLS, TCA, VIR, UMI
-    monetary_authority: Federal Reserve
-  UYU:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - USA
+        - ASM
+        - VGB
+        - BES
+        - ECU
+        - SLV
+        - GUM
+        - HTI
+        - MHL
+        - FSM
+        - MNP
+        - PLW
+        - PAN
+        - PRI
+        - TLS
+        - TCA
+        - VIR
+        - UMI
+      monetary_authority: Federal Reserve
+
+  - code: UYU
     name: UruguayanPeso
     label: Uruguayan peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centésimo
-    polity: URY
-    monetary_authority: Central Bank of Uruguay
-  UYU:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centésimo
+      polity:
+        - URY
+      monetary_authority: Central Bank of Uruguay
+
+  - code: UYU
     name: UruguayanPeso
     label: Uruguayan peso
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Centésimo
-    polity: URY
-    monetary_authority: Central Bank of Uruguay
-  UZS:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Centésimo
+      polity:
+        - URY
+      monetary_authority: Central Bank of Uruguay
+
+  - code: UZS
     name: UzbekistaniSom
     label: Uzbekistani soʻm
-    symbol: "so'm"
-    fractions: 100
-    fractional_unit: Tiyin
-    polity: UZB
-    monetary_authority: Central Bank of the Republic of Uzbekistan
-  VES:
+    metadata:
+      symbol: "so'm"
+      fractions: 100
+      fractional_unit: Tiyin
+      polity:
+        - UZB
+      monetary_authority: Central Bank of the Republic of Uzbekistan
+
+  - code: VES
     name: VenezuelanBolivarSoberano
     label: Venezuelan bolívar soberano
-    symbol: "Bs."
-    fractions: 100
-    fractional_unit: Céntimo
-    polity: VEN
-    monetary_authority: Central Bank of Venezuela
-  VND:
+    metadata:
+      symbol: "Bs."
+      fractions: 100
+      fractional_unit: Céntimo
+      polity:
+        - VEN
+      monetary_authority: Central Bank of Venezuela
+
+  - code: VND
     name: VietlabelseDong
     label: Vietlabelse đồng
-    symbol: "₫"
-    fractions: 100
-    fractional_unit: Hào
-    polity: VNM
-    monetary_authority: State Bank of Vietnam
-  VUV:
+    metadata:
+      symbol: "₫"
+      fractions: 100
+      fractional_unit: Hào
+      polity:
+        - VNM
+      monetary_authority: State Bank of Vietnam
+
+  - code: VUV
     name: VanuatuVatu
     label: Vanuatu vatu
-    symbol: "Vt"
-    fractions: 1
-    fractional_unit: ~
-    polity: VUT
-    monetary_authority: Reserve Bank of Vanuatu
-  WST:
+    metadata:
+      symbol: "Vt"
+      fractions: 1
+      fractional_unit: ~
+      polity:
+        - VUT
+      monetary_authority: Reserve Bank of Vanuatu
+
+  - code: WST
     name: SamoanTala
     label: Samoan tālā
-    symbol: "T"
-    fractions: 100
-    fractional_unit: Sene
-    polity: WSM
-    monetary_authority: Central Bank of Samoa
-  XAF:
+    metadata:
+      symbol: "T"
+      fractions: 100
+      fractional_unit: Sene
+      polity:
+        - WSM
+      monetary_authority: Central Bank of Samoa
+
+  - code: XAF
     name: CentralAfricanCFAFranc
     label: Central African CFA franc
-    symbol: "T"
-    fractions: 100
-    fractional_unit: Sene
-    polity: CMR, CAF, COG, TCD, GNQ, GAB
-    monetary_authority: Central Bank of Samoa
-#XAG	.	Silver (one troy ounce)
-#XAU	.	Gold (one troy ounce)
-#XBA	.	European Composite Unit (EURCO) (bond market unit)
-#XBB	.	European Monetary Unit (E.M.U.-6) (bond market unit)
-#XBC	.	European Unit of Account 9 (E.U.A.-9) (bond market unit)
-#XBD	.	European Unit of Account 17 (E.U.A.-17) (bond market unit)
-  XCD:
+    metadata:
+      symbol: "T"
+      fractions: 100
+      fractional_unit: Sene
+      polity:
+        - CMR
+        - CAF
+        - COG
+        - TCD
+        - GNQ
+        - GAB
+      monetary_authority: Central Bank of Samoa
+
+  - code: XCD
     name: EastCaribbeanDollar
     label: East Caribbean dollar
-    symbol: "$"
-    fractions: 100
-    fractional_unit: Cent
-    polity:	AIA, ATG, DMA, GRD, MSR, KNA, LCA, VCT
-    monetary_authority: Eastern Caribbean Central Bank
-#XDR	.	Special drawing rights	International Monetary Fund
-  XOF:
+    metadata:
+      symbol: "$"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - AIA
+        - ATG
+        - DMA
+        - GRD
+        - MSR
+        - KNA
+        - LCA
+        - VCT
+      monetary_authority: Eastern Caribbean Central Bank
+
+  - code: XOF
     name: WestAfricanCFAFranc
     label: West African CFA franc
-    symbol:	"Fr"
-    fractions: 100
-    fractional_unit: Centime
-    polity: BEN, BFA, CIV, GNB, MLI, NER, SEN, TGO
-    monetary_authority: Central Bank of West African States
-#XPD	.	Palladium (one troy ounce)
-  XPF:
-#  	0	CFP franc (franc Pacifique)	French territories of the Pacific Ocean:  French Polynesia (PF),  NewCaledonia (NC),  Wallis and Futuna (WF)
-#XPT	.	Platinum (one troy ounce)
-  YER:
+    metadata:
+      symbol: "Fr"
+      fractions: 100
+      fractional_unit: Centime
+      polity:
+        - BEN
+        - BFA
+        - CIV
+        - GNB
+        - MLI
+        - NER
+        - SEN
+        - TGO
+      monetary_authority: Central Bank of West African States
+
+  - code: YER
     name: YemeniRial
     label: Yemeni rial
-    symbol: "﷼"
-    fractions: 100
-    fractional_unit: Fils
-    polity: YEM
-    monetary_authority: Central Bank of Yemen
-  ZAR:
+    metadata:
+      symbol: "﷼"
+      fractions: 100
+      fractional_unit: Fils
+      polity:
+        - YEM
+      monetary_authority: Central Bank of Yemen
+
+  - code: ZAR
     name: SouthAfricanRand
     label: South African rand
-    symbol: "R"
-    fractions: 100
-    fractional_unit: Cent
-    polity: ZAF
-    monetary_authority: South African Reserve Bank
-  ZMW:
+    metadata:
+      symbol: "R"
+      fractions: 100
+      fractional_unit: Cent
+      polity:
+        - ZAF
+      monetary_authority: South African Reserve Bank
+
+  - code: ZMW
     name: ZambianKwacha
     label: Zambian kwacha
-    symbol: "ZK"
-    fractions: 100
-    fractional_unit: Ngwee
-    polity: ZMB
-    monetary_authority: Bank of Zambia
+    metadata:
+      symbol: "ZK"
+      fractions: 100
+      fractional_unit: Ngwee
+      polity:
+        - ZMB
+      monetary_authority: Bank of Zambia
 
 `
 
 // Entities - Legal Entities & Ownership Structures. 1 character.
 var yamlEntities = `
-    I:
-      name: individual # (Natural Person)
+
+    - code: I
+      name: Individual # (Natural Person)
       label: "Individual"
-      type: Legal
-      roles:
-        owners:
-          principal: null
-        administrators:
-          legalGuardian: []
-          agent: [] # (granted by the principal)
-        general:
-          accountant: []
-          advisor: []
-          lawyer: []
-          manager: []
-          trader: []
-    P:
-      name: publicCompany
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            principal: null
+          administrators:
+            legalGuardian: []
+            agent: [] # (granted by the principal)
+          general:
+            accountant: []
+            advisor: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: P
+      name: PublicCompany
       label: "Public Company Limited by Shares"
-      type: Legal
-      roles:
-        owners:
-          shareholder: []
-          significantShareholder: []
-        administrators: # Board of Directors
-          chairman: null
-          director: []
-        managers:
-          ceo: null
-          coo: null
-          cfo: null
-          cto: null
-          executive: []
-          secretary: null
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    C:
-      name: privateCompany
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            shareholder: []
+            significantShareholder: []
+          administrators: # Board of Directors
+            chairman: null
+            director: []
+          managers:
+            ceo: null
+            coo: null
+            cfo: null
+            cto: null
+            executive: []
+            secretary: null
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: C
+      name: PrivateCompany
       label: "Private Company Limited by Shares"
-      type: Legal
-      roles:
-        owners:
-          shareholder: []
-          significantShareholder: []
-        administrators:
-          chairman: null
-          director: []
-          secretary: null
-        managers:
-          ceo: null
-          coo: null
-          cfo: null
-          cto: null
-          executive: []
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    L:
-      name: limitedPartnership
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            shareholder: []
+            significantShareholder: []
+          administrators:
+            chairman: null
+            director: []
+            secretary: null
+          managers:
+            ceo: null
+            coo: null
+            cfo: null
+            cto: null
+            executive: []
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: L
+      name: LimitedPartnership
       label: "Limited Partnership"
-      type: Legal
-      roles:
-        owners:
-          partner: []
-        managers:
-          managingPartner: []
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    U:
-      name: unlimitedPartnership
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            partner: []
+          managers:
+            managingPartner: []
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: U
+      name: UnlimitedPartnership
       label: "Unlimited Partnership" # (General Partnership, Marriage, Civil Union, Common Law Marriage, Domestic Partnership,  )
-      type: Legal
-      roles:
-        owners:
-          partner: []
-        managers:
-          managingPartner: []
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    T:
-      name: soleProprietorship
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            partner: []
+          managers:
+            managingPartner: []
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: T
+      name: SoleProprietorship
       label: "Sole Proprietorship"
-      type: Legal
-      roles:
-        owners:
-          proprietor: null
-        administrators:
-          agent: [] # (granted by the proprietor)
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    S:
-      name: statutoryCompany
+      metadata:
+        type: Legal
+        roles:
+          owners:
+            proprietor: null
+          administrators:
+            agent: [] # (granted by the proprietor)
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: S
+      name: StatutoryCompany
       label: "Statutory Company"
-      type: Legal
-      roles:
-        administrators:
-          chairman: null
-          director: []
-          secretary: null
-        managers:
-          ceo: null
-          coo: null
-          cfo: null
-          cto: null
-          executive: []
-          secretary: null
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    O:
-      name: nonProfitOrganization
+      metadata:
+        type: Legal
+        roles:
+          administrators:
+            chairman: null
+            director: []
+            secretary: null
+          managers:
+            ceo: null
+            coo: null
+            cfo: null
+            cto: null
+            executive: []
+            secretary: null
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: O
+      name: NonProfitOrganization
       label: "Non-Profit Organization"
-      type: Legal
-      role:
-        administrators:
-          chairman: null
-          director: []
-          secretary: null
-        managers:
-          ceo: null
-          coo: null
-          cfo: null
-          cto: null
-          executive: []
-        general:
-          accountant: []
-          advisor: []
-          employee: []
-          lawyer: []
-          manager: []
-          trader: []
-    N:
-      name: nationState
+      metadata:
+        type: Legal
+        role:
+          administrators:
+            chairman: null
+            director: []
+            secretary: null
+          managers:
+            ceo: null
+            coo: null
+            cfo: null
+            cto: null
+            executive: []
+          general:
+            accountant: []
+            advisor: []
+            employee: []
+            lawyer: []
+            manager: []
+            trader: []
+
+    - code: N
+      name: NationState
       label: "Nation State" # (Sovereign State)
-      type: Legal
-    G:
-      name: governmentAgency
+      metadata:
+        type: Legal
+
+    - code: G
+      name: GovernmentAgency
       label: "Government Agency"
-      type: Legal
-    U:
-      name: unitTrust
+      metadata:
+        type: Legal
+
+    - code: U
+      name: UnitTrust
       label: "Unit Trust"
-      type: Ownership
-      roles:
-        owners:
-          unitholder: []
-        administrators:
-          protector: []
-          trustee: []
-        general:
-          accountant: []
-          advisor: []
-          custodian: []
-          employee: []
-          lawyer: []
-          manager: []
-          settlor: []
-          trader: []
-    D:
-      name: discretionaryTrust
+      metadata:
+        type: Ownership
+        roles:
+          owners:
+            unitholder: []
+          administrators:
+            protector: []
+            trustee: []
+          general:
+            accountant: []
+            advisor: []
+            custodian: []
+            employee: []
+            lawyer: []
+            manager: []
+            settlor: []
+            trader: []
+
+    - code: D
+      name: DiscretionaryTrust
       label: "Discretionary Trust" # (Family Trust)
-      type: Ownership
-      roles:
-        owners:
-          beneficiary: []
-        administrators:
-          protector: []
-          trustee: []
-        general:
-          accountant: []
-          advisor: []
-          custodian: []
-          employee: []
-          lawyer: []
-          manager: []
-          settlor: []
-          trader: []
+      metadata:
+        type: Ownership
+        roles:
+          owners:
+            beneficiary: []
+          administrators:
+            protector: []
+            trustee: []
+          general:
+            accountant: []
+            advisor: []
+            custodian: []
+            employee: []
+            lawyer: []
+            manager: []
+            settlor: []
+            trader: []
 
 `
 
 // Polities - Polities (eg. Countries/Nation-States (ISO-3166 Alpha-3),
-// Political Unions, International Organizations, etc.). 3 character code.
+// Political Unions, International Organizations, etc.). Based on a 3
+// character code.
 var yamlPolities = `
-  ALA:
+  - code: ALA
     name: Aaland Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/52/Flag_of_%C3%85land.svg"
-  AFG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/52/Flag_of_%C3%85land.svg"
+
+  - code: AFG
     name: Afghanistan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Afghanistan.svg"
-  ALB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Afghanistan.svg"
+
+  - code: ALB
     name: Albania
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/36/Flag_of_Albania.svg"
-  DZA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/36/Flag_of_Albania.svg"
+
+  - code: DZA
     name: Algeria
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_Algeria.svg"
-  ASM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_Algeria.svg"
+
+  - code: ASM
     name: American Samoa
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/87/Flag_of_American_Samoa.svg"
-  AND:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/87/Flag_of_American_Samoa.svg"
+
+  - code: AND
     name: Andorra
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Andorra.svg"
-  AGO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Andorra.svg"
+
+  - code: AGO
     name: Angola
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Flag_of_Angola.svg"
-  AIA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Flag_of_Angola.svg"
+
+  - code: AIA
     name: Anguilla
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b4/Flag_of_Anguilla.svg"
-  ATA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b4/Flag_of_Anguilla.svg"
+
+  - code: ATA
     name: Antarctica
-    states: ~
-    flag:
-  ATG:
+    metadata:
+      states: ~
+      flag:
+
+  - code: ATG
     name: Antigua and Barbuda
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/89/Flag_of_Antigua_and_Barbuda.svg"
-  ARG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/89/Flag_of_Antigua_and_Barbuda.svg"
+
+  - code: ARG
     name: Argentina
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/1a/Flag_of_Argentina.svg"
-  ARM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/1a/Flag_of_Argentina.svg"
+
+  - code: ARM
     name: Armenia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Flag_of_Armenia.svg"
-  ABW:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Flag_of_Armenia.svg"
+
+  - code: ABW
     name: Aruba
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Aruba.svg"
-  AU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Aruba.svg"
+
+  - code: AU
     name: African Union
-    states:
-      DZA: ~
-      AGO: ~
-      BEN: ~
-      BWA: ~
-      BFA: ~
-      BDI: ~
-      CPV: ~
-      CMR: ~
-      CAF: ~
-      TCD: ~
-      COM: ~
-      COD: ~
-      DJI: ~
-      EGY: ~
-      GNQ: ~
-      ERI: ~
-      SWZ: ~
-      ETH: ~
-      GAB: ~
-      GMB: ~
-      GHA: ~
-      GIN: ~
-      GNB: ~
-      CIV: ~
-      KEN: ~
-      LSO: ~
-      LBR: ~
-      LBY: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/51/Flag_of_the_African_Union.svg"
-  AUS:
+    metadata:
+      states:
+        DZA: ~
+        AGO: ~
+        BEN: ~
+        BWA: ~
+        BFA: ~
+        BDI: ~
+        CPV: ~
+        CMR: ~
+        CAF: ~
+        TCD: ~
+        COM: ~
+        COD: ~
+        DJI: ~
+        EGY: ~
+        GNQ: ~
+        ERI: ~
+        SWZ: ~
+        ETH: ~
+        GAB: ~
+        GMB: ~
+        GHA: ~
+        GIN: ~
+        GNB: ~
+        CIV: ~
+        KEN: ~
+        LSO: ~
+        LBR: ~
+        LBY: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/51/Flag_of_the_African_Union.svg"
+
+  - code: AUS
     name: Australia
-    states:
-      AUNSW: New South Wales
-      AUQLD: Queensland
-      AUSA: South Australia
-      AUTAS: Tasmania
-      AUVIC: Victoria
-      AUWA: Western Australia
-      AUACT: Australian Capital Territory
-      AUNT: Northern Territory
-      AUJBT: Jervis Bay Territory
-      AUCX: Christmas Island
-      AUCC: Cocos (Keening) Island
-      AUHM: Heard Island and McDonalds Islands
-      AUNF: Norfolk Island
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b9/Flag_of_Australia.svg"
-    fiscal_year: 0701-0630
-    gov_fiscal_year: 0701-0630
-  AUT:
+    metadata:
+      states:
+        AUNSW: New South Wales
+        AUQLD: Queensland
+        AUSA: South Australia
+        AUTAS: Tasmania
+        AUVIC: Victoria
+        AUWA: Western Australia
+        AUACT: Australian Capital Territory
+        AUNT: Northern Territory
+        AUJBT: Jervis Bay Territory
+        AUCX: Christmas Island
+        AUCC: Cocos (Keening) Island
+        AUHM: Heard Island and McDonalds Islands
+        AUNF: Norfolk Island
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b9/Flag_of_Australia.svg"
+      fiscal_year: 0701-0630
+      gov_fiscal_year: 0701-0630
+
+  - code: AUT
     name: Austria
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/41/Flag_of_Austria.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  AZE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/41/Flag_of_Austria.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: AZE
     name: Azerbaijan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/dd/Flag_of_Azerbaijan.svg"
-  BHS:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/dd/Flag_of_Azerbaijan.svg"
+
+  - code: BHS
     name: The Bahamas
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/93/Flag_of_the_Bahamas.svg"
-  BHR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/93/Flag_of_the_Bahamas.svg"
+
+  - code: BHR
     name: Bahrain
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Flag_of_Bahrain.svg"
-  BGD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Flag_of_Bahrain.svg"
+
+  - code: BGD
     name: Bangladesh
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f9/Flag_of_Bangladesh.svg"
-    fiscal_year: 0701-0630
-    gov_fiscal_year: 0701-0630
-  BRB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f9/Flag_of_Bangladesh.svg"
+      fiscal_year: 0701-0630
+      gov_fiscal_year: 0701-0630
+
+  - code: BRB
     name: Barbados
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Flag_of_Barbados.svg"
-  BLR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Flag_of_Barbados.svg"
+
+  - code: BLR
     name: Belarus
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/85/Flag_of_Belarus.svg"
-  BEL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/85/Flag_of_Belarus.svg"
+
+  - code: BEL
     name: Belgium
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/65/Flag_of_Belgium.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  BLZ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/65/Flag_of_Belgium.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: BLZ
     name: Belize
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Flag_of_Belize.svg"
-  BEN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Flag_of_Belize.svg"
+
+  - code: BEN
     name: Benin
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0a/Flag_of_Benin.svg"
-  BMU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0a/Flag_of_Benin.svg"
+
+  - code: BMU
     name: Bermuda
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bf/Flag_of_Bermuda.svg"
-  BTN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bf/Flag_of_Bermuda.svg"
+
+  - code: BTN
     name: Bhutan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/91/Flag_of_Bhutan.svg"
-  BOL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/91/Flag_of_Bhutan.svg"
+
+  - code: BOL
     name: Bolivia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/de/Flag_of_Bolivia_%28state%29.svg"
-  BES:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/de/Flag_of_Bolivia_%28state%29.svg"
+
+  - code: BES
     name: Bonaire, St Eustasuis and Saba
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/20/Flag_of_the_Netherlands.svg"
-  BIH:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/20/Flag_of_the_Netherlands.svg"
+
+  - code: BIH
     name: Bosnia and Herzegovina
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bf/Flag_of_Bosnia_and_Herzegovina.svg"
-  BWA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bf/Flag_of_Bosnia_and_Herzegovina.svg"
+
+  - code: BWA
     name: Botswana
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_Botswana.svg"
-  BVT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_Botswana.svg"
+
+  - code: BVT
     name: Bouvet Island
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Norway.svg"
-  BRA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Norway.svg"
+
+  - code: BRA
     name: Brazil
-    states:
-      BRAC: Acre
-      BRAL: Alagoas
-      BRAP: Amapá
-      BRAM: Amazonas
-      BRBA: Bahia
-      BRCE: Ceará
-      BRES: Espírito Santo
-      BRDF: Federal District
-      BRGO: Goiás
-      BRMA: Maranhão
-      BRMT: Mato Grosso
-      BRMS: Mato Grosso do Sul
-      BRMG: Minas Gerais
-      BRPA: Pará
-      BRPB: Paraíba
-      BRPR: Paraná
-      BRPE: Pernambuco
-      BRPI: Piauí
-      BRRJ: Rio de Janeiro
-      BRRN: Rio Grande do Norte
-      BRRS: Rio Grande do Sul
-      BRRO: Rondônia
-      BRRR: Roraima
-      BRSC: Santa Catarina
-      BRSP: São Paulo
-      BRSE: Sergipe
-      BRTO: Tocantins
-    flag: "https://upload.wikimedia.org/wikipedia/en/0/05/Flag_of_Brazil.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  IOT:
+    metadata:
+      states:
+        BRAC: Acre
+        BRAL: Alagoas
+        BRAP: Amapá
+        BRAM: Amazonas
+        BRBA: Bahia
+        BRCE: Ceará
+        BRES: Espírito Santo
+        BRDF: Federal District
+        BRGO: Goiás
+        BRMA: Maranhão
+        BRMT: Mato Grosso
+        BRMS: Mato Grosso do Sul
+        BRMG: Minas Gerais
+        BRPA: Pará
+        BRPB: Paraíba
+        BRPR: Paraná
+        BRPE: Pernambuco
+        BRPI: Piauí
+        BRRJ: Rio de Janeiro
+        BRRN: Rio Grande do Norte
+        BRRS: Rio Grande do Sul
+        BRRO: Rondônia
+        BRRR: Roraima
+        BRSC: Santa Catarina
+        BRSP: São Paulo
+        BRSE: Sergipe
+        BRTO: Tocantins
+      flag: "https://upload.wikimedia.org/wikipedia/en/0/05/Flag_of_Brazil.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: IOT
     name: British Indian Ocean Territory
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Flag_of_the_British_Indian_Ocean_Territory.svg"
-  VGB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Flag_of_the_British_Indian_Ocean_Territory.svg"
+
+  - code: VGB
     name: British Virgin Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/42/Flag_of_the_British_Virgin_Islands.svg"
-  BRN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/42/Flag_of_the_British_Virgin_Islands.svg"
+
+  - code: BRN
     name: Brunei
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Brunei.svg"
-  BGR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Brunei.svg"
+
+  - code: BGR
     name: Bulgaria
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Bulgaria.svg"
-  BFA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Bulgaria.svg"
+
+  - code: BFA
     name: Burkina Faso
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Burkina_Faso.svg"
-  BDI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Burkina_Faso.svg"
+
+  - code: BDI
     name: Burundi
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/50/Flag_of_Burundi.svg"
-  KHM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/50/Flag_of_Burundi.svg"
+
+  - code: KHM
     name: Cambodia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/83/Flag_of_Cambodia.svg"
-  CMR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/83/Flag_of_Cambodia.svg"
+
+  - code: CMR
     name: Cameroon
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Flag_of_Cameroon.svg"
-  CAN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Flag_of_Cameroon.svg"
+
+  - code: CAN
     name: Canada
-    states:
-      CAAB: Alberta
-      CABC: British Columbia
-      CAMB: Manitoba
-      CANB: New Brunswick
-      CANL: Newfoundland and Labrador
-      CANS: Nova Scotia
-      CAON: Ontario
-      CAPE: Prince Edward Island
-      CAQC: Quebec
-      CASK: Saskatchewan
-      CANT: Northwest Territories
-      CANU: Nunavut
-      CAYT: Yukon
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Canada_%28Pantone%29.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0401-0331
-  CPV:
+    metadata:
+      states:
+        CAAB: Alberta
+        CABC: British Columbia
+        CAMB: Manitoba
+        CANB: New Brunswick
+        CANL: Newfoundland and Labrador
+        CANS: Nova Scotia
+        CAON: Ontario
+        CAPE: Prince Edward Island
+        CAQC: Quebec
+        CASK: Saskatchewan
+        CANT: Northwest Territories
+        CANU: Nunavut
+        CAYT: Yukon
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Canada_%28Pantone%29.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0401-0331
+
+  - code: CPV
     name: Cape Verde
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Cape_Verde.svg"
-  CYM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Cape_Verde.svg"
+
+  - code: CYM
     name: Cayman Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_the_Cayman_Islands.svg"
-  CAF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_the_Cayman_Islands.svg"
+
+  - code: CAF
     name: Central African Republic
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Flag_of_the_Central_African_Republic.svg"
-  TCD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Flag_of_the_Central_African_Republic.svg"
+
+  - code: TCD
     name: Chad
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4b/Flag_of_Chad.svg"
-  CHL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4b/Flag_of_Chad.svg"
+
+  - code: CHL
     name: Chile
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/78/Flag_of_Chile.svg"
-  CHN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/78/Flag_of_Chile.svg"
+
+  - code: CHN
     name: China
-    states:
-      CNBJ: Beijing
-      CNTJ: Tianjin
-      CNHE: Hebei
-      CNSX: Shanxi
-      CNNM: Nei Mongol (mn)
-      CNLN: Liaoning
-      CNJL: Jilin
-      CNHL: Heilongjiang
-      CNSH: Shanghai
-      CNJS: Jiangsu
-      CNZJ: Zhejiang
-      CNAH: Anhui
-      CNFJ: Fujian
-      CNJX: Jiangxi
-      CNSD: Shandong
-      CNHA: Henan
-      CNHB: Hubei
-      CNHN: Hunan
-      CNGD: Guangdong
-      CNGX: Guangxi
-      CNHI: Hainan
-      CNCQ: Chongqing
-      CNSC: Sichuan
-      CNGZ: Guizhou
-      CNYN: Yunnan
-      CNXZ: Xizang
-      CNSN: Shaanxi
-      CNGS: Gansu
-      CNQH: Qinghai
-      CNNX: Ningxia
-      CNXJ: Xinjiang
-      CNTW: Taiwan
-      CNHK: Hong Kong (Xianggang)
-      CNMC: Macao (Aomen)
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  CXR:
+    metadata:
+      states:
+        CNBJ: Beijing
+        CNTJ: Tianjin
+        CNHE: Hebei
+        CNSX: Shanxi
+        CNNM: Nei Mongol (mn)
+        CNLN: Liaoning
+        CNJL: Jilin
+        CNHL: Heilongjiang
+        CNSH: Shanghai
+        CNJS: Jiangsu
+        CNZJ: Zhejiang
+        CNAH: Anhui
+        CNFJ: Fujian
+        CNJX: Jiangxi
+        CNSD: Shandong
+        CNHA: Henan
+        CNHB: Hubei
+        CNHN: Hunan
+        CNGD: Guangdong
+        CNGX: Guangxi
+        CNHI: Hainan
+        CNCQ: Chongqing
+        CNSC: Sichuan
+        CNGZ: Guizhou
+        CNYN: Yunnan
+        CNXZ: Xizang
+        CNSN: Shaanxi
+        CNGS: Gansu
+        CNQH: Qinghai
+        CNNX: Ningxia
+        CNXJ: Xinjiang
+        CNTW: Taiwan
+        CNHK: Hong Kong (Xianggang)
+        CNMC: Macao (Aomen)
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: CXR
     name: Christmas Island
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/67/Flag_of_Christmas_Island.svg"
-  CCK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/67/Flag_of_Christmas_Island.svg"
+
+  - code: CCK
     name: Cocos Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/74/Flag_of_the_Cocos_%28Keeling%29_Islands.svg"
-  COL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/74/Flag_of_the_Cocos_%28Keeling%29_Islands.svg"
+
+  - code: COL
     name: Colombia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Colombia.svg"
-  COM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Colombia.svg"
+
+  - code: COM
     name: Comoros
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/94/Flag_of_the_Comoros.svg"
-  COG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/94/Flag_of_the_Comoros.svg"
+
+  - code: COG
     name: Congo-Brazzaville
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/92/Flag_of_the_Republic_of_the_Congo.svg"
-  COD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/92/Flag_of_the_Republic_of_the_Congo.svg"
+
+  - code: COD
     name: Congo-Kinshasa
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Flag_of_the_Democratic_Republic_of_the_Congo.svg"
-  COK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Flag_of_the_Democratic_Republic_of_the_Congo.svg"
+
+  - code: COK
     name: Cook Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/35/Flag_of_the_Cook_Islands.svg"
-  CRI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/35/Flag_of_the_Cook_Islands.svg"
+
+  - code: CRI
     name: Costa Rica
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Costa_Rica_%28state%29.svg"
-    fiscal_year: 1001-0931
-    gov_fiscal_year: 1001-0931
-  HRV:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Costa_Rica_%28state%29.svg"
+      fiscal_year: 1001-0931
+      gov_fiscal_year: 1001-0931
+
+  - code: HRV
     name: Croatia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/1b/Flag_of_Croatia.svg"
-  CUB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/1b/Flag_of_Croatia.svg"
+
+  - code: CUB
     name: Cuba
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bd/Flag_of_Cuba.svg"
-  CUW:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bd/Flag_of_Cuba.svg"
+
+  - code: CUW
     name: Curacao
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Flag_of_Cura%C3%A7ao.svg"
-  CYP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Flag_of_Cura%C3%A7ao.svg"
+
+  - code: CYP
     name: Cyprus
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Cyprus.svg"
-  CZE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Cyprus.svg"
+
+  - code: CZE
     name: Czech Republic
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Flag_of_the_Czech_Republic.svg"
-  DNK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Flag_of_the_Czech_Republic.svg"
+
+  - code: DNK
     name: Denmark
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Denmark.svg"
-  DJI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Denmark.svg"
+
+  - code: DJI
     name: Djibouti
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/34/Flag_of_Djibouti.svg"
-  DMA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/34/Flag_of_Djibouti.svg"
+
+  - code: DMA
     name: Dominica
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/c4/Flag_of_Dominica.svg"
-  DOM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/c4/Flag_of_Dominica.svg"
+
+  - code: DOM
     name: Dominican Republic
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_the_Dominican_Republic.svg"
-  TLS:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_the_Dominican_Republic.svg"
+
+  - code: TLS
     name: East Timor
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/26/Flag_of_East_Timor.svg"
-  ECU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/26/Flag_of_East_Timor.svg"
+
+  - code: ECU
     name: Ecuador
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Flag_of_Ecuador.svg"
-  EGY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Flag_of_Ecuador.svg"
+
+  - code: EGY
     name: Egypt
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Egypt.svg"
-    fiscal_year: 0701-0630
-    gov_fiscal_year: 0701-0630
-  SLV:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Egypt.svg"
+      fiscal_year: 0701-0630
+      gov_fiscal_year: 0701-0630
+
+  - code: SLV
     name: El Salvador
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/34/Flag_of_El_Salvador.svg"
-  GNQ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/34/Flag_of_El_Salvador.svg"
+
+  - code: GNQ
     name: Equatorial Guinea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Equatorial_Guinea.svg"
-  ERI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Equatorial_Guinea.svg"
+
+  - code: ERI
     name: Eritrea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/29/Flag_of_Eritrea.svg"
-  EST:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/29/Flag_of_Eritrea.svg"
+
+  - code: EST
     name: Estonia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/8f/Flag_of_Estonia.svg"
-  ETH:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/8f/Flag_of_Estonia.svg"
+
+  - code: ETH
     name: Ethiopia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/71/Flag_of_Ethiopia.svg"
-    fiscal_year: 0708-0707
-    gov_fiscal_year: 0708-0707
-  EU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/71/Flag_of_Ethiopia.svg"
+      fiscal_year: 0708-0707
+      gov_fiscal_year: 0708-0707
+
+  - code: EU
     name: European Union
-    states:
-      AUT: ~
-      BEL: ~
-      BGR: ~
-      HRV: ~
-      CYP: ~
-      CZE: ~
-      DNK: ~
-      EST: ~
-      FIN: ~
-      FRA: ~
-      DEU: ~
-      GRC: ~
-      HUN: ~
-      IRL: ~
-      ITA: ~
-      LVA: ~
-      LTU: ~
-      LUX: ~
-      MLT: ~
-      NLD: ~
-      POL: ~
-      PRT: ~
-      ROU: ~
-      SVK: ~
-      SVN: ~
-      ESP: ~
-      SWE: ~
-      GBR: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b7/Flag_of_Europe.svg"
-  FLK:
+    metadata:
+      states:
+        AUT: ~
+        BEL: ~
+        BGR: ~
+        HRV: ~
+        CYP: ~
+        CZE: ~
+        DNK: ~
+        EST: ~
+        FIN: ~
+        FRA: ~
+        DEU: ~
+        GRC: ~
+        HUN: ~
+        IRL: ~
+        ITA: ~
+        LVA: ~
+        LTU: ~
+        LUX: ~
+        MLT: ~
+        NLD: ~
+        POL: ~
+        PRT: ~
+        ROU: ~
+        SVK: ~
+        SVN: ~
+        ESP: ~
+        SWE: ~
+        GBR: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b7/Flag_of_Europe.svg"
+
+  - code: FLK
     name: Falkland Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/83/Flag_of_the_Falkland_Islands.svg"
-  FRO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/83/Flag_of_the_Falkland_Islands.svg"
+
+  - code: FRO
     name: Faroe Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/3c/Flag_of_the_Faroe_Islands.svg"
-  FJI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/3c/Flag_of_the_Faroe_Islands.svg"
+
+  - code: FJI
     name: Fiji
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/ba/Flag_of_Fiji.svg"
-  FIN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/ba/Flag_of_Fiji.svg"
+
+  - code: FIN
     name: Finland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Finland.svg"
-  FRA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Finland.svg"
+
+  - code: FRA
     name: France
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  GUF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: GUF
     name: French Guiana
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  PYF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: PYF
     name: French Polynesia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/db/Flag_of_French_Polynesia.svg"
-  ATF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/db/Flag_of_French_Polynesia.svg"
+
+  - code: ATF
     name: French Southern and Antarctic Lands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Flag_of_the_French_Southern_and_Antarctic_Lands.svg"
-  GAB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Flag_of_the_French_Southern_and_Antarctic_Lands.svg"
+
+  - code: GAB
     name: Gabon
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/04/Flag_of_Gabon.svg"
-  GMB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/04/Flag_of_Gabon.svg"
+
+  - code: GMB
     name: The Gambia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_The_Gambia.svg"
-  GEO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_The_Gambia.svg"
+
+  - code: GEO
     name: Georgia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_Georgia.svg"
-  DEU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_Georgia.svg"
+
+  - code: DEU
     name: Germany
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/b/ba/Flag_of_Germany.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  GHA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/b/ba/Flag_of_Germany.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: GHA
     name: Ghana
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Ghana.svg"
-  GIB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Ghana.svg"
+
+  - code: GIB
     name: Gibraltar
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/02/Flag_of_Gibraltar.svg"
-  GRC:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/02/Flag_of_Gibraltar.svg"
+
+  - code: GRC
     name: Greece
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Flag_of_Greece.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  GRL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Flag_of_Greece.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: GRL
     name: Greenland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/09/Flag_of_Greenland.svg"
-  GRD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/09/Flag_of_Greenland.svg"
+
+  - code: GRD
     name: Grenada
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Grenada.svg"
-  GLP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Grenada.svg"
+
+  - code: GLP
     name: Guadeloupe
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  GUM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: GUM
     name: Guam
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/07/Flag_of_Guam.svg"
-  GTM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/07/Flag_of_Guam.svg"
+
+  - code: GTM
     name: Guatemala
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/ec/Flag_of_Guatemala.svg"
-  GGY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/ec/Flag_of_Guatemala.svg"
+
+  - code: GGY
     name: Guernsey
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_Guernsey.svg"
-  GIN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_Guernsey.svg"
+
+  - code: GIN
     name: Guinea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/ed/Flag_of_Guinea.svg"
-  GNB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/ed/Flag_of_Guinea.svg"
+
+  - code: GNB
     name: Guinea-Bissau
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Guinea-Bissau.svg"
-  GUY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Guinea-Bissau.svg"
+
+  - code: GUY
     name: Guyana
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/99/Flag_of_Guyana.svg"
-  HTI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/99/Flag_of_Guyana.svg"
+
+  - code: HTI
     name: Haiti
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/56/Flag_of_Haiti.svg"
-  HMD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/56/Flag_of_Haiti.svg"
+
+  - code: HMD
     name: Heard Island and McDonald Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/88/Flag_of_Australia_%28converted%29.svg"
-  HND:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/88/Flag_of_Australia_%28converted%29.svg"
+
+  - code: HND
     name: Honduras
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/82/Flag_of_Honduras.svg"
-  HKG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/82/Flag_of_Honduras.svg"
+
+  - code: HKG
     name: Hong Kong
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Flag_of_Hong_Kong.svg"
-    fiscal_year: 0401-0331
-    gov_fiscal_year: 0401-0331
-  HUN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/5b/Flag_of_Hong_Kong.svg"
+      fiscal_year: 0401-0331
+      gov_fiscal_year: 0401-0331
+
+  - code: HUN
     name: Hungary
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Flag_of_Hungary.svg"
-  ISL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Flag_of_Hungary.svg"
+
+  - code: ISL
     name: Iceland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Flag_of_Iceland.svg"
-  IND:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Flag_of_Iceland.svg"
+
+  - code: IND
     name: India
-    states:
-      INAN: Andaman and Nicobar Islands
-      INAP: Andhra Pradesh
-      INAR: Arunachal Pradesh
-      INAS: Assam
-      INBR: Bihar
-      INCH: Chandigarh
-      INCT: Chhattisgarh
-      INDN: Dadra and Nagar Haveli
-      INDD: Daman and Diu
-      INDL: Delhi
-      INGA: Goa
-      INGJ: Gujarat
-      INHR: Haryana
-      INHP: Himachal Pradesh
-      INJK: Jammu and Kashmir
-      INJH: Jharkhand
-      INKA: Karnataka
-      INKL: Kerala
-      INLD: Lakshadweep
-      INMP: Madhya Pradesh
-      INMH: Maharashtra
-      INMN: Manipur
-      INML: Meghalaya
-      INMZ: Mizoram
-      INNL: Nagaland
-      INOR: Odisha (formerly known as Orissa)
-      INPY: Puducherry (Pondicherry)
-      INPB: Punjab
-      INRJ: Rajasthan
-      INSK: Sikkim
-      INTN: Tamil Nadu
-      INTG: Telangana
-      INTR: Tripura
-      INUT: Uttarakhand
-      INUP: Uttar Pradesh
-      INWB: West Bengal
-    flag: "https://upload.wikimedia.org/wikipedia/en/4/41/Flag_of_India.svg"
-    fiscal_year: 0401-0331
-    gov_fiscal_year: 0401-0331
-  IDN:
+    metadata:
+      states:
+        INAN: Andaman and Nicobar Islands
+        INAP: Andhra Pradesh
+        INAR: Arunachal Pradesh
+        INAS: Assam
+        INBR: Bihar
+        INCH: Chandigarh
+        INCT: Chhattisgarh
+        INDN: Dadra and Nagar Haveli
+        INDD: Daman and Diu
+        INDL: Delhi
+        INGA: Goa
+        INGJ: Gujarat
+        INHR: Haryana
+        INHP: Himachal Pradesh
+        INJK: Jammu and Kashmir
+        INJH: Jharkhand
+        INKA: Karnataka
+        INKL: Kerala
+        INLD: Lakshadweep
+        INMP: Madhya Pradesh
+        INMH: Maharashtra
+        INMN: Manipur
+        INML: Meghalaya
+        INMZ: Mizoram
+        INNL: Nagaland
+        INOR: Odisha (formerly known as Orissa)
+        INPY: Puducherry (Pondicherry)
+        INPB: Punjab
+        INRJ: Rajasthan
+        INSK: Sikkim
+        INTN: Tamil Nadu
+        INTG: Telangana
+        INTR: Tripura
+        INUT: Uttarakhand
+        INUP: Uttar Pradesh
+        INWB: West Bengal
+      flag: "https://upload.wikimedia.org/wikipedia/en/4/41/Flag_of_India.svg"
+      fiscal_year: 0401-0331
+      gov_fiscal_year: 0401-0331
+
+  - code: IDN
     name: Indonesia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_Indonesia.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  IRN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_Indonesia.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: IRN
     name: Iran
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/ca/Flag_of_Iran.svg"
-  IRQ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/ca/Flag_of_Iran.svg"
+
+  - code: IRQ
     name: Iraq
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Iraq.svg"
-  IRL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Iraq.svg"
+
+  - code: IRL
     name: Ireland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/45/Flag_of_Ireland.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  IMN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/45/Flag_of_Ireland.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: IMN
     name: Isle of Man
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/5d/Flag_of_the_Isle_of_Mann.svg"
-  ISR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/5d/Flag_of_the_Isle_of_Mann.svg"
+
+  - code: ISR
     name: Israel
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Flag_of_Israel.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0101-1231
-  ITA:
+
+  - code: ITA
     name: Italy
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/0/03/Flag_of_Italy.svg"
-  CIV:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/0/03/Flag_of_Italy.svg"
+
+  - code: CIV
     name: Ivory Coast
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_C%C3%B4te_d%27Ivoire.svg"
-  JAM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_C%C3%B4te_d%27Ivoire.svg"
+
+  - code: JAM
     name: Jamaica
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0a/Flag_of_Jamaica.svg"
-  JPN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0a/Flag_of_Jamaica.svg"
+
+  - code: JPN
     name: Japan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/9/9e/Flag_of_Japan.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/9/9e/Flag_of_Japan.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0401-0331
-  JEY:
+
+  - code: JEY
     name: Jersey
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Flag_of_Jersey.svg"
-  JOR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Flag_of_Jersey.svg"
+
+  - code: JOR
     name: Jordan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/c0/Flag_of_Jordan.svg"
-  KAZ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/c0/Flag_of_Jordan.svg"
+
+  - code: KAZ
     name: Kazakhstan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Kazakhstan.svg"
-  KEN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Kazakhstan.svg"
+
+  - code: KEN
     name: Kenya
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Kenya.svg"
-  KIR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Kenya.svg"
+
+  - code: KIR
     name: Kiribati
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Kiribati.svg"
-  KWT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Kiribati.svg"
+
+  - code: KWT
     name: Kuwait
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/aa/Flag_of_Kuwait.svg"
-  KGZ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/aa/Flag_of_Kuwait.svg"
+
+  - code: KGZ
     name: Kyrgyzstan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Flag_of_Kyrgyzstan.svg"
-  LAO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Flag_of_Kyrgyzstan.svg"
+
+  - code: LAO
     name: Laos
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/56/Flag_of_Laos.svg"
-  LVA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/56/Flag_of_Laos.svg"
+
+  - code: LVA
     name: Latvia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/84/Flag_of_Latvia.svg"
-  LBN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/84/Flag_of_Latvia.svg"
+
+  - code: LBN
     name: Lebanon
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/59/Flag_of_Lebanon.svg"
-  LSO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/59/Flag_of_Lebanon.svg"
+
+  - code: LSO
     name: Lesotho
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Flag_of_Lesotho.svg"
-  LBR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Flag_of_Lesotho.svg"
+
+  - code: LBR
     name: Liberia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b8/Flag_of_Liberia.svg"
-  LBY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b8/Flag_of_Liberia.svg"
+
+  - code: LBY
     name: Libya
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/05/Flag_of_Libya.svg"
-  LIE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/05/Flag_of_Libya.svg"
+
+  - code: LIE
     name: Liechtenstein
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/47/Flag_of_Liechtenstein.svg"
-  LTU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/47/Flag_of_Liechtenstein.svg"
+
+  - code: LTU
     name: Lithuania
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/11/Flag_of_Lithuania.svg"
-  LUX:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/11/Flag_of_Lithuania.svg"
+
+  - code: LUX
     name: Luxembourg
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/da/Flag_of_Luxembourg.svg"
-  MAC:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/da/Flag_of_Luxembourg.svg"
+
+  - code: MAC
     name: Macau
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/63/Flag_of_Macau.svg"
-  MKD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/63/Flag_of_Macau.svg"
+
+  - code: MKD
     name: Macedonia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f8/Flag_of_Macedonia.svg"
-  MDG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f8/Flag_of_Macedonia.svg"
+
+  - code: MDG
     name: Madagascar
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Madagascar.svg"
-  MWI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flag_of_Madagascar.svg"
+
+  - code: MWI
     name: Malawi
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d1/Flag_of_Malawi.svg"
-  MYS:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d1/Flag_of_Malawi.svg"
+
+  - code: MYS
     name: Malaysia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/66/Flag_of_Malaysia.svg"
-  MDV:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/66/Flag_of_Malaysia.svg"
+
+  - code: MDV
     name: Maldives
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_Maldives.svg"
-  MLI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Flag_of_Maldives.svg"
+
+  - code: MLI
     name: Mali
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/92/Flag_of_Mali.svg"
-  MLT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/92/Flag_of_Mali.svg"
+
+  - code: MLT
     name: Malta
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/73/Flag_of_Malta.svg"
-  MHL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/73/Flag_of_Malta.svg"
+
+  - code: MHL
     name: Marshall Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/2e/Flag_of_the_Marshall_Islands.svg"
-  MTQ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/2e/Flag_of_the_Marshall_Islands.svg"
+
+  - code: MTQ
     name: Martinique
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  MRT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: MRT
     name: Mauritania
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/30/New_National_Flag_of_Mauritania.png"
-  MUS:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/30/New_National_Flag_of_Mauritania.png"
+
+  - code: MUS
     name: Mauritius
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_Mauritius.svg"
-  MYT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/77/Flag_of_Mauritius.svg"
+
+  - code: MYT
     name: Mayotte
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Flag_of_Mayotte_%28local%29.svg"
-  MEX:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Flag_of_Mayotte_%28local%29.svg"
+
+  - code: MEX
     name: Mexico
-    states:
+    metadata:
+      states:
       MXAGU: Aguascalientes
       MXBCN: Baja California
       MXBCS: Baja California Sur
@@ -2496,798 +3374,1007 @@ var yamlPolities = `
       MXVER: Veracruz
       MXYUC: Yucatán
       MXZAC: Zacatecas
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fc/Flag_of_Mexico.svg"
-  FSM:
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fc/Flag_of_Mexico.svg"
+
+  - code: FSM
     name: Micronesia
-    states: ~
-    flag:
-  MDA:
+    metadata:
+      states: ~
+      flag:
+
+  - code: MDA
     name: Moldova
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/27/Flag_of_Moldova.svg"
-  MCO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/27/Flag_of_Moldova.svg"
+
+  - code: MCO
     name: Monaco
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/ea/Flag_of_Monaco.svg"
-  MNG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/ea/Flag_of_Monaco.svg"
+
+  - code: MNG
     name: Mongolia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4c/Flag_of_Mongolia.svg"
-  MNE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4c/Flag_of_Mongolia.svg"
+
+  - code: MNE
     name: Montenegro
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/64/Flag_of_Montenegro.svg"
-  MSR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/64/Flag_of_Montenegro.svg"
+
+  - code: MSR
     name: Montserrat
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Montserrat.svg"
-  MAR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Montserrat.svg"
+
+  - code: MAR
     name: Morocco
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Flag_of_Morocco.svg"
-  MOZ:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Flag_of_Morocco.svg"
+
+  - code: MOZ
     name: Mozambique
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Mozambique.svg"
-  MMR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Mozambique.svg"
+
+  - code: MMR
     name: Myanmar
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Flag_of_Myanmar.svg"
-  NAM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Flag_of_Myanmar.svg"
+
+  - code: NAM
     name: Namibia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_Namibia.svg"
-  NRU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_Namibia.svg"
+
+  - code: NRU
     name: Nauru
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/30/Flag_of_Nauru.svg"
-  NPL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/30/Flag_of_Nauru.svg"
+
+  - code: NPL
     name: Nepal
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9b/Flag_of_Nepal.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  NLD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9b/Flag_of_Nepal.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: NLD
     name: Netherlands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/20/Flag_of_the_Netherlands.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  NCL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/20/Flag_of_the_Netherlands.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: NCL
     name: New Caledonia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  NZL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: NZL
     name: New Zealand
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Flag_of_New_Zealand.svg"
-  NIC:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Flag_of_New_Zealand.svg"
+
+  - code: NIC
     name: Nicaragua
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Nicaragua.svg"
-  NER:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Nicaragua.svg"
+
+  - code: NER
     name: Niger
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f4/Flag_of_Niger.svg"
-  NGA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f4/Flag_of_Niger.svg"
+
+  - code: NGA
     name: Nigeria
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/79/Flag_of_Nigeria.svg"
-  NIU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/79/Flag_of_Nigeria.svg"
+
+  - code: NIU
     name: Niue
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Niue.svg"
-  NFK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Niue.svg"
+
+  - code: NFK
     name: Norfolk and Philip Island
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Norfolk_Island.svg"
-  PRK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Norfolk_Island.svg"
+
+  - code: PRK
     name: North Korea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/51/Flag_of_North_Korea.svg"
-  MNP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/51/Flag_of_North_Korea.svg"
+
+  - code: MNP
     name: Northern Mariana Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/e0/Flag_of_the_Northern_Mariana_Islands.svg"
-  NOR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/e0/Flag_of_the_Northern_Mariana_Islands.svg"
+
+  - code: NOR
     name: Norway
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Norway.svg"
-  OMN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d9/Flag_of_Norway.svg"
+
+  - code: OMN
     name: Oman
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/dd/Flag_of_Oman.svg"
-  PAK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/dd/Flag_of_Oman.svg"
+
+  - code: PAK
     name: Pakistan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/32/Flag_of_Pakistan.svg"
-  PLW:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/32/Flag_of_Pakistan.svg"
+
+  - code: PLW
     name: Palau
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Palau.svg"
-  PSE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Palau.svg"
+
+  - code: PSE
     name: Palestinian Territory
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_Palestine.svg"
-  PAN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_Palestine.svg"
+
+  - code: PAN
     name: Panama
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Flag_of_Panama.svg"
-  PNG:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Flag_of_Panama.svg"
+
+  - code: PNG
     name: Papua New Guinea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/e3/Flag_of_Papua_New_Guinea.svg"
-  PRY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/e3/Flag_of_Papua_New_Guinea.svg"
+
+  - code: PRY
     name: Paraguay
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/27/Flag_of_Paraguay.svg"
-  PER:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/27/Flag_of_Paraguay.svg"
+
+  - code: PER
     name: Peru
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/df/Flag_of_Peru_%28state%29.svg"
-  PHL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/df/Flag_of_Peru_%28state%29.svg"
+
+  - code: PHL
     name: Philippines
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/99/Flag_of_the_Philippines.svg"
-  PCN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/99/Flag_of_the_Philippines.svg"
+
+  - code: PCN
     name: Pitcairn Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/88/Flag_of_the_Pitcairn_Islands.svg"
-  POL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/88/Flag_of_the_Pitcairn_Islands.svg"
+
+  - code: POL
     name: Poland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/1/12/Flag_of_Poland.svg"
-  PRT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/1/12/Flag_of_Poland.svg"
+
+  - code: PRT
     name: Portugal
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Flag_of_Portugal.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Flag_of_Portugal.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0101-1231
-  PRI:
+
+  - code: PRI
     name: Puerto Rico
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/28/Flag_of_Puerto_Rico.svg"
-  QAT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/28/Flag_of_Puerto_Rico.svg"
+
+  - code: QAT
     name: Qatar
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/65/Flag_of_Qatar.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/65/Flag_of_Qatar.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0101-1231
-  REU:
+
+  - code: REU
     name: Réunion
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Flag_of_R%C3%A9union.svg"
-  ROU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Flag_of_R%C3%A9union.svg"
+
+  - code: ROU
     name: Romania
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/73/Flag_of_Romania.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/73/Flag_of_Romania.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0101-1231
-  RUS:
+
+  - code: RUS
     name: Russia
-    states:
-      RUAD: Adygeya, Respublika
-      RUAL: Altay, Respublika
-      RUBA: Bashkortostan, Respublika
-      RUBU: Buryatiya, Respublika
-      RUCE: Chechenskaya Respublika
-      RUCU: Chuvashskaya Respublika
-      RUDA: Dagestan, Respublika
-      RUIN: Ingushetiya, Respublika
-      RUKB: Kabardino-Balkarskaya Respublika
-      RUKL: Kalmykiya, Respublika
-      RUKC: Karachayevo-Cherkesskaya Respubl.
-      RUKR: Kareliya, Respublika
-      RUKK: Khakasiya, Respublika
-      RUKO: Komi, Respublika
-      RUME: Mariy El, Respublika
-      RUMO: Mordoviya, Respublika
-      RUSA: Sakha, Respublika
-      RUSE: Severnaya Osetiya-Alaniya, Respubl.
-      RUTA: Tatarstan, Respublika
-      RUTY: Tyva, Respublika
-      RUUD: Udmurtskaya Respublika
-      RUALT: Altayskiy kray
-      RUKAM: Kamchatskiy kray
-      RUKHA: Khabarovskiy kray
-      RUKDA: Krasnodarskiy kray
-      RUKYA: Krasnoyarskiy kray
-      RUPER: Permskiy kray
-      RUPRI: Primorskiy kray
-      RUSTA: Stavropol"skiy kray
-      RUZAB: Zabaykal"skiy kray
-      RUAMU: Amurskaya oblast"
-      RUARK: Arkhangel"skaya oblast"
-      RUAST: Astrakhanskaya oblast"
-      RUBEL: Belgorodskaya oblast"
-      RUBRY: Bryanskaya oblast"
-      RUCHE: Chelyabinskaya oblast"
-      RUIRK: Irkutskaya oblast"
-      RUIVA: Ivanovskaya oblast"
-      RUKGD: Kaliningradskaya oblast"
-      RUKLU: Kaluzhskaya oblast"
-      RUKEM: Kemerovskaya oblast"
-      RUKIR: Kirovskaya oblast"
-      RUKOS: Kostromskaya oblast"
-      RUKGN: Kurganskaya oblast"
-      RUKRS: Kurskaya oblast"
-      RULEN: Leningradskaya oblast"
-      RULIP: Lipetskaya oblast"
-      RUMAG: Magadanskaya oblast"
-      RUMOS: Moskovskaya oblast"
-      RUMUR: Murmanskaya oblast"
-      RUNIZ: Nizhegorodskaya oblast"
-      RUNGR: Novgorodskaya oblast"
-      RUNVS: Novosibirskaya oblast"
-      RUOMS: Omskaya oblast"
-      RUORE: Orenburgskaya oblast"
-      RUORL: Orlovskaya oblast"
-      RUPNZ: Penzenskaya oblast"
-      RUPSK: Pskovskaya oblast"
-      RUROS: Rostovskaya oblast"
-      RURYA: Ryazanskaya oblast"
-      RUSAK: Sakhalinskaya oblast"
-      RUSAM: Samarskaya oblast"
-      RUSAR: Saratovskaya oblast"
-      RUSMO: Smolenskaya oblast"
-      RUSVE: Sverdlovskaya oblast"
-      RUTAM: Tambovskaya oblast"
-      RUTOM: Tomskaya oblast"
-      RUTUL: Tul"skaya oblast"
-      RUTVE: Tverskaya oblast"
-      RUTYU: Tyumenskaya oblast"
-      RUULY: Ul"yanovskaya oblast"
-      RUVLA: Vladimirskaya oblast"
-      RUVGG: Volgogradskaya oblast"
-      RUVLG: Vologodskaya oblast"
-      RUVOR: Voronezhskaya oblast"
-      RUYAR: Yaroslavskaya oblast"
-      RUMOW: Moskva (autonomous city)
-      RUSPE: Sankt-Peterburg (autonomous city)
-      RUYEV: Yevreyskaya avtonomnaya oblast"
-      RUCHU: Chukotskiy avtonomnyy okrug
-      RUKHM: Khanty-Mansiyskiy avtonomnyy okrug-Yugra
-      RUNEN: Nenetskiy avtonomnyy okrug
-      RUYAN: Yamalo-Nenetskiy avtonomnyy okrug
-    flag: "https://upload.wikimedia.org/wikipedia/en/f/f3/Flag_of_Russia.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  RWA:
+    metadata:
+      states:
+        RUAD: Adygeya, Respublika
+        RUAL: Altay, Respublika
+        RUBA: Bashkortostan, Respublika
+        RUBU: Buryatiya, Respublika
+        RUCE: Chechenskaya Respublika
+        RUCU: Chuvashskaya Respublika
+        RUDA: Dagestan, Respublika
+        RUIN: Ingushetiya, Respublika
+        RUKB: Kabardino-Balkarskaya Respublika
+        RUKL: Kalmykiya, Respublika
+        RUKC: Karachayevo-Cherkesskaya Respubl.
+        RUKR: Kareliya, Respublika
+        RUKK: Khakasiya, Respublika
+        RUKO: Komi, Respublika
+        RUME: Mariy El, Respublika
+        RUMO: Mordoviya, Respublika
+        RUSA: Sakha, Respublika
+        RUSE: Severnaya Osetiya-Alaniya, Respubl.
+        RUTA: Tatarstan, Respublika
+        RUTY: Tyva, Respublika
+        RUUD: Udmurtskaya Respublika
+        RUALT: Altayskiy kray
+        RUKAM: Kamchatskiy kray
+        RUKHA: Khabarovskiy kray
+        RUKDA: Krasnodarskiy kray
+        RUKYA: Krasnoyarskiy kray
+        RUPER: Permskiy kray
+        RUPRI: Primorskiy kray
+        RUSTA: Stavropol"skiy kray
+        RUZAB: Zabaykal"skiy kray
+        RUAMU: Amurskaya oblast"
+        RUARK: Arkhangel"skaya oblast"
+        RUAST: Astrakhanskaya oblast"
+        RUBEL: Belgorodskaya oblast"
+        RUBRY: Bryanskaya oblast"
+        RUCHE: Chelyabinskaya oblast"
+        RUIRK: Irkutskaya oblast"
+        RUIVA: Ivanovskaya oblast"
+        RUKGD: Kaliningradskaya oblast"
+        RUKLU: Kaluzhskaya oblast"
+        RUKEM: Kemerovskaya oblast"
+        RUKIR: Kirovskaya oblast"
+        RUKOS: Kostromskaya oblast"
+        RUKGN: Kurganskaya oblast"
+        RUKRS: Kurskaya oblast"
+        RULEN: Leningradskaya oblast"
+        RULIP: Lipetskaya oblast"
+        RUMAG: Magadanskaya oblast"
+        RUMOS: Moskovskaya oblast"
+        RUMUR: Murmanskaya oblast"
+        RUNIZ: Nizhegorodskaya oblast"
+        RUNGR: Novgorodskaya oblast"
+        RUNVS: Novosibirskaya oblast"
+        RUOMS: Omskaya oblast"
+        RUORE: Orenburgskaya oblast"
+        RUORL: Orlovskaya oblast"
+        RUPNZ: Penzenskaya oblast"
+        RUPSK: Pskovskaya oblast"
+        RUROS: Rostovskaya oblast"
+        RURYA: Ryazanskaya oblast"
+        RUSAK: Sakhalinskaya oblast"
+        RUSAM: Samarskaya oblast"
+        RUSAR: Saratovskaya oblast"
+        RUSMO: Smolenskaya oblast"
+        RUSVE: Sverdlovskaya oblast"
+        RUTAM: Tambovskaya oblast"
+        RUTOM: Tomskaya oblast"
+        RUTUL: Tul"skaya oblast"
+        RUTVE: Tverskaya oblast"
+        RUTYU: Tyumenskaya oblast"
+        RUULY: Ul"yanovskaya oblast"
+        RUVLA: Vladimirskaya oblast"
+        RUVGG: Volgogradskaya oblast"
+        RUVLG: Vologodskaya oblast"
+        RUVOR: Voronezhskaya oblast"
+        RUYAR: Yaroslavskaya oblast"
+        RUMOW: Moskva (autonomous city)
+        RUSPE: Sankt-Peterburg (autonomous city)
+        RUYEV: Yevreyskaya avtonomnaya oblast"
+        RUCHU: Chukotskiy avtonomnyy okrug
+        RUKHM: Khanty-Mansiyskiy avtonomnyy okrug-Yugra
+        RUNEN: Nenetskiy avtonomnyy okrug
+        RUYAN: Yamalo-Nenetskiy avtonomnyy okrug
+      flag: "https://upload.wikimedia.org/wikipedia/en/f/f3/Flag_of_Russia.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: RWA
     name: Rwanda
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/17/Flag_of_Rwanda.svg"
-  SHN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/17/Flag_of_Rwanda.svg"
+
+  - code: SHN
     name: Saint Helena, Ascension and Tristan da Cunha
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/a/ae/Flag_of_the_United_Kingdom.svg"
-  KNA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/a/ae/Flag_of_the_United_Kingdom.svg"
+
+  - code: KNA
     name: Saint Kitts and Nevis
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Saint_Kitts_and_Nevis.svg"
-  LCA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Saint_Kitts_and_Nevis.svg"
+
+  - code: LCA
     name: Saint Lucia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_Saint_Lucia.svg"
-  SPM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_Saint_Lucia.svg"
+
+  - code: SPM
     name: Saint Pierre and Miquelon
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  VCT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: VCT
     name: Saint Vincent and the Grenadines
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6d/Flag_of_Saint_Vincent_and_the_Grenadines.svg"
-  BLM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6d/Flag_of_Saint_Vincent_and_the_Grenadines.svg"
+
+  - code: BLM
     name: Saint-Barthelemy
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/df/Flag_of_Saint_Barthelemy_%28local%29.svg"
-  MAF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/df/Flag_of_Saint_Barthelemy_%28local%29.svg"
+
+  - code: MAF
     name: Saint-Martin
-    states: ~
-    flag:
-  WSM:
+    metadata:
+      states: ~
+      flag:
+
+  - code: WSM
     name: Samoa
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Samoa.svg"
-  SMR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/31/Flag_of_Samoa.svg"
+
+  - code: SMR
     name: San Marino
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Flag_of_San_Marino.svg"
-  STP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Flag_of_San_Marino.svg"
+
+  - code: STP
     name: São Tomé and Príncipe
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Flag_of_Sao_Tome_and_Principe.svg"
-  SAU:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Flag_of_Sao_Tome_and_Principe.svg"
+
+  - code: SAU
     name: Saudi Arabia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Flag_of_Saudi_Arabia.svg"
-  SEN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Flag_of_Saudi_Arabia.svg"
+
+  - code: SEN
     name: Senegal
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fd/Flag_of_Senegal.svg"
-  SRB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fd/Flag_of_Senegal.svg"
+
+  - code: SRB
     name: Serbia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/ff/Flag_of_Serbia.svg"
-  SYC:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/ff/Flag_of_Serbia.svg"
+
+  - code: SYC
     name: Seychelles
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fc/Flag_of_Seychelles.svg"
-  SLE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fc/Flag_of_Seychelles.svg"
+
+  - code: SLE
     name: Sierra Leone
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/17/Flag_of_Sierra_Leone.svg"
-  SGP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/17/Flag_of_Sierra_Leone.svg"
+
+  - code: SGP
     name: Singapore
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Singapore.svg"
-  SXM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/48/Flag_of_Singapore.svg"
+
+  - code: SXM
     name: Sint Maarten
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Sint_Maarten.svg"
-  SVK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Flag_of_Sint_Maarten.svg"
+
+  - code: SVK
     name: Slovakia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Flag_of_Slovakia.svg"
-  SVN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Flag_of_Slovakia.svg"
+
+  - code: SVN
     name: Slovenia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f0/Flag_of_Slovenia.svg"
-  SLB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f0/Flag_of_Slovenia.svg"
+
+  - code: SLB
     name: Solomon Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/74/Flag_of_the_Solomon_Islands.svg"
-  SOM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/74/Flag_of_the_Solomon_Islands.svg"
+
+  - code: SOM
     name: Somalia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/a0/Flag_of_Somalia.svg"
-  ZAF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/a0/Flag_of_Somalia.svg"
+
+  - code: ZAF
     name: South Africa
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/af/Flag_of_South_Africa.svg"
-  SGS:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/af/Flag_of_South_Africa.svg"
+
+  - code: SGS
     name: South Georgia and the South Sandwich Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/e/ed/Flag_of_South_Georgia_and_the_South_Sandwich_Islands.svg"
-  KOR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/e/ed/Flag_of_South_Georgia_and_the_South_Sandwich_Islands.svg"
+
+  - code: KOR
     name: South Korea
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/09/Flag_of_South_Korea.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  SSD:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/09/Flag_of_South_Korea.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: SSD
     name: South Sudan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/7a/Flag_of_South_Sudan.svg"
-  ESP:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/7a/Flag_of_South_Sudan.svg"
+
+  - code: ESP
     name: Spain
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/9/9a/Flag_of_Spain.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  LKA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/9/9a/Flag_of_Spain.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: LKA
     name: Sri Lanka
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/11/Flag_of_Sri_Lanka.svg"
-  SDN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/11/Flag_of_Sri_Lanka.svg"
+
+  - code: SDN
     name: Sudan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Sudan.svg"
-  SUR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/01/Flag_of_Sudan.svg"
+
+  - code: SUR
     name: Suriname
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/60/Flag_of_Suriname.svg"
-  SJM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/60/Flag_of_Suriname.svg"
+
+  - code: SJM
     name: Svalbard and Jan Mayen
-    states: ~
-    flag:
-  SWZ:
+    metadata:
+      states: ~
+      flag:
+
+  - code: SWZ
     name: Swaziland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fb/Flag_of_Eswatini.svg"
-  SWE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fb/Flag_of_Eswatini.svg"
+
+  - code: SWE
     name: Sweden
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/4/4c/Flag_of_Sweden.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  CHE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/4/4c/Flag_of_Sweden.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: CHE
     name: Switzerland
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/08/Flag_of_Switzerland_%28Pantone%29.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  SYR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/08/Flag_of_Switzerland_%28Pantone%29.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: SYR
     name: Syria
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/5/53/Flag_of_Syria.svg"
-  TWN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/5/53/Flag_of_Syria.svg"
+
+  - code: TWN
     name: Taiwan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/72/Flag_of_the_Republic_of_China.svg"
-    fiscal_year: 0101-1231
-    gov_fiscal_year: 0101-1231
-  TJK:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/72/Flag_of_the_Republic_of_China.svg"
+      fiscal_year: 0101-1231
+      gov_fiscal_year: 0101-1231
+
+  - code: TJK
     name: Tajikistan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Tajikistan.svg"
-  TZA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Flag_of_Tajikistan.svg"
+
+  - code: TZA
     name: Tanzania
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Tanzania.svg"
-  THA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Tanzania.svg"
+
+  - code: THA
     name: Thailand
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/a9/Flag_of_Thailand.svg"
-  TGO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/a9/Flag_of_Thailand.svg"
+
+  - code: TGO
     name: Togo
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/68/Flag_of_Togo.svg"
-  TKL:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/68/Flag_of_Togo.svg"
+
+  - code: TKL
     name: Tokelau
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/8e/Flag_of_Tokelau.svg"
-  TON:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/8e/Flag_of_Tokelau.svg"
+
+  - code: TON
     name: Tonga
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Tonga.svg"
-  TTO:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Tonga.svg"
+
+  - code: TTO
     name: Trinidad and Tobago
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/64/Flag_of_Trinidad_and_Tobago.svg"
-  TUN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/64/Flag_of_Trinidad_and_Tobago.svg"
+
+  - code: TUN
     name: Tunisia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Flag_of_Tunisia.svg"
-  TUR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Flag_of_Tunisia.svg"
+
+  - code: TUR
     name: Turkey
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/b/b4/Flag_of_Turkey.svg"
-  TKM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/b/b4/Flag_of_Turkey.svg"
+
+  - code: TKM
     name: Turkmenistan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/1/1b/Flag_of_Turkmenistan.svg"
-  TCA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/1/1b/Flag_of_Turkmenistan.svg"
+
+  - code: TCA
     name: Turks and Caicos Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/a/a0/Flag_of_the_Turks_and_Caicos_Islands.svg"
-  TUV:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/a/a0/Flag_of_the_Turks_and_Caicos_Islands.svg"
+
+  - code: TUV
     name: Tuvalu
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Tuvalu.svg"
-  UGA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/3/38/Flag_of_Tuvalu.svg"
+
+  - code: UGA
     name: Uganda
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/4e/Flag_of_Uganda.svg"
-  UKR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/4e/Flag_of_Uganda.svg"
+
+  - code: UKR
     name: Ukraine
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Ukraine.svg"
-  ARE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Ukraine.svg"
+
+  - code: ARE
     name: United Arab Emirates
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Flag_of_the_United_Arab_Emirates.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Flag_of_the_United_Arab_Emirates.svg"
     fiscal_year: 0101-1231
     gov_fiscal_year: 0101-1231
-  GBR:
+
+  - code: GBR
     name: United Kingdom
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/a/ae/Flag_of_the_United_Kingdom.svg"
-    fiscal_year: 0406-0405
-    gov_fiscal_year: 0401-0331
-  UMI:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/a/ae/Flag_of_the_United_Kingdom.svg"
+      fiscal_year: 0406-0405
+      gov_fiscal_year: 0401-0331
+
+  - code: UMI
     name: United States Minor Outlying Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg"
-  URY:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg"
+
+  - code: URY
     name: Uruguay
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Uruguay.svg"
-  VIR:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Flag_of_Uruguay.svg"
+
+  - code: VIR
     name: US Virgin Islands
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/f/f8/Flag_of_the_United_States_Virgin_Islands.svg"
-  USA:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/f/f8/Flag_of_the_United_States_Virgin_Islands.svg"
+
+  - code: USA
     name: USA
-    states:
-      USAK: Alaska
-      USAL: Alabama
-      USAR: Arkansas
-      USAZ: Arizona
-      USCA: California
-      USCO: Colorado
-      USCT: Connecticut
-      USDC: Washington D.C.
-      USDE: Delaware
-      USFL: Florida
-      USGA: Georgia
-      USHI: Hawaii
-      USIA: Iowa
-      USID: Idaho
-      USIL: Illinois
-      USIN: Indiana
-      USKS: Kansas
-      USKY: Kentucky
-      USLA: Louisiana
-      USMA: Massachusetts
-      USMD: Maryland
-      USME: Maine
-      USMI: Michigan
-      USMN: Minnesota
-      USMO: Missouri
-      USMS: Mississippi
-      USMT: Montana
-      USNC: North Carolina
-      USND: North Dakota
-      USNE: Nebraska
-      USNH: New Hampshire
-      USNJ: New Jersey
-      USNM: New Mexico
-      USNV: Nevada
-      USNY: New York
-      USOH: Ohio
-      USOK: Oklahoma
-      USOR: Oregon
-      USPA: Pennsylvania
-      USRI: Rhode Island
-      USSC: South Carolina
-      USSD: South Dakota
-      USTN: Tennessee
-      USTX: Texas
-      USUT: Utah
-      USVA: Virginia
-      USVT: Vermont
-      USWA: Washington
-      USWI: Wisconsin
-      USWV: West Virginia
-      USWY: Wyoming
-      USAS: American Samoa
-      USGU: Guam
-      USMP: Northern Mariana Islands
-      USPR: Puerto Rico
-      USUM: United States Minor Outlying Islands
-      USVI: US Virgin Islands
-    flag: "https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg"
-  UZB:
+    metadata:
+      states:
+        USAK: Alaska
+        USAL: Alabama
+        USAR: Arkansas
+        USAZ: Arizona
+        USCA: California
+        USCO: Colorado
+        USCT: Connecticut
+        USDC: Washington D.C.
+        USDE: Delaware
+        USFL: Florida
+        USGA: Georgia
+        USHI: Hawaii
+        USIA: Iowa
+        USID: Idaho
+        USIL: Illinois
+        USIN: Indiana
+        USKS: Kansas
+        USKY: Kentucky
+        USLA: Louisiana
+        USMA: Massachusetts
+        USMD: Maryland
+        USME: Maine
+        USMI: Michigan
+        USMN: Minnesota
+        USMO: Missouri
+        USMS: Mississippi
+        USMT: Montana
+        USNC: North Carolina
+        USND: North Dakota
+        USNE: Nebraska
+        USNH: New Hampshire
+        USNJ: New Jersey
+        USNM: New Mexico
+        USNV: Nevada
+        USNY: New York
+        USOH: Ohio
+        USOK: Oklahoma
+        USOR: Oregon
+        USPA: Pennsylvania
+        USRI: Rhode Island
+        USSC: South Carolina
+        USSD: South Dakota
+        USTN: Tennessee
+        USTX: Texas
+        USUT: Utah
+        USVA: Virginia
+        USVT: Vermont
+        USWA: Washington
+        USWI: Wisconsin
+        USWV: West Virginia
+        USWY: Wyoming
+        USAS: American Samoa
+        USGU: Guam
+        USMP: Northern Mariana Islands
+        USPR: Puerto Rico
+        USUM: United States Minor Outlying Islands
+        USVI: US Virgin Islands
+      flag: "https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg"
+
+  - code: UZB
     name: Uzbekistan
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/84/Flag_of_Uzbekistan.svg"
-  VUT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/84/Flag_of_Uzbekistan.svg"
+
+  - code: VUT
     name: Vanuatu
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Flag_of_Vanuatu_%28official%29.svg"
-  VAT:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6e/Flag_of_Vanuatu_%28official%29.svg"
+
+  - code: VAT
     name: Vatican City
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_the_Vatican_City.svg"
-  VEN:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/00/Flag_of_the_Vatican_City.svg"
+
+  - code: VEN
     name: Venezuela
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Flag_of_Venezuela_%28state%29.svg"
-  VNM:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Flag_of_Venezuela_%28state%29.svg"
+
+  - code: VNM
     name: Vietnam
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Vietnam.svg"
-  WLF:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/2/21/Flag_of_Vietnam.svg"
+
+  - code: WLF
     name: Wallis and Futuna
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
-  ESH:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg"
+
+  - code: ESH
     name: Western Sahara
-    states: ~
-    flag:
-  YEM:
+    metadata:
+      states: ~
+      flag:
+
+  - code: YEM
     name: Yemen
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/8/89/Flag_of_Yemen.svg"
-  ZMB:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/8/89/Flag_of_Yemen.svg"
+
+  - code: ZMB
     name: Zambia
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/0/06/Flag_of_Zambia.svg"
-  ZWE:
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/0/06/Flag_of_Zambia.svg"
+
+  - code: ZWE
     name: Zimbabwe
-    states: ~
-    flag: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Flag_of_Zimbabwe.svg"
+    metadata:
+      states: ~
+      flag: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Flag_of_Zimbabwe.svg"
 
 `
 
 // Rejections - Code/Text combinations returned in rejection messages when
 // a request is not accepted.
 var yamlRejections = `
-    #################################### Basic ####################################
 
-    0:
-      name: Success
-      text: Success
-      description: No failure. This code should not be used in a reject message.
+  - code: 0
+    name: Success
+    label: Success
+    description: No failure. This code should not be used in a reject message.
 
-    1:
-      name: MsgMalformed
-      text: Message Malformed
-      description: The OP_RETURN message is malformed. It doesn't pass data validation or something about it isn't according to protocol.
+  - code: 1
+    name: MsgMalformed
+    label: Message Malformed
+    description: The OP_RETURN message is malformed. It doesn't pass data validation or something about it isn't according to protocol.
 
-    2:
-      name: TxMalformed
-      text: Transaction Malformed
-      description: The Bitcoin tx is malformed. Incorrect inputs/outputs or something similar.
+  - code: 2
+    name: TxMalformed
+    label: Transaction Malformed
+    description: The Bitcoin tx is malformed. Incorrect inputs/outputs or something similar.
 
-    3:
-      name: Timeout
-      text: Time Out
-      description: A dependency, other contract/service, has failed to complete before the smart contract's timeout.
+  - code: 3
+    name: Timeout
+    label: Time Out
+    description: A dependency, other contract/service, has failed to complete before the smart contract's timeout.
+
+#################################### Contract ####################################
+
+  - code: 10
+    name: ContractExists
+    label: Contract Already Exists
+    description: The contract already exists and can't be recreated.
+
+  - code: 11
+    name: ContractNotDynamic
+    label: Contract Is Not Dynamic
+    description: 'Sent when a CO is received, but the contract type is not "D" (Dynamic)'
+
+  - code: 12
+    name: ContractAssetQtyReduction
+    label: Contract Asset Quantity Reduction
+    description: Sent when a CA tries to reduce the number of assets below the number of assets the contract has.
+
+  - code: 13
+    name: ContractFixedQuantity
+    label: Contract Fixed Quantity
+    description: Sent when the issuer attempted to increase the quantity of assets in a contract beyond the fixed quantity permitted.
+
+  - code: 14
+    name: ContractAuthFlags
+    label: Contract Auth Flags Prohibit
+    description: The contract auth flags don't permit the action requested.
+
+  - code: 15
+    name: ContractExpired
+    label: Contract Expired
+    description: The contract is expired so can no longer accept requests.
+
+  - code: 16
+    name: ContractFrozen
+    label: Contract Frozen
+    description: The contract is frozen and the request is not permitted while frozen.
+
+  - code: 17
+    name: ContractRevision
+    label: Contract Revision Incorrect
+    description: The revision in a contract amendment is incorrect.
+
+  - code: 18
+    name: ContractNotPermitted
+    label: Contract Not Permitted
+    description: Action not permitted by contract.
+
+#################################### Asset ####################################
+
+  - code: 20
+    name: AssetCodeExists
+    label: Asset Code Already Exists
+    description: The asset code specified already exists and can't be reused.
+
+  - code: 21
+    name: AssetNotFound
+    label: Asset Not Found
+    description: The asset code is not found.
+
+  - code: 22
+    name: AssetAuthFlags
+    label: Asset Auth Flags Prohibit
+    description: The asset auth flags don't permit the action requested.
+
+  - code: 23
+    name: AssetFrozen
+    label: Asset Frozen
+    description: The asset is frozen and the request is not permitted while frozen.
+
+  - code: 24
+    name: AssetRevision
+    label: Asset Revision Incorrect
+    description: The revision in an asset amendment is incorrect.
+
+  - code: 25
+    name: AssetNotPermitted
+    label: Asset Not Permitted
+    description: Action not permitted by asset.
+
+#################################### Transfer ####################################
+
+  - code: 30
+    name: TransferSelf
+    label: Transfer To Self Prohibited
+    description: Transfers with the sender and receiver addresses the same are not permitted.
+
+  - code: 31
+    name: TransferExpired
+    label: Transfer Expired
+    description: The transfer has expired.
+
+  - code: 32
+    name: HoldingsFrozen
+    label: Holdings Frozen
+    description: Holdings are frozen, so the request can't be completed.
+
+#################################### Governance ####################################
+
+  - code: 40
+    name: HolderProposalProhibited
+    label: Holder Proposal Prohibited
+    description: Holders are not permitted to make proposals.
+
+  - code: 41
+    name: ProposalConflicts
+    label: Proposal Conflicts
+    description: The proposal conflicts with an unapplied proposal.
+
+  - code: 42
+    name: VoteNotFound
+    label: Vote Not Found
+    description: The vote ID referenced is not found.
+
+  - code: 43
+    name: VoteClosed
+    label: Vote Closed
+    description: The vote has closed and ballots are no longer permitted.
+
+  - code: 44
+    name: BallotAlreadyCounted
+    label: Ballot Already Counted
+    description: The ballot has already been counted for this address.
+
+  - code: 45
+    name: VoteSystemNotPermitted
+    label: Vote System Not Permitted
+    description: "The voting system isn't permitted for this request."
+
+#################################### Enforcement ####################################
 
 
-    #################################### Contract ####################################
+#################################### Funding ####################################
 
-    10:
-      name: ContractExists
-      text: Contract Already Exists
-      description: The contract already exists and can't be recreated.
+  - code: 60
+    name: InsufficientTxFeeFunding
+    label: Insufficient Transaction Fee Funding
+    description: Insufficient bitcoin quantities for response transaction fees.
 
-    11:
-      name: ContractNotDynamic
-      text: Contract Is Not Dynamic
-      description: 'Sent when a CO is received, but the contract type is not "D" (Dynamic)'
+  - code: 61
+    name: InsufficientValue
+    label: Insufficient Value
+    description: Insufficient bitcoin quantity in inputs to fund request.
 
-    12:
-      name: ContractAssetQtyReduction
-      text: Contract Asset Quantity Reduction
-      description: Sent when a CA tries to reduce the number of assets below the number of assets the contract has.
+  - code: 62
+    name: InsufficientQuantity
+    label: Insufficient Quantity
+    description: Insufficient token holdings to for request.
 
-    13:
-      name: ContractFixedQuantity
-      text: Contract Fixed Quantity
-      description: Sent when the issuer attempted to increase the quantity of assets in a contract beyond the fixed quantity permitted.
+#################################### Address ####################################
 
-    14:
-      name: ContractAuthFlags
-      text: Contract Auth Flags Prohibit
-      description: The contract auth flags don't permit the action requested.
+  - code: 70
+    name: NotIssuer
+    label: Requestor Is Not Issuer
+    description: The requestor is not the issuer and is required to be for this request.
 
-    15:
-      name: ContractExpired
-      text: Contract Expired
-      description: The contract is expired so can no longer accept requests.
+  - code: 71
+    name: NotOperator
+    label: Requestor Is Not Operator
+    description: The requestor is not the operator and is required to be for this request.
 
-    16:
-      name: ContractFrozen
-      text: Contract Frozen
-      description: The contract is frozen and the request is not permitted while frozen.
+  - code: 72
+    name: UnauthorizedAddress
+    label: Unauthorized Address
+    description: The address specified is not permitted for this request.
 
-    17:
-      name: ContractRevision
-      text: Contract Revision Incorrect
-      description: The revision in a contract amendment is incorrect.
+#################################### Signatures ####################################
 
-    18:
-      name: ContractNotPermitted
-      text: Contract Not Permitted
-      description: Action not permitted by contract.
-
-    #################################### Asset ####################################
-
-    20:
-      name: AssetCodeExists
-      text: Asset Code Already Exists
-      description: The asset code specified already exists and can't be reused.
-
-    21:
-      name: AssetNotFound
-      text: Asset Not Found
-      description: The asset code is not found.
-
-    22:
-      name: AssetAuthFlags
-      text: Asset Auth Flags Prohibit
-      description: The asset auth flags don't permit the action requested.
-
-    23:
-      name: AssetFrozen
-      text: Asset Frozen
-      description: The asset is frozen and the request is not permitted while frozen.
-
-    24:
-      name: AssetRevision
-      text: Asset Revision Incorrect
-      description: The revision in an asset amendment is incorrect.
-
-    25:
-      name: AssetNotPermitted
-      text: Asset Not Permitted
-      description: Action not permitted by asset.
-
-    #################################### Transfer ####################################
-
-    30:
-      name: TransferSelf
-      text: Transfer To Self Prohibited
-      description: Transfers with the sender and receiver addresses the same are not permitted.
-
-    31:
-      name: TransferExpired
-      text: Transfer Expired
-      description: The transfer has expired.
-
-    32:
-      name: HoldingsFrozen
-      text: Holdings Frozen
-      description: Holdings are frozen, so the request can't be completed.
-
-    #################################### Governance ####################################
-
-    40:
-      name: HolderProposalProhibited
-      text: Holder Proposal Prohibited
-      description: Holders are not permitted to make proposals.
-
-    41:
-      name: ProposalConflicts
-      text: Proposal Conflicts
-      description: The proposal conflicts with an unapplied proposal.
-
-    42:
-      name: VoteNotFound
-      text: Vote Not Found
-      description: The vote ID referenced is not found.
-
-    43:
-      name: VoteClosed
-      text: Vote Closed
-      description: The vote has closed and ballots are no longer permitted.
-
-    44:
-      name: BallotAlreadyCounted
-      text: Ballot Already Counted
-      description: The ballot has already been counted for this address.
-
-    45:
-      name: VoteSystemNotPermitted
-      text: Vote System Not Permitted
-      description: "The voting system isn't permitted for this request."
-
-    #################################### Enforcement ####################################
-
-    #50:
-
-    #################################### Funding ####################################
-
-    60:
-      name: InsufficientTxFeeFunding
-      text: Insufficient Transaction Fee Funding
-      description: Insufficient bitcoin quantities for response transaction fees.
-
-    61:
-      name: InsufficientValue
-      text: Insufficient Value
-      description: Insufficient bitcoin quantity in inputs to fund request.
-
-    62:
-      name: InsufficientQuantity
-      text: Insufficient Quantity
-      description: Insufficient token holdings to for request.
-
-    #################################### Address ####################################
-
-    70:
-      name: NotIssuer
-      text: Requestor Is Not Issuer
-      description: The requestor is not the issuer and is required to be for this request.
-
-    71:
-      name: NotOperator
-      text: Requestor Is Not Operator
-      description: The requestor is not the operator and is required to be for this request.
-
-    72:
-      name: UnauthorizedAddress
-      text: Unauthorized Address
-      description: The address specified is not permitted for this request.
-
-    #################################### Signatures ####################################
-
-    80:
-      name: InvalidSignature
-      text: Invalid Signature
-      description: The signature provided is not valid. This is for signatures included within OP_RETURN data. Not bitcoin transaction signature scripts.
+  - code: 80
+    name: InvalidSignature
+    label: Invalid Signature
+    description: The signature provided is not valid. This is for signatures included within OP_RETURN data. Not bitcoin transaction signature scripts.
 
 `
 
@@ -3295,66 +4382,93 @@ var yamlRejections = `
 // other entities. These roles have widely-accepted tasks, rights and
 // duties.
 var yamlRoles = `
-    1:
-      name: Accountant
-    2:
-      name: Advisor
-    3:
-      name: Agent
-    4:
-      name: Beneficiary
-    5:
-      name: CEO
-    6:
-      name: CFO
-    7:
-      name: Chair
-    8:
-      name: COO
-    9:
-      name: CTO
-    10:
-      name: Custodian
-    11:
-      name: Director
-    12:
-      name: Executive
-    13:
-      name: Lawyer
-    14:
-      name: Legal Guardian
-    15:
-      name: Limited Partner
-    16:
-      name: Manager
-    17:
-      name: Managing Partner
-    18:
-      name: Member
-      description: Shareholder
-    19:
-      name: Partner
-    20:
-      name: Principal
-    21:
-      name: Proprietor
-    22:
-      name: Protector
-    23:
-      name: Secretary
-    24:
-      name: Settlor
-    25:
-      name: Significant Member
-      description: Major Shareholder
-    26:
-      name: Smart Contract Operator
-    27:
-      name: Trader
-    28:
-      name: Trustee
-    29:
-      name: Unit Holder
+  - code: 1
+    label: Accountant
 
+  - code: 2
+    label: Advisor
+
+  - code: 3
+    label: Agent
+
+  - code: 4
+    label: Beneficiary
+
+  - code: 5
+    label: CEO
+
+  - code: 6
+    label: CFO
+
+  - code: 7
+    label: Chair
+
+  - code: 8
+    label: COO
+
+  - code: 9
+    label: CTO
+
+  - code: 10
+    label: Custodian
+
+  - code: 11
+    label: Director
+
+  - code: 12
+    label: Executive
+
+  - code: 13
+    label: Lawyer
+
+  - code: 14
+    label: Legal Guardian
+
+  - code: 15
+    label: Limited Partner
+
+  - code: 16
+    label: Manager
+
+  - code: 17
+    label: Managing Partner
+
+  - code: 18
+    label: Member
+    description: Shareholder
+
+  - code: 19
+    label: Partner
+
+  - code: 20
+    label: Principal
+
+  - code: 21
+    label: Proprietor
+
+  - code: 22
+    label: Protector
+
+  - code: 23
+    label: Secretary
+
+  - code: 24
+    label: Settlor
+
+  - code: 25
+    label: Significant Member
+    description: Major Shareholder
+
+  - code: 26
+    label: Smart Contract Operator
+
+  - code: 27
+    label: Trader
+
+  - code: 28
+    label: Trustee
+
+  - code: 29
+    label: Unit Holder
 
 `

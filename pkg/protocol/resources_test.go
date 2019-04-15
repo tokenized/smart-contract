@@ -25,7 +25,8 @@ func TestCurrencies(t *testing.T) {
 	}
 	t.Logf("Loaded %d currencies.\n", len(currencies))
 
-	usd, exists := currencies["USD"]
+	testCode := [3]byte{'U', 'S', 'D'}
+	usd, exists := currencies[testCode]
 	if !exists {
 		t.Fatalf("USD not found in currencies\n")
 	}
