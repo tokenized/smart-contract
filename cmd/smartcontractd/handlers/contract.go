@@ -59,45 +59,30 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		}
 	}
 
-	if msg.BodyOfAgreementType == 1 {
-		if len(msg.BodyOfAgreement) != 32 {
-			logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.BodyOfAgreement))
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-		}
-	} else if msg.BodyOfAgreementType != 0 {
-		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.BodyOfAgreementType)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
-
-	if msg.SupportingDocsFileType == 1 {
-		if len(msg.SupportingDocs) != 32 {
-			logger.Warn(ctx, "%s : Contract supporting docs hash is incorrect length : %s : %d", v.TraceID, contractPKH.String(), len(msg.SupportingDocs))
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-		}
-	} else if msg.SupportingDocsFileType != 0 {
-		logger.Warn(ctx, "%s : Invalid contract body of agreement type : %s : %d", v.TraceID, contractPKH.String(), msg.SupportingDocsFileType)
+	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
+		logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %d", v.TraceID, len(msg.BodyOfAgreement))
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
-		logger.Warn(ctx, "%s : Expiration already passed : %s : %d", v.TraceID, contractPKH.String(), msg.ContractExpiration.Nano())
+		logger.Warn(ctx, "%s : Expiration already passed : %d", v.TraceID, msg.ContractExpiration.Nano())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
-		logger.Warn(ctx, "%s : Invalid contract auth flags : %s : %s", v.TraceID, contractPKH.String(), err)
+		logger.Warn(ctx, "%s : Invalid contract auth flags : %s", v.TraceID, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
 		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
-			logger.Warn(ctx, "%s : Invalid voting system : %s : %s", v.TraceID, contractPKH.String(), err)
+			logger.Warn(ctx, "%s : Invalid voting system : %s", v.TraceID, err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	}
 
-	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
+	logger.Info(ctx, "%s : Accepting contract offer : %s", v.TraceID, msg.ContractName)
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.ContractFormation{}
@@ -387,13 +372,13 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		var offerTx *inspector.Transaction
 		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
 		if err != nil {
-			return errors.Wrap(err, "Contract Offer tx not found")
+			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
 		}
 
 		// Get offer from it
 		offer, ok := offerTx.MsgProto.(*protocol.ContractOffer)
-		if ok {
-			return errors.New("Could not find ContractOffer in offer tx")
+		if !ok {
+			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
 		nc.IssuerPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[0].Address.ScriptAddress()) // First input of offer tx

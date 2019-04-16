@@ -206,6 +206,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+			logger.Warn(ctx, "Sending reject. Failed to sign tx : %s", err)
 			return RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)

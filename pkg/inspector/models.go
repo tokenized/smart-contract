@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -86,6 +87,9 @@ func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
 }
 
 func (in *Input) Write(buf *bytes.Buffer) error {
+	if in.FullTx == nil {
+		return errors.New("No input tx")
+	}
 	if err := in.FullTx.Serialize(buf); err != nil {
 		return err
 	}

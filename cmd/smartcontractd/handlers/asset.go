@@ -381,6 +381,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return err
 		}
 
+		na.IssuerPKH = ct.IssuerPKH
+
 		if err := contract.AddAssetCode(ctx, a.MasterDB, contractPKH, &msg.AssetCode, v.Now); err != nil {
 			return err
 		}

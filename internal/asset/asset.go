@@ -7,6 +7,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/pkg/errors"
@@ -65,7 +66,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	a.CreatedAt = now
 	a.UpdatedAt = now
 
-	a.Holdings = make([]state.Holding, 1)
+	a.Holdings = make([]state.Holding, 0, 1)
 	a.Holdings = append(a.Holdings, state.Holding{
 		PKH:       nu.IssuerPKH,
 		Balance:   nu.TokenQty,
@@ -192,8 +193,11 @@ func updateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.Publi
 
 			// Only update if this is the latest update.
 			if now.Nano() > holding.UpdatedAt.Nano() {
+				logger.Verbose(ctx, "Updating balance to %d for %s", balance, userPKH.String())
 				holding.Balance = balance
 				updated = true
+			} else {
+				logger.Warn(ctx, "Balance update old %d : %s (%s > %s)", balance, userPKH.String(), now.String(), holding.UpdatedAt.String())
 			}
 
 			if updated {
@@ -205,6 +209,7 @@ func updateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.Publi
 	}
 
 	// New holding
+	logger.Verbose(ctx, "Creating new balance to %d for %s", balance, userPKH.String())
 	as.Holdings = append(as.Holdings, state.Holding{
 		PKH:       *userPKH,
 		Balance:   balance,

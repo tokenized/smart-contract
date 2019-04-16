@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/pkg/errors"
@@ -67,8 +66,6 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if contract.Oracles == nil {
 		contract.Oracles = []protocol.Oracle{}
 	}
-
-	logger.Verbose(ctx, "Creating contract :\n%+v", &contract)
 
 	return Save(ctx, dbConn, &contract)
 }

@@ -170,18 +170,73 @@ func Serialize(msg OpReturnMessage) ([]byte, error) {
 }
 
 // Code returns the identifying code from the OP_RETURN payload.
-func Code(b []byte) (string, error) {
-	if len(b) < 9 || b[0] != OpReturn {
-		return "", errors.New("Not an OP_RETURN payload")
+func Code(script []byte) (string, error) {
+	buf := bytes.NewBuffer(script)
+
+	var opCode byte
+	var err error
+
+	// Parse OP_RETURN op code
+	err = binary.Read(buf, DefaultEndian, &opCode)
+	if err != nil {
+		return "", err
 	}
 
-	offset := 7
-
-	if b[1] < 0x4c {
-		offset = 6
+	if opCode != OpReturn {
+		return "", fmt.Errorf("Not an op return output : %02x", opCode)
 	}
 
-	return string(b[offset : offset+2]), nil
+	// Parse push op code for op return protocol ID
+	err = binary.Read(buf, DefaultEndian, &opCode)
+	if err != nil {
+		return "", err
+	}
+
+	if int(opCode) != len(ProtocolID) {
+		return "", fmt.Errorf("Push not correct size for protocol ID : %02x", opCode)
+	}
+
+	// Parse protocol ID
+	protocolID := make([]byte, len(ProtocolID))
+	_, err = buf.Read(protocolID)
+	if err != nil {
+		return "", err
+	}
+
+	if !bytes.Equal(protocolID, []byte(ProtocolID)) {
+		return "", fmt.Errorf("Invalid protocol ID : %s", string(protocolID))
+	}
+
+	// Parse push op code for payload length + 3 for version and message type code
+	var payloadSize uint64
+	payloadSize, err = txbuilder.ParsePushDataScript(buf)
+	if err != nil {
+		return "", err
+	}
+
+	if uint64(buf.Len()) < payloadSize {
+		return "", fmt.Errorf("Payload push op code is too large for message : %d", payloadSize)
+	}
+
+	// Parse version
+	var version uint8
+	err = binary.Read(buf, DefaultEndian, &version)
+	if err != nil {
+		return "", err
+	}
+
+	if version != Version {
+		return "", fmt.Errorf("Unsupported version : %02x", version)
+	}
+
+	// Parse message type code
+	code := make([]byte, 2)
+	_, err = buf.Read(code)
+	if err != nil {
+		return "", err
+	}
+
+	return string(code), nil
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -240,8 +295,17 @@ func (id *TxId) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (id *TxId) UnmarshalJSON(data []byte) error {
-	_, err := fmt.Sscanf(string(data), "\"%x\"", id.data)
-	return err
+	if len(data) < 2 {
+		return fmt.Errorf("Too short for TxId hex data : %d", len(data))
+	}
+	n, err := hex.Decode(id.data[:], data[1:len(data)-1])
+	if err != nil {
+		return err
+	}
+	if n != 32 {
+		return fmt.Errorf("Invalid TxId size : %d", n)
+	}
+	return nil
 }
 
 // Set sets the value specified

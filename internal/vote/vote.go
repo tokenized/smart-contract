@@ -43,7 +43,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	var v state.Vote
 
 	// Get current state
-	err := node.Convert(ctx, &nv, &v)
+	err := node.Convert(ctx, nv, &v)
 	if err != nil {
 		return err
 	}

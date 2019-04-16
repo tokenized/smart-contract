@@ -332,7 +332,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx.MsgTx, settlement, m.Headers)
+	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {

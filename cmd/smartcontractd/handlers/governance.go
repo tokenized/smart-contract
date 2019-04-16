@@ -10,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/transactions"
@@ -26,7 +27,7 @@ import (
 )
 
 type Governance struct {
-	handler   *node.App
+	handler   protomux.Handler
 	MasterDB  *db.DB
 	Config    *node.Config
 	Scheduler *scheduler.Scheduler
@@ -264,6 +265,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Respond with a vote
+	logger.Verbose(ctx, "%s : Accepting proposal", v.TraceID)
 	return node.RespondSuccess(ctx, w, itx, rk, &vote)
 }
 

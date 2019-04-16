@@ -294,6 +294,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params) erro
 	itx.Hash = msg.TxHash()
 
 	// Inputs
+	itx.Inputs = make([]Input, len(msg.TxIn))
 	for i, _ := range itx.Inputs {
 		if err := itx.Inputs[i].Read(buf, netParams); err != nil {
 			return err
@@ -302,8 +303,8 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params) erro
 
 	// Outputs
 	outputs := []Output{}
-	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(itx.MsgTx, n, netParams)
+	for i := range itx.MsgTx.TxOut {
+		output, err := buildOutput(itx.MsgTx, i, netParams)
 
 		if err != nil {
 			return err
