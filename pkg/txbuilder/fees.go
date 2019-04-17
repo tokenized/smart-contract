@@ -117,11 +117,11 @@ func (tx *Tx) adjustFee(amount int64) error {
 	if amount > int64(0) {
 		// Increase fee, transfer from change
 		if changeOutputIndex == 0xffffffff {
-			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for fee"))
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for tx fee"))
 		}
 
 		if tx.MsgTx.TxOut[changeOutputIndex].Value < amount {
-			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
 		}
 
 		// Decrease change, thereby increasing the fee
@@ -131,7 +131,7 @@ func (tx *Tx) adjustFee(amount int64) error {
 		if uint64(tx.MsgTx.TxOut[changeOutputIndex].Value) < tx.DustLimit {
 			if !tx.Outputs[changeOutputIndex].addedForFee {
 				// Don't remove outputs unless they were added by fee adjustment
-				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
+				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
 			}
 			// Remove change output since it is less than dust. Dust will go to miner.
 			tx.MsgTx.TxOut = append(tx.MsgTx.TxOut[:changeOutputIndex], tx.MsgTx.TxOut[changeOutputIndex+1:]...)

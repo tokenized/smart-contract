@@ -54,16 +54,15 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	// Contract could not be found
-	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractPKH.String())
-		return node.ErrNoResponse
-	}
-
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
-		logger.Warn(ctx, "%s : Only issuer can create assets: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Warn(ctx, "%s : Only issuer can create assets: %x", v.TraceID, itx.Inputs[0].Address.ScriptAddress())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotIssuer)
+	}
+
+	if msg.AssetCode.IsZero() {
+		logger.Warn(ctx, "%s : Asset creation with zero code", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Locate Asset

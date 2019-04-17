@@ -143,7 +143,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, contractPKH.String())
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, requestorPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 

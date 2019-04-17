@@ -49,10 +49,10 @@ var tracer *listeners.Tracer
 var sch scheduler.Scheduler
 var utxoSet *utxos.UTXOs
 var api protomux.Handler
-var fundingTx *wire.MsgTx
 var assetCode protocol.AssetCode
 var voteTxId protocol.TxId
 var voteResultTxId protocol.TxId
+var freezeTxId protocol.TxId
 var tokenQty uint64
 
 func TestFull(t *testing.T) {
@@ -146,6 +146,20 @@ func TestFull(t *testing.T) {
 
 	if err := proposalAmendment(ctx, t); err != nil {
 		t.Errorf("Failed proposal amendment : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	if err := freezeOrder(ctx, t); err != nil {
+		t.Errorf("Failed freeze order : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	if err := thawOrder(ctx, t); err != nil {
+		t.Errorf("Failed thaw order : %s", err)
 		sch.Stop(ctx)
 		wg.Wait()
 		return
@@ -459,19 +473,14 @@ func createAsset(ctx context.Context, t *testing.T) error {
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	// Create asset
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
 	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
 
 	fundingTx := wire.NewMsgTx(2)
 	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100001, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 	cache.AddTX(ctx, fundingTx)
+
+	assetCode = *protocol.AssetCodeFromBytes([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 
 	// Create AssetDefinition message
 	assetData := protocol.AssetDefinition{
@@ -509,7 +518,7 @@ func createAsset(ctx context.Context, t *testing.T) error {
 		return errors.Wrap(err, "Failed to serialize asset auth flags")
 	}
 
-	// Build offer transaction
+	// Build asset definition transaction
 	assetTx := wire.NewMsgTx(2)
 
 	var assetInputHash chainhash.Hash
@@ -578,14 +587,7 @@ func transferTokens(ctx context.Context, t *testing.T) error {
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	// Transfer some tokens to user
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
-	fundingTx = wire.NewMsgTx(2)
+	fundingTx := wire.NewMsgTx(2)
 	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100002, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 	cache.AddTX(ctx, fundingTx)
 
@@ -604,7 +606,7 @@ func transferTokens(ctx context.Context, t *testing.T) error {
 
 	transferData.Assets = append(transferData.Assets, assetTransferData)
 
-	// Build offer transaction
+	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
 
 	var transferInputHash chainhash.Hash
@@ -710,14 +712,7 @@ func holderProposal(ctx context.Context, t *testing.T) error {
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	// Create holder proposal message
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
-	fundingTx = wire.NewMsgTx(2)
+	fundingTx := wire.NewMsgTx(2)
 	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100003, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
 	cache.AddTX(ctx, fundingTx)
 
@@ -737,7 +732,7 @@ func holderProposal(ctx context.Context, t *testing.T) error {
 		Data:       []byte("Test Name 2"),
 	})
 
-	// Build offer transaction
+	// Build proposal transaction
 	proposalTx := wire.NewMsgTx(2)
 
 	var proposalInputHash chainhash.Hash
@@ -800,19 +795,7 @@ func sendBallot(ctx context.Context, t *testing.T, pkh *protocol.PublicKeyHash, 
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
-	fundingTx = wire.NewMsgTx(2)
+	fundingTx := wire.NewMsgTx(2)
 	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100006, txbuilder.P2PKHScriptForPKH(pkh.Bytes())))
 	cache.AddTX(ctx, fundingTx)
 
@@ -831,7 +814,7 @@ func sendBallot(ctx context.Context, t *testing.T, pkh *protocol.PublicKeyHash, 
 	ballotTx.TxIn = append(ballotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&ballotInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(51000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(1000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&ballotData)
@@ -876,12 +859,6 @@ func processVoteResult(ctx context.Context, t *testing.T) error {
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
 	// Wait for vote expiration
 	time.Sleep(time.Second)
 
@@ -907,14 +884,7 @@ func proposalAmendment(ctx context.Context, t *testing.T) error {
 	}
 	ctx = context.WithValue(ctx, node.KeyValues, &v)
 
-	// Create amendment for proposal
-	v = node.Values{
-		TraceID: span.SpanContext().TraceID.String(),
-		Now:     protocol.CurrentTimestamp(),
-	}
-	ctx = context.WithValue(ctx, node.KeyValues, &v)
-
-	fundingTx = wire.NewMsgTx(2)
+	fundingTx := wire.NewMsgTx(2)
 	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100007, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 	cache.AddTX(ctx, fundingTx)
 
@@ -928,7 +898,7 @@ func proposalAmendment(ctx context.Context, t *testing.T) error {
 		Data:       []byte("Test Name 2"),
 	})
 
-	// Build offer transaction
+	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(2)
 
 	var amendmentInputHash chainhash.Hash
@@ -938,7 +908,7 @@ func proposalAmendment(ctx context.Context, t *testing.T) error {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(51000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(1000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&amendmentData)
@@ -968,6 +938,182 @@ func proposalAmendment(ctx context.Context, t *testing.T) error {
 
 	if err := checkResponse(ctx, t, "C2"); err != nil {
 		return errors.Wrap(err, "Failed to check amendment response")
+	}
+
+	return nil
+}
+
+func freezeOrder(ctx context.Context, t *testing.T) error {
+	ctx, span := trace.StartSpan(ctx, "Test.freezeOrder")
+	defer span.End()
+
+	v := node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100008, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionFreeze,
+		AssetType:        protocol.CodeShareCommon,
+		AssetCode:        assetCode,
+		Message:          "Court order",
+	}
+
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{
+		Address:  *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		Quantity: 200,
+	})
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	var orderInputHash chainhash.Hash
+	orderInputHash = fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize order")
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create order itx")
+	}
+
+	err = orderItx.Promote(ctx, &cache)
+	if err != nil {
+		return errors.Wrap(err, "Failed to promote order itx")
+	}
+
+	cache.AddTX(ctx, orderTx)
+
+	err = api.Trigger(ctx, protomux.SEE, orderItx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to accept order")
+	}
+
+	t.Logf("Freeze order accepted")
+
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		freezeTxId = *protocol.TxIdFromBytes(hash[:])
+	}
+
+	if err := checkResponse(ctx, t, "E2"); err != nil {
+		return errors.Wrap(err, "Failed to check order response")
+	}
+
+	// Check balance status
+	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetCode)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve asset")
+	}
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	if asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
+		return errors.New("User unfrozen balance too high")
+	}
+
+	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 50, v.Now) {
+		return errors.New("User unfrozen balance not high enough")
+	}
+
+	return nil
+}
+
+func thawOrder(ctx context.Context, t *testing.T) error {
+	ctx, span := trace.StartSpan(ctx, "Test.freezeOrder")
+	defer span.End()
+
+	v := node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionThaw,
+		AssetType:        protocol.CodeShareCommon,
+		AssetCode:        assetCode,
+		FreezeTxId:       freezeTxId,
+		Message:          "Court order released",
+	}
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	var orderInputHash chainhash.Hash
+	orderInputHash = fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize order")
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create order itx")
+	}
+
+	err = orderItx.Promote(ctx, &cache)
+	if err != nil {
+		return errors.Wrap(err, "Failed to promote order itx")
+	}
+
+	cache.AddTX(ctx, orderTx)
+
+	err = api.Trigger(ctx, protomux.SEE, orderItx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to accept order")
+	}
+
+	t.Logf("Thaw order accepted")
+
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		freezeTxId = *protocol.TxIdFromBytes(hash[:])
+	}
+
+	if err := checkResponse(ctx, t, "E3"); err != nil {
+		return errors.Wrap(err, "Failed to check order response")
+	}
+
+	// Check balance status
+	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetCode)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve asset")
+	}
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 250, v.Now) {
+		return errors.New("User balance not unfrozen")
 	}
 
 	return nil
