@@ -9,7 +9,7 @@ import (
 // an Entity.
 type Administrator struct {
 	Type uint8  `json:"type,omitempty"` // Chairman, Director, Managing Partner, etc.. Found in 'Roles' in Specification/Resources
-	Name string `json:"name,omitempty"` // Length 0-255 bytes. 0 is valid. Name (eg. John Alexander Smith)
+	Name string `json:"name,omitempty"` // Length 0-255 bytes. 0 is valid.
 }
 
 // Serialize returns the byte representation of the message.
@@ -1268,7 +1268,7 @@ func (m *Entity) Equal(other Entity) bool {
 // Management of an Entity.
 type Manager struct {
 	Type uint8  `json:"type,omitempty"` // CEO, COO, CFO, etc. Found in 'Roles' in Specification/Resources
-	Name string `json:"name,omitempty"` // Length 0-255 bytes. 0 is valid. Name (eg. John Alexander Smith)
+	Name string `json:"name,omitempty"` // Length 0-255 bytes. 0 is valid.
 }
 
 // Serialize returns the byte representation of the message.
@@ -1745,7 +1745,7 @@ func (m *TokenReceiver) Equal(other TokenReceiver) bool {
 // VotingSystem A VotingSystem defines all details of a Voting System.
 type VotingSystem struct {
 	Name                    string `json:"name,omitempty"`                      // eg. Special Resolutions, Ordinary Resolutions, Fundamental Matters, General Matters, Directors' Vote, Poll, etc.
-	VoteType                byte   `json:"vote_type,omitempty"`                 // R - Relative Threshold, A - Absolute Threshold, P - Plurality,  (Relative Threshold means the number of counted votes must exceed the threshold % of total ballots cast.  Abstentations/spoiled votes do not detract from the liklihood of a vote passing as they are not included in the denominator.  Absolute Threshold requires the number of ballots counted to exceed the threshold value when compared to the total outstanding tokens.  Abstentations/spoiled votes detract from the liklihood of the vote passing.  For example, in an absolute threshold vote, if the threshold was 50% and 51% of the total outstanding tokens did not vote, then the vote cannot pass.  50% of all tokens would have had to vote for one vote option for the vote to be successful.
+	VoteType                byte   `json:"vote_type,omitempty"`                 // R - Relative Threshold, A - Absolute Threshold, P - Plurality,  (Relative Threshold means the number of counted votes must exceed the threshold % of total ballots cast.  Abstentations/spoiled votes do not detract from the liklihood of a vote passing as they are not included in the denominator.  Absolute Threshold requires the number of ballots counted to exceed the threshold value when compared to the total outstanding tokens.  Abstentations/spoiled votes detract from the liklihood of the vote passing.  For example, in an absolute threshold vote, if the threshold was 50% and 51% of the total outstanding tokens did not vote, then the vote cannot pass.  50% of all tokens would have had to vote for one vote option for the vote to be successful. Plurality means the most favoured option is selected, regardless of the number of votes cast or the percentage relative to other choices.
 	TallyLogic              byte   `json:"tally_logic,omitempty"`               // 0 - Standard Scoring (+1 * # of tokens owned), 1 - Weighted Scoring (1st choice * Vote Max * # of tokens held, 2nd choice * Vote Max-1 * # of tokens held,..etc.)
 	ThresholdPercentage     uint8  `json:"threshold_percentage,omitempty"`      // This field is ignored when VoteType is P (Plurality). Otherwise it is the percentage of ballots required for a proposal to pass. Valid values are greater than 0 and less than 100. 75 means 75% and greater.  Only applicable to Relative and Absolute Threshold vote methods.  The Plurality vote method requires no threshold value (NULL), as the successful vote option is simply selected on the basis of highest ballots cast for it.
 	VoteMultiplierPermitted bool   `json:"vote_multiplier_permitted,omitempty"` // Where an asset has a vote multiplier, true must be set here for the vote multiplier to count, otherwise votes are simply treated as 1x per token.

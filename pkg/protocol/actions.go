@@ -29,6 +29,10 @@ const (
 	// StaticContractFormation message.
 	CodeStaticContractFormation = "C4"
 
+	// CodeContractAddressChange identifies data as a ContractAddressChange
+	// message.
+	CodeContractAddressChange = "C5"
+
 	// CodeOrder identifies data as a Order message.
 	CodeOrder = "E1"
 
@@ -120,6 +124,9 @@ func TypeMapping(code string) OpReturnMessage {
 	case CodeStaticContractFormation:
 		result := StaticContractFormation{}
 		return &result
+	case CodeContractAddressChange:
+		result := ContractAddressChange{}
+		return &result
 	case CodeOrder:
 		result := Order{}
 		return &result
@@ -180,9 +187,9 @@ func TypeMapping(code string) OpReturnMessage {
 }
 
 // AssetDefinition This action is used by the issuer to define the
-// properties/characteristics of the Asset (token) that it wants to create.
+// properties/characteristics of the asset (token) that it wants to create.
 // An asset has a unique identifier called AssetID = AssetType +
-// base58(AssetCode + checksum). An asset is always linked to a Contract
+// base58(AssetCode + checksum). An asset is always linked to a contract
 // that is identified by the public address of the Contract wallet.
 type AssetDefinition struct {
 	AssetType                   string    `json:"asset_type,omitempty"`                    // Three letter character that specifies the asset type.
@@ -193,11 +200,11 @@ type AssetDefinition struct {
 	EnforcementOrdersPermitted  bool      `json:"enforcement_orders_permitted,omitempty"`  // Set to true if the issuer is permitted to make enforcement orders on user tokens and balances, otherwise set to false to disable this feature.
 	VotingRights                bool      `json:"voting_rights,omitempty"`                 // When false holders of this asset will not be able to vote for tokens of this asset even on voting systems in which vote multiplers are not permitted.
 	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies a vote by the specified integer. Where 1 token is equal to 1 vote with a 1 for vote multipler (normal), 1 token = 3 votes with a multiplier of 3, for example. If zero, then holders of this asset don't get any votes for their tokens.
-	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // Set to true if an Issuer is permitted to make proposals outside of the smart contract scope.
+	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // Set to true if an issuer is permitted to make proposals outside of the smart contract scope.
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`               // Set to true if a holder is permitted to make proposals outside of the smart contract scope.
 	AssetModificationGovernance uint8     `json:"asset_modification_governance,omitempty"` // Supported values: 1 - Contract-wide Asset Governance. 0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (only this asset votes on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
 	TokenQty                    uint64    `json:"token_qty,omitempty"`                     // The number of tokens to issue with this asset. Set to greater than zero for fungible tokens. If the value is 1 then it becomes a non-fungible token, where the contract would have many assets. Set to 0 to represent a placeholder asset, where tokens are to be issued later, or to represent a decomissioned asset where all tokens have been revoked.
-	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // A custom payload that contains meta data about this asset. Payload structure and length is dependent on the asset type chosen. See Asset documentation for more details.
+	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // A custom payload that contains meta data about this asset. Payload structure and length is dependent on the asset type chosen. See asset documentation for more details.
 }
 
 // Type returns the type identifer for this message.
@@ -537,7 +544,7 @@ func (action AssetDefinition) String() string {
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
 
-// AssetCreation This action creates an Asset in response to the Issuer's
+// AssetCreation This action creates an asset in response to the issuer's
 // instructions in the Definition Action.
 type AssetCreation struct {
 	AssetType                   string    `json:"asset_type,omitempty"`                    // Three letter character that specifies the asset type.
@@ -548,11 +555,11 @@ type AssetCreation struct {
 	EnforcementOrdersPermitted  bool      `json:"enforcement_orders_permitted,omitempty"`  // Set to true if the issuer is permitted to make enforcement orders on user tokens and balances, otherwise set to false to disable this feature.
 	VotingRights                bool      `json:"voting_rights,omitempty"`                 // When false holders of this asset will not be able to vote for tokens of this asset even on voting systems in which vote multiplers are not permitted.
 	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`               // Multiplies a vote by the specified integer. Where 1 token is equal to 1 vote with a 1 for vote multipler (normal), 1 token = 3 votes with a multiplier of 3, for example. If zero, then holders of this asset don't get any votes for their tokens.
-	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // Set to true if an Issuer is permitted to make proposals outside of the smart contract scope.
+	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`               // Set to true if an issuer is permitted to make proposals outside of the smart contract scope.
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`               // Set to true if a holder is permitted to make proposals outside of the smart contract scope.
 	AssetModificationGovernance uint8     `json:"asset_modification_governance,omitempty"` // Supported values: 1 - Contract-wide Asset Governance.  0 - Asset-wide Asset Governance.  If a referendum or initiative is used to propose a modification to a subfield controlled by the asset auth flags, then the vote will either be a contract-wide vote (all assets vote on the referendum/initiative) or an asset-wide vote (only this asset votes on the referendum/initiative) depending on the value in this subfield.  The voting system specifies the voting rules.
 	TokenQty                    uint64    `json:"token_qty,omitempty"`                     // The number of tokens to issue with this asset. Set to greater than zero for fungible tokens. If the value is 1 then it becomes a non-fungible token, where the contract would have many assets. Set to 0 to represent a placeholder asset, where tokens are to be issued later, or to represent a decomissioned asset where all tokens have been revoked.
-	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // A custom payload that contains meta data about this asset. Payload structure and length is dependent on the asset type chosen. See Asset documentation for more details.
+	AssetPayload                []byte    `json:"asset_payload,omitempty"`                 // A custom payload that contains meta data about this asset. Payload structure and length is dependent on the asset type chosen. See asset documentation for more details.
 	AssetRevision               uint32    `json:"asset_revision,omitempty"`                // A counter for the number of times this asset has been revised using a modification action.
 	Timestamp                   Timestamp `json:"timestamp,omitempty"`                     // Timestamp in nanoseconds of when the smart contract created the action.
 }
@@ -1141,34 +1148,34 @@ func (action AssetModification) String() string {
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
 
-// ContractOffer Allows the Issuer to tell the smart contract what they
+// ContractOffer Allows the issuer to tell the smart contract what they
 // want the details (labels, data, T&C's, etc.) of the Contract to be
 // on-chain in a public and immutable way. The Contract Offer action
 // 'initializes' a generic smart contract that has been spun up by either
-// the Smart Contract Operator or the Issuer. This on-chain action allows
+// the smart contract operator or the issuer. This on-chain action allows
 // for the positive response from the smart contract with either a Contract
 // Formation Action or a Rejection Action.
 type ContractOffer struct {
-	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
+	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public key hash address. If the public address is lost, then the issuer will have to reissue the entire contract, Asset Definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
 
 	BodyOfAgreementType      uint8          `json:"body_of_agreement_type,omitempty"`     // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
 	BodyOfAgreement          []byte         `json:"body_of_agreement,omitempty"`          // SHA-256 hash of the body of the agreement (full contract in pdf format or the like) or the full terms and conditions of an agreement in the Tokenized Body of Agreement format.  This is specific to the smart contract and relevant Assets.  Legal and technical information.
 	ContractType             string         `json:"contract_type,omitempty"`              // Describes the purpose of the contract.
 	SupportingDocsFileType   uint8          `json:"supporting_docs_file_type,omitempty"`  // 1 - 7z
 	SupportingDocs           []byte         `json:"supporting_docs,omitempty"`            //
-	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
+	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
 	Jurisdiction             string         `json:"jurisdiction,omitempty"`               // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
 	ContractExpiration       Timestamp      `json:"contract_expiration,omitempty"`        // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate total smart contract running costs for the entire life of the contract. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
-	ContractURI              string         `json:"contract_uri,omitempty"`               // Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on-chain information or even a public address (DNS).
+	ContractURI              string         `json:"contract_uri,omitempty"`               // Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the issuer (company), information about the asset, legal information, etc.  There will also be a way for token owners to vote on this page and contact details with the issuer/tokenized companies. Could be a IPv6/IPv4, or txn-id for on-chain information or even a public address (DNS).
 	Issuer                   Entity         `json:"issuer,omitempty"`                     // The issuer of this contract.
-	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the Issuers logo.
+	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the issuer's logo.
 	ContractOperatorIncluded bool           `json:"contract_operator_included,omitempty"` // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
 	ContractOperator         Entity         `json:"contract_operator,omitempty"`          // An additional entity with operator access to the contract.
-	ContractAuthFlags        []byte         `json:"contract_auth_flags,omitempty"`        // A set of switches that define the authorization rules for this contract. See the Authorization Flags documentation for more detail. Other terms and conditions that are out of the smart contract's control should be listed in the Contract File.
+	ContractAuthFlags        []byte         `json:"contract_auth_flags,omitempty"`        // A set of switches that define the authorization rules for this contract. See the Authorization Flags documentation for more detail. Other terms and conditions that are out of the smart contract's control should be listed in the Body of Agreement.
 	ContractFee              uint64         `json:"contract_fee,omitempty"`               // Satoshis required to be paid to the contract for each asset action.
 	VotingSystems            []VotingSystem `json:"voting_systems,omitempty"`             // A list of voting systems.
 	RestrictedQtyAssets      uint64         `json:"restricted_qty_assets,omitempty"`      // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
-	IssuerProposal           bool           `json:"issuer_proposal,omitempty"`            // Set to true if an Issuer is permitted to make proposals outside of the smart contract scope.
+	IssuerProposal           bool           `json:"issuer_proposal,omitempty"`            // Set to true if an issuer is permitted to make proposals outside of the smart contract scope.
 	HolderProposal           bool           `json:"holder_proposal,omitempty"`            // Set to true if a holder is permitted to make proposals outside of the smart contract scope.
 	Oracles                  []Oracle       `json:"oracles,omitempty"`                    // A list of oracles that provide approval for all token transfers for all assets under the contract.
 }
@@ -1755,28 +1762,28 @@ func (action ContractOffer) String() string {
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
 
-// ContractFormation This txn is created by the Contract (smart
+// ContractFormation This txn is created by the contract (smart
 // contract/off-chain agent/token contract) upon receipt of a valid
-// Contract Offer Action from the issuer. The Smart Contract will execute
-// on a server controlled by the Issuer. or a Smart Contract Operator on
+// Contract Offer Action from the issuer. The smart contract will execute
+// on a server controlled by the issuer, or a smart contract operator on
 // their behalf.
 type ContractFormation struct {
-	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public key hash address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
+	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public key hash address. If the public address is lost, then the issuer will have to reissue the entire contract, asset definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
 
 	BodyOfAgreementType      uint8          `json:"body_of_agreement_type,omitempty"`     // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
 	BodyOfAgreement          []byte         `json:"body_of_agreement,omitempty"`          // SHA-256 hash of the body of the agreement (full contract in pdf format or the like) or the full terms and conditions of an agreement in the Tokenized Body of Agreement format.  This is specific to the smart contract and relevant Assets.  Legal and technical information.
 	ContractType             string         `json:"contract_type,omitempty"`              // Describes the purpose of the contract.
 	SupportingDocsFileType   uint8          `json:"supporting_docs_file_type,omitempty"`  // 1 - 7z
 	SupportingDocs           []byte         `json:"supporting_docs,omitempty"`            //
-	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
+	GoverningLaw             string         `json:"governing_law,omitempty"`              // 5 Letter Code to identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
 	Jurisdiction             string         `json:"jurisdiction,omitempty"`               // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
 	ContractExpiration       Timestamp      `json:"contract_expiration,omitempty"`        // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate smart contract running costs. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
 	ContractURI              string         `json:"contract_uri,omitempty"`               // Length 0-255 bytes.  0 is valid. Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on chain information or even a public address (DNS).
 	Issuer                   Entity         `json:"issuer,omitempty"`                     // The issuer of this contract.
-	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the Issuers logo.
+	IssuerLogoURL            string         `json:"issuer_logo_url,omitempty"`            // The URL of the issuer's logo.
 	ContractOperatorIncluded bool           `json:"contract_operator_included,omitempty"` // If true, then the second input is a contract operator. If false, then all additional inputs are just funding and "includes" fields are skipped in serialization.
 	ContractOperator         Entity         `json:"contract_operator,omitempty"`          // An additional entity with operator access to the contract.
-	ContractAuthFlags        []byte         `json:"contract_auth_flags,omitempty"`        // A set of switches that define the authorization rules for this contract. See the Authorization Flags documentation for more detail. Other terms and conditions that are out of the smart contract's control should be listed in the Contract File.
+	ContractAuthFlags        []byte         `json:"contract_auth_flags,omitempty"`        // A set of switches that define the authorization rules for this contract. See the Authorization Flags documentation for more detail. Other terms and conditions that are out of the smart contract's control should be listed in the Body of Agreement
 	ContractFee              uint64         `json:"contract_fee,omitempty"`               // Satoshis required to be paid to the contract for each asset action.
 	VotingSystems            []VotingSystem `json:"voting_systems,omitempty"`             // A list voting systems.
 	RestrictedQtyAssets      uint64         `json:"restricted_qty_assets,omitempty"`      // Number of Assets (non-fungible) permitted on this contract. 0 if unlimited which will display an infinity symbol in UI
@@ -2421,8 +2428,8 @@ func (action ContractFormation) String() string {
 // is restricted by the Authorization Flag set on the current revision of
 // Contract Formation action.
 type ContractAmendment struct {
-	ChangeIssuerAddress   bool        `json:"change_issuer_address,omitempty"`   // Used to change the issuer address.  The new issuer address must be in the input[1] position.
-	ChangeOperatorAddress bool        `json:"change_operator_address,omitempty"` // Used to change the smart contract operator address.  The new operator address must be in the input[1] position, unless issuer is being changed too, then it is in input[2].
+	ChangeIssuerAddress   bool        `json:"change_issuer_address,omitempty"`   // Used to change the issuer address.  The new issuer address must be in the input[1] position. A change of an issuer or operator address requires both the operator and the issuer address to be in the inputs (both signatures) of the Contract Amendment action.
+	ChangeOperatorAddress bool        `json:"change_operator_address,omitempty"` // Used to change the smart contract operator address.  The new operator address must be in the input[1] position, unless issuer is being changed too, then it is in input[2]. A change of an issuer or operator address requires both the operator and the issuer address to be in the inputs (both signatures) of the Contract Amendment action.
 	ContractRevision      uint32      `json:"contract_revision,omitempty"`       // Counter 0 to (2^32)-1
 	Amendments            []Amendment `json:"amendments,omitempty"`              // A collection of modifications to perform on this contract.
 	RefTxID               TxId        `json:"ref_tx_id,omitempty"`               // The Bitcoin transaction ID of the associated result action that permitted the modifications. See Governance for more details.
@@ -2607,7 +2614,7 @@ func (action ContractAmendment) String() string {
 
 // StaticContractFormation Static Contract Formation Action
 type StaticContractFormation struct {
-	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public address. If the Public Address is lost, then the issuer will have to reissue the entire contract, Asset definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
+	ContractName string `json:"contract_name,omitempty"` // Can be any unique identifying string, including human readable names for branding/vanity purposes. Contract identifier (instance) is the bitcoin public address. If the public address is lost, then the issuer will have to reissue the entire contract, Asset Definition and tokens with the new public address. Smart contracts can be branded and specialized to suit any terms and conditions.
 
 	ContractCode           ContractCode `json:"contract_code,omitempty"`             // 32 randomly generated bytes. Each Contract Code should be unique. The Contract ID will be human facing and will be the Contract Code, with a checksum, encoded in base58 and prefixed by 'CON'. Contract ID = CON + base58(ContractCode + checksum).  Eg. Contract ID = 'CON18RDoKK7Ed5zid2FkKVy7q3rULr4tgfjr4'
 	BodyOfAgreementType    uint8        `json:"body_of_agreement_type,omitempty"`    // 1 - SHA-256 Hash, 2 - Tokenized Body of Agreement Format
@@ -2616,11 +2623,11 @@ type StaticContractFormation struct {
 	SupportingDocsFileType uint8        `json:"supporting_docs_file_type,omitempty"` // 1 - 7z
 	SupportingDocs         string       `json:"supporting_docs,omitempty"`           //
 	ContractRevision       uint32       `json:"contract_revision,omitempty"`         // Counter 0 to (2^32)-1
-	GoverningLaw           string       `json:"governing_law,omitempty"`             // 5 Letter Code to Identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
+	GoverningLaw           string       `json:"governing_law,omitempty"`             // 5 Letter Code to identify which governing law the contract will adhere to.  Disputes are to be settled by this law in the jurisdiction specified below. Private dispute resolution organizations can be used as well.  A custom code just needs to be defined.
 	Jurisdiction           string       `json:"jurisdiction,omitempty"`              // Legal proceedings/arbitration will take place using the specified Governing Law in this location.
 	EffectiveDate          Timestamp    `json:"effective_date,omitempty"`            // Start date of the contract.
 	ContractExpiration     Timestamp    `json:"contract_expiration,omitempty"`       // All actions related to the contract will cease to work after this timestamp. The smart contract will stop running.  This will allow many token use cases to be able to calculate smart contract running costs. Eg. an issuer is creating tickets for an event on the 5th of June 2018.  The smart contract will facilitate exchange and send transactions up until the 6th of June.  Wallets can use this to forget tokens that are no longer valid - or at least store them in an 'Expired' folder.
-	ContractURI            string       `json:"contract_uri,omitempty"`              // Length 0-255 bytes. Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the Issuer (company), information about the Asset, legal information, etc.  There will also be a way for Token Owners to vote on this page and contact details with the Issuer/tokenized companies. Could be a IPv6/IPv4, an IPFS address (hash) or txn-id for on chain information or even a public address (DNS).
+	ContractURI            string       `json:"contract_uri,omitempty"`              // Length 0-255 bytes. Points to an information page that also has a copy of the Contract.  Anyone can go to the website to have a look at the price/token, information about the issuer (company), information about the Asset, legal information, etc.  There will also be a way for token owners to vote on this page and contact details with the issuer/tokenized companies. Could be a IPv6/IPv4, or txn-id for on chain information or even a public address (DNS).
 	PrevRevTxID            TxId         `json:"prev_rev_tx_id,omitempty"`            // The Tx-ID of the previous contract revision.
 	Entities               []Entity     `json:"entities,omitempty"`                  // A list of legal entities associated with this contract.
 }
@@ -3058,6 +3065,86 @@ func (action StaticContractFormation) String() string {
 	vals = append(vals, fmt.Sprintf("ContractURI:%#+v", action.ContractURI))
 	vals = append(vals, fmt.Sprintf("PrevRevTxID:%#+v", action.PrevRevTxID))
 	vals = append(vals, fmt.Sprintf("Entities:%#+v", action.Entities))
+
+	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
+}
+
+// ContractAddressChange This txn is signed by the master contract key
+// defined in the contract formation and changes the active contract
+// address which the contract uses to receive and respond to requests. This
+// is a worst case scenario fallback to only be used when the contract
+// private key is believed to be exposed.
+type ContractAddressChange struct {
+	NewContractPKH PublicKeyHash `json:"new_contract_pkh,omitempty"` // The address to be used by all future requests/responses for the contract.
+}
+
+// Type returns the type identifer for this message.
+func (action ContractAddressChange) Type() string {
+	return CodeContractAddressChange
+}
+
+// Read implements the io.Reader interface, writing the receiver to the
+// []byte.
+func (action *ContractAddressChange) read(b []byte) (int, error) {
+	data, err := action.serialize()
+
+	if err != nil {
+		return 0, err
+	}
+
+	copy(b, data)
+
+	return len(b), nil
+}
+
+// serialize returns the full OP_RETURN payload bytes.
+func (action *ContractAddressChange) serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	// NewContractPKH (PublicKeyHash)
+	{
+		b, err := action.NewContractPKH.Serialize()
+		if err != nil {
+			return nil, err
+		}
+
+		if err := write(buf, b); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// write populates the fields in ContractAddressChange from the byte slice
+func (action *ContractAddressChange) write(b []byte) (int, error) {
+	buf := bytes.NewBuffer(b)
+	// NewContractPKH (PublicKeyHash)
+	{
+		if err := action.NewContractPKH.Write(buf); err != nil {
+			return 0, err
+		}
+	}
+
+	return len(b) - buf.Len(), nil
+}
+
+func (m *ContractAddressChange) Validate() error {
+
+	// NewContractPKH (PublicKeyHash)
+	{
+		if err := m.NewContractPKH.Validate(); err != nil {
+			return fmt.Errorf("field NewContractPKH is invalid : %s", err)
+		}
+
+	}
+
+	return nil
+}
+
+func (action ContractAddressChange) String() string {
+	vals := []string{}
+
+	vals = append(vals, fmt.Sprintf("NewContractPKH:%#+v", action.NewContractPKH))
 
 	return fmt.Sprintf("{%s}", strings.Join(vals, " "))
 }
@@ -3568,7 +3655,7 @@ func (action Order) String() string {
 // be used to comply with contractual/legal/issuer requirements. The target
 // public address(es) will be marked as frozen. However the Freeze action
 // publishes this fact to the public blockchain for transparency. The
-// Contract will not respond to any actions requested by the frozen
+// contract will not respond to any actions requested by the frozen
 // address.
 type Freeze struct {
 	AssetType    string          `json:"asset_type,omitempty"`    // Three letter character that specifies the asset type.
@@ -4281,7 +4368,7 @@ type Proposal struct {
 	AssetType            string      `json:"asset_type,omitempty"`             // Three letter character that specifies the asset type.
 	AssetCode            AssetCode   `json:"asset_code,omitempty"`             // A unique code that is used to identify the asset, made up of 32 randomly generated bytes. The asset code is a human readable identifier that can be used in a similar way to a Bitcoin (BSV) address.
 	VoteSystem           uint8       `json:"vote_system,omitempty"`            // X for Vote System X. (1-255, 0 is not valid.)
-	Specific             bool        `json:"specific,omitempty"`               // When true the ProposedAmendments field is included and specifies the exact changes to make to the Contract/Asset on chain. When false this is just a general proposal like a strategy/direction and doesn't result in any on chain update.
+	Specific             bool        `json:"specific,omitempty"`               // When true the ProposedAmendments field is included and specifies the exact changes to make to the contract/asset on chain. When false this is just a general proposal like a strategy/direction and doesn't result in any on chain update.
 	ProposedAmendments   []Amendment `json:"proposed_amendments,omitempty"`    // Each element contains details of which fields to modify, or delete. Because the number of fields in a Contract and Asset is dynamic due to some fields being able to be repeated, the index value of the field needs to be calculated against the Contract or Asset the changes are to apply to. In the event of a Vote being created from this Initiative, the changes will be applied to the version of the Contract or Asset at that time.
 	VoteOptions          string      `json:"vote_options,omitempty"`           // Length 1-255 bytes. 0 is not valid. Each byte allows for a different vote option. Typical votes will likely be multiple choice or Y/N. Vote instances are identified by the Tx-ID. AB would be used for Y/N (binary) type votes. When Specific is true, only AB is a valid value.
 	VoteMax              uint8       `json:"vote_max,omitempty"`               // Range: 1-X. How many selections can a voter make in a Ballot Cast. 1 is selected for Y/N (binary). When Specific is true, only 1 is a valid value.

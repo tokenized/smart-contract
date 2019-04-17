@@ -1331,6 +1331,53 @@ func TestStaticContractFormation(t *testing.T) {
 	}
 }
 
+func TestContractAddressChange(t *testing.T) {
+	// Create a randomized object
+	initialMessage := ContractAddressChange{}
+	// NewContractPKH (PublicKeyHash)
+	{
+		initialMessage.NewContractPKH = PublicKeyHash{}
+	}
+
+	// Encode message
+	initialEncoding, err := initialMessage.serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Initial encoding : %d bytes", len(initialEncoding))
+
+	// Decode message
+	decodedMessage := ContractAddressChange{}
+
+	n, err := decodedMessage.write(initialEncoding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Decoded : %d bytes", n)
+
+	if n != len(initialEncoding) {
+		t.Fatalf("got %v, want %v", n, len(initialEncoding))
+	}
+
+	// Serializing the message should give us the same bytes
+	secondEncoding, err := decodedMessage.serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(initialEncoding, secondEncoding) {
+		t.Errorf("Encoded value doesn't match.\ngot\n%+v\nwant\n%+v", initialEncoding, secondEncoding)
+	}
+
+	// if !cmp.Equal(&initialMessage, &decodedMessage) {
+	// 	t.Errorf("Decoded value doesn't match.\ninitial : %+v\ndecoded : %+v", initialMessage, decodedMessage)
+	// }
+
+	// Compare re-serialized values
+	// NewContractPKH (PublicKeyHash)
+	// PublicKeyHash test compare not setup
+}
+
 func TestOrder(t *testing.T) {
 	// Create a randomized object
 	initialMessage := Order{}
