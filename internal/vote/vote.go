@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
 	"github.com/pkg/errors"
@@ -74,6 +75,12 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if uv.CompletedAt != nil {
 		v.CompletedAt = *uv.CompletedAt
 	}
+	if uv.Result != nil {
+		v.Result = *uv.Result
+	}
+	if uv.OptionTally != nil {
+		v.OptionTally = *uv.OptionTally
+	}
 	if uv.AppliedTxId != nil {
 		v.AppliedTxId = *uv.AppliedTxId
 	}
@@ -81,6 +88,24 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		v.Ballots = append(v.Ballots, uv.NewBallot)
 	}
 
+	v.UpdatedAt = now
+
+	return Save(ctx, dbConn, contractPKH, v)
+}
+
+// Mark the vote as applied
+func MarkApplied(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+	voteTxId *protocol.TxId, appliedTxID *protocol.TxId, now protocol.Timestamp) error {
+	ctx, span := trace.StartSpan(ctx, "internal.vote.MarkApplied")
+	defer span.End()
+
+	// Find vote
+	v, err := Fetch(ctx, dbConn, contractPKH, voteTxId)
+	if err != nil {
+		return ErrNotFound
+	}
+
+	v.AppliedTxId = *appliedTxID
 	v.UpdatedAt = now
 
 	return Save(ctx, dbConn, contractPKH, v)
@@ -117,7 +142,7 @@ func AddBallot(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicK
 // CalculateResults calculates the result of a completed vote.
 func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Proposal, votingSystem *protocol.VotingSystem) ([]uint64, string, error) {
 
-	floatResults := make([]float32, proposal.VoteMax)
+	floatTallys := make([]float32, len(proposal.VoteOptions))
 	votedQuantity := uint64(0)
 	var score float32
 	for _, ballot := range vt.Ballots {
@@ -133,7 +158,7 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Pr
 
 			for j, option := range proposal.VoteOptions {
 				if option == choice {
-					floatResults[j] += score
+					floatTallys[j] += score
 					break
 				}
 			}
@@ -149,47 +174,49 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Pr
 	for {
 		highestIndex = -1
 		highestScore = 0.0
-		for i, floatResult := range floatResults {
+		for i, floatTally := range floatTallys {
 			_, exists := scored[i]
 			if exists {
 				continue
 			}
 
-			if floatResult <= highestScore {
+			if floatTally <= highestScore {
 				continue
 			}
 
 			switch votingSystem.VoteType {
 			case 'R': // Relative
-				if floatResult/float32(votedQuantity) >= float32(votingSystem.ThresholdPercentage)/100.0 {
+				if floatTally/float32(votedQuantity) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
-					highestScore = floatResult
+					highestScore = floatTally
 				}
 			case 'A': // Absolute
-				if floatResult/float32(vt.TokenQty) >= float32(votingSystem.ThresholdPercentage)/100.0 {
+				if floatTally/float32(vt.TokenQty) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
-					highestScore = floatResult
+					highestScore = floatTally
 				}
 			case 'P': // Plurality
 				highestIndex = i
-				highestScore = floatResult
+				highestScore = floatTally
 			}
 		}
 
 		if highestIndex == -1 {
-			break // No more valid results
+			break // No more valid tallys
 		}
 		winners.WriteByte(proposal.VoteOptions[highestIndex])
 		scored[highestIndex] = true
 	}
 
-	// Convert results back to integers
-	results := make([]uint64, proposal.VoteMax)
-	for i, floatResult := range floatResults {
-		results[i] = uint64(floatResult)
+	// Convert tallys back to integers
+	tallys := make([]uint64, len(proposal.VoteOptions))
+	for i, floatTally := range floatTallys {
+		logger.Verbose(ctx, "Vote result %c : %d", proposal.VoteOptions[i], uint64(floatTally))
+		tallys[i] = uint64(floatTally)
 	}
 
-	return results, winners.String(), nil
+	logger.Verbose(ctx, "Processed vote : winners %s", winners.String())
+	return tallys, winners.String(), nil
 }
 
 func ValidateVotingSystem(system *protocol.VotingSystem) error {

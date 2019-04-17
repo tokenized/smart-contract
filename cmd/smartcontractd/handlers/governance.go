@@ -356,6 +356,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to schedule vote finalizer")
 	}
 
+	logger.Verbose(ctx, "%s : Creating vote : %s", v.TraceID, itx.Hash.String())
 	return nil
 }
 
@@ -433,7 +434,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			}
 		}
 		if !found {
-			logger.Warn(ctx, "%s : Ballot chose an invalid option : %s", v.TraceID, contractPKH.String())
+			logger.Warn(ctx, "%s : Ballot chose an invalid option : %s", v.TraceID, msg.Vote)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	}
@@ -447,7 +448,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	if proposal.AssetSpecificVote && !vt.ContractWideVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
 		if err != nil {
-			logger.Warn(ctx, "%s : Asset not found : %s %s", v.TraceID, contractPKH.String(), proposal.String())
+			logger.Warn(ctx, "%s : Asset not found : %s", v.TraceID, proposal.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 		}
 
@@ -457,7 +458,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	if quantity == 0 {
-		logger.Warn(ctx, "%s : User PKH doesn't hold any voting tokens : %s %s", v.TraceID, contractPKH.String(), holderPKH.String())
+		logger.Warn(ctx, "%s : User PKH doesn't hold any voting tokens : %s", v.TraceID, holderPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 	}
 
@@ -494,6 +495,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Respond with a vote
+	logger.Warn(ctx, "%s : Accepting ballot for %d from %s", v.TraceID, quantity, holderPKH.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
 
@@ -559,6 +561,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+	logger.Verbose(ctx, "%s : Finalizing vote : %s", v.TraceID, itx.Hash.String())
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 

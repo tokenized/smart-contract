@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -147,13 +148,18 @@ func TestFull(t *testing.T) {
 		t.Errorf("Failed to create address : %s", err)
 		return
 	}
-	t.Logf("Contract PKH : %x", contractKey.Address.ScriptAddress())
 
 	masterWallet := wallet.New()
 	wif, err := btcutil.NewWIF(contractKey.PrivateKey, &config.ChainParams, true)
 	if err := masterWallet.Register(wif.String()); err != nil {
 		t.Errorf("Failed to create wallet : %s", err)
 		return
+	}
+	contractKey = *masterWallet.ListAll()[0]
+	t.Logf("Contract PKH : %x", contractKey.Address.ScriptAddress())
+
+	for _, walletKey := range masterWallet.ListAll() {
+		t.Logf("Wallet Key : %s", walletKey.Address.String())
 	}
 
 	masterDB, err := db.New(&db.StorageConfig{
@@ -194,13 +200,7 @@ func TestFull(t *testing.T) {
 		wg.Wait()
 		return
 	}
-
-	responseWriter := node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
+	api.SetResponder(respondTx)
 
 	// Create funding tx
 	fundingTx := wire.NewMsgTx(2)
@@ -279,22 +279,9 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	contractHandler := Contract{
-		MasterDB: masterDB,
-		Config:   &config,
-	}
-	c := &contractHandler
-
 	cache.AddTX(ctx, offerTx)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = c.OfferRequest(ctx, &responseWriter, offerItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, offerItx)
 	if err == nil {
 		t.Errorf("Accepted invalid contract offer")
 		sch.Stop(ctx)
@@ -312,7 +299,7 @@ func TestFull(t *testing.T) {
 	}
 
 	var responseMsg protocol.OpReturnMessage
-	response := responses[0]
+	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript)
@@ -387,7 +374,7 @@ func TestFull(t *testing.T) {
 	cache.AddTX(ctx, offerTx)
 
 	// Resubmit to handler
-	err = c.OfferRequest(ctx, &responseWriter, offerItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, offerItx)
 	if err != nil {
 		t.Errorf("Failed to handle contract offer : %s", err)
 		sch.Stop(ctx)
@@ -404,7 +391,7 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	response = responses[0]
+	response = responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript)
@@ -459,14 +446,7 @@ func TestFull(t *testing.T) {
 
 	cache.AddTX(ctx, response)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = c.FormationResponse(ctx, &responseWriter, formationItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, formationItx)
 	if err != nil {
 		t.Errorf("Failed to handle contract formation : %s", err)
 		sch.Stop(ctx)
@@ -574,22 +554,9 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	assetHandler := Asset{
-		MasterDB: masterDB,
-		Config:   &config,
-	}
-	a := &assetHandler
-
 	cache.AddTX(ctx, assetTx)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = a.DefinitionRequest(ctx, &responseWriter, assetItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, assetItx)
 	if err != nil {
 		t.Errorf("Failed to accept asset definition : %s", err)
 		sch.Stop(ctx)
@@ -606,7 +573,7 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	response = responses[0]
+	response = responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript)
@@ -660,14 +627,7 @@ func TestFull(t *testing.T) {
 
 	cache.AddTX(ctx, response)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = a.CreationResponse(ctx, &responseWriter, creationItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, creationItx)
 	if err != nil {
 		t.Errorf("Failed to process asset creation : %s", err)
 		sch.Stop(ctx)
@@ -773,26 +733,9 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	transferHandler := Transfer{
-		handler:   api,
-		MasterDB:  masterDB,
-		Config:    &config,
-		Headers:   nil,
-		Tracer:    tracer,
-		Scheduler: &sch,
-	}
-	th := &transferHandler
-
 	cache.AddTX(ctx, transferTx)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = th.TransferRequest(ctx, &responseWriter, transferItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, transferItx)
 	if err == nil {
 		t.Errorf("Accepted transfer with insufficient value")
 		sch.Stop(ctx)
@@ -831,14 +774,7 @@ func TestFull(t *testing.T) {
 	// Resubmit
 	cache.AddTX(ctx, transferTx)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = th.TransferRequest(ctx, &responseWriter, transferItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, transferItx)
 	if err != nil {
 		t.Errorf("Failed to accept transfer : %s", err)
 		sch.Stop(ctx)
@@ -849,13 +785,13 @@ func TestFull(t *testing.T) {
 	t.Logf("Transfer accepted")
 
 	if len(responses) != 1 {
-		t.Errorf("Handle transfer created no response : %s", err)
+		t.Errorf("Handle transfer created no response")
 		sch.Stop(ctx)
 		wg.Wait()
 		return
 	}
 
-	response = responses[0]
+	response = responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript)
@@ -908,14 +844,7 @@ func TestFull(t *testing.T) {
 
 	cache.AddTX(ctx, response)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = th.SettlementResponse(ctx, &responseWriter, settlementItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, settlementItx)
 	if err != nil {
 		t.Errorf("Failed to process settlement : %s", err)
 		sch.Stop(ctx)
@@ -926,7 +855,7 @@ func TestFull(t *testing.T) {
 	t.Logf("Settlement processed")
 
 	if len(responses) != 0 {
-		t.Errorf("Handle settlement created a response : %s", err)
+		t.Errorf("Handle settlement created a response")
 		sch.Stop(ctx)
 		wg.Wait()
 		return
@@ -980,8 +909,8 @@ func TestFull(t *testing.T) {
 		Specific:            true,
 		VoteOptions:         "AB",
 		VoteMax:             1,
-		ProposalDescription: "Change contract name to Test Name 2",
-		VoteCutOffTimestamp: protocol.NewTimestamp(v.Now.Nano() + 1000000000),
+		ProposalDescription: "Change contract name",
+		VoteCutOffTimestamp: protocol.NewTimestamp(v.Now.Nano() + 500000000),
 	}
 
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, protocol.Amendment{
@@ -1030,24 +959,9 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	governanceHandler := Governance{
-		handler:   api,
-		MasterDB:  masterDB,
-		Config:    &config,
-		Scheduler: &sch,
-	}
-	g := &governanceHandler
-
 	cache.AddTX(ctx, proposalTx)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = g.ProposalRequest(ctx, &responseWriter, proposalItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, proposalItx)
 	if err != nil {
 		t.Errorf("Failed to accept proposal : %s", err)
 		sch.Stop(ctx)
@@ -1058,13 +972,13 @@ func TestFull(t *testing.T) {
 	t.Logf("Proposal accepted")
 
 	if len(responses) != 1 {
-		t.Errorf("Handle proposal created no response : %s", err)
+		t.Errorf("Handle proposal created no response")
 		sch.Stop(ctx)
 		wg.Wait()
 		return
 	}
 
-	response = responses[0]
+	response = responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript)
@@ -1092,7 +1006,6 @@ func TestFull(t *testing.T) {
 		return
 	}
 
-	// ********************************************************************************************
 	// Submit vote response
 	v = node.Values{
 		TraceID: span.SpanContext().TraceID.String(),
@@ -1118,14 +1031,7 @@ func TestFull(t *testing.T) {
 
 	cache.AddTX(ctx, response)
 
-	responseWriter = node.ResponseWriter{
-		Config: &config,
-		Mux:    api,
-	}
-	// Set responder
-	responseWriter.Mux.SetResponder(respondTx)
-
-	err = g.VoteResponse(ctx, &responseWriter, voteItx, &contractKey)
+	err = api.Trigger(ctx, protomux.SEE, voteItx)
 	if err != nil {
 		t.Errorf("Failed to process vote : %s", err)
 		sch.Stop(ctx)
@@ -1136,7 +1042,7 @@ func TestFull(t *testing.T) {
 	t.Logf("Vote processed")
 
 	if len(responses) != 0 {
-		t.Errorf("Handle vote created a response : %s", err)
+		t.Errorf("Handle vote created a response")
 		sch.Stop(ctx)
 		wg.Wait()
 		return
@@ -1144,15 +1050,522 @@ func TestFull(t *testing.T) {
 
 	// ********************************************************************************************
 	// Submit ballot from issuer
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx = wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100005, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	issuerBallotData := protocol.BallotCast{
+		VoteTxId: *protocol.TxIdFromBytes(voteItx.Hash[:]),
+		Vote:     "A", // approve
+	}
+
+	// Build transaction
+	issuerBallotTx := wire.NewMsgTx(2)
+
+	var issuerBallotInputHash chainhash.Hash
+	issuerBallotInputHash = fundingTx.TxHash()
+
+	// From issuer
+	issuerBallotTx.TxIn = append(issuerBallotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&issuerBallotInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	issuerBallotTx.TxOut = append(issuerBallotTx.TxOut, wire.NewTxOut(51000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err = protocol.Serialize(&issuerBallotData)
+	if err != nil {
+		t.Errorf("Failed to serialize issuerBallot : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	issuerBallotTx.TxOut = append(issuerBallotTx.TxOut, wire.NewTxOut(0, script))
+
+	issuerBallotItx, err := inspector.NewTransactionFromWire(ctx, issuerBallotTx)
+	if err != nil {
+		t.Errorf("Failed to create issuerBallot itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = issuerBallotItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote issuerBallot itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, issuerBallotTx)
+
+	err = api.Trigger(ctx, protomux.SEE, issuerBallotItx)
+	if err != nil {
+		t.Errorf("Failed to accept issuerBallot : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Issuer ballot accepted")
+
+	if len(responses) != 1 {
+		t.Errorf("Handle issuerBallot created no response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	response = responses[0].Copy()
+	responses = nil
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Errorf("Issuer ballot response doesn't contain tokenized op return")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	if responseMsg.Type() != "G4" {
+		t.Errorf("Issuer ballot response not a ballot counted : %s", responseMsg.Type())
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	_, ok = responseMsg.(*protocol.BallotCounted)
+	if !ok {
+		t.Errorf("Failed to convert response to ballot counted")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	// Submit ballot counted response
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	ballotCountedItx, err := inspector.NewTransactionFromWire(ctx, response)
+	if err != nil {
+		t.Errorf("Failed to create ballot counted itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = ballotCountedItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote ballot counted itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, response)
+
+	err = api.Trigger(ctx, protomux.SEE, ballotCountedItx)
+	if err != nil {
+		t.Errorf("Failed to process ballot counted : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Ballot counted processed")
+
+	if len(responses) != 0 {
+		t.Errorf("Handle ballot counted created a response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
 
 	// ********************************************************************************************
 	// Submit ballot from user
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx = wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100006, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	userBallotData := protocol.BallotCast{
+		VoteTxId: *protocol.TxIdFromBytes(voteItx.Hash[:]),
+		Vote:     "B", // block
+	}
+
+	// Build transaction
+	userBallotTx := wire.NewMsgTx(2)
+
+	var userBallotInputHash chainhash.Hash
+	userBallotInputHash = fundingTx.TxHash()
+
+	// From user
+	userBallotTx.TxIn = append(userBallotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&userBallotInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	userBallotTx.TxOut = append(userBallotTx.TxOut, wire.NewTxOut(51000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err = protocol.Serialize(&userBallotData)
+	if err != nil {
+		t.Errorf("Failed to serialize userBallot : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	userBallotTx.TxOut = append(userBallotTx.TxOut, wire.NewTxOut(0, script))
+
+	userBallotItx, err := inspector.NewTransactionFromWire(ctx, userBallotTx)
+	if err != nil {
+		t.Errorf("Failed to create userBallot itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = userBallotItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote userBallot itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, userBallotTx)
+
+	err = api.Trigger(ctx, protomux.SEE, userBallotItx)
+	if err != nil {
+		t.Errorf("Failed to accept userBallot : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("User ballot accepted")
+
+	if len(responses) != 1 {
+		t.Errorf("Handle userBallot created no response : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	response = responses[0].Copy()
+	responses = nil
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Errorf("User ballot response doesn't contain tokenized op return")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	if responseMsg.Type() != "G4" {
+		t.Errorf("User ballot response not a ballot counted : %s", responseMsg.Type())
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	_, ok = responseMsg.(*protocol.BallotCounted)
+	if !ok {
+		t.Errorf("Failed to convert response to ballot counted")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	// Submit ballot counted response
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	ballotCountedItx, err = inspector.NewTransactionFromWire(ctx, response)
+	if err != nil {
+		t.Errorf("Failed to create ballot counted itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = ballotCountedItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote ballot counted itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, response)
+
+	err = api.Trigger(ctx, protomux.SEE, ballotCountedItx)
+	if err != nil {
+		t.Errorf("Failed to process ballot counted : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Ballot counted processed")
+
+	if len(responses) != 0 {
+		t.Errorf("Handle ballot counted created a response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
 
 	// ********************************************************************************************
 	// Check result
 	// Wait for expiration
-	time.Sleep(2 * time.Second)
-	// TODO Run scheduler in another thread
+	time.Sleep(time.Second)
+
+	if len(responses) != 1 {
+		t.Errorf("Vote result response not created")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	response = responses[0].Copy()
+	responses = nil
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Errorf("Vote result response doesn't contain tokenized op return")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	if responseMsg.Type() != "G5" {
+		t.Errorf("Vote result response not a vote result : %s", responseMsg.Type())
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	_, ok = responseMsg.(*protocol.Result)
+	if !ok {
+		t.Errorf("Failed to convert response to vote result")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	// Submit vote result response
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	voteResultItx, err := inspector.NewTransactionFromWire(ctx, response)
+	if err != nil {
+		t.Errorf("Failed to create vote result itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = voteResultItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote vote result itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, response)
+
+	err = api.Trigger(ctx, protomux.SEE, voteResultItx)
+	if err != nil {
+		t.Errorf("Failed to process vote result : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Vote result processed")
+
+	if len(responses) != 0 {
+		t.Errorf("Handle vote result created a response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	// ********************************************************************************************
+	// Create amendment for proposal
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx = wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100007, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	amendmentData := protocol.ContractAmendment{
+		ContractRevision: 0,
+		RefTxID: *protocol.TxIdFromBytes(voteResultItx.Hash[:]),
+	}
+
+	amendmentData.Amendments = append(amendmentData.Amendments, protocol.Amendment{
+		FieldIndex: 0,
+		Data:       []byte("Test Name 2"),
+	})
+
+	// Build offer transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	var amendmentInputHash chainhash.Hash
+	amendmentInputHash = fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(51000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err = protocol.Serialize(&amendmentData)
+	if err != nil {
+		t.Errorf("Failed to serialize amendment : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	if err != nil {
+		t.Errorf("Failed to create amendment itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = amendmentItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote amendment itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, amendmentTx)
+
+	err = api.Trigger(ctx, protomux.SEE, amendmentItx)
+	if err != nil {
+		t.Errorf("Failed to accept amendment : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Amendment accepted")
+
+	if len(responses) != 1 {
+		t.Errorf("Handle amendment created no response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	response = responses[0].Copy()
+	responses = nil
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Errorf("Amendment response doesn't contain tokenized op return")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	if responseMsg.Type() != "C2" {
+		t.Errorf("Amendment response not a formation : %s", responseMsg.Type())
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+	_, ok = responseMsg.(*protocol.ContractFormation)
+	if !ok {
+		t.Errorf("Failed to convert response to formation")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	// Submit formation response
+	v = node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	formationItx, err = inspector.NewTransactionFromWire(ctx, response)
+	if err != nil {
+		t.Errorf("Failed to create formation itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	err = formationItx.Promote(ctx, &cache)
+	if err != nil {
+		t.Errorf("Failed to promote formation itx : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	cache.AddTX(ctx, response)
+
+	err = api.Trigger(ctx, protomux.SEE, formationItx)
+	if err != nil {
+		t.Errorf("Failed to process formation : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	t.Logf("Formation processed")
+
+	if len(responses) != 0 {
+		t.Errorf("Handle formation created a response")
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
 
 }
 

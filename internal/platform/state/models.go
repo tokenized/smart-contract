@@ -89,8 +89,8 @@ type Vote struct {
 	Specific           bool                 `json:"specific,omit_empty"`
 	ProposedAmendments []protocol.Amendment `json:"proposed_amendments,omit_empty"`
 
-	VoteTxId     protocol.TxId      `json:"vote_tx_id_hash,omit_empty"`
-	ProposalTxId protocol.TxId      `json:"proposal_tx_id_hash,omit_empty"`
+	VoteTxId     protocol.TxId      `json:"vote_tx_id,omit_empty"`
+	ProposalTxId protocol.TxId      `json:"proposal_tx_id,omit_empty"`
 	TokenQty     uint64             `json:"token_qty,omit_empty"`
 	Expires      protocol.Timestamp `json:"expires,omit_empty"`
 	Timestamp    protocol.Timestamp `json:"timestamp,omit_empty"`

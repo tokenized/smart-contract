@@ -201,7 +201,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		if vt.Result != "A" {
-			logger.Warn(ctx, "%s : Vote result not A(Accept)", v.TraceID)
+			logger.Warn(ctx, "%s : Vote result not A(Accept) : %s", v.TraceID, vt.Result)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
@@ -327,7 +327,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
 	var vt *state.Vote
 	var amendment *protocol.ContractAmendment
-	if err != nil && request != nil {
+	if err == nil && request != nil {
 		var ok bool
 		amendment, ok = request.MsgProto.(*protocol.ContractAmendment)
 
@@ -406,6 +406,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(request.Inputs[1].Address.ScriptAddress())
+			logger.Info(ctx, "%s : Updating contract issuer PKH : %s", v.TraceID, uc.IssuerPKH.String())
 		}
 
 		// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
@@ -419,16 +420,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(request.Inputs[index].Address.ScriptAddress())
+			logger.Info(ctx, "%s : Updating contract operator PKH : %s", v.TraceID, uc.OperatorPKH.String())
 		}
 
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
-
-		if !bytes.Equal(ct.IssuerPKH.Bytes(), uc.IssuerPKH.Bytes()) {
-			// TODO Move asset balances from previous issuer to new issuer.
-			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
-			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
-		}
 
 		if ct.ContractName != msg.ContractName {
 			uc.ContractName = stringPointer(msg.ContractName)
@@ -560,9 +556,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
-			uv := vote.UpdateVote{AppliedTxId: protocol.TxIdFromBytes(request.Hash[:])}
-			if err := vote.Update(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
-				return errors.Wrap(err, "Failed to update vote")
+			logger.Info(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
+			if err := vote.MarkApplied(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
 	}
