@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
@@ -160,6 +161,27 @@ func TestFull(t *testing.T) {
 
 	if err := thawOrder(ctx, t); err != nil {
 		t.Errorf("Failed thaw order : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	if err := confiscateOrder(ctx, t); err != nil {
+		t.Errorf("Failed confiscate order : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	if err := reconcileOrder(ctx, t); err != nil {
+		t.Errorf("Failed reconcile order : %s", err)
+		sch.Stop(ctx)
+		wg.Wait()
+		return
+	}
+
+	if err := assetAmendment(ctx, t); err != nil {
+		t.Errorf("Failed asset amendment : %s", err)
 		sch.Stop(ctx)
 		wg.Wait()
 		return
@@ -334,7 +356,7 @@ func createContract(ctx context.Context, t *testing.T) error {
 	// Define permissions for contract fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = false      // Issuer can't update field without proposal
+		permissions[i].Permitted = false      // Issuer can update field without proposal
 		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
 		permissions[i].HolderProposal = true  // Holder's can initiate proposals to update field
 
@@ -489,7 +511,6 @@ func createAsset(ctx context.Context, t *testing.T) error {
 		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		IssuerProposal:             true,
 		TokenQty:                   1000,
 	}
 
@@ -505,7 +526,7 @@ func createAsset(ctx context.Context, t *testing.T) error {
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 13)
 	for i, _ := range permissions {
-		permissions[i].Permitted = false      // Issuer can't update field without proposal
+		permissions[i].Permitted = true       // Issuer can update field without proposal
 		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
 		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
 
@@ -1095,11 +1116,6 @@ func thawOrder(ctx context.Context, t *testing.T) error {
 
 	t.Logf("Thaw order accepted")
 
-	if len(responses) > 0 {
-		hash := responses[0].TxHash()
-		freezeTxId = *protocol.TxIdFromBytes(hash[:])
-	}
-
 	if err := checkResponse(ctx, t, "E3"); err != nil {
 		return errors.Wrap(err, "Failed to check order response")
 	}
@@ -1115,6 +1131,302 @@ func thawOrder(ctx context.Context, t *testing.T) error {
 	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 250, v.Now) {
 		return errors.New("User balance not unfrozen")
 	}
+
+	return nil
+}
+
+func confiscateOrder(ctx context.Context, t *testing.T) error {
+	ctx, span := trace.StartSpan(ctx, "Test.confiscateOrder")
+	defer span.End()
+
+	v := node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionConfiscation,
+		AssetType:        protocol.CodeShareCommon,
+		AssetCode:        assetCode,
+		DepositAddress:   *issuerPKH,
+		Message:          "Court order",
+	}
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{Address: *userPKH, Quantity: 50})
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	var orderInputHash chainhash.Hash
+	orderInputHash = fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize order")
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create order itx")
+	}
+
+	err = orderItx.Promote(ctx, &cache)
+	if err != nil {
+		return errors.Wrap(err, "Failed to promote order itx")
+	}
+
+	cache.AddTX(ctx, orderTx)
+
+	err = api.Trigger(ctx, protomux.SEE, orderItx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to accept order")
+	}
+
+	t.Logf("Confiscate order accepted")
+
+	if err := checkResponse(ctx, t, "E4"); err != nil {
+		return errors.Wrap(err, "Failed to check order response")
+	}
+
+	// Check balance status
+	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetCode)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve asset")
+	}
+
+	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
+	if issuerBalance != tokenQty-200 {
+		return fmt.Errorf("Issuer token balance incorrect : %d != %d", issuerBalance, tokenQty-200)
+	}
+
+	userBalance := asset.GetBalance(ctx, as, userPKH)
+	if userBalance != 200 {
+		return fmt.Errorf("User token balance incorrect : %d != %d", userBalance, 200)
+	}
+
+	return nil
+}
+
+func reconcileOrder(ctx context.Context, t *testing.T) error {
+	ctx, span := trace.StartSpan(ctx, "Test.reconcileOrder")
+	defer span.End()
+
+	v := node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionReconciliation,
+		AssetType:        protocol.CodeShareCommon,
+		AssetCode:        assetCode,
+		Message:          "Court order",
+	}
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{Address: *userPKH, Quantity: 50})
+
+	orderData.BitcoinDispersions = append(orderData.BitcoinDispersions, protocol.QuantityIndex{Index: 0, Quantity: 75000})
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	var orderInputHash chainhash.Hash
+	orderInputHash = fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(751500, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize order")
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create order itx")
+	}
+
+	err = orderItx.Promote(ctx, &cache)
+	if err != nil {
+		return errors.Wrap(err, "Failed to promote order itx")
+	}
+
+	cache.AddTX(ctx, orderTx)
+
+	err = api.Trigger(ctx, protomux.SEE, orderItx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to accept order")
+	}
+
+	t.Logf("Reconcile order accepted")
+
+	if len(responses) < 1 {
+		return errors.New("No response for reconcile")
+	}
+
+	// Check for bitcoin dispersion to user
+	found := false
+	for _, output := range responses[0].TxOut {
+		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		if err != nil {
+			continue
+		}
+		if bytes.Equal(pkh, userPKH.Bytes()) && output.Value == 75000 {
+			t.Logf("Found reconcile bitcoin dispersion")
+			found = true
+		}
+	}
+
+	if !found {
+		return errors.New("Failed to find bitcoin dispersion")
+	}
+
+	if err := checkResponse(ctx, t, "E5"); err != nil {
+		return errors.Wrap(err, "Failed to check order response")
+	}
+
+	// Check balance status
+	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetCode)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve asset")
+	}
+
+	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
+	if issuerBalance != tokenQty-200 {
+		return fmt.Errorf("Issuer token balance incorrect : %d != %d", issuerBalance, tokenQty-200)
+	}
+	t.Logf("Verified issuer balance : %d", issuerBalance)
+
+	userBalance := asset.GetBalance(ctx, as, userPKH)
+	if userBalance != 150 {
+		return fmt.Errorf("User token balance incorrect : %d != %d", userBalance, 150)
+	}
+	t.Logf("Verified user balance : %d", userBalance)
+
+	return nil
+}
+
+func assetAmendment(ctx context.Context, t *testing.T) error {
+	ctx, span := trace.StartSpan(ctx, "Test.assetAmendment")
+	defer span.End()
+
+	v := node.Values{
+		TraceID: span.SpanContext().TraceID.String(),
+		Now:     protocol.CurrentTimestamp(),
+	}
+	ctx = context.WithValue(ctx, node.KeyValues, &v)
+
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100007, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	cache.AddTX(ctx, fundingTx)
+
+	amendmentData := protocol.AssetModification{
+		AssetType:     protocol.CodeShareCommon,
+		AssetCode:     assetCode,
+		AssetRevision: 0,
+	}
+
+	// Serialize new token quantity
+	newQuantity := uint64(1200)
+	var buf bytes.Buffer
+	err := binary.Write(&buf, binary.BigEndian, &newQuantity)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize new quantity")
+	}
+
+	amendmentData.Amendments = append(amendmentData.Amendments, protocol.Amendment{
+		FieldIndex: 11, // Token quantity
+		Data:       buf.Bytes(),
+	})
+
+	// Build amendment transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	var amendmentInputHash chainhash.Hash
+	amendmentInputHash = fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(1000, txbuilder.P2PKHScriptForPKH(contractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&amendmentData)
+	if err != nil {
+		return errors.Wrap(err, "Failed to serialize amendment")
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create amendment itx")
+	}
+
+	err = amendmentItx.Promote(ctx, &cache)
+	if err != nil {
+		return errors.Wrap(err, "Failed to promote amendment itx")
+	}
+
+	cache.AddTX(ctx, amendmentTx)
+
+	err = api.Trigger(ctx, protomux.SEE, amendmentItx)
+	if err != nil {
+		return errors.Wrap(err, "Failed to accept amendment")
+	}
+
+	t.Logf("Amendment accepted")
+
+	if err := checkResponse(ctx, t, "A2"); err != nil {
+		return errors.Wrap(err, "Failed to check amendment response")
+	}
+
+	// Check balance status
+	contractPKH := protocol.PublicKeyHashFromBytes(contractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetCode)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve asset")
+	}
+
+	if as.TokenQty != 1200 {
+		return fmt.Errorf("Asset token quantity incorrect : %d != %d", as.TokenQty, 1200)
+	}
+
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
+	if issuerBalance != 1000 {
+		return fmt.Errorf("Issuer token balance incorrect : %d != %d", issuerBalance, 1000)
+	}
+	t.Logf("Verified issuer balance : %d", issuerBalance)
 
 	return nil
 }

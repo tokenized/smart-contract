@@ -160,24 +160,24 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		logger.Verbose(ctx, "%s : Requestor is not operator : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
 	as, err := asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to retrieve asset")
 	}
 
 	// Asset could not be found
 	if as == nil {
-		logger.Verbose(ctx, "%s : Asset ID not found: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Asset ID not found: %s", v.TraceID, msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s", v.TraceID, msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetRevision)
 	}
 
@@ -263,13 +263,16 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Asset Creation <- Asset Modification
 	ac := protocol.AssetCreation{}
 
-	err = node.Convert(ctx, &as, &ac)
+	err = node.Convert(ctx, as, &ac)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert state asset to asset creation")
 	}
 
 	ac.AssetRevision = as.Revision + 1
 	ac.Timestamp = v.Now
+	ac.AssetCode = msg.AssetCode // Asset code not in state data
+
+	logger.Info(ctx, "%s : Amending asset : %s", v.TraceID, msg.AssetCode.String())
 
 	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments); err != nil {
 		logger.Warn(ctx, "%s : Asset amendments failed : %s", v.TraceID, err)
@@ -389,7 +392,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		if err := asset.Create(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &na, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to create asset")
 		}
-		logger.Info(ctx, "%s : Created asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Info(ctx, "%s : Created asset : %s", v.TraceID, msg.AssetCode.String())
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -406,7 +409,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
 			ua.AssetAuthFlags = &msg.AssetAuthFlags
-			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.AssetAuthFlags)
+			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %x", v.TraceID, msg.AssetCode.String(), *ua.AssetAuthFlags)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
@@ -434,14 +437,16 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
-			logger.Info(ctx, "%s : Updating asset token quantity (%s) : %d", v.TraceID, msg.AssetCode.String(), *ua.TokenQty)
+			logger.Info(ctx, "%s : Updating asset token quantity %d : %s", v.TraceID, *ua.TokenQty, msg.AssetCode.String())
 
 			issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
 			if msg.TokenQty > as.TokenQty {
+				logger.Info(ctx, "%s : Increasing token quantity by %d to %d : %s", v.TraceID, msg.TokenQty - as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
 				// Increasing token quantity. Give tokens to issuer.
 				issuerBalance += msg.TokenQty - as.TokenQty
 			} else {
-				// Increasing token quantity. Take tokens from issuer.
+				logger.Info(ctx, "%s : Decreasing token quantity by %d to %d : %s", v.TraceID, as.TokenQty - msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
+				// Decreasing token quantity. Take tokens from issuer.
 				issuerBalance -= as.TokenQty - msg.TokenQty
 			}
 			ua.NewBalances = make(map[protocol.PublicKeyHash]uint64)
@@ -468,10 +473,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 
 		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to update asset : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+			logger.Warn(ctx, "%s : Failed to update asset : %s", v.TraceID, msg.AssetCode.String())
 			return err
 		}
-		logger.Info(ctx, "%s : Updated asset : %s %s", v.TraceID, contractPKH, msg.AssetCode.String())
+		logger.Info(ctx, "%s : Updated asset : %s", v.TraceID, msg.AssetCode.String())
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
@@ -489,7 +494,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 func checkAssetAmendmentsPermissions(as *state.Asset, votingSystems []protocol.VotingSystem,
 	amendments []protocol.Amendment, proposed bool, proposalInitiator, votingSystem uint8) error {
 
-	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, contract.FieldCount, len(votingSystems))
+	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, asset.FieldCount, len(votingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid asset auth flags : %s", err)
 	}
@@ -670,7 +675,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 	}
 
 	if authFieldsUpdated {
-		if _, err := protocol.ReadAuthFlags(ac.AssetAuthFlags, contract.FieldCount, len(votingSystems)); err != nil {
+		if _, err := protocol.ReadAuthFlags(ac.AssetAuthFlags, asset.FieldCount, len(votingSystems)); err != nil {
 			return fmt.Errorf("Invalid asset auth flags : %s", err)
 		}
 	}

@@ -244,7 +244,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	cf := protocol.ContractFormation{}
 
 	// Get current state
-	err = node.Convert(ctx, &ct, &cf)
+	err = node.Convert(ctx, ct, &cf)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert state contract to contract formation")
 	}

@@ -493,7 +493,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 		targetAddr, err := btcutil.NewAddressPubKeyHash(target.Address.Bytes(), &e.Config.ChainParams)
 		if err != nil {
-			logger.Warn(ctx, "%s : Invalid target address: %s %s", v.TraceID, msg.AssetCode.String(), target.Address.String())
+			logger.Warn(ctx, "%s : Invalid target address : %s %s", v.TraceID, msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
 		}
 
@@ -505,9 +505,12 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 	// Update outputs with bitcoin dispersions
 	for _, quantity := range msg.BitcoinDispersions {
-		if int(quantity.Index) >= len(addressOutputIndex) {
-			outputs[addressOutputIndex[quantity.Index]].Value += quantity.Quantity
+		if int(quantity.Index) >= len(msg.TargetAddresses) {
+			logger.Warn(ctx, "%s : Invalid bitcoin dispersion index : %s %d", v.TraceID, msg.AssetCode.String(), quantity.Index)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
+
+		outputs[addressOutputIndex[quantity.Index]].Value += quantity.Quantity
 	}
 
 	// Add outputs to response writer
