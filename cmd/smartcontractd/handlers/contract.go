@@ -147,13 +147,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
-	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
-	// unlimited asset creation is permitted.
-	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
-		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
-	}
-
 	if ct.Revision != msg.ContractRevision {
 		logger.Warn(ctx, "%s : Incorrect contract revision (%s) : specified %d != current %d", v.TraceID, ct.ContractName, msg.ContractRevision, ct.Revision)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractRevision)
@@ -231,6 +224,28 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 		proposalInitiator = vt.Initiator
 		votingSystem = vt.VoteSystem
+	}
+
+	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
+	// unlimited asset creation is permitted.
+	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
+		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
+	}
+
+	if msg.ChangeIssuerAddress || msg.ChangeOperatorAddress {
+		if len(itx.Inputs) < 2 {
+			logger.Verbose(ctx, "%s : Both operators required for operator change", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
+		}
+
+		requestor1PKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+		requestor2PKH := protocol.PublicKeyHashFromBytes(itx.Inputs[1].Address.ScriptAddress())
+		if requestor1PKH.Equal(*requestor2PKH) || !contract.IsOperator(ctx, ct, requestor1PKH) ||
+			!contract.IsOperator(ctx, ct, requestor2PKH) {
+			logger.Verbose(ctx, "%s : Both operators required for operator change", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
+		}
 	}
 
 	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
