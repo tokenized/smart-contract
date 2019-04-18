@@ -2,7 +2,7 @@ package vote
 
 import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // NewVote defines what information may be provided to create a Vote.

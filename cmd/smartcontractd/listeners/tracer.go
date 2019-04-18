@@ -8,7 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"

@@ -1,7 +1,7 @@
 package vote
 
 import (
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // ValidateProposal returns true if the Proposal is valid.

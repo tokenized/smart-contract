@@ -18,7 +18,7 @@ import (
 	platformTests "github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 
 	"github.com/btcsuite/btcd/chaincfg"

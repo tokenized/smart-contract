@@ -2,7 +2,7 @@ package asset
 
 import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // NewAsset defines what we require when creating a Asset record.

@@ -1,7 +1,7 @@
 package contract
 
 import (
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // NewContract defines what we require when creating a Contract record.

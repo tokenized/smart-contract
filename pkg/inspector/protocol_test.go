@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 const (
