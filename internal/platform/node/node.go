@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -91,11 +92,17 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 		// For each address controlled by this wallet
 		rootKeys, _ := a.wallet.List(pkhs)
+		handled := false
 		for _, rootKey := range rootKeys {
+			handled = true
 			// Call the wrapped handler functions.
 			if err := handler(ctx, w, itx, rootKey); err != nil {
 				return err
 			}
+		}
+
+		if !handled {
+			return errors.New("Unrelated Tx")
 		}
 
 		return nil
