@@ -58,3 +58,19 @@ func (k KeyStore) GetRawPubKeyHashes() ([][]byte, error) {
 	}
 	return result, nil
 }
+
+func (k KeyStore) GetAddresses() []btcutil.Address {
+	result := make([]btcutil.Address, 0, len(k.Keys))
+	for _, key := range k.Keys {
+		result = append(result, key.Address)
+	}
+	return result
+}
+
+func (k KeyStore) GetAll() []*RootKey {
+	result := make([]*RootKey, 0, len(k.Keys))
+	for _, key := range k.Keys {
+		result = append(result, key)
+	}
+	return result
+}

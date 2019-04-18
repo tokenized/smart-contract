@@ -11,11 +11,12 @@ import (
 )
 
 // EstimatedResponse calculates information about the contract's response to a request.
+//   fees is the sum of all contract related fees including base contract fee, proposal fee, and others.
 // Returns
-//   size of response tx in bytes
-//   value of outputs of response in satoshis, including dust outputs (not including change)
+//   estimated size of response tx in bytes.
+//   estimated funding needed, not including contract/proposal fees.
 //   error if there were any
-func EstimatedResponse(requestTx *wire.MsgTx, dustLimit uint64) (int, uint64, error) {
+func EstimatedResponse(requestTx *wire.MsgTx, inputIndex int, dustLimit, fees uint64) (int, uint64, error) {
 	// Find Tokenized OP_RETURN
 	var err error
 	var opReturn OpReturnMessage
@@ -36,7 +37,7 @@ func EstimatedResponse(requestTx *wire.MsgTx, dustLimit uint64) (int, uint64, er
 	size := txbuilder.BaseTxSize
 	value := uint64(0)
 
-	switch opReturn.(type) {
+	switch request := opReturn.(type) {
 	case *ContractOffer:
 		contractFormation := ContractFormation{}
 		response = &contractFormation
@@ -44,25 +45,103 @@ func EstimatedResponse(requestTx *wire.MsgTx, dustLimit uint64) (int, uint64, er
 		// 1 input from contract
 		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
 
+		// P2PKH dust output to contract, contract fee, and op return output
+		if fees > 0 {
+			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+			value += fees
+		} else {
+			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+		}
+		value += dustLimit
+
+	case *AssetDefinition:
+		assetDefinition := AssetDefinition{}
+		response = &assetDefinition
+
+		// 1 input from contract
+		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
+
 		// P2PKH dust output to contract, and op return output
-		size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+		if fees > 0 {
+			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+			value += fees
+		} else {
+			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+		}
+		value += dustLimit
+
+	case *Proposal:
+		if inputIndex == 0 {
+			// First input funds vote (initiation) message
+			vote := Vote{}
+			response = &vote
+
+			// 1 input from contract
+			size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
+
+			// P2PKH dust output to contract, and op return output
+			if fees > 0 {
+				size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+				value += fees
+			} else {
+				size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+			}
+			value += dustLimit
+		} else {
+			// Second input funds vote result message
+			voteResult := Result{}
+			response = &voteResult
+
+			voteResult.OptionTally = make([]uint64, len(request.VoteOptions))
+			voteResult.Result = " "
+			for len(voteResult.Result) < len(request.VoteOptions) {
+				voteResult.Result += " "
+			}
+
+			// 1 input from contract
+			size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
+
+			// P2PKH dust output to contract, and op return output
+			if fees > 0 {
+				size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+				value += fees
+			} else {
+				size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+			}
+			value += dustLimit
+		}
+
+	case *BallotCast:
+		counted := BallotCounted{}
+		response = &counted
+
+		// 1 input from contract
+		size += wire.VarIntSerializeSize(uint64(1)) + txbuilder.EstimatedInputSize
+
+		// P2PKH dust output to contract, and op return output
+		if fees > 0 {
+			size += wire.VarIntSerializeSize(uint64(3)) + txbuilder.P2PKHOutputSize
+			value += fees
+		} else {
+			size += wire.VarIntSerializeSize(uint64(2)) + txbuilder.P2PKHOutputSize
+		}
 		value += dustLimit
 
 	default:
 		return 0, 0, errors.New("Unsupported request type")
 	}
 
-	if err = convert(opReturn, &response); err != nil {
-		return 0, 0, errors.Wrap(err, "Failed to convert ContractOffer to ContractFormation")
+	if err = convert(opReturn, response); err != nil {
+		return 0, 0, errors.Wrap(err, "Failed to convert request to response")
 	}
 
 	script, err := Serialize(response)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "Failed to convert ContractFormation")
+		return 0, 0, errors.Wrap(err, "Failed to serialize response")
 	}
 
 	// OP_RETURN output size
-	size += txbuilder.OutputBaseSize + len(txbuilder.PushDataScript(uint64(len(script)))) + len(script)
+	size += txbuilder.OutputBaseSize + wire.VarIntSerializeSize(uint64(len(script))) + len(script)
 
 	return size, value, nil
 }

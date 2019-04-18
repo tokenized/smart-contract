@@ -107,7 +107,8 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Determine funding required for contract to be able to post response tx.
-		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, theClient.Config.DustLimit)
+		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, theClient.Config.DustLimit, theClient.Config.ContractFee)
+		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
 		funding += uint64(float32(estimatedSize) * theClient.Config.FeeRate * 1.1) // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
 		if err != nil {
@@ -153,7 +154,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			logger.Warn(ctx, "Tx is not inspector tokenized")
 		}
 
-		fmt.Printf("Tx Id : %s\n", tx.MsgTx.TxHash())
+		fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
 
 		if hexFormat {
 			var buf bytes.Buffer

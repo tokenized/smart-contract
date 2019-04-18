@@ -8,6 +8,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func TestBlocks(test *testing.T) {
@@ -18,24 +19,21 @@ func TestBlocks(test *testing.T) {
 	blocks := make([]chainhash.Hash, 0, testBlockCount)
 	seed := rand.NewSource(time.Now().UnixNano())
 	randGen := rand.New(seed)
-	var newHash chainhash.Hash
-	bytes := make([]byte, chainhash.HashSize)
-	for i := 0; i < testBlockCount; i++ {
-		// Randomize bytes
-		for j := 0; j < chainhash.HashSize; j++ {
-			bytes[j] = byte(randGen.Intn(256))
-		}
-		newHash.SetBytes(bytes)
-		blocks = append(blocks, newHash)
-	}
 
 	ctx := context.Background()
 	storageConfig := storage.NewConfig("ap-southeast-2", "", "", "standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
 	repo := NewBlockRepository(store)
 
-	for _, hash := range blocks {
-		repo.Add(ctx, hash)
+	t := uint32(time.Now().Unix())
+	header := wire.BlockHeader{Version: 1}
+	for i := 0; i < testBlockCount; i++ {
+		header.Timestamp = time.Unix(int64(t), 0)
+		header.Nonce = uint32(randGen.Int())
+		repo.Add(ctx, &header)
+		t += 600
+		blocks = append(blocks, header.BlockHash())
+		header.PrevBlock = blocks[len(blocks)-1]
 	}
 
 	if err := repo.Save(ctx); err != nil {

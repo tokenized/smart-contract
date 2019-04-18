@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
@@ -21,16 +22,19 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/protocol"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -61,9 +65,15 @@ func main() {
 	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
 	logConfig.Main.MinLevel = logger.LevelDebug
-	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
+
+	// Configure spynode logs to be verbose
+	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
+	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
+	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
+	logConfig.SubSystems[spynode.SubSystem].SetWriter(io.MultiWriter(os.Stdout, logFile))
+
 	ctx = logger.ContextWithLogConfig(ctx, logConfig)
 
 	// -------------------------------------------------------------------------
@@ -96,12 +106,17 @@ func main() {
 	appConfig := &node.Config{
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
-		FeeAddress:         cfg.Contract.FeeAddress,
-		FeeValue:           cfg.Contract.FeeAmount,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
+		RequestTimeout:     cfg.Contract.RequestTimeout,
 	}
+
+	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "Invalid fee address : %s", err)
+	}
+	appConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeAddress.ScriptAddress())
 
 	// -------------------------------------------------------------------------
 	// SPY Node
@@ -159,7 +174,8 @@ func main() {
 	if len(rawPKHs) != 1 {
 		panic("More than one key in wallet")
 	}
-	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0])
+	tracer := listeners.NewTracer()
+	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0], tracer)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -181,10 +197,20 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Register Hooks
+	sch := scheduler.Scheduler{}
+	utxos, err := utxos.Load(ctx, masterDB)
+	if err != nil {
+		logger.Fatal(ctx, "Load UTXOs : %s", err)
+	}
 
-	appHandlers := handlers.API(masterWallet, appConfig, masterDB, handlers.NewTxCache())
+	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, tracer,
+		&sch, spyNode, utxos)
+	if err != nil {
+		logger.Fatal(ctx, "Generate API : %s", apiErr)
+	}
 
-	node := listeners.NewServer(appConfig, rpcNode, spyNode, appHandlers, rawPKHs[0])
+	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
+		&sch, tracer, rawPKHs[0], utxos)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -193,8 +219,12 @@ func main() {
 	// buffered channel so the goroutine can exit if we don't collect this error.
 	serverErrors := make(chan error, 1)
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
 	// Start the service listening for requests.
 	go func() {
+		defer wg.Done()
 		logger.Info(ctx, "Node Running")
 		serverErrors <- node.Run(ctx)
 	}()
@@ -225,6 +255,13 @@ func main() {
 			logger.Fatal(ctx, "Could not stop server: %s", err)
 		}
 	}
+
+	// Block until goroutines finish as a result of Stop()
+	wg.Wait()
+	err = utxos.Save(ctx, masterDB)
+	if err != nil {
+		logger.Fatal(ctx, "Save UTXOs : %s", err)
+	}
 }
 
 var (
@@ -239,14 +276,16 @@ var (
 type TxFilter struct {
 	chainParams *chaincfg.Params
 	contractPKH []byte
+	tracer      *listeners.Tracer
 	hash256     hash.Hash
 	hash160     hash.Hash
 }
 
-func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
+func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte, tracer *listeners.Tracer) *TxFilter {
 	result := TxFilter{
 		chainParams: chainParams,
 		contractPKH: contractPKH,
+		tracer:      tracer,
 		hash256:     sha256.New(),
 		hash160:     ripemd160.New(),
 	}
@@ -255,6 +294,12 @@ func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte) *TxFilter {
 }
 
 func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+	if filter.tracer.Contains(ctx, tx) {
+		logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+			"Matches Tracer : %s", tx.TxHash().String())
+		return true
+	}
+
 	containsTokenized := false
 	for _, output := range tx.TxOut {
 		if IsTokenizedOpReturn(output.PkScript) {
@@ -271,12 +316,11 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 	// Check if relevant to contract
 	for _, output := range tx.TxOut {
-		// TODO Remove extra logic in this. Should only check if P2PKH and get raw 20 bytes for PKH
-		class, addresses, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, filter.chainParams)
+		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err != nil {
 			continue
 		}
-		if class == txscript.PubKeyHashTy && bytes.Equal(addresses[0].ScriptAddress(), filter.contractPKH) {
+		if bytes.Equal(pkh, filter.contractPKH) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true
@@ -286,20 +330,10 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	// Check if txin is from contract
 	// Reject responses don't go to the contract. They are from contract to request sender.
 	for _, input := range tx.TxIn {
-		pushes, err := txscript.PushedData(input.SignatureScript)
+		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
-		if len(pushes) != 2 {
-			continue
-		}
-
-		// Calculate RIPEMD160(SHA256(PublicKey))
-		filter.hash256.Reset()
-		filter.hash256.Write(pushes[1])
-		filter.hash160.Reset()
-		filter.hash160.Write(filter.hash256.Sum(nil))
-		pkh := filter.hash160.Sum(nil)
 
 		if bytes.Equal(pkh, filter.contractPKH) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,

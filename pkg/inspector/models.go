@@ -1,12 +1,15 @@
 package inspector
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -70,7 +73,7 @@ func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
 	for _, utxo := range u {
 		publicAddress, err := utxo.PublicAddress(&chaincfg.MainNetParams)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		if publicAddress.String() != s {
@@ -81,4 +84,107 @@ func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
 	}
 
 	return filtered, nil
+}
+
+func (in *Input) Write(buf *bytes.Buffer) error {
+	if in.FullTx == nil {
+		return errors.New("No input tx")
+	}
+	if err := in.FullTx.Serialize(buf); err != nil {
+		return err
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, &in.Index); err != nil {
+		return err
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, &in.Value); err != nil {
+		return err
+	}
+
+	if err := in.UTXO.Write(buf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (in *Input) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
+	msg := wire.MsgTx{}
+	if err := msg.Deserialize(buf); err != nil {
+		return err
+	}
+	in.FullTx = &msg
+
+	if err := binary.Read(buf, binary.BigEndian, &in.Index); err != nil {
+		return err
+	}
+
+	if err := binary.Read(buf, binary.BigEndian, &in.Value); err != nil {
+		return err
+	}
+
+	if err := in.UTXO.Read(buf); err != nil {
+		return err
+	}
+
+	// Calculate address
+	var err error
+	in.Address, err = in.UTXO.PublicAddress(netParams)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (utxo *UTXO) Write(buf *bytes.Buffer) error {
+	if _, err := buf.Write(utxo.Hash[:]); err != nil {
+		return err
+	}
+
+	scriptSize := uint32(len(utxo.PkScript))
+	if err := binary.Write(buf, binary.BigEndian, &scriptSize); err != nil {
+		return err
+	}
+
+	if _, err := buf.Write(utxo.PkScript); err != nil {
+		return err
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, &utxo.Index); err != nil {
+		return err
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, &utxo.Value); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (utxo *UTXO) Read(buf *bytes.Buffer) error {
+	if _, err := buf.Read(utxo.Hash[:]); err != nil {
+		return err
+	}
+
+	var scriptSize uint32
+	if err := binary.Read(buf, binary.BigEndian, &scriptSize); err != nil {
+		return err
+	}
+
+	utxo.PkScript = make([]byte, int(scriptSize))
+	if _, err := buf.Read(utxo.PkScript); err != nil {
+		return err
+	}
+
+	if err := binary.Read(buf, binary.BigEndian, &utxo.Index); err != nil {
+		return err
+	}
+
+	if err := binary.Read(buf, binary.BigEndian, &utxo.Value); err != nil {
+		return err
+	}
+
+	return nil
 }

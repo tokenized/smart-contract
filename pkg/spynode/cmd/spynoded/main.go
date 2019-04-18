@@ -18,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -91,9 +92,12 @@ func main() {
 		store = storage.NewS3Storage(storageConfig)
 	}
 
+	chainParams := chaincfg.MainNetParams
+	chainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
+
 	// -------------------------------------------------------------------------
 	// Node Config
-	nodeConfig, err := data.NewConfig(cfg.Node.Address, cfg.Node.UserAgent,
+	nodeConfig, err := data.NewConfig(&chainParams, cfg.Node.Address, cfg.Node.UserAgent,
 		cfg.Node.StartHash, cfg.Node.UntrustedNodes, cfg.Node.SafeTxDelay)
 	if err != nil {
 		logger.Error(ctx, "Failed to create node config : %s\n", err)

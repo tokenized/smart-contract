@@ -93,7 +93,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// Add to repo
-		if err = handler.blocks.Add(ctx, hash); err != nil {
+		if err = handler.blocks.Add(ctx, &block.Header); err != nil {
 			return nil, err
 		}
 

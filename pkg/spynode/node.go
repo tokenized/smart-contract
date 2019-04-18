@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -35,6 +36,7 @@ type Node struct {
 	peers          *handlerstorage.PeerRepository     // Peer data
 	blocks         *handlerstorage.BlockRepository    // Block data
 	txs            *handlerstorage.TxRepository       // Tx data
+	reorgs         *handlerstorage.ReorgRepository    // Reorg data
 	txTracker      *data.TxTracker                    // Tracks tx requests to ensure all txs are received
 	memPool        *data.MemPool                      // Tracks which txs have been received and checked
 	handlers       map[string]handlers.CommandHandler // Handlers for messages from trusted node
@@ -63,6 +65,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		peers:          handlerstorage.NewPeerRepository(store),
 		blocks:         handlerstorage.NewBlockRepository(store),
 		txs:            handlerstorage.NewTxRepository(store),
+		reorgs:         handlerstorage.NewReorgRepository(store),
 		txTracker:      data.NewTxTracker(),
 		memPool:        data.NewMemPool(),
 		outgoing:       nil,
@@ -117,7 +120,8 @@ func (node *Node) load(ctx context.Context) error {
 	}
 
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
-		node.blocks, node.txs, node.txTracker, node.memPool, node.listeners, node.txFilters, node)
+		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, node.listeners,
+		node.txFilters, node)
 	return nil
 }
 
@@ -255,7 +259,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
-	if node.stopping {
+	if node.stopping || node.stopped {
 		return nil
 	}
 	node.stopping = true
@@ -340,7 +344,7 @@ func (node *Node) sendOutgoing(ctx context.Context) error {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to send %s : %v", msg.Command()))
+			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}
 	}
 
@@ -506,12 +510,19 @@ func (node *Node) check(ctx context.Context) error {
 			if node.queueOutgoing(mempool) {
 				node.state.SetMemPoolRequested()
 			}
-		} else if !node.state.NotifiedSync() {
-			// TODO Add method to wait for mempool to sync
-			for _, listener := range node.listeners {
-				listener.HandleInSync(ctx)
+		} else {
+			if !node.state.WasInSync() {
+				node.reorgs.ClearActive(ctx)
+				node.state.SetWasInSync()
 			}
-			node.state.SetNotifiedSync()
+
+			if !node.state.NotifiedSync() {
+				// TODO Add method to wait for mempool to sync
+				for _, listener := range node.listeners {
+					listener.HandleInSync(ctx)
+				}
+				node.state.SetNotifiedSync()
+			}
 		}
 
 		responses, err := node.txTracker.Check(ctx, node.memPool)
@@ -580,10 +591,7 @@ func (node *Node) checkTxDelays(ctx context.Context) error {
 
 		for _, txid := range txids {
 			for _, listener := range node.listeners {
-				err := listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
-				if err != nil {
-					logger.Warn(ctx, err.Error())
-				}
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
 			}
 		}
 	}
@@ -754,4 +762,18 @@ func (node *Node) sleepUntilStop(seconds int) {
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// BitcoinHeaders interface
+func (node *Node) LastHeight(ctx context.Context) int {
+	return node.blocks.LastHeight()
+}
+
+func (node *Node) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+	return node.blocks.Hash(ctx, height)
+}
+
+func (node *Node) Time(ctx context.Context, height int) (uint32, error) {
+	return node.blocks.Time(ctx, height)
 }

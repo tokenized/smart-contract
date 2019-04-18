@@ -171,6 +171,16 @@ func (tx *Tx) AddValueToOutput(index uint32, value uint64) error {
 	return nil
 }
 
+// UpdateOutput updates the script of an output.
+func (tx *Tx) UpdateOutput(index uint32, script []byte) error {
+	if int(index) >= len(tx.MsgTx.TxOut) {
+		return errors.New("Output index out of range")
+	}
+
+	tx.MsgTx.TxOut[index].PkScript = script
+	return nil
+}
+
 type Input struct {
 	PkScript []byte
 	Value    uint64

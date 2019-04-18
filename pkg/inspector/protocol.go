@@ -93,14 +93,8 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 	}
 
 	// Some specific actions have the contract address as an input
-	switch m.Type() {
-	case protocol.CodeBallotCounted,
-		protocol.CodeFreeze,
-		protocol.CodeThaw,
-		protocol.CodeConfiscation,
-		protocol.CodeReconciliation,
-		protocol.CodeRejection:
-
+	isOutgoing, ok := outgoingMessageTypes[m.Type()]
+	if ok && isOutgoing {
 		addresses = append(addresses, itx.Inputs[0].Address)
 		return addresses
 	}
@@ -159,8 +153,7 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		protocol.CodeAssetDefinition,
 		protocol.CodeAssetModification,
 		protocol.CodeTransfer,
-		protocol.CodeInitiative,
-		protocol.CodeReferendum,
+		protocol.CodeProposal,
 		protocol.CodeBallotCast,
 		protocol.CodeOrder:
 

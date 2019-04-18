@@ -3,15 +3,20 @@ package contract
 import (
 	"bytes"
 	"context"
-	"errors"
 
+	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
+)
+
+const (
+	FieldCount       = 21 // The count of fields that can be changed with amendments.
+	EntityFieldCount = 15 // The count of fields in an entity that can be changed with amendments.
 )
 
 var (
@@ -23,72 +28,55 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
 	// Find contract in storage
-	c, err := Fetch(ctx, dbConn, address)
+	contract, err := Fetch(ctx, dbConn, contractPKH)
 	if err != nil {
-		if err == ErrNotFound {
-			return nil, nil
-		}
 		return nil, err
 	}
 
-	return c, nil
+	return contract, nil
 }
 
 // Create the contract
-func Create(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
 	// Find contract
-	var c state.Contract
+	var contract state.Contract
 
 	// Get current state
-	err := node.Convert(ctx, &nu, &c)
+	err := node.Convert(ctx, &nu, &contract)
 	if err != nil {
-		logger.Warn(ctx, "Failed to convert new contract to contract : %s", err)
-		return err
+		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
-	c.ID = *address
-	c.Revision = 0
-	c.CreatedAt = now
-	c.UpdatedAt = now
+	contract.ID = *contractPKH
+	contract.Revision = 0
+	contract.CreatedAt = now
+	contract.UpdatedAt = now
 
-	if c.VotingSystems == nil {
-		c.VotingSystems = []state.VotingSystem{}
+	if contract.VotingSystems == nil {
+		contract.VotingSystems = []protocol.VotingSystem{}
 	}
-	if c.Registries == nil {
-		c.Registries = []state.Registry{}
-	}
-	if c.ActionFee == nil {
-		c.ActionFee = []protocol.Fee{}
-	}
-	if c.KeyRoles == nil {
-		c.KeyRoles = []state.KeyRole{}
-	}
-	if c.NotableRoles == nil {
-		c.NotableRoles = []state.NotableRole{}
+	if contract.Oracles == nil {
+		contract.Oracles = []protocol.Oracle{}
 	}
 
-	if err := Save(ctx, dbConn, c); err != nil {
-		return err
-	}
-
-	return nil
+	return Save(ctx, dbConn, &contract)
 }
 
 // Update the contract
-func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, address)
+	c, err := Fetch(ctx, dbConn, contractPKH)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -101,21 +89,30 @@ func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 		c.Timestamp = *upd.Timestamp
 	}
 
-	if upd.Issuer != nil {
-		c.Issuer = *upd.Issuer
+	if upd.IssuerPKH != nil {
+		c.IssuerPKH = *upd.IssuerPKH
 	}
-	if upd.Operator != nil {
-		c.Operator = *upd.Operator
+	if upd.OperatorPKH != nil {
+		c.OperatorPKH = *upd.OperatorPKH
 	}
 
 	if upd.ContractName != nil {
 		c.ContractName = *upd.ContractName
 	}
-	if upd.ContractFileType != nil {
-		c.ContractFileType = *upd.ContractFileType
+	if upd.ContractType != nil {
+		c.ContractType = *upd.ContractType
 	}
-	if upd.ContractFile != nil {
-		c.ContractFile = *upd.ContractFile
+	if upd.BodyOfAgreementType != nil {
+		c.BodyOfAgreementType = *upd.BodyOfAgreementType
+	}
+	if upd.BodyOfAgreement != nil {
+		c.BodyOfAgreement = *upd.BodyOfAgreement
+	}
+	if upd.SupportingDocsFileType != nil {
+		c.SupportingDocsFileType = *upd.SupportingDocsFileType
+	}
+	if upd.SupportingDocs != nil {
+		c.SupportingDocs = *upd.SupportingDocs
 	}
 	if upd.GoverningLaw != nil {
 		c.GoverningLaw = *upd.GoverningLaw
@@ -129,92 +126,67 @@ func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 	if upd.ContractURI != nil {
 		c.ContractURI = *upd.ContractURI
 	}
-	if upd.IssuerName != nil {
-		c.IssuerName = *upd.IssuerName
-	}
-	if upd.IssuerType != nil {
-		c.IssuerType = *upd.IssuerType
+	if upd.Issuer != nil {
+		c.Issuer = *upd.Issuer
 	}
 	if upd.IssuerLogoURL != nil {
 		c.IssuerLogoURL = *upd.IssuerLogoURL
 	}
-	if upd.ContractOperatorID != nil {
-		c.ContractOperatorID = *upd.ContractOperatorID
+	if upd.ContractOperator != nil {
+		c.ContractOperator = *upd.ContractOperator
 	}
 	if upd.ContractAuthFlags != nil {
 		c.ContractAuthFlags = *upd.ContractAuthFlags
 	}
-	if upd.ActionFee != nil {
-		c.ActionFee = *upd.ActionFee
-		if c.ActionFee == nil {
-			c.ActionFee = []protocol.Fee{}
-		}
+	if upd.ContractFee != nil {
+		c.ContractFee = *upd.ContractFee
 	}
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems
 		if c.VotingSystems == nil {
-			c.VotingSystems = []state.VotingSystem{}
+			c.VotingSystems = []protocol.VotingSystem{}
 		}
 	}
 	if upd.RestrictedQtyAssets != nil {
 		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
 	}
-	if upd.ReferendumProposal != nil {
-		c.ReferendumProposal = *upd.ReferendumProposal
+	if upd.IssuerProposal != nil {
+		c.IssuerProposal = *upd.IssuerProposal
 	}
-	if upd.InitiativeProposal != nil {
-		c.InitiativeProposal = *upd.InitiativeProposal
+	if upd.HolderProposal != nil {
+		c.HolderProposal = *upd.HolderProposal
 	}
-	if upd.Registries != nil {
-		c.Registries = *upd.Registries
-		if c.Registries == nil {
-			c.Registries = []state.Registry{}
+	if upd.Oracles != nil {
+		c.Oracles = *upd.Oracles
+		if c.Oracles == nil {
+			c.Oracles = []protocol.Oracle{}
 		}
 	}
-	if upd.UnitNumber != nil {
-		c.UnitNumber = *upd.UnitNumber
-	}
-	if upd.BuildingNumber != nil {
-		c.BuildingNumber = *upd.BuildingNumber
-	}
-	if upd.Street != nil {
-		c.Street = *upd.Street
-	}
-	if upd.SuburbCity != nil {
-		c.SuburbCity = *upd.SuburbCity
-	}
-	if upd.TerritoryStateProvinceCode != nil {
-		c.TerritoryStateProvinceCode = *upd.TerritoryStateProvinceCode
-	}
-	if upd.CountryCode != nil {
-		c.CountryCode = *upd.CountryCode
-	}
-	if upd.PostalZIPCode != nil {
-		c.PostalZIPCode = *upd.PostalZIPCode
-	}
-	if upd.EmailAddress != nil {
-		c.EmailAddress = *upd.EmailAddress
-	}
-	if upd.PhoneNumber != nil {
-		c.PhoneNumber = *upd.PhoneNumber
-	}
-	if upd.KeyRoles != nil {
-		c.KeyRoles = *upd.KeyRoles
-		if c.KeyRoles == nil {
-			c.KeyRoles = []state.KeyRole{}
-		}
-	}
-	if upd.NotableRoles != nil {
-		c.NotableRoles = *upd.NotableRoles
-		if c.NotableRoles == nil {
-			c.NotableRoles = []state.NotableRole{}
-		}
+	if upd.FreezePeriod != nil {
+		c.FreezePeriod = *upd.FreezePeriod
 	}
 
 	c.UpdatedAt = now
 
-	if err := Save(ctx, dbConn, *c); err != nil {
-		return err
+	return Save(ctx, dbConn, c)
+}
+
+// AddAssetCode adds an asset code to a contract
+func AddAssetCode(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode, now protocol.Timestamp) error {
+	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
+	defer span.End()
+
+	// Find contract
+	ct, err := Fetch(ctx, dbConn, contractPKH)
+	if err != nil {
+		return ErrNotFound
+	}
+
+	ct.AssetCodes = append(ct.AssetCodes, *assetCode)
+	ct.UpdatedAt = now
+
+	if err := Save(ctx, dbConn, ct); err != nil {
+		return errors.Wrap(err, "Failed to add asset to contract")
 	}
 
 	return nil
@@ -225,23 +197,28 @@ func Update(ctx context.Context, dbConn *db.DB, address *protocol.PublicKeyHash,
 //
 // A "dynamic" contract is permitted to have unlimited assets if the
 // contract.Qty == 0.
-func CanHaveMoreAssets(ctx context.Context, contract *state.Contract) bool {
-	if contract.RestrictedQtyAssets == 0 {
+func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
+	if ct.RestrictedQtyAssets == 0 {
 		return true
 	}
 
 	// number of current assets
-	total := uint64(len(contract.Assets))
+	total := uint64(len(ct.AssetCodes))
 
 	// more assets can be added if the current total is less than the limit
 	// imposed by the contract.
-	return total < contract.RestrictedQtyAssets
+	return total < ct.RestrictedQtyAssets
 }
 
-// HasAnyBalance checks if the user has any balance of any token across the contract
-func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH *protocol.PublicKeyHash) bool {
-	for _, a := range contract.Assets {
-		if h, ok := a.Holdings[*userPKH]; ok && h.Balance > 0 {
+// HasAnyBalance checks if the user has any balance of any token across the contract.
+func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash) bool {
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		if err != nil {
+			continue
+		}
+
+		if asset.GetBalance(ctx, as, userPKH) > 0 {
 			return true
 		}
 	}
@@ -249,12 +226,65 @@ func HasAnyBalance(ctx context.Context, contract *state.Contract, userPKH *proto
 	return false
 }
 
-// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
-func IsOperator(ctx context.Context, contract *state.Contract, pkh *protocol.PublicKeyHash) bool {
-	return bytes.Equal(contract.Issuer.Bytes(), pkh.Bytes()) || bytes.Equal(contract.Operator.Bytes(), pkh.Bytes())
+// GetTokenQty returns the token quantities for all assets.
+func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMultiplier bool) uint64 {
+	result := uint64(0)
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		if err != nil {
+			continue
+		}
+
+		if !as.VotingRights {
+			continue
+		}
+
+		if applyMultiplier {
+			result += as.TokenQty * uint64(as.VoteMultiplier)
+		} else {
+			result += as.TokenQty
+		}
+	}
+
+	return result
 }
 
-// IsVotingPermitted returns true if contract allows voting
-func IsVotingPermitted(ctx context.Context, contract *state.Contract) bool {
-	return len(contract.VotingSystems) != 0
+// GetVotingBalance returns the tokens held across all of the contract's assets.
+func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+	result := uint64(0)
+	for _, a := range ct.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		if err != nil {
+			continue
+		}
+
+		result += asset.GetVotingBalance(ctx, as, userPKH, applyMultiplier, now)
+	}
+
+	return result
+}
+
+// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
+func IsOperator(ctx context.Context, ct *state.Contract, pkh *protocol.PublicKeyHash) bool {
+	return bytes.Equal(ct.IssuerPKH.Bytes(), pkh.Bytes()) || bytes.Equal(ct.OperatorPKH.Bytes(), pkh.Bytes())
+}
+
+// ValidateVoting returns an error if voting is not allowed.
+func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint8) error {
+	if len(ct.VotingSystems) == 0 {
+		return errors.New("No voting systems")
+	}
+
+	switch initiatorType {
+	case 0: // Issuer
+		if !ct.IssuerProposal {
+			return errors.New("Issuer proposals not allowed")
+		}
+	case 1: // Holder
+		if !ct.HolderProposal {
+			return errors.New("Holder proposals not allowed")
+		}
+	}
+
+	return nil
 }

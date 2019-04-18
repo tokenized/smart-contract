@@ -20,15 +20,15 @@ const (
 	//       public key size = 33 bytes
 	EstimatedInputSize = 32 + 4 + 2 + 75 + 34
 
+	// Size of output not including script
+	OutputBaseSize = 8
+
 	// P2PKH/P2SH output size 33
 	//   amount = 8 bytes
 	//   script size = 1 byte
 	//   Script (24 bytes) OP_DUP OP_HASH160 <PUB KEY/SCRIPT HASH (20 bytes)> OP_EQUALVERIFY
 	//     OP_CHECKSIG
-	P2PKHOutputSize = 8 + 25
-
-	// Size of output not including script
-	OutputBaseSize = 8
+	P2PKHOutputSize = OutputBaseSize + 25
 
 	// BaseTxFee is the size of the tx not included in inputs and outputs.
 	//   Version = 4 bytes
@@ -117,11 +117,11 @@ func (tx *Tx) adjustFee(amount int64) error {
 	if amount > int64(0) {
 		// Increase fee, transfer from change
 		if changeOutputIndex == 0xffffffff {
-			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for fee"))
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for tx fee"))
 		}
 
 		if tx.MsgTx.TxOut[changeOutputIndex].Value < amount {
-			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
 		}
 
 		// Decrease change, thereby increasing the fee
@@ -131,7 +131,7 @@ func (tx *Tx) adjustFee(amount int64) error {
 		if uint64(tx.MsgTx.TxOut[changeOutputIndex].Value) < tx.DustLimit {
 			if !tx.Outputs[changeOutputIndex].addedForFee {
 				// Don't remove outputs unless they were added by fee adjustment
-				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for fee"))
+				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
 			}
 			// Remove change output since it is less than dust. Dust will go to miner.
 			tx.MsgTx.TxOut = append(tx.MsgTx.TxOut[:changeOutputIndex], tx.MsgTx.TxOut[changeOutputIndex+1:]...)

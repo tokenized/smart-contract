@@ -15,6 +15,7 @@ type State struct {
 	protocolVersion    uint32            // Bitcoin protocol version
 	handshakeComplete  bool              // Handshake negotiation is complete
 	sentSendHeaders    bool              // The sendheaders message has been sent
+	wasInSync          bool              // Flag used to determine if the in sync flag was recently set
 	isInSync           bool              // We have all the blocks our peer does and we are just monitoring new data
 	notifiedSync       bool              // Sync message has been sent to listeners
 	addressesRequested bool              // Peer addresses have been requested
@@ -35,6 +36,7 @@ func NewState() *State {
 		protocolVersion:    wire.ProtocolVersion,
 		handshakeComplete:  false,
 		sentSendHeaders:    false,
+		wasInSync:          false,
 		isInSync:           false,
 		notifiedSync:       false,
 		addressesRequested: false,
@@ -58,6 +60,7 @@ func (state *State) Reset() {
 	state.protocolVersion = wire.ProtocolVersion
 	state.handshakeComplete = false
 	state.sentSendHeaders = false
+	state.wasInSync = false
 	state.isInSync = false
 	state.memPoolRequested = false
 	state.headersRequested = nil
@@ -149,6 +152,28 @@ func (state *State) SetInSync() {
 	defer state.lock.Unlock()
 
 	state.isInSync = true
+}
+
+func (state *State) ClearInSync() {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+
+	state.wasInSync = false
+	state.isInSync = false
+}
+
+func (state *State) WasInSync() bool {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+
+	return state.wasInSync
+}
+
+func (state *State) SetWasInSync() {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+
+	state.wasInSync = true
 }
 
 func (state *State) NotifiedSync() bool {

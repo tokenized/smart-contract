@@ -8,54 +8,46 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/protocol"
+
+	"github.com/pkg/errors"
 )
 
 const storageKey = "contracts"
 
 // Put a single contract in storage
-func Save(ctx context.Context, dbConn *db.DB, c state.Contract) error {
-	b, err := json.Marshal(c)
+func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
+	b, err := json.Marshal(contract)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to marshal contract")
 	}
 
-	key := buildStoragePath(&c.ID)
+	key := buildStoragePath(&contract.ID)
 
 	return dbConn.Put(ctx, key, b)
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, pkh *protocol.PublicKeyHash) (*state.Contract, error) {
-	key := buildStoragePath(pkh)
+func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
+	key := buildStoragePath(contractPKH)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
 		if err == db.ErrNotFound {
-			err = ErrNotFound
+			return nil, ErrNotFound
 		}
 
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to fetch contract")
 	}
 
-	c := state.Contract{}
-	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, err
+	contract := state.Contract{}
+	if err := json.Unmarshal(b, &contract); err != nil {
+		return nil, errors.Wrap(err, "Failed to unmarshal contract")
 	}
 
-	// Initialize Asset map
-	if c.Assets == nil {
-		c.Assets = make(map[protocol.AssetCode]*state.Asset)
-	}
-
-	// Initialize Vote map
-	if c.Votes == nil {
-		c.Votes = make(map[protocol.TxId]*state.Vote)
-	}
-
-	return &c, nil
+	return &contract, nil
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(id *protocol.PublicKeyHash) string {
-	return fmt.Sprintf("%v/%x", storageKey, id)
+func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
+	return fmt.Sprintf("%s/%s/contract", storageKey, contractPKH.String())
 }

@@ -3,7 +3,8 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"errors"
+	"encoding/binary"
+	"fmt"
 	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -11,11 +12,15 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/internal/transactions"
+	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/protocol"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -34,24 +39,50 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return errors.New("Could not assert as *protocol.ContractOffer")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Contract offer invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
 	// Locate Contract
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != nil {
-		return err
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	_, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	if err != contract.ErrNotFound {
+		if err == nil {
+			logger.Warn(ctx, "%s : Contract already exists : %s", v.TraceID, contractPKH.String())
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExists)
+		} else {
+			return errors.Wrap(err, "Failed to retrieve contract")
+		}
 	}
 
-	// The contract should not exist already
-	if ct != nil {
-		logger.Warn(ctx, "%s : Contract already exists: %s", v.TraceID, contractAddr.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractExists)
+	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
+		logger.Warn(ctx, "%s : Contract body of agreement hash is incorrect length : %d", v.TraceID, len(msg.BodyOfAgreement))
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	logger.Info(ctx, "%s : Accepting contract offer (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
+	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "%s : Expiration already passed : %d", v.TraceID, msg.ContractExpiration.Nano())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
+	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
+		logger.Warn(ctx, "%s : Invalid contract auth flags : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
+	// Validate voting systems are all valid.
+	for _, votingSystem := range msg.VotingSystems {
+		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
+			logger.Warn(ctx, "%s : Invalid voting system : %s", v.TraceID, err)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+	}
+
+	logger.Info(ctx, "%s : Accepting contract offer : %s", v.TraceID, msg.ContractName)
 
 	// Contract Formation <- Contract Offer
 	cf := protocol.ContractFormation{}
@@ -65,16 +96,21 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	cf.Timestamp = v.Now
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &c.Config.ChainParams)
 	if err != nil {
 		return err
 	}
 
 	// Build outputs
 	// 1 - Contract Address
-	// 2 - Issuer (Change)
+	// 2 - Contract Fee (change)
 	w.AddOutput(ctx, contractAddress, 0)
-	w.AddChangeOutput(ctx, itx.Inputs[0].Address)
+	w.AddContractFee(ctx, msg.ContractFee)
+
+	// Save Tx for when formation is processed.
+	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -90,97 +126,174 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Could not assert as *protocol.ContractAmendment")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	// Locate Contract
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != nil {
-		return err
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Contract amendment request invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Contract could not be found
-	if ct == nil {
-		logger.Warn(ctx, "%s : Contract not found: %s", v.TraceID, contractAddr.String())
-		return node.ErrNoResponse
+	// Locate Contract
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	if !contract.IsOperator(ctx, ct, requestorPKH) {
+		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, requestorPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
-	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.Assets)) {
-		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractAddr.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractQtyReduction)
+	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
+		logger.Warn(ctx, "%s : Cannot reduce allowable assets below existing number: %s", v.TraceID, contractPKH.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
 	}
 
 	if ct.Revision != msg.ContractRevision {
 		logger.Warn(ctx, "%s : Incorrect contract revision (%s) : specified %d != current %d", v.TraceID, ct.ContractName, msg.ContractRevision, ct.Revision)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractRevision)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractRevision)
 	}
 
-	// TODO Validate that changes are allowed. Check votes, ...
-	// TODO Verify RefTxID data
-	//msg.RefTxID               []byte
+	// Check proposal if there was one
+	proposed := false
+	proposalInitiator := uint8(0)
+	votingSystem := uint8(0)
 
-	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractAddr.String())
+	if !msg.RefTxID.IsZero() { // Vote Result Action allowing these amendments
+		proposed = true
+
+		refTxId, err := chainhash.NewHash(msg.RefTxID.Bytes())
+		if err != nil {
+			return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+		}
+
+		// Retrieve Vote Result
+		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+		if err != nil {
+			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+		if !ok {
+			logger.Warn(ctx, "%s : Vote Result invalid for amendment", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		// Retrieve the vote
+		vt, err := vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+		if err == vote.ErrNotFound {
+			logger.Warn(ctx, "%s : Vote not found : %s", v.TraceID, voteResult.VoteTxId.String())
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
+		} else if err != nil {
+			logger.Warn(ctx, "%s : Failed to retrieve vote : %s : %s", v.TraceID, voteResult.VoteTxId.String(), err)
+			return errors.Wrap(err, "Failed to retrieve vote")
+		}
+
+		if vt.CompletedAt.Nano() == 0 {
+			logger.Warn(ctx, "%s : Vote not complete yet", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if vt.Result != "A" {
+			logger.Warn(ctx, "%s : Vote result not A(Accept) : %s", v.TraceID, vt.Result)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if !vt.Specific {
+			logger.Warn(ctx, "%s : Vote was not for specific amendments", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		if vt.AssetSpecificVote {
+			logger.Warn(ctx, "%s : Vote was not for contract amendments", v.TraceID)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		// Verify proposal amendments match these amendments.
+		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
+			logger.Warn(ctx, "%s : Proposal has different count of amendments : %d != %d",
+				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		}
+
+		for i, amendment := range voteResult.ProposedAmendments {
+			if !amendment.Equal(msg.Amendments[i]) {
+				logger.Warn(ctx, "%s : Proposal amendment %d doesn't match", v.TraceID, i)
+				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			}
+		}
+
+		proposalInitiator = vt.Initiator
+		votingSystem = vt.VoteSystem
+	}
+
+	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
+		logger.Warn(ctx, "%s : Contract amendments not permitted : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+	}
+
+	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractPKH.String())
 
 	// Contract Formation <- Contract Amendment
 	cf := protocol.ContractFormation{}
 
 	// Get current state
-	err = node.Convert(ctx, &ct, &cf)
+	err = node.Convert(ctx, ct, &cf)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to convert state contract to contract formation")
 	}
 
 	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = v.Now
 
-	// TODO Implement contract amendments
-	// type Amendment struct {
-	// FieldIndex    uint8
-	// Element       uint16
-	// SubfieldIndex uint8
-	// Operation     uint8
-	// Data          []byte
-	// }
-	// for _, amendment := range msg.Amendments {
-	// switch(amendment.FieldIndex) {
-	// default:
-	// logger.Warn(ctx, "%s : Incorrect contract amendment field offset (%s) : %d", v.TraceID, ct.ContractName, amendment.FieldIndex)
-	// return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMalformedAmendment)
-	// }
-	// }
+	if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
+		logger.Warn(ctx, "%s : Contract amendments failed : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
 
 	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractAddr.Bytes(), &c.Config.ChainParams)
+	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &c.Config.ChainParams)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
 
 	// Build outputs
 	// 1 - Contract Address
-	// 2 - Issuer (Change)
+	// 2 - Contract Fee (change)
 	w.AddOutput(ctx, contractAddress, 0)
+	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Issuer change. New issuer in second input
 	if msg.ChangeIssuerAddress {
 		if len(itx.Inputs) < 2 {
 			logger.Warn(ctx, "%s : New issuer specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectionCodeContractMissingNewIssuer)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
 		}
-
-		w.AddChangeOutput(ctx, itx.Inputs[1].Address)
-	} else {
-		w.AddChangeOutput(ctx, itx.Inputs[0].Address)
 	}
 
-	// TODO Operator changes
-	// if msg.ChangeOperatorAddress {
+	// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+	if msg.ChangeOperatorAddress {
+		index := 1
+		if msg.ChangeIssuerAddress {
+			index++
+		}
+		if index >= len(itx.Inputs) {
+			logger.Warn(ctx, "%s : New operator specified but not included in inputs (%s)", v.TraceID, ct.ContractName)
+			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+		}
+	}
 
-	// }
+	// Save Tx.
+	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
@@ -196,17 +309,53 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.New("Could not assert as *protocol.ContractFormation")
 	}
 
-	dbConn := c.MasterDB
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
-	contractAddr := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
+		return fmt.Errorf("Contract formation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	}
+
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, dbConn, contractAddr)
-	if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve contract (%s) : %s", v.TraceID, contractName, err.Error())
-		return err
+	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	if err != nil && err != contract.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	// Get request tx
+	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
+	var vt *state.Vote
+	var amendment *protocol.ContractAmendment
+	if err == nil && request != nil {
+		var ok bool
+		amendment, ok = request.MsgProto.(*protocol.ContractAmendment)
+
+		if ok && !amendment.RefTxID.IsZero() {
+			refTxId, err := chainhash.NewHash(amendment.RefTxID.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+			}
+
+			// Retrieve Vote Result
+			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+			if err != nil {
+				return errors.New("Vote Result tx not found for amendment")
+			}
+
+			voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+			if !ok {
+				return errors.New("Vote Result invalid for amendment")
+			}
+
+			// Retrieve the vote
+			vt, err = vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+			if err == vote.ErrNotFound {
+				return errors.New("Vote not found for amendment")
+			} else if err != nil {
+				return errors.New("Failed to retrieve vote for amendment")
+			}
+		}
 	}
 
 	// Create or update Contract
@@ -219,45 +368,92 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return err
 		}
 
-		nc.Issuer = *protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress()) // Second output of formation tx
-		// nc.Operator =  // TODO How do we determine if an operator is specified?
+		// Get contract offer message to retrieve issuer and operator.
+		var offerTx *inspector.Transaction
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
+		}
 
-		if err := contract.Create(ctx, dbConn, contractAddr, &nc, v.Now); err != nil {
+		// Get offer from it
+		offer, ok := offerTx.MsgProto.(*protocol.ContractOffer)
+		if !ok {
+			return fmt.Errorf("Could not find Contract Offer in offer tx")
+		}
+
+		nc.IssuerPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[0].Address.ScriptAddress()) // First input of offer tx
+		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
+			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[1].Address.ScriptAddress()) // Second input of offer tx
+		}
+
+		if err := contract.Create(ctx, c.MasterDB, contractPKH, &nc, v.Now); err != nil {
 			logger.Warn(ctx, "%s : Failed to create contract (%s) : %s", v.TraceID, contractName, err.Error())
 			return err
 		}
-		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractAddr.String())
+		logger.Info(ctx, "%s : Created contract (%s) : %s", v.TraceID, contractName, contractPKH.String())
 	} else {
-		// Required pointers
-		stringPointer := func(s string) *string { return &s }
-
 		// Prepare update object
 		uc := contract.UpdateContract{
 			Revision:  &msg.ContractRevision,
 			Timestamp: &msg.Timestamp,
 		}
 
-		if !bytes.Equal(ct.Issuer.Bytes(), itx.Outputs[1].Address.ScriptAddress()) { // Second output of formation tx
-			// TODO Should asset balances be moved from previous issuer to new issuer.
-			uc.Issuer = protocol.PublicKeyHashFromBytes(itx.Outputs[1].Address.ScriptAddress())
-			logger.Info(ctx, "%s : Updating contract issuer address (%s) : %s", v.TraceID, ct.ContractName, itx.Outputs[1].Address.String())
+		// Pull from amendment tx.
+		// Issuer change. New issuer in second input
+		if amendment != nil && amendment.ChangeIssuerAddress {
+			if len(request.Inputs) < 2 {
+				return errors.New("New issuer specified but not included in inputs")
+			}
+
+			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(request.Inputs[1].Address.ScriptAddress())
+			logger.Info(ctx, "%s : Updating contract issuer PKH : %s", v.TraceID, uc.IssuerPKH.String())
 		}
 
-		// TODO Update operator address - OperatorAddress *string
+		// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+		if amendment != nil && amendment.ChangeOperatorAddress {
+			index := 1
+			if amendment.ChangeIssuerAddress {
+				index++
+			}
+			if index >= len(request.Inputs) {
+				return errors.New("New operator specified but not included in inputs")
+			}
+
+			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(request.Inputs[index].Address.ScriptAddress())
+			logger.Info(ctx, "%s : Updating contract operator PKH : %s", v.TraceID, uc.OperatorPKH.String())
+		}
+
+		// Required pointers
+		stringPointer := func(s string) *string { return &s }
 
 		if ct.ContractName != msg.ContractName {
 			uc.ContractName = stringPointer(msg.ContractName)
 			logger.Info(ctx, "%s : Updating contract name (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractName)
 		}
 
-		if ct.ContractFileType != msg.ContractFileType {
-			uc.ContractFileType = &msg.ContractFileType
-			logger.Info(ctx, "%s : Updating contract file type (%s) : %02x", v.TraceID, ct.ContractName, msg.ContractFileType)
+		if ct.ContractType != msg.ContractType {
+			uc.ContractType = stringPointer(msg.ContractType)
+			logger.Info(ctx, "%s : Updating contract type (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractType)
 		}
 
-		if !bytes.Equal(ct.ContractFile, msg.ContractFile) {
-			uc.ContractFile = &msg.ContractFile
-			logger.Info(ctx, "%s : Updating contract file (%s)", v.TraceID, ct.ContractName)
+		if ct.BodyOfAgreementType != msg.BodyOfAgreementType {
+			uc.BodyOfAgreementType = &msg.BodyOfAgreementType
+			logger.Info(ctx, "%s : Updating agreement file type (%s) : %02x", v.TraceID, ct.ContractName, msg.BodyOfAgreementType)
+		}
+
+		if !bytes.Equal(ct.BodyOfAgreement, msg.BodyOfAgreement) {
+			uc.BodyOfAgreement = &msg.BodyOfAgreement
+			logger.Info(ctx, "%s : Updating agreement (%s)", v.TraceID, ct.ContractName)
+		}
+
+		if ct.SupportingDocsFileType != msg.SupportingDocsFileType {
+			uc.SupportingDocsFileType = &msg.SupportingDocsFileType
+			logger.Info(ctx, "%s : Updating supporting docs file type (%s) : %02x", v.TraceID, ct.ContractName, msg.SupportingDocsFileType)
+		}
+
+		if !bytes.Equal(ct.SupportingDocs, msg.SupportingDocs) {
+			uc.SupportingDocs = &msg.SupportingDocs
+			logger.Info(ctx, "%s : Updating supporting docs (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if ct.GoverningLaw != string(msg.GoverningLaw) {
@@ -281,14 +477,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract URI (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractURI)
 		}
 
-		if ct.IssuerName != msg.IssuerName {
-			uc.IssuerName = stringPointer(msg.IssuerName)
-			logger.Info(ctx, "%s : Updating contract issuer name (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerName)
-		}
-
-		if ct.IssuerType != msg.IssuerType {
-			uc.IssuerType = &msg.IssuerType
-			logger.Info(ctx, "%s : Updating contract issuer type (%s) : %02x", v.TraceID, ct.ContractName, *uc.IssuerType)
+		if !ct.Issuer.Equal(msg.Issuer) {
+			uc.Issuer = &msg.Issuer
+			logger.Info(ctx, "%s : Updating contract issuer data (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if ct.IssuerLogoURL != msg.IssuerLogoURL {
@@ -296,9 +487,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract issuer logo URL (%s) : %s", v.TraceID, ct.ContractName, *uc.IssuerLogoURL)
 		}
 
-		if ct.ContractOperatorID != msg.ContractOperatorID {
-			uc.ContractOperatorID = stringPointer(msg.ContractOperatorID)
-			logger.Info(ctx, "%s : Updating contract operator ID (%s) : %s", v.TraceID, ct.ContractName, *uc.ContractOperatorID)
+		if !ct.ContractOperator.Equal(msg.ContractOperator) {
+			uc.ContractOperator = &msg.ContractOperator
+			logger.Info(ctx, "%s : Updating contract operator data (%s)", v.TraceID, ct.ContractName)
 		}
 
 		if !bytes.Equal(ct.ContractAuthFlags[:], msg.ContractAuthFlags[:]) {
@@ -306,83 +497,31 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			logger.Info(ctx, "%s : Updating contract auth flags (%s) : %v", v.TraceID, ct.ContractName, *uc.ContractAuthFlags)
 		}
 
+		if ct.ContractFee != msg.ContractFee {
+			uc.ContractFee = &msg.ContractFee
+			logger.Info(ctx, "%s : Updating contract fee (%s) : %d", v.TraceID, ct.ContractName, *uc.ContractFee)
+		}
+
 		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
 			uc.RestrictedQtyAssets = &msg.RestrictedQtyAssets
 			logger.Info(ctx, "%s : Updating contract restricted quantity assets (%s) : %d", v.TraceID, ct.ContractName, *uc.RestrictedQtyAssets)
 		}
 
-		if ct.ReferendumProposal != msg.ReferendumProposal {
-			uc.ReferendumProposal = &msg.ReferendumProposal
-			logger.Info(ctx, "%s : Updating contract referendum proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.ReferendumProposal)
+		if ct.IssuerProposal != msg.IssuerProposal {
+			uc.IssuerProposal = &msg.IssuerProposal
+			logger.Info(ctx, "%s : Updating contract issuer proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.IssuerProposal)
 		}
 
-		if ct.InitiativeProposal != msg.InitiativeProposal {
-			uc.InitiativeProposal = &msg.InitiativeProposal
-			logger.Info(ctx, "%s : Updating contract initiative proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.InitiativeProposal)
+		if ct.HolderProposal != msg.HolderProposal {
+			uc.HolderProposal = &msg.HolderProposal
+			logger.Info(ctx, "%s : Updating contract holder proposal (%s) : %t", v.TraceID, ct.ContractName, *uc.HolderProposal)
 		}
 
-		if ct.UnitNumber != msg.UnitNumber {
-			uc.UnitNumber = stringPointer(msg.UnitNumber)
-			logger.Info(ctx, "%s : Updating contract unit number (%s) : %s", v.TraceID, ct.ContractName, *uc.UnitNumber)
-		}
-
-		if ct.BuildingNumber != msg.BuildingNumber {
-			uc.BuildingNumber = stringPointer(msg.BuildingNumber)
-			logger.Info(ctx, "%s : Updating contract building number (%s) : %s", v.TraceID, ct.ContractName, *uc.BuildingNumber)
-		}
-
-		if ct.Street != msg.Street {
-			uc.Street = stringPointer(msg.Street)
-			logger.Info(ctx, "%s : Updating contract street (%s) : %s", v.TraceID, ct.ContractName, *uc.Street)
-		}
-
-		if ct.SuburbCity != msg.SuburbCity {
-			uc.SuburbCity = stringPointer(msg.SuburbCity)
-			logger.Info(ctx, "%s : Updating contract city (%s) : %s", v.TraceID, ct.ContractName, *uc.SuburbCity)
-		}
-
-		if ct.TerritoryStateProvinceCode != msg.TerritoryStateProvinceCode {
-			uc.TerritoryStateProvinceCode = &msg.TerritoryStateProvinceCode
-			logger.Info(ctx, "%s : Updating contract state (%s) : %s", v.TraceID, ct.ContractName, *uc.TerritoryStateProvinceCode)
-		}
-
-		if ct.CountryCode != msg.CountryCode {
-			uc.CountryCode = &msg.CountryCode
-			logger.Info(ctx, "%s : Updating contract country (%s) : %s", v.TraceID, ct.ContractName, *uc.CountryCode)
-		}
-
-		if ct.PostalZIPCode != msg.PostalZIPCode {
-			uc.PostalZIPCode = &msg.PostalZIPCode
-			logger.Info(ctx, "%s : Updating contract postal code (%s) : %s", v.TraceID, ct.ContractName, *uc.PostalZIPCode)
-		}
-
-		if ct.EmailAddress != msg.EmailAddress {
-			uc.EmailAddress = &msg.EmailAddress
-			logger.Info(ctx, "%s : Updating contract email (%s) : %s", v.TraceID, ct.ContractName, *uc.EmailAddress)
-		}
-
-		if ct.PhoneNumber != msg.PhoneNumber {
-			uc.PhoneNumber = &msg.PhoneNumber
-			logger.Info(ctx, "%s : Updating contract phone (%s) : %s", v.TraceID, ct.ContractName, *uc.PhoneNumber)
-		}
-
-		// Check if action fee is different
-		different := len(ct.ActionFee) != len(msg.ActionFee)
+		// Check if oracles are different
+		different := len(ct.Oracles) != len(msg.Oracles)
 		if !different {
-			for i, actionFee := range ct.ActionFee {
-				if !bytes.Equal(actionFee.Contract.Bytes(), msg.ActionFee[i].Contract.Bytes()) {
-					different = true
-					break
-				}
-				if actionFee.AssetType != msg.ActionFee[i].AssetType {
-					different = true
-					break
-				}
-				if !bytes.Equal(actionFee.AssetCode.Bytes(), msg.ActionFee[i].AssetCode.Bytes()) {
-					different = true
-					break
-				}
-				if actionFee.FixedRate != msg.ActionFee[i].FixedRate {
+			for i, oracle := range ct.Oracles {
+				if !oracle.Equal(msg.Oracles[i]) {
 					different = true
 					break
 				}
@@ -390,132 +529,15 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newActionFees := make([]protocol.Fee, 0, len(msg.ActionFee))
-			for _, actionFee := range msg.ActionFee {
-				var newActionFee protocol.Fee
-				err := node.Convert(ctx, &actionFee, &newActionFee)
-				if err != nil {
-					return err
-				}
-				newActionFees = append(newActionFees, newActionFee)
-			}
-			uc.ActionFee = &newActionFees
-		}
-
-		// Check if key roles are different
-		different = len(ct.KeyRoles) != len(msg.KeyRoles)
-		if !different {
-			for i, keyRole := range ct.KeyRoles {
-				if keyRole.Type != msg.KeyRoles[i].Type || keyRole.Name != msg.KeyRoles[i].Name {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newKeyRoles := make([]state.KeyRole, 0, len(msg.KeyRoles))
-			for _, keyRole := range msg.KeyRoles {
-				var newKeyRole state.KeyRole
-				err := node.Convert(ctx, &keyRole, &newKeyRole)
-				if err != nil {
-					return err
-				}
-				newKeyRoles = append(newKeyRoles, newKeyRole)
-			}
-			uc.KeyRoles = &newKeyRoles
-		}
-
-		// Check if notable roles are different
-		different = len(ct.NotableRoles) != len(msg.NotableRoles)
-		if !different {
-			for i, notableRole := range ct.NotableRoles {
-				if notableRole.Type != msg.NotableRoles[i].Type || notableRole.Name != msg.NotableRoles[i].Name {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newNotableRoles := make([]state.NotableRole, 0, len(msg.NotableRoles))
-			for _, notableRole := range msg.NotableRoles {
-				var newNotableRole state.NotableRole
-				err := node.Convert(ctx, &notableRole, &newNotableRole)
-				if err != nil {
-					return err
-				}
-				newNotableRoles = append(newNotableRoles, newNotableRole)
-			}
-			uc.NotableRoles = &newNotableRoles
-		}
-
-		// Check if registries are different
-		different = len(ct.Registries) != len(msg.Registries)
-		if !different {
-			for i, registry := range ct.Registries {
-				if registry.Name != msg.Registries[i].Name ||
-					registry.URL != msg.Registries[i].URL ||
-					!bytes.Equal(registry.PublicKey.Bytes(), msg.Registries[i].PublicKey.Bytes()) {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			newRegistries := make([]state.Registry, 0, len(msg.Registries))
-			for _, registry := range msg.Registries {
-				var newRegistry state.Registry
-				err := node.Convert(ctx, &registry, &newRegistry)
-				if err != nil {
-					return err
-				}
-				newRegistries = append(newRegistries, newRegistry)
-			}
-			uc.Registries = &newRegistries
+			logger.Info(ctx, "%s : Updating contract oracles (%s)", v.TraceID, ct.ContractName)
+			uc.Oracles = &msg.Oracles
 		}
 
 		// Check if voting systems are different
 		different = len(ct.VotingSystems) != len(msg.VotingSystems)
 		if !different {
 			for i, votingSystem := range ct.VotingSystems {
-				if votingSystem.Name != msg.VotingSystems[i].Name {
-					different = true
-					break
-				}
-
-				if !bytes.Equal(votingSystem.System[:], msg.VotingSystems[i].System[:]) {
-					different = true
-					break
-				}
-
-				if votingSystem.Method != msg.VotingSystems[i].Method {
-					different = true
-					break
-				}
-
-				if votingSystem.Logic != msg.VotingSystems[i].Logic {
-					different = true
-					break
-				}
-
-				if votingSystem.ThresholdPercentage != msg.VotingSystems[i].ThresholdPercentage {
-					different = true
-					break
-				}
-
-				if votingSystem.VoteMultiplierPermitted != msg.VotingSystems[i].VoteMultiplierPermitted {
-					different = true
-					break
-				}
-
-				if votingSystem.InitiativeThreshold != msg.VotingSystems[i].InitiativeThreshold {
-					different = true
-					break
-				}
-
-				if votingSystem.InitiativeThresholdCurrency != msg.VotingSystems[i].InitiativeThresholdCurrency {
+				if !votingSystem.Equal(msg.VotingSystems[i]) {
 					different = true
 					break
 				}
@@ -523,23 +545,481 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			newVotingSystems := make([]state.VotingSystem, 0, len(msg.VotingSystems))
-			for _, votingSystem := range msg.VotingSystems {
-				var newVotingSystem state.VotingSystem
-				err := node.Convert(ctx, &votingSystem, &newVotingSystem)
-				if err != nil {
-					return err
-				}
-				newVotingSystems = append(newVotingSystems, newVotingSystem)
-			}
-			uc.VotingSystems = &newVotingSystems
+			logger.Info(ctx, "%s : Updating contract voting systems (%s)", v.TraceID, ct.ContractName)
+			uc.VotingSystems = &msg.VotingSystems
 		}
 
-		if err := contract.Update(ctx, dbConn, contractAddr, &uc, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed contract update (%s) : %s", v.TraceID, msg.ContractName, err.Error())
-			return err
+		if err := contract.Update(ctx, c.MasterDB, contractPKH, &uc, v.Now); err != nil {
+			return errors.Wrap(err, "Failed to update contract")
 		}
-		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractAddr.String())
+		logger.Info(ctx, "%s : Updated contract (%s) : %s", v.TraceID, msg.ContractName, contractPKH.String())
+
+		// Mark vote as "applied" if this amendment was a result of a vote.
+		if vt != nil {
+			logger.Info(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
+			if err := vote.MarkApplied(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+				return errors.Wrap(err, "Failed to mark vote applied")
+			}
+		}
+	}
+
+	return nil
+}
+
+// checkContractAmendmentsPermissions verifies that the amendments are permitted bases on the auth flags.
+func checkContractAmendmentsPermissions(ct *state.Contract, amendments []protocol.Amendment, proposed bool,
+	proposalInitiator, votingSystem uint8) error {
+
+	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, contract.FieldCount, len(ct.VotingSystems))
+	if err != nil {
+		return fmt.Errorf("Invalid contract auth flags : %s", err)
+	}
+
+	for _, amendment := range amendments {
+		if int(amendment.FieldIndex) >= len(permissions) {
+			return fmt.Errorf("Amendment field index out of range : %d", amendment.FieldIndex)
+		}
+		if proposed {
+			switch proposalInitiator {
+			case 0: // Issuer
+				if !permissions[amendment.FieldIndex].IssuerProposal {
+					return fmt.Errorf("Field %d amendment not permitted by issuer proposal", amendment.FieldIndex)
+				}
+			case 1: // Holder
+				if !permissions[amendment.FieldIndex].HolderProposal {
+					return fmt.Errorf("Field %d amendment not permitted by holder proposal", amendment.FieldIndex)
+				}
+			default:
+				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+			}
+
+			if int(votingSystem) >= len(permissions[amendment.FieldIndex].VotingSystemsAllowed) {
+				return fmt.Errorf("Field %d amendment voting system out of range : %d", amendment.FieldIndex, votingSystem)
+			}
+			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
+				return fmt.Errorf("Field %d amendment not allowed using voting system %d", amendment.FieldIndex, votingSystem)
+			}
+		} else if !permissions[amendment.FieldIndex].Permitted {
+			return fmt.Errorf("Field %d amendment not permitted without proposal", amendment.FieldIndex)
+		}
+	}
+
+	return nil
+}
+
+// applyContractAmendments applies the amendments to the contract formation.
+func applyContractAmendments(cf *protocol.ContractFormation, amendments []protocol.Amendment) error {
+	authFieldsUpdated := false
+	for _, amendment := range amendments {
+		switch amendment.FieldIndex {
+		case 0: // ContractName
+			cf.ContractName = string(amendment.Data)
+
+		case 1: // BodyOfAgreementType
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("BodyOfAgreementType amendment value is wrong size : %d", len(amendment.Data))
+			}
+			cf.BodyOfAgreementType = uint8(amendment.Data[0])
+
+		case 2: // BodyOfAgreement
+			cf.BodyOfAgreement = amendment.Data
+
+		case 3: // ContractType
+			cf.ContractType = string(amendment.Data)
+
+		case 4: // SupportingDocsFileType
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("SupportingDocsFileType amendment value is wrong size : %d", len(amendment.Data))
+			}
+			cf.SupportingDocsFileType = uint8(amendment.Data[0])
+
+		case 5: // SupportingDocs
+			cf.SupportingDocs = amendment.Data
+
+		case 6: // GoverningLaw
+			cf.GoverningLaw = string(amendment.Data)
+
+		case 7: // Jurisdiction
+			cf.Jurisdiction = string(amendment.Data)
+
+		case 8: // ContractExpiration
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := cf.ContractExpiration.Write(buf); err != nil {
+				return fmt.Errorf("ContractExpiration amendment value failed to deserialize : %s", err)
+			}
+
+		case 9: // ContractURI
+			cf.ContractURI = string(amendment.Data)
+
+		case 10: // Issuer
+			switch amendment.SubfieldIndex {
+			case 0: // Name
+				cf.Issuer.Name = string(amendment.Data)
+
+			case 1: // Type
+				if len(amendment.Data) != 1 {
+					return fmt.Errorf("Issuer.Type amendment value is wrong size : %d", len(amendment.Data))
+				}
+				cf.Issuer.Type = amendment.Data[0]
+
+			case 2: // LEI
+				cf.Issuer.LEI = string(amendment.Data)
+
+			case 3: // AddressIncluded
+				return fmt.Errorf("Amendment attempting to change Issuer.AddressIncluded")
+
+			case 4: // UnitNumber
+				cf.Issuer.UnitNumber = string(amendment.Data)
+
+			case 5: // BuildingNumber
+				cf.Issuer.BuildingNumber = string(amendment.Data)
+
+			case 6: // Street
+				cf.Issuer.Street = string(amendment.Data)
+
+			case 7: // SuburbCity
+				cf.Issuer.SuburbCity = string(amendment.Data)
+
+			case 8: // TerritoryStateProvinceCode
+				cf.Issuer.TerritoryStateProvinceCode = string(amendment.Data)
+
+			case 9: // CountryCode
+				cf.Issuer.CountryCode = string(amendment.Data)
+
+			case 10: // PostalZIPCode
+				cf.Issuer.PostalZIPCode = string(amendment.Data)
+
+			case 11: // EmailAddress
+				cf.Issuer.EmailAddress = string(amendment.Data)
+
+			case 12: // PhoneNumber
+				cf.Issuer.PhoneNumber = string(amendment.Data)
+
+			case 13: // Administration []Administrator
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.Issuer.Administration[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment Issuer.Administration[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newAdministrator := protocol.Administrator{}
+					if err := newAdministrator.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to Issuer.Administration failed to deserialize : %s",
+							err)
+					}
+					cf.Issuer.Administration = append(cf.Issuer.Administration, newAdministrator)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
+							amendment.SubfieldElement)
+					}
+					cf.Issuer.Administration = append(cf.Issuer.Administration[:amendment.SubfieldElement],
+						cf.Issuer.Administration[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for Issuer.Administration : %d", amendment.Operation)
+				}
+
+			case 14: // Management []Manager
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.Issuer.Management[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment Issuer.Management[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newManager := protocol.Manager{}
+					if err := newManager.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to Issuer.Management failed to deserialize : %s",
+							err)
+					}
+					cf.Issuer.Management = append(cf.Issuer.Management, newManager)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
+							amendment.SubfieldElement)
+					}
+					cf.Issuer.Management = append(cf.Issuer.Management[:amendment.SubfieldElement],
+						cf.Issuer.Management[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for Issuer.Management : %d", amendment.Operation)
+				}
+
+			default:
+				return fmt.Errorf("Contract amendment subfield offset for Issuer out of range : %d", amendment.SubfieldIndex)
+			}
+
+		case 11: // IssuerLogoURL
+			cf.IssuerLogoURL = string(amendment.Data)
+
+		case 12: // ContractOperatorIncluded
+			return fmt.Errorf("Amendment attempting to change ContractOperatorIncluded")
+
+		case 13: // ContractOperator
+			switch amendment.SubfieldIndex {
+			case 0: // Name
+				cf.ContractOperator.Name = string(amendment.Data)
+
+			case 1: // Type
+				if len(amendment.Data) != 1 {
+					return fmt.Errorf("ContractOperator.Type amendment value is wrong size : %d", len(amendment.Data))
+				}
+				cf.ContractOperator.Type = amendment.Data[0]
+
+			case 2: // LEI
+				cf.ContractOperator.LEI = string(amendment.Data)
+
+			case 3: // AddressIncluded
+				return fmt.Errorf("Amendment attempting to change ContractOperator.AddressIncluded")
+
+			case 4: // UnitNumber
+				cf.ContractOperator.UnitNumber = string(amendment.Data)
+
+			case 5: // BuildingNumber
+				cf.ContractOperator.BuildingNumber = string(amendment.Data)
+
+			case 6: // Street
+				cf.ContractOperator.Street = string(amendment.Data)
+
+			case 7: // SuburbCity
+				cf.ContractOperator.SuburbCity = string(amendment.Data)
+
+			case 8: // TerritoryStateProvinceCode
+				cf.ContractOperator.TerritoryStateProvinceCode = string(amendment.Data)
+
+			case 9: // CountryCode
+				cf.ContractOperator.CountryCode = string(amendment.Data)
+
+			case 10: // PostalZIPCode
+				cf.ContractOperator.PostalZIPCode = string(amendment.Data)
+
+			case 11: // EmailAddress
+				cf.ContractOperator.EmailAddress = string(amendment.Data)
+
+			case 12: // PhoneNumber
+				cf.ContractOperator.PhoneNumber = string(amendment.Data)
+
+			case 13: // Administration []Administrator
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.ContractOperator.Administration[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment ContractOperator.Administration[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newAdministrator := protocol.Administrator{}
+					if err := newAdministrator.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to ContractOperator.Administration failed to deserialize : %s",
+							err)
+					}
+					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration, newAdministrator)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
+							amendment.SubfieldElement)
+					}
+					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration[:amendment.SubfieldElement],
+						cf.ContractOperator.Administration[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Administration : %d", amendment.Operation)
+				}
+
+			case 14: // Management []Manager
+				switch amendment.Operation {
+				case 0: // Modify
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
+							amendment.SubfieldElement)
+					}
+
+					buf := bytes.NewBuffer(amendment.Data)
+					if err := cf.ContractOperator.Management[amendment.SubfieldElement].Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment ContractOperator.Management[%d] failed to deserialize : %s",
+							amendment.SubfieldElement, err)
+					}
+
+				case 1: // Add element
+					buf := bytes.NewBuffer(amendment.Data)
+					newManager := protocol.Manager{}
+					if err := newManager.Write(buf); err != nil {
+						return fmt.Errorf("Contract amendment addition to ContractOperator.Management failed to deserialize : %s",
+							err)
+					}
+					cf.ContractOperator.Management = append(cf.ContractOperator.Management, newManager)
+
+				case 2: // Delete element
+					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
+						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
+							amendment.SubfieldElement)
+					}
+					cf.ContractOperator.Management = append(cf.ContractOperator.Management[:amendment.SubfieldElement],
+						cf.ContractOperator.Management[amendment.SubfieldElement+1:]...)
+
+				default:
+					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Management : %d", amendment.Operation)
+				}
+
+			default:
+				return fmt.Errorf("Contract amendment subfield offset for ContractOperator out of range : %d", amendment.SubfieldIndex)
+			}
+
+		case 14: // ContractAuthFlags
+			cf.ContractAuthFlags = amendment.Data
+			authFieldsUpdated = true
+
+		case 15: // ContractFee
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("ContractFee amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.ContractFee); err != nil {
+				return fmt.Errorf("ContractFee amendment value failed to deserialize : %s", err)
+			}
+
+		case 16: // VotingSystems
+			switch amendment.Operation {
+			case 0: // Modify
+				if int(amendment.Element) >= len(cf.VotingSystems) {
+					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
+						amendment.Element)
+				}
+
+				buf := bytes.NewBuffer(amendment.Data)
+				if err := cf.VotingSystems[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment VotingSystems[%d] failed to deserialize : %s",
+						amendment.Element, err)
+				}
+
+			case 1: // Add element
+				buf := bytes.NewBuffer(amendment.Data)
+				newVotingSystem := protocol.VotingSystem{}
+				if err := newVotingSystem.Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment addition to VotingSystems failed to deserialize : %s",
+						err)
+				}
+				cf.VotingSystems = append(cf.VotingSystems, newVotingSystem)
+
+			case 2: // Delete element
+				if int(amendment.Element) >= len(cf.VotingSystems) {
+					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
+						amendment.Element)
+				}
+				cf.VotingSystems = append(cf.VotingSystems[:amendment.Element],
+					cf.VotingSystems[amendment.Element+1:]...)
+
+			default:
+				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d", amendment.Operation)
+			}
+
+		case 17: // RestrictedQtyAssets
+			if len(amendment.Data) != 8 {
+				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.RestrictedQtyAssets); err != nil {
+				return fmt.Errorf("RestrictedQtyAssets amendment value failed to deserialize : %s", err)
+			}
+
+		case 18: // IssuerProposal
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("IssuerProposal amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.IssuerProposal); err != nil {
+				return fmt.Errorf("IssuerProposal amendment value failed to deserialize : %s", err)
+			}
+
+		case 19: // HolderProposal
+			if len(amendment.Data) != 1 {
+				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
+			}
+			buf := bytes.NewBuffer(amendment.Data)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.HolderProposal); err != nil {
+				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
+			}
+
+		case 20: // Oracles
+			switch amendment.Operation {
+			case 0: // Modify
+				if int(amendment.Element) >= len(cf.Oracles) {
+					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
+						amendment.Element)
+				}
+
+				buf := bytes.NewBuffer(amendment.Data)
+				if err := cf.Oracles[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment Oracles[%d] failed to deserialize : %s",
+						amendment.Element, err)
+				}
+
+			case 1: // Add element
+				buf := bytes.NewBuffer(amendment.Data)
+				newOracle := protocol.Oracle{}
+				if err := newOracle.Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment addition to Registries failed to deserialize : %s",
+						err)
+				}
+				cf.Oracles = append(cf.Oracles, newOracle)
+
+			case 2: // Delete element
+				if int(amendment.Element) >= len(cf.Oracles) {
+					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
+						amendment.Element)
+				}
+				cf.Oracles = append(cf.Oracles[:amendment.Element],
+					cf.Oracles[amendment.Element+1:]...)
+
+			default:
+				return fmt.Errorf("Invalid contract amendment operation for Registries : %d", amendment.Operation)
+			}
+
+		default:
+			return fmt.Errorf("Contract amendment field offset out of range : %d", amendment.FieldIndex)
+		}
+	}
+
+	if authFieldsUpdated {
+		if _, err := protocol.ReadAuthFlags(cf.ContractAuthFlags, contract.FieldCount, len(cf.VotingSystems)); err != nil {
+			return fmt.Errorf("Invalid contract auth flags : %s", err)
+		}
+	}
+
+	// Check validity of updated contract data
+	if err := cf.Validate(); err != nil {
+		return fmt.Errorf("Contract data invalid after amendments : %s", err)
 	}
 
 	return nil
