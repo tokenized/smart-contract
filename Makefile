@@ -68,5 +68,8 @@ goimports:
 test: prepare
 	go test ./...
 
+test-win: prepare-win
+	go test ./...
+
 clean:
 	rm -rf dist

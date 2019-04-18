@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
@@ -13,14 +14,16 @@ import (
 //   RPC_USERNAME
 //   RPC_PASSWORD
 //   TX_ID
-func TestNode(test *testing.T) {
+func ManualTestNode(test *testing.T) {
 	ctx := context.Background()
 
-	host := os.Getenv("RPC_HOST")
-	user := os.Getenv("RPC_USERNAME")
-	password := os.Getenv("RPC_PASSWORD")
-	config := NewConfig(host, user, password)
-	test.Logf("Connect to %s as %s password : %s", host, user, password)
+	config := &Config{
+		Host:        os.Getenv("RPC_HOST"),
+		Username:    os.Getenv("RPC_USERNAME"),
+		Password:    os.Getenv("RPC_PASSWORD"),
+		ChainParams: &chaincfg.MainNetParams,
+	}
+	test.Logf("Connect to %s as %s password : %s", config.Host, config.Username, config.Password)
 
 	node, err := NewNode(config)
 	if err != nil {

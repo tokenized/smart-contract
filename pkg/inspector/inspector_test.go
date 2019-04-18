@@ -4,9 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func TestParseTX(t *testing.T) {
@@ -20,7 +23,8 @@ func TestParseTX(t *testing.T) {
 	}
 
 	// Parse outputs
-	if err := itx.ParseOutputs(ctx); err != nil {
+	node := TestNode{}
+	if err := itx.ParseOutputs(ctx, &node); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,4 +77,14 @@ func TestParseTX(t *testing.T) {
 	if diff := cmp.Diff(itx, wantTX, ignore); diff != "" {
 		t.Fatalf("\t%s\tShould get the expected result. Diff:\n%s", "\u2717", diff)
 	}
+}
+
+type TestNode struct{}
+
+func (n *TestNode) GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error) {
+	return nil, nil
+}
+
+func (n *TestNode) GetChainParams() *chaincfg.Params {
+	return &chaincfg.MainNetParams
 }

@@ -160,7 +160,7 @@ func main() {
 	// Wallet
 
 	masterWallet := wallet.New()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, &appConfig.ChainParams); err != nil {
 		panic(err)
 	}
 

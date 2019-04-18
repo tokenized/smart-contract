@@ -19,14 +19,14 @@ func TestLogger(test *testing.T) {
 		// logConfig.Main.Format |= System
 		ctx := ContextWithLogConfig(context.Background(), logConfig)
 
-		Log(ctx, Info, "First main entry")
+		Log(ctx, LevelInfo, "First main entry")
 
 		showCtx := ContextWithLogSubSystem(ctx, showsystem)
-		Log(showCtx, Info, "First Sub entry")
+		Log(showCtx, LevelInfo, "First Sub entry")
 
 		hideCtx := ContextWithLogSubSystem(ctx, hidesystem)
-		Log(hideCtx, Info, "First Hidden Sub entry. You should not see this!")
+		Log(hideCtx, LevelInfo, "First Hidden Sub entry. You should not see this!")
 
-		Log(ctx, Info, "Second main entry")
+		Log(ctx, LevelInfo, "Second main entry")
 	}
 }

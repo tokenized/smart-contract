@@ -1,4 +1,4 @@
-package handlers
+package tests
 
 import (
 	"bytes"
@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/internal/platform/tests"
+	platformTests "github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/protocol"
@@ -29,7 +30,7 @@ import (
 var responses []*wire.MsgTx
 
 type Test struct {
-	tests.Test
+	platformTests.Test
 
 	userKey   *wallet.RootKey
 	issuerKey *wallet.RootKey
@@ -62,7 +63,7 @@ func TestFull(t *testing.T) {
 	test.tracer = listeners.NewTracer()
 	test.cache.params = &test.NodeConfig.ChainParams
 
-	test.api, err = API(ctx, test.Wallet, &test.NodeConfig, test.DB, test.tracer, &test.Scheduler, nil, test.UTXOs)
+	test.api, err = handlers.API(ctx, test.Wallet, &test.NodeConfig, test.DB, test.tracer, &test.Scheduler, nil, test.UTXOs)
 	if err != nil {
 		test.Close(ctx)
 		t.Errorf("Failed to configure api : %s", err)
