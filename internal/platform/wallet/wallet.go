@@ -31,8 +31,12 @@ func New() *Wallet {
 	}
 }
 
+func (w Wallet) Add(key *RootKey) error {
+	return w.KeyStore.Add(key)
+}
+
 // Register a private key with the wallet
-func (w Wallet) Register(secret string) error {
+func (w Wallet) Register(secret string, chainParams *chaincfg.Params) error {
 	if len(secret) == 0 {
 		return errors.New("Create wallet failed: missing secret")
 	}
@@ -42,6 +46,9 @@ func (w Wallet) Register(secret string) error {
 	if err != nil {
 		return err
 	}
+	if !wif.IsForNet(chainParams) {
+		return errors.New("WIF for wrong net")
+	}
 
 	// Private / Public Keys
 	priv := wif.PrivKey
@@ -49,14 +56,14 @@ func (w Wallet) Register(secret string) error {
 
 	// Public Address (PKH)
 	h := hex.EncodeToString(pub.SerializeCompressed())
-	pubhash, err := btcutil.DecodeAddress(h, &chaincfg.MainNetParams)
+	pubhash, err := btcutil.DecodeAddress(h, chainParams)
 	if err != nil {
 		return err
 	}
 	pubaddr := pubhash.EncodeAddress()
 
 	// Put in key store
-	w.KeyStore.Put(pubaddr, priv, pub)
+	w.KeyStore.Put(pubaddr, priv, pub, chainParams)
 	return nil
 }
 

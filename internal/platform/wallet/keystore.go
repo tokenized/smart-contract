@@ -28,8 +28,13 @@ func NewKeyStore() *KeyStore {
 	}
 }
 
-func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey) error {
-	addr, _ := btcutil.DecodeAddress(pkh, &chaincfg.MainNetParams)
+func (k KeyStore) Add(key *RootKey) error {
+	k.Keys[key.Address.String()] = key
+	return nil
+}
+
+func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey, chainParams *chaincfg.Params) error {
+	addr, _ := btcutil.DecodeAddress(pkh, chainParams)
 
 	k.Keys[pkh] = &RootKey{
 		Address:    addr,
