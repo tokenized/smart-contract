@@ -49,6 +49,9 @@ tools:
 	go get github.com/golang/lint/golint
 
 run:
+	go run cmd/$(BINARY)/main.go
+
+run-race:
 	go run -race cmd/$(BINARY)/main.go
 
 run-sync:
