@@ -331,6 +331,17 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return err
 	}
 
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractMoved)
+	}
+
 	// Add this contract's data to the settlement op return data
 	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx, settlement, m.Headers)
 	if err != nil {
@@ -441,6 +452,17 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, protocol.RejectContractMoved)
+	}
 
 	// Verify all the data for this contract is correct.
 	err = verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx, settlement, m.Headers)

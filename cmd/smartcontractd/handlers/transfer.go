@@ -115,6 +115,17 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return err
 	}
 
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, t.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectContractMoved, false)
+	}
+
 	// Transfer Outputs
 	//   Contract 1 : amount = calculated fee for settlement tx + contract fees + any bitcoins being transfered
 	//   Contract 2 : contract fees if applicable or dust
@@ -195,7 +206,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	// Save pending transfer
 	timeout := protocol.NewTimestamp(v.Now.Nano() + t.Config.RequestTimeout)
 	pendingTransfer := state.PendingTransfer{TransferTxId: *protocol.TxIdFromBytes(itx.Hash[:]), Timeout: timeout}
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if err := transfer.Save(ctx, t.MasterDB, contractPKH, &pendingTransfer); err != nil {
 		return errors.Wrap(err, "Failed to save pending transfer")
 	}
@@ -916,9 +926,15 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return errors.New("Could not assert as *protocol.Settlement")
 	}
 
-	dbConn := t.MasterDB
-
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, t.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
 
 	for _, assetSettlement := range msg.Assets {
 		if assetSettlement.AssetType == "CUR" && assetSettlement.AssetCode.IsZero() {
@@ -953,7 +969,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 
 		// Update database
-		err := asset.Update(ctx, dbConn, contractPKH, &assetSettlement.AssetCode, &ua, msg.Timestamp)
+		err := asset.Update(ctx, t.MasterDB, contractPKH, &assetSettlement.AssetCode, &ua, msg.Timestamp)
 		if err != nil {
 			return err
 		}
