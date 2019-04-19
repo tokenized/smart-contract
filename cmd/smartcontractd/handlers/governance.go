@@ -17,8 +17,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
@@ -56,6 +56,11 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
@@ -288,22 +293,24 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return err
 	}
 
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	// Verify input is from contract
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		return fmt.Errorf("Response not from contract")
+		return errors.New("Response not from contract")
 	}
 
 	// Retrieve Proposal
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return errors.New("Proposal not found for vote")
 	}
 
 	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
 	if !ok {
-		logger.Warn(ctx, "%s : Proposal invalid for vote : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return errors.New("Proposal invalid for vote")
 	}
 
 	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
@@ -311,11 +318,10 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	_, err = vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
 	if err != vote.ErrNotFound {
 		if err != nil {
-			logger.Warn(ctx, "%s : Failed to retrieve vote : %s %s : %s", v.TraceID, contractPKH.String(), voteTxId.String(), err)
+			return fmt.Errorf("Failed to retrieve vote : %s : %s", voteTxId.String(), err)
 		} else {
-			logger.Warn(ctx, "%s : Vote already exists : %s %s", v.TraceID, contractPKH.String(), voteTxId.String())
+			return fmt.Errorf("Vote already exists : %s", voteTxId.String())
 		}
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	nv := vote.NewVote{}
@@ -332,8 +338,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	if proposal.AssetSpecificVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
 		if err != nil {
-			logger.Warn(ctx, "%s : Asset not found : %s %s", v.TraceID, contractPKH.String(), proposal.AssetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+			return fmt.Errorf("Asset not found : %s", proposal.AssetCode.String(), err)
 		}
 
 		if as.AssetModificationGovernance == 1 { // Contract wide asset governance
@@ -383,6 +388,11 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
 		return err
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &msg.VoteTxId)
@@ -516,16 +526,23 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Ballot counted not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
+	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Ballot cast not found for ballot counted msg : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return fmt.Errorf("Ballot cast not found for ballot counted msg : %s", contractPKH.String())
 	}
 
 	cast, ok := castTx.MsgProto.(*protocol.BallotCast)
 	if !ok {
-		logger.Warn(ctx, "%s : Ballot cast invalid for ballot counted : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return fmt.Errorf("Ballot cast invalid for ballot counted : %s", contractPKH.String())
 	}
 
 	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &cast.VoteTxId)
@@ -571,6 +588,10 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 		return err
 	}
 
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	// Retrieve vote
 	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
 	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
@@ -582,14 +603,12 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams)
 	if err != nil {
-		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return fmt.Errorf("Proposal not found for vote : %s", contractPKH.String())
 	}
 
 	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
 	if !ok {
-		logger.Warn(ctx, "%s : Proposal invalid for vote : %s", v.TraceID, contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return fmt.Errorf("Proposal invalid for vote : %s", contractPKH.String())
 	}
 
 	// Build Response
@@ -649,8 +668,17 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
+	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	uv := vote.UpdateVote{}
-	err := node.Convert(ctx, msg, &uv)
+	err = node.Convert(ctx, msg, &uv)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert result message to update vote")
 	}

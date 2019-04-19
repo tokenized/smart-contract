@@ -53,6 +53,11 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	}
+
 	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, senderPKH) {
 		logger.Warn(ctx, "%s : Requestor PKH is not issuer or operator : %s", v.TraceID, contractPKH.String())
@@ -549,6 +554,15 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 		return fmt.Errorf("Freeze not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
+	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	full := false
 	if len(msg.Quantities) == 0 {
 		return fmt.Errorf("No freeze addresses specified : %s", contractPKH.String())
@@ -621,6 +635,15 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
 		return fmt.Errorf("Thaw not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	}
+
+	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
 	// Get Freeze Tx
@@ -704,6 +727,15 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Confiscation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
 	}
 
+	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	}
+
 	// Apply confiscations
 	ua := asset.UpdateAsset{NewBalances: make(map[protocol.PublicKeyHash]uint64)}
 
@@ -743,6 +775,15 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
 		return fmt.Errorf("Reconciliation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	}
+
+	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
 	// Apply reconciliations

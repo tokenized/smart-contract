@@ -9,8 +9,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
-	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
@@ -38,8 +38,7 @@ func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.
 	app.Handle(protomux.SEE, protocol.CodeContractOffer, c.OfferRequest)
 	app.Handle(protomux.SEE, protocol.CodeContractAmendment, c.AmendmentRequest)
 	app.Handle(protomux.SEE, protocol.CodeContractFormation, c.FormationResponse)
-	// app.Handle(protomux.LOST, protocol.CodeContractAmendment, c.AmendmentReorg)
-	// app.Handle(protomux.STOLE, protocol.CodeContractAmendment, c.AmendmentDoubleSpend)
+	app.Handle(protomux.SEE, protocol.CodeContractAddressChange, c.AddressChange)
 
 	// Register asset based events.
 	a := Asset{

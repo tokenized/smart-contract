@@ -16,8 +16,8 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 const (
@@ -194,24 +194,24 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	// payload, err := opReturn.PayloadMessage()
 	// if err != nil {
-		// return errors.Wrap(err, fmt.Sprintf("Failed to retreive %s payload", actionType))
+	// return errors.Wrap(err, fmt.Sprintf("Failed to retreive %s payload", actionType))
 	// }
 	// if payload == nil {
-		// return nil // No payload for this message type
+	// return nil // No payload for this message type
 	// }
 
 	// fmt.Printf("Payload : %s\n", payload.Type())
 	// payloadData, err := payload.Serialize()
 	// if hexFormat {
-		// fmt.Printf("%x\n", payloadData)
+	// fmt.Printf("%x\n", payloadData)
 	// } else if b64Format {
-		// fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(payloadData))
+	// fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(payloadData))
 	// } else {
-		// data, err = json.MarshalIndent(payload, "", "  ")
-		// if err != nil {
-			// return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s payload %s", actionType, payload.Type()))
-		// }
-		// fmt.Printf(string(data) + "\n")
+	// data, err = json.MarshalIndent(payload, "", "  ")
+	// if err != nil {
+	// return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s payload %s", actionType, payload.Type()))
+	// }
+	// fmt.Printf(string(data) + "\n")
 	// }
 
 	return nil
