@@ -8,8 +8,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // VoteFinalizer is a Scheduler job that compiles the vote result when the vote expires.

@@ -6,14 +6,17 @@ import (
 
 // Contract represents a Smart Contract.
 type Contract struct {
-	ID        protocol.PublicKeyHash `json:"id,omitempty"`
-	Revision  uint32                 `json:"revision,omitempty"`
-	CreatedAt protocol.Timestamp     `json:"created_at,omitempty"`
-	UpdatedAt protocol.Timestamp     `json:"updated_at,omitempty"`
-	Timestamp protocol.Timestamp     `json:"timestamp,omitempty"`
+	ID           protocol.PublicKeyHash `json:"id,omitempty"`
+	Revision     uint32                 `json:"revision,omitempty"`
+	CreatedAt    protocol.Timestamp     `json:"created_at,omitempty"`
+	UpdatedAt    protocol.Timestamp     `json:"updated_at,omitempty"`
+	Timestamp    protocol.Timestamp     `json:"timestamp,omitempty"`
+	FreezePeriod protocol.Timestamp     `json:"freeze_period,omitempty"`
 
 	IssuerPKH   protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
 	OperatorPKH protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	MasterPKH   protocol.PublicKeyHash `json:"master_pkh,omitempty"`
+	MovedTo     protocol.PublicKeyHash `json:"moved_to,omitempty"`
 
 	ContractName           string                  `json:"contract_name,omitempty"`
 	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
@@ -35,7 +38,6 @@ type Contract struct {
 	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
 	Oracles                []protocol.Oracle       `json:"oracles,omitempty"`
-	FreezePeriod           protocol.Timestamp      `json:"freeze_period,omitempty"`
 
 	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`
 }

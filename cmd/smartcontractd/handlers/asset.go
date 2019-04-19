@@ -54,6 +54,11 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	}
+
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
 		logger.Warn(ctx, "%s : Only issuer can create assets: %x", v.TraceID, itx.Inputs[0].Address.ScriptAddress())
@@ -156,6 +161,11 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
@@ -329,6 +339,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
 	as, err := asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)

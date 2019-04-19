@@ -141,6 +141,11 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
+	if !ct.MovedTo.IsZero() {
+		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	}
+
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, requestorPKH.String())
@@ -253,8 +258,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
 	}
 
-	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractPKH.String())
-
 	// Contract Formation <- Contract Amendment
 	cf := protocol.ContractFormation{}
 
@@ -310,6 +313,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to save tx")
 	}
 
+	logger.Info(ctx, "%s : Accepting contract amendment (%s) : %s", v.TraceID, ct.ContractName, contractPKH.String())
+
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
 }
@@ -336,6 +341,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	if ct != nil && !ct.MovedTo.IsZero() {
+		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
 	// Get request tx
@@ -577,6 +586,65 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 		}
 	}
+
+	return nil
+}
+
+// AddressChange handles an incoming Contract Address Change.
+func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+	ctx, span := trace.StartSpan(ctx, "handlers.Contract.AddressChange")
+	defer span.End()
+
+	msg, ok := itx.MsgProto.(*protocol.ContractAddressChange)
+	if !ok {
+		return errors.New("Could not assert as *protocol.ContractAddressChange")
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// Validate all fields have valid values.
+	if err := msg.Validate(); err != nil {
+		logger.Warn(ctx, "%s : Contract address change invalid : %s", v.TraceID, err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
+	// Locate Contract
+	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	if err != nil && err != contract.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+
+	// Check that it is from the master PKH
+	if bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.MasterPKH.Bytes()) {
+		logger.Warn(ctx, "%s : Contract address change must be from master PKH : %x", v.TraceID, itx.Inputs[0].Address.ScriptAddress())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+	}
+
+	// Check that it is to the current contract address and the new contract address
+	toCurrent := false
+	toNew := false
+	for _, output := range itx.Outputs {
+		if bytes.Equal(output.Address.ScriptAddress(), contractPKH.Bytes()) {
+			toCurrent = true
+		}
+		if bytes.Equal(output.Address.ScriptAddress(), msg.NewContractPKH.Bytes()) {
+			toNew = true
+		}
+	}
+
+	if !toCurrent || !toNew {
+		logger.Warn(ctx, "%s : Contract address change must be to current and new PKH", v.TraceID)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+	}
+
+	// Perform move
+	err = contract.Move(ctx, c.MasterDB, contractPKH, &msg.NewContractPKH, msg.Timestamp)
+	if err != nil {
+		return err
+	}
+
+	//TODO Transfer all UTXOs to fee address.
 
 	return nil
 }

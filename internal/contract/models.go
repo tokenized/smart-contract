@@ -10,6 +10,7 @@ type NewContract struct {
 
 	IssuerPKH   protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
 	OperatorPKH protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	MasterPKH   protocol.PublicKeyHash `json:"master_pkh,omitempty"`
 
 	ContractName           string                  `json:"contract_name,omitempty"`
 	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`

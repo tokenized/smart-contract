@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -169,6 +170,64 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	c.UpdatedAt = now
 
 	return Save(ctx, dbConn, c)
+}
+
+// Move marks the contract as moved and copies the data to the new address.
+func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, newContractPKH *protocol.PublicKeyHash, now protocol.Timestamp) error {
+	ctx, span := trace.StartSpan(ctx, "internal.contract.Move")
+	defer span.End()
+
+	// Find contract
+	c, err := Fetch(ctx, dbConn, contractPKH)
+	if err != nil {
+		return ErrNotFound
+	}
+
+	// Get assets
+	assets := make([]*state.Asset, 0, len(c.AssetCodes))
+	for _, assetCode := range c.AssetCodes {
+		as, err := asset.Retrieve(ctx, dbConn, contractPKH, &assetCode)
+		if err != nil {
+			return err
+		}
+		assets = append(assets, as)
+	}
+
+	// Get votes
+	vts, err := vote.List(ctx, dbConn, contractPKH)
+	if err != nil {
+		return err
+	}
+
+	newContract := *c
+	newContract.ID = *newContractPKH
+
+	c.MovedTo = *newContractPKH
+
+	if err = Save(ctx, dbConn, c); err != nil {
+		return err
+	}
+	if err = Save(ctx, dbConn, &newContract); err != nil {
+		return err
+	}
+
+	// Copy assets
+	for _, as := range assets {
+		err = asset.Save(ctx, dbConn, newContractPKH, as)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Copy votes
+	for _, vt := range vts {
+		err = vote.Save(ctx, dbConn, newContractPKH, vt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddAssetCode adds an asset code to a contract
