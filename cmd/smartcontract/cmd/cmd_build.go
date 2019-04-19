@@ -16,7 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
@@ -107,7 +107,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Determine funding required for contract to be able to post response tx.
-		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, theClient.Config.DustLimit, theClient.Config.ContractFee)
+		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0, theClient.Config.DustLimit, theClient.Config.ContractFee)
 		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
 		funding += uint64(float32(estimatedSize) * theClient.Config.FeeRate * 1.1) // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
@@ -192,27 +192,27 @@ func buildAction(c *cobra.Command, args []string) error {
 		fmt.Printf(string(data) + "\n")
 	}
 
-	payload, err := opReturn.PayloadMessage()
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retreive %s payload", actionType))
-	}
-	if payload == nil {
-		return nil // No payload for this message type
-	}
+	// payload, err := opReturn.PayloadMessage()
+	// if err != nil {
+		// return errors.Wrap(err, fmt.Sprintf("Failed to retreive %s payload", actionType))
+	// }
+	// if payload == nil {
+		// return nil // No payload for this message type
+	// }
 
-	fmt.Printf("Payload : %s\n", payload.Type())
-	payloadData, err := payload.Serialize()
-	if hexFormat {
-		fmt.Printf("%x\n", payloadData)
-	} else if b64Format {
-		fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(payloadData))
-	} else {
-		data, err = json.MarshalIndent(payload, "", "  ")
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s payload %s", actionType, payload.Type()))
-		}
-		fmt.Printf(string(data) + "\n")
-	}
+	// fmt.Printf("Payload : %s\n", payload.Type())
+	// payloadData, err := payload.Serialize()
+	// if hexFormat {
+		// fmt.Printf("%x\n", payloadData)
+	// } else if b64Format {
+		// fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(payloadData))
+	// } else {
+		// data, err = json.MarshalIndent(payload, "", "  ")
+		// if err != nil {
+			// return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s payload %s", actionType, payload.Type()))
+		// }
+		// fmt.Printf(string(data) + "\n")
+	// }
 
 	return nil
 }

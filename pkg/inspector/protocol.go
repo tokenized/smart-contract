@@ -2,7 +2,7 @@ package inspector
 
 import (
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 type Balance struct {
@@ -74,13 +74,6 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 
 	addresses := []btcutil.Address{}
 
-	// Swaps contain a second contract
-	// if m.Type() == protocol.CodeSwap {
-	// addresses = append(addresses, itx.Outputs[0].Address)
-	// addresses = append(addresses, itx.Outputs[1].Address)
-	// return addresses
-	// }
-
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
 		addresses = append(addresses, itx.Inputs[0].Address)
@@ -101,6 +94,9 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 
 	// Default behavior is contract as first output
 	addresses = append(addresses, itx.Outputs[0].Address)
+
+	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
+
 	return addresses
 }
 

@@ -24,7 +24,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
@@ -160,7 +160,7 @@ func main() {
 	// Wallet
 
 	masterWallet := wallet.New()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, &appConfig.ChainParams); err != nil {
 		panic(err)
 	}
 

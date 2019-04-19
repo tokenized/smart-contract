@@ -16,7 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
@@ -441,11 +441,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 			issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
 			if msg.TokenQty > as.TokenQty {
-				logger.Info(ctx, "%s : Increasing token quantity by %d to %d : %s", v.TraceID, msg.TokenQty - as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
+				logger.Info(ctx, "%s : Increasing token quantity by %d to %d : %s", v.TraceID, msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
 				// Increasing token quantity. Give tokens to issuer.
 				issuerBalance += msg.TokenQty - as.TokenQty
 			} else {
-				logger.Info(ctx, "%s : Decreasing token quantity by %d to %d : %s", v.TraceID, as.TokenQty - msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
+				logger.Info(ctx, "%s : Decreasing token quantity by %d to %d : %s", v.TraceID, as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
 				// Decreasing token quantity. Take tokens from issuer.
 				issuerBalance -= as.TokenQty - msg.TokenQty
 			}

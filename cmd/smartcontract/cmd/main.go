@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"

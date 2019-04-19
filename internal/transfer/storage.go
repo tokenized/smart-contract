@@ -8,7 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/protocol"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 const storageKey = "contracts"
@@ -68,7 +68,7 @@ func Remove(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 // List all pending transfer for a specified contract.
 func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) ([]*state.PendingTransfer, error) {
 
-	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String()))
+	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String(), storageSubKey))
 	if err != nil {
 		return nil, err
 	}
