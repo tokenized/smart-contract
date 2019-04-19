@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -88,7 +87,7 @@ func createContract(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, offerTx)
 
-	err = a.Trigger(ctx, protomux.SEE, offerItx)
+	err = a.Trigger(ctx, "SEE", offerItx)
 	if err == nil {
 		t.Fatalf("\t%s\tAccepted invalid contract offer", tests.Failed)
 	}
@@ -149,7 +148,7 @@ func createContract(t *testing.T) {
 	test.RPCNode.AddTX(ctx, offerTx)
 
 	// Resubmit to handler
-	err = a.Trigger(ctx, protomux.SEE, offerItx)
+	err = a.Trigger(ctx, "SEE", offerItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to handle contract offer : %v", tests.Failed, err)
 	}

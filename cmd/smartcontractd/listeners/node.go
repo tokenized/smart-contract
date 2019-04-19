@@ -183,21 +183,21 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 
 	server.Tracer.AddTx(ctx, itx.MsgTx)
 	server.utxos.Add(itx.MsgTx, server.contractPKH)
-	return server.Handler.Trigger(ctx, protomux.SEE, itx)
+	return server.Handler.Trigger(ctx, "SEE", itx)
 }
 
 func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
 	server.utxos.Remove(itx.MsgTx, server.contractPKH)
-	return server.Handler.Trigger(ctx, protomux.STOLE, itx)
+	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
 	server.utxos.Remove(itx.MsgTx, server.contractPKH)
-	return server.Handler.Trigger(ctx, protomux.LOST, itx)
+	return server.Handler.Trigger(ctx, "LOST", itx)
 }
 
 func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {
-	return server.Handler.Trigger(ctx, protomux.REPROCESS, itx)
+	return server.Handler.Trigger(ctx, "REPROCESS", itx)
 }

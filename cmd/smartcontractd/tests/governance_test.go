@@ -6,7 +6,6 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -82,7 +81,7 @@ func holderProposal(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, proposalTx)
 
-	err = a.Trigger(ctx, protomux.SEE, proposalItx)
+	err = a.Trigger(ctx, "SEE", proposalItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept proposal : %v", tests.Failed, err)
 	}
@@ -150,7 +149,7 @@ func sendBallot(t *testing.T, pkh *protocol.PublicKeyHash, vote string) {
 
 	test.RPCNode.AddTX(ctx, ballotTx)
 
-	err = a.Trigger(ctx, protomux.SEE, ballotItx)
+	err = a.Trigger(ctx, "SEE", ballotItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept ballot : %v", tests.Failed, err)
 	}

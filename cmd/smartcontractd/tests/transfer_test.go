@@ -5,7 +5,6 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -76,7 +75,7 @@ func transferTokens(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, transferTx)
 
-	err = a.Trigger(ctx, protomux.SEE, transferItx)
+	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {
 		t.Fatalf("\t%s\tAccepted transfer with insufficient value", tests.Failed)
 	}
@@ -103,7 +102,7 @@ func transferTokens(t *testing.T) {
 	// Resubmit
 	test.RPCNode.AddTX(ctx, transferTx)
 
-	err = a.Trigger(ctx, protomux.SEE, transferItx)
+	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept transfer : %v", tests.Failed, err)
 	}

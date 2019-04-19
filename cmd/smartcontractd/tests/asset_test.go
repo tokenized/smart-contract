@@ -8,7 +8,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -103,7 +102,7 @@ func createAsset(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, assetTx)
 
-	err = a.Trigger(ctx, protomux.SEE, assetItx)
+	err = a.Trigger(ctx, "SEE", assetItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept asset definition : %v", tests.Failed, err)
 	}
@@ -186,7 +185,7 @@ func assetAmendment(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, amendmentTx)
 
-	err = a.Trigger(ctx, protomux.SEE, amendmentItx)
+	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept amendment : %v", tests.Failed, err)
 	}
@@ -264,7 +263,7 @@ func proposalAmendment(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, amendmentTx)
 
-	err = a.Trigger(ctx, protomux.SEE, amendmentItx)
+	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept amendment : %v", tests.Failed, err)
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -75,7 +74,7 @@ func freezeOrder(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, orderTx)
 
-	err = a.Trigger(ctx, protomux.SEE, orderItx)
+	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
@@ -155,7 +154,7 @@ func thawOrder(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, orderTx)
 
-	err = a.Trigger(ctx, protomux.SEE, orderItx)
+	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
@@ -230,7 +229,7 @@ func confiscateOrder(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, orderTx)
 
-	err = a.Trigger(ctx, protomux.SEE, orderItx)
+	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
@@ -309,7 +308,7 @@ func reconcileOrder(t *testing.T) {
 
 	test.RPCNode.AddTX(ctx, orderTx)
 
-	err = a.Trigger(ctx, protomux.SEE, orderItx)
+	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}

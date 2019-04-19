@@ -37,7 +37,7 @@ func (vf *VoteFinalizer) IsReady(ctx context.Context) bool {
 // Run executes the job.
 func (vf *VoteFinalizer) Run(ctx context.Context) {
 	logger.Info(ctx, "Finalizing vote : %s", vf.voteTx.Hash.String())
-	vf.handler.Trigger(ctx, protomux.REPROCESS, vf.voteTx)
+	vf.handler.Trigger(ctx, "REPROCESS", vf.voteTx)
 	vf.finished = true
 }
 

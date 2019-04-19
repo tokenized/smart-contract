@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -126,7 +125,7 @@ func checkResponse(t *testing.T, responseCode string) {
 
 	test.RPCNode.AddTX(ctx, response)
 
-	err = a.Trigger(ctx, protomux.SEE, responseItx)
+	err = a.Trigger(ctx, "SEE", responseItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to process response : %v", tests.Failed, err)
 	}
