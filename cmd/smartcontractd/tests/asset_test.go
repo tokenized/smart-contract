@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -39,10 +38,11 @@ func createAsset(t *testing.T) {
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100001, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address.ScriptAddress())
 
 	testAssetCode = *randomAssetCode()
 
@@ -84,8 +84,7 @@ func createAsset(t *testing.T) {
 	// Build asset definition transaction
 	assetTx := wire.NewMsgTx(2)
 
-	var assetInputHash chainhash.Hash
-	assetInputHash = fundingTx.TxHash()
+	assetInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
 	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
@@ -151,9 +150,7 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100001, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address.ScriptAddress())
 
 	amendmentData := protocol.AssetModification{
 		AssetType:     protocol.CodeShareCommon,
@@ -177,8 +174,7 @@ func assetAmendment(t *testing.T) {
 	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(2)
 
-	var amendmentInputHash chainhash.Hash
-	amendmentInputHash = fundingTx.TxHash()
+	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
@@ -270,9 +266,7 @@ func proposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up vote result : %v", tests.Failed, err)
 	}
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100002, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100003, issuerKey.Address.ScriptAddress())
 
 	amendmentData := protocol.AssetModification{
 		AssetType:     protocol.CodeShareCommon,
@@ -286,8 +280,7 @@ func proposalAmendment(t *testing.T) {
 	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(2)
 
-	var amendmentInputHash chainhash.Hash
-	amendmentInputHash = fundingTx.TxHash()
+	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
@@ -355,6 +348,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 
 	testAssetType = payload.Type()
 	testAssetCode = assetData.ID
+	testTokenQty = quantity
 
 	var err error
 	assetData.AssetPayload, err = payload.Serialize()
@@ -387,5 +381,34 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	})
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	return asset.Save(ctx, test.MasterDB, contractPKH, &assetData)
+	err = asset.Save(ctx, test.MasterDB, contractPKH, &assetData)
+	if err != nil {
+		return err
+	}
+
+	// Add to contract
+	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		return err
+	}
+
+	ct.AssetCodes = append(ct.AssetCodes, assetData.ID)
+	return contract.Save(ctx, test.MasterDB, ct)
+}
+
+func mockUpHolding(ctx context.Context, pkh []byte, quantity uint64) error {
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		return err
+	}
+
+	as.Holdings = append(as.Holdings, state.Holding{
+		PKH:       *protocol.PublicKeyHashFromBytes(pkh),
+		Balance:   quantity,
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+	})
+
+	return asset.Save(ctx, test.MasterDB, contractPKH, as)
 }

@@ -2,12 +2,15 @@ package tests
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -27,13 +30,25 @@ func TestEnforcement(t *testing.T) {
 func freezeOrder(t *testing.T) {
 	ctx := test.Context
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100008, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	test.ResetDB()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 300)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address.ScriptAddress())
 
 	orderData := protocol.Order{
 		ComplianceAction: protocol.ComplianceActionFreeze,
-		AssetType:        protocol.CodeShareCommon,
+		AssetType:        testAssetType,
 		AssetCode:        testAssetCode,
 		Message:          "Court order",
 	}
@@ -46,14 +61,13 @@ func freezeOrder(t *testing.T) {
 	// Build order transaction
 	orderTx := wire.NewMsgTx(2)
 
-	var orderInputHash chainhash.Hash
-	orderInputHash = fundingTx.TxHash()
+	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&orderData)
@@ -79,12 +93,7 @@ func freezeOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
 
-	t.Logf("Freeze order accepted")
-
-	if len(responses) > 0 {
-		hash := responses[0].TxHash()
-		testFreezeTxId = *protocol.TxIdFromBytes(hash[:])
-	}
+	t.Logf("\t%s\tFreeze order accepted", tests.Success)
 
 	// Check the response
 	checkResponse(t, "E2")
@@ -99,11 +108,11 @@ func freezeOrder(t *testing.T) {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	if asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
+	if asset.CheckBalanceFrozen(ctx, as, userPKH, 101, v.Now) {
 		t.Fatalf("\t%s\tUser unfrozen balance too high", tests.Failed)
 	}
 
-	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 50, v.Now) {
+	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
 		t.Fatalf("\t%s\tUser unfrozen balance not high enough", tests.Failed)
 	}
 }
@@ -111,29 +120,44 @@ func freezeOrder(t *testing.T) {
 func thawOrder(t *testing.T) {
 	ctx := test.Context
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	test.ResetDB()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 300)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+	freezeTxId, err := mockUpFreeze(ctx, t, userKey.Address.ScriptAddress(), 200)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up freeze : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100006, issuerKey.Address.ScriptAddress())
 
 	orderData := protocol.Order{
 		ComplianceAction: protocol.ComplianceActionThaw,
-		AssetType:        protocol.CodeShareCommon,
+		AssetType:        testAssetType,
 		AssetCode:        testAssetCode,
-		FreezeTxId:       testFreezeTxId,
-		Message:          "Court order released",
+		FreezeTxId:       *freezeTxId,
+		Message:          "Court order lifted",
 	}
 
 	// Build order transaction
 	orderTx := wire.NewMsgTx(2)
 
-	var orderInputHash chainhash.Hash
-	orderInputHash = fundingTx.TxHash()
+	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&orderData)
@@ -159,7 +183,7 @@ func thawOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
 
-	t.Logf("Thaw order accepted")
+	t.Logf("\t%s\tThaw order accepted", tests.Success)
 
 	// Check the response
 	checkResponse(t, "E3")
@@ -174,7 +198,7 @@ func thawOrder(t *testing.T) {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 250, v.Now) {
+	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 300, v.Now) {
 		t.Fatalf("\t%s\tUser balance not unfrozen", tests.Failed)
 	}
 }
@@ -182,14 +206,26 @@ func thawOrder(t *testing.T) {
 func confiscateOrder(t *testing.T) {
 	ctx := test.Context
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	test.ResetDB()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100007, issuerKey.Address.ScriptAddress())
 
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
 	orderData := protocol.Order{
 		ComplianceAction: protocol.ComplianceActionConfiscation,
-		AssetType:        protocol.CodeShareCommon,
+		AssetType:        testAssetType,
 		AssetCode:        testAssetCode,
 		DepositAddress:   *issuerPKH,
 		Message:          "Court order",
@@ -201,14 +237,13 @@ func confiscateOrder(t *testing.T) {
 	// Build order transaction
 	orderTx := wire.NewMsgTx(2)
 
-	var orderInputHash chainhash.Hash
-	orderInputHash = fundingTx.TxHash()
+	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(1500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&orderData)
@@ -234,7 +269,7 @@ func confiscateOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
 
-	t.Logf("Confiscate order accepted")
+	t.Logf("\t%s\tConfiscate order accepted", tests.Success)
 
 	// Check the response
 	checkResponse(t, "E4")
@@ -247,47 +282,60 @@ func confiscateOrder(t *testing.T) {
 	}
 
 	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty-200 {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-200)
+	if issuerBalance != testTokenQty+50 {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty+50)
 	}
+	t.Logf("\t%s\tIssuer token balance verified : %d", tests.Success, issuerBalance)
 
 	userBalance := asset.GetBalance(ctx, as, userPKH)
 	if userBalance != 200 {
 		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 200)
 	}
+	t.Logf("\t%s\tUser token balance verified : %d", tests.Success, userBalance)
 }
 
 func reconcileOrder(t *testing.T) {
 	ctx := test.Context
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100009, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	test.ResetDB()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 150)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100008, issuerKey.Address.ScriptAddress())
 
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
 	orderData := protocol.Order{
 		ComplianceAction: protocol.ComplianceActionReconciliation,
-		AssetType:        protocol.CodeShareCommon,
+		AssetType:        testAssetType,
 		AssetCode:        testAssetCode,
 		Message:          "Court order",
 	}
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{Address: *userPKH, Quantity: 50})
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{Address: *userPKH, Quantity: 75})
 
 	orderData.BitcoinDispersions = append(orderData.BitcoinDispersions, protocol.QuantityIndex{Index: 0, Quantity: 75000})
 
 	// Build order transaction
 	orderTx := wire.NewMsgTx(2)
 
-	var orderInputHash chainhash.Hash
-	orderInputHash = fundingTx.TxHash()
+	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(751500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&orderData)
@@ -313,7 +361,7 @@ func reconcileOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
 	}
 
-	t.Logf("Reconcile order accepted")
+	t.Logf("\t%s\tReconcile order accepted", tests.Success)
 
 	if len(responses) < 1 {
 		t.Fatalf("\t%s\tNo response for reconcile", tests.Failed)
@@ -327,7 +375,7 @@ func reconcileOrder(t *testing.T) {
 			continue
 		}
 		if bytes.Equal(pkh, userPKH.Bytes()) && output.Value == 75000 {
-			t.Logf("Found reconcile bitcoin dispersion")
+			t.Logf("\t%s\tFound reconcile bitcoin dispersion", tests.Success)
 			found = true
 		}
 	}
@@ -347,14 +395,108 @@ func reconcileOrder(t *testing.T) {
 	}
 
 	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty-200 {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-200)
+	if issuerBalance != testTokenQty {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty)
 	}
-	t.Logf("Verified issuer balance : %d", issuerBalance)
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerBalance)
 
 	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != 150 {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 150)
+	if userBalance != 75 {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 75)
 	}
-	t.Logf("Verified user balance : %d", userBalance)
+	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userBalance)
+}
+
+func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64) (*protocol.TxId, error) {
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000013, issuerKey.Address.ScriptAddress())
+
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionFreeze,
+		AssetType:        testAssetType,
+		AssetCode:        testAssetCode,
+		Message:          "Court order",
+	}
+
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{
+		Address:  *protocol.PublicKeyHashFromBytes(pkh),
+		Quantity: quantity,
+	})
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	orderInputHash := fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData)
+	if err != nil {
+		return nil, err
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = orderItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		return nil, err
+	}
+
+	test.RPCNode.AddTX(ctx, orderTx)
+	transactions.AddTx(ctx, test.MasterDB, orderItx)
+
+	err = a.Trigger(ctx, "SEE", orderItx)
+	if err != nil {
+		return nil, err
+	}
+
+	var freezeTxId *protocol.TxId
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		freezeTxId = protocol.TxIdFromBytes(hash[:])
+
+		test.RPCNode.AddTX(ctx, responses[0])
+
+		freezeItx, err := inspector.NewTransactionFromWire(ctx, responses[0])
+		if err != nil {
+			return nil, err
+		}
+
+		err = freezeItx.Promote(ctx, test.RPCNode)
+		if err != nil {
+			return nil, err
+		}
+
+		transactions.AddTx(ctx, test.MasterDB, freezeItx)
+		responses = nil
+	}
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		return freezeTxId, err
+	}
+
+	for i, _ := range as.Holdings {
+		if bytes.Equal(as.Holdings[i].PKH.Bytes(), pkh) {
+			ts := protocol.CurrentTimestamp()
+			as.Holdings[i].HoldingStatuses = append(as.Holdings[i].HoldingStatuses, state.HoldingStatus{
+				Code:    'F',
+				Expires: protocol.NewTimestamp(ts.Nano() + 100000000000),
+				Balance: quantity,
+				TxId:    *freezeTxId,
+			})
+			return freezeTxId, asset.Save(ctx, test.MasterDB, contractPKH, as)
+		}
+	}
+
+	return freezeTxId, errors.New("Holding not found for mock freeze")
 }

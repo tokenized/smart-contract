@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
@@ -58,14 +57,12 @@ func createContract(t *testing.T) {
 	}
 
 	// Create funding tx
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100003, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address.ScriptAddress())
 
 	// Build offer transaction
 	offerTx := wire.NewMsgTx(2)
 
-	var offerInputHash chainhash.Hash = fundingTx.TxHash()
+	offerInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
 	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&offerInputHash, 0), make([]byte, 130)))

@@ -11,9 +11,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/specification/dist/golang/protocol"
-
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 var a protomux.Handler
@@ -30,7 +29,6 @@ var testAssetType string
 var testAssetCode protocol.AssetCode
 var testVoteTxId protocol.TxId
 var testVoteResultTxId protocol.TxId
-var testFreezeTxId protocol.TxId
 
 // TestMain is the entry point for testing.
 func TestMain(m *testing.M) {

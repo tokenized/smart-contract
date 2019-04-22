@@ -3,7 +3,6 @@ package tests
 import (
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -22,9 +21,21 @@ func TestTransfers(t *testing.T) {
 func transferTokens(t *testing.T) {
 	ctx := test.Context
 
-	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100002, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
-	test.RPCNode.AddTX(ctx, fundingTx)
+	test.ResetDB()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 100)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -44,8 +55,7 @@ func transferTokens(t *testing.T) {
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
 
-	var transferInputHash chainhash.Hash
-	transferInputHash = fundingTx.TxHash()
+	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
@@ -84,10 +94,10 @@ func transferTokens(t *testing.T) {
 		t.Fatalf("\t%s\tHandle asset transfer created reject response", tests.Failed)
 	}
 
-	t.Logf("Underfunded asset transfer rejected with no response")
+	t.Logf("\t%s\tUnderfunded asset transfer rejected with no response", tests.Success)
 
 	// Adjust amount to contract to be appropriate
-	transferTx.TxOut[0].Value = 1000
+	transferTx.TxOut[0].Value = 2000
 
 	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx)
 	if err != nil {
@@ -127,8 +137,8 @@ func transferTokens(t *testing.T) {
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
 	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != transferAmount {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, transferAmount)
+	if userBalance != 100+transferAmount {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 100+transferAmount)
 	}
 
 	t.Logf("Issuer asset balance : %d", issuerBalance)

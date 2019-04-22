@@ -9,11 +9,6 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -24,6 +19,12 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/ripemd160"
 )
 
