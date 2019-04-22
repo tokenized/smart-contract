@@ -45,7 +45,6 @@ type Config struct {
 	ContractProviderID string
 	Version            string
 	FeePKH             *protocol.PublicKeyHash
-	FeeValue           uint64
 	DustLimit          uint64
 	ChainParams        chaincfg.Params
 	FeeRate            float32

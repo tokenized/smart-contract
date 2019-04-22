@@ -1,12 +1,17 @@
 package tests
 
 import (
+	"context"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/internal/transactions"
+	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -171,4 +176,100 @@ func processVoteResult(t *testing.T) {
 
 	// Check the response
 	checkResponse(t, "G5")
+}
+
+func randomTxId() *protocol.TxId {
+	data := make([]byte, 32)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i, _ := range data {
+		data[i] = byte(r.Intn(256))
+	}
+	return protocol.TxIdFromBytes(data)
+}
+
+func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint8, amendment *protocol.Amendment) error {
+	var voteData = state.Vote{
+		Initiator:         initiator,
+		VoteSystem:        system,
+		AssetSpecificVote: true,
+		AssetType:         testAssetType,
+		AssetCode:         testAssetCode,
+		Specific:          true,
+
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+
+		VoteTxId: *randomTxId(),
+	}
+
+	testVoteTxId = voteData.VoteTxId
+
+	voteData.ProposedAmendments = append(voteData.ProposedAmendments, *amendment)
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	return vote.Save(ctx, test.MasterDB, contractPKH, &voteData)
+}
+
+func mockUpVoteResultTx(ctx context.Context, result string) error {
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		return err
+	}
+
+	vt.CompletedAt = protocol.CurrentTimestamp()
+	vt.Result = result
+
+	// Set result Id
+	fundingTx := wire.NewMsgTx(2)
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100002, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	test.RPCNode.AddTX(ctx, fundingTx)
+
+	// Build result transaction
+	resultTx := wire.NewMsgTx(2)
+
+	var resultInputHash chainhash.Hash
+	resultInputHash = fundingTx.TxHash()
+
+	// From issuer
+	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&resultInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	resultData := protocol.Result{
+		AssetSpecificVote:  vt.AssetSpecificVote,
+		AssetType:          vt.AssetType,
+		AssetCode:          vt.AssetCode,
+		Specific:           vt.Specific,
+		ProposedAmendments: vt.ProposedAmendments,
+		VoteTxId:           testVoteTxId,
+		OptionTally:        []uint64{1000, 0},
+		Result:             "A",
+		Timestamp:          protocol.CurrentTimestamp(),
+	}
+	script, err := protocol.Serialize(&resultData)
+	if err != nil {
+		return err
+	}
+	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(0, script))
+
+	resultItx, err := inspector.NewTransactionFromWire(ctx, resultTx)
+	if err != nil {
+		return err
+	}
+
+	err = resultItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		return err
+	}
+
+	testVoteResultTxId = *protocol.TxIdFromBytes(resultItx.Hash[:])
+
+	if err := transactions.AddTx(ctx, test.MasterDB, resultItx); err != nil {
+		return err
+	}
+
+	return vote.Save(ctx, test.MasterDB, contractPKH, vt)
 }

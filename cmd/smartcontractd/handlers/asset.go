@@ -494,9 +494,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
-			uv := vote.UpdateVote{AppliedTxId: protocol.TxIdFromBytes(request.Hash[:])}
-			if err := vote.Update(ctx, a.MasterDB, contractPKH, &vt.VoteTxId, &uv, v.Now); err != nil {
-				return errors.Wrap(err, "Failed to update vote")
+			logger.Info(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
+			if err := vote.MarkApplied(ctx, a.MasterDB, contractPKH, &vt.VoteTxId, protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
 	}

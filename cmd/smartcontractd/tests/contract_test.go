@@ -1,9 +1,12 @@
 package tests
 
 import (
+	"context"
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -20,6 +23,8 @@ func TestContracts(t *testing.T) {
 
 func createContract(t *testing.T) {
 	ctx := test.Context
+
+	test.ResetDB()
 
 	// New Contract Offer
 	offerData := protocol.ContractOffer{
@@ -54,7 +59,7 @@ func createContract(t *testing.T) {
 
 	// Create funding tx
 	fundingTx := wire.NewMsgTx(2)
-	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100000, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
+	fundingTx.TxOut = append(fundingTx.TxOut, wire.NewTxOut(100003, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 	test.RPCNode.AddTX(ctx, fundingTx)
 
 	// Build offer transaction
@@ -66,7 +71,7 @@ func createContract(t *testing.T) {
 	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&offerInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(100000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&offerData)
@@ -157,4 +162,49 @@ func createContract(t *testing.T) {
 
 	// Check the response
 	checkResponse(t, "C2")
+}
+
+func mockUpContract(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string,
+	issuerProposal, holderProposal bool) error {
+
+	var contractData = state.Contract{
+		ID:                     *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ContractName:           name,
+		BodyOfAgreementType:    1,
+		BodyOfAgreement:        []byte(agreement),
+		SupportingDocsFileType: 1,
+		Issuer: protocol.Entity{
+			Type:           issuerType,
+			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
+			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		IssuerProposal: issuerProposal,
+		HolderProposal: holderProposal,
+		ContractFee:    1000,
+
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH: *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
+	}
+
+	// Define permissions for asset fields
+	permissions := make([]protocol.Permission, 21)
+	for i, _ := range permissions {
+		permissions[i].Permitted = true      // Issuer can update field without proposal
+		permissions[i].IssuerProposal = true // Issuer can update field with a proposal
+		permissions[i].HolderProposal = true // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	var err error
+	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		return err
+	}
+
+	return contract.Save(ctx, test.MasterDB, &contractData)
 }

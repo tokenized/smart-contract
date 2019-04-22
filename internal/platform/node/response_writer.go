@@ -129,7 +129,7 @@ func outputValue(ctx context.Context, config *Config, addr btcutil.Address, valu
 
 // outputFee prepares a special fee output based on node configuration
 func outputFee(ctx context.Context, config *Config, value uint64) *Output {
-	if config.FeeValue > 0 {
+	if value > 0 {
 		feeAddr, _ := btcutil.NewAddressPubKeyHash(config.FeePKH.Bytes(), &config.ChainParams)
 		return &Output{
 			Address: feeAddr,

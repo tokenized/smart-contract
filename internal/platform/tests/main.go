@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"testing"
 
@@ -36,6 +37,7 @@ type Test struct {
 	Context     context.Context
 	RPCNode     *mockRpcNode
 	NodeConfig  node.Config
+	MasterKey   *wallet.RootKey
 	ContractKey *wallet.RootKey
 	FeeKey      *wallet.RootKey
 	Wallet      *wallet.Wallet
@@ -43,6 +45,7 @@ type Test struct {
 	UTXOs       *utxos.UTXOs
 	Scheduler   *scheduler.Scheduler
 	schStarted  bool
+	path        string
 }
 
 func New() *Test {
@@ -69,7 +72,6 @@ func New() *Test {
 		ChainParams:        config.NewChainParams("mainnet"),
 		FeeRate:            1.0,
 		RequestTimeout:     1000000000000,
-		FeeValue:           10000,
 	}
 
 	feeKey, err := GenerateKey(nodeConfig.ChainParams)
@@ -86,9 +88,10 @@ func New() *Test {
 	// ============================================================
 	// Database
 
+	path := "./tmp"
 	masterDB, err := db.New(&db.StorageConfig{
 		Bucket: "standalone",
-		Root:   "./tmp",
+		Root:   path,
 	})
 	if err != nil {
 		logger.Fatal(ctx, "main : Failed to create DB : %v", err)
@@ -100,6 +103,11 @@ func New() *Test {
 	testUTXOs, err := utxos.Load(ctx, masterDB)
 	if err != nil {
 		logger.Fatal(ctx, "main : Failed to load UTXOs : %v", err)
+	}
+
+	masterKey, err := GenerateKey(nodeConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "main : Failed to generate master key : %v", err)
 	}
 
 	contractKey, err := GenerateKey(nodeConfig.ChainParams)
@@ -131,6 +139,7 @@ func New() *Test {
 		Context:     ctx,
 		RPCNode:     rpcNode,
 		NodeConfig:  nodeConfig,
+		MasterKey:   masterKey,
 		ContractKey: contractKey,
 		FeeKey:      feeKey,
 		Wallet:      testWallet,
@@ -138,6 +147,7 @@ func New() *Test {
 		UTXOs:       testUTXOs,
 		Scheduler:   testScheduler,
 		schStarted:  true,
+		path:        path,
 	}
 }
 
@@ -190,4 +200,9 @@ func Recover(t *testing.T) {
 	if r := recover(); r != nil {
 		t.Fatal("Unhandled Exception:", string(debug.Stack()))
 	}
+}
+
+// ResetDB clears all the data in the database.
+func (test *Test) ResetDB() {
+	os.RemoveAll(filepath.FromSlash(test.path))
 }

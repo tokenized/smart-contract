@@ -7,7 +7,7 @@ import (
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -16,7 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
-var a *node.App
+var a protomux.Handler
 var test *tests.Test
 
 // Information about the handlers we have created for testing.
@@ -26,6 +26,7 @@ var userKey *wallet.RootKey
 var issuerKey *wallet.RootKey
 
 var testTokenQty uint64
+var testAssetType string
 var testAssetCode protocol.AssetCode
 var testVoteTxId protocol.TxId
 var testVoteResultTxId protocol.TxId
@@ -50,7 +51,8 @@ func testMain(m *testing.M) int {
 
 	tracer := listeners.NewTracer()
 
-	a, err := handlers.API(
+	var err error
+	a, err = handlers.API(
 		test.Context,
 		test.Wallet,
 		&test.NodeConfig,
