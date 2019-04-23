@@ -17,13 +17,15 @@ import (
 func TestContracts(t *testing.T) {
 	defer tests.Recover(t)
 
-	t.Run("createContract", createContract)
+	t.Run("create", createContract)
+	t.Run("amendment", contractAmendment)
+	t.Run("proposalAmendment", contractProposalAmendment)
 }
 
 func createContract(t *testing.T) {
 	ctx := test.Context
 
-	test.ResetDB()
+	resetTest()
 
 	// New Contract Offer
 	offerData := protocol.ContractOffer{
@@ -44,7 +46,7 @@ func createContract(t *testing.T) {
 	for i, _ := range permissions {
 		permissions[i].Permitted = false      // Issuer can update field without proposal
 		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = true  // Holder's can initiate proposals to update field
+		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -159,10 +161,207 @@ func createContract(t *testing.T) {
 
 	// Check the response
 	checkResponse(t, "C2")
+
+	// Verify data
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.ContractName != offerData.ContractName {
+		t.Fatalf("\t%s\tContract name incorrect : \"%s\" != \"%s\"", tests.Failed, ct.ContractName, offerData.ContractName)
+	}
+
+	t.Logf("\t%s\tVerified contract name : %s", tests.Success, ct.ContractName)
+
+	if string(ct.BodyOfAgreement) != string(offerData.BodyOfAgreement) {
+		t.Fatalf("\t%s\tContract body incorrect : \"%s\" != \"%s\"", tests.Failed, string(ct.BodyOfAgreement), string(offerData.BodyOfAgreement))
+	}
+
+	t.Logf("\t%s\tVerified body name : %s", tests.Success, ct.BodyOfAgreement)
+
+	if ct.Issuer.Administration[0].Name != offerData.Issuer.Administration[0].Name {
+		t.Fatalf("\t%s\tContract issuer name incorrect : \"%s\" != \"%s\"", tests.Failed, ct.Issuer.Administration[0].Name, "John Smith")
+	}
+
+	t.Logf("\t%s\tVerified issuer name : %s", tests.Success, ct.Issuer.Administration[0].Name)
+
+	if !ct.HolderProposal {
+		t.Fatalf("\t%s\tContract holder proposal incorrect : %t", tests.Failed, ct.HolderProposal)
+	}
+
+	t.Logf("\t%s\tVerified holder proposal", tests.Success)
+
+	if ct.IssuerProposal {
+		t.Fatalf("\t%s\tContract issuer proposal incorrect : %t", tests.Failed, ct.IssuerProposal)
+	}
+
+	t.Logf("\t%s\tVerified issuer proposal", tests.Success)
+}
+
+func contractAmendment(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address.ScriptAddress())
+
+	amendmentData := protocol.ContractAmendment{
+		ContractRevision: 0,
+	}
+
+	amendmentData.Amendments = append(amendmentData.Amendments, protocol.Amendment{
+		FieldIndex: 0, // ContractName
+		Data:       []byte("Test Contract 2"),
+	})
+
+	// Build amendment transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	amendmentInputHash := fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&amendmentData)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, amendmentTx)
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept contract amendment : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tContract Amendment accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "C2")
+
+	// Check contract name
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.ContractName != "Test Contract 2" {
+		t.Fatalf("\t%s\tContract name incorrect : \"%s\" != \"%s\"", tests.Failed, ct.ContractName, "Test Contract 2")
+	}
+
+	t.Logf("\t%s\tVerified contract name : %s", tests.Success, ct.ContractName)
+}
+
+func contractProposalAmendment(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, true, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	assetAmendment := protocol.Amendment{
+		FieldIndex: 3, // ContractType
+		Data:       []byte("New Type"),
+	}
+	err = mockUpContractAmendmentVote(ctx, 0, 0, &assetAmendment)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
+	}
+
+	err = mockUpVoteResultTx(ctx, "A")
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up vote result : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000015, issuerKey.Address.ScriptAddress())
+
+	amendmentData := protocol.ContractAmendment{
+		ContractRevision: 0,
+		RefTxID:          testVoteResultTxId,
+	}
+
+	amendmentData.Amendments = append(amendmentData.Amendments, assetAmendment)
+
+	// Build amendment transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	amendmentInputHash := fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&amendmentData)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, amendmentTx)
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept contract amendment : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tContract Amendment accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "C2")
+
+	// Check contract type
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.ContractType != "New Type" {
+		t.Fatalf("\t%s\tContract type incorrect : \"%s\" != \"%s\"", tests.Failed, ct.ContractType, "New Type")
+	}
+
+	t.Logf("\t%s\tVerified contract type : %s", tests.Success, ct.ContractType)
 }
 
 func mockUpContract(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string,
-	issuerProposal, holderProposal bool) error {
+	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
 		ID:                     *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
@@ -189,9 +388,54 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = true      // Issuer can update field without proposal
-		permissions[i].IssuerProposal = true // Issuer can update field with a proposal
-		permissions[i].HolderProposal = true // Holder's can initiate proposals to update field
+		permissions[i].Permitted = permitted   // Issuer can update field without proposal
+		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	var err error
+	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		return err
+	}
+
+	return contract.Save(ctx, test.MasterDB, &contractData)
+}
+
+func mockUpContract2(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string,
+	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
+
+	var contractData = state.Contract{
+		ID:                     *protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress()),
+		ContractName:           name,
+		BodyOfAgreementType:    1,
+		BodyOfAgreement:        []byte(agreement),
+		SupportingDocsFileType: 1,
+		Issuer: protocol.Entity{
+			Type:           issuerType,
+			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
+			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		IssuerProposal: issuerProposal,
+		HolderProposal: holderProposal,
+		ContractFee:    1000,
+
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH: *protocol.PublicKeyHashFromBytes(test.Master2Key.Address.ScriptAddress()),
+	}
+
+	// Define permissions for asset fields
+	permissions := make([]protocol.Permission, 21)
+	for i, _ := range permissions {
+		permissions[i].Permitted = permitted   // Issuer can update field without proposal
+		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.

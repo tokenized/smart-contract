@@ -32,7 +32,7 @@ type Server struct {
 	Tracer           *Tracer
 	utxos            *utxos.UTXOs
 	Handler          protomux.Handler
-	contractPKH      []byte // Used to determine which txs will be needed again
+	contractPKHs     [][]byte // Used to determine which txs will be needed again
 	pendingRequests  []*inspector.Transaction
 	unsafeRequests   []*inspector.Transaction
 	pendingResponses []*wire.MsgTx
@@ -43,7 +43,7 @@ type Server struct {
 
 func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
 	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler,
-	tracer *Tracer, contractPKH []byte, utxos *utxos.UTXOs) *Server {
+	tracer *Tracer, contractPKHs [][]byte, utxos *utxos.UTXOs) *Server {
 	result := Server{
 		wallet:           wallet,
 		Config:           config,
@@ -53,7 +53,7 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 		Scheduler:        sch,
 		Tracer:           tracer,
 		Handler:          handler,
-		contractPKH:      contractPKH,
+		contractPKHs:     contractPKHs,
 		utxos:            utxos,
 		pendingRequests:  make([]*inspector.Transaction, 0),
 		unsafeRequests:   make([]*inspector.Transaction, 0),
@@ -175,26 +175,30 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 	}
 
 	// Save tx to cache so it can be used to process the response
-	if bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), server.contractPKH) {
-		if err := server.RpcNode.SaveTX(ctx, itx.MsgTx); err != nil {
-			return err
+	for _, output := range itx.Outputs {
+		for _, pkh := range server.contractPKHs {
+			if bytes.Equal(output.Address.ScriptAddress(), pkh) {
+				if err := server.RpcNode.SaveTX(ctx, itx.MsgTx); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
 	server.Tracer.AddTx(ctx, itx.MsgTx)
-	server.utxos.Add(itx.MsgTx, server.contractPKH)
+	server.utxos.Add(itx.MsgTx, server.contractPKHs)
 	return server.Handler.Trigger(ctx, "SEE", itx)
 }
 
 func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKH)
+	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
 	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKH)
+	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
 	return server.Handler.Trigger(ctx, "LOST", itx)
 }
 

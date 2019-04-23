@@ -35,33 +35,41 @@ const (
 )
 
 type Test struct {
-	Context     context.Context
-	RPCNode     *mockRpcNode
-	NodeConfig  node.Config
-	MasterKey   *wallet.RootKey
-	ContractKey *wallet.RootKey
-	FeeKey      *wallet.RootKey
-	Wallet      *wallet.Wallet
-	MasterDB    *db.DB
-	UTXOs       *utxos.UTXOs
-	Scheduler   *scheduler.Scheduler
-	schStarted  bool
-	path        string
+	Context      context.Context
+	RPCNode      *mockRpcNode
+	NodeConfig   node.Config
+	MasterKey    *wallet.RootKey
+	ContractKey  *wallet.RootKey
+	FeeKey       *wallet.RootKey
+	Master2Key   *wallet.RootKey
+	Contract2Key *wallet.RootKey
+	Fee2Key      *wallet.RootKey
+	UTXOs        *utxos.UTXOs
+	Wallet       *wallet.Wallet
+	MasterDB     *db.DB
+	Scheduler    *scheduler.Scheduler
+	schStarted   bool
+	path         string
 }
 
-func New() *Test {
+func New(logToStdOut bool) *Test {
 
 	// =========================================================================
 	// Logging
 
-	logConfig := logger.NewDevelopmentConfig()
-	logConfig.Main.SetWriter(os.Stdout)
-	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.LevelDebug
-	logConfig.EnableSubSystem(txbuilder.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
+	var ctx context.Context
+	if logToStdOut {
+		logConfig := logger.NewDevelopmentConfig()
+		logConfig.Main.SetWriter(os.Stdout)
+		logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
+		logConfig.Main.MinLevel = logger.LevelDebug
+		logConfig.EnableSubSystem(txbuilder.SubSystem)
+		logConfig.EnableSubSystem(spynode.SubSystem)
 
-	ctx := logger.ContextWithLogConfig(NewContext(), logConfig)
+		ctx = logger.ContextWithLogConfig(NewContext(), logConfig)
+	} else {
+		ctx = NewContext()
+	}
 
 	// ============================================================
 	// Node
@@ -78,6 +86,11 @@ func New() *Test {
 	feeKey, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
 		logger.Fatal(ctx, "main : Failed to generate fee key : %v", err)
+	}
+
+	fee2Key, err := GenerateKey(nodeConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "main : Failed to generate fee 2 key : %v", err)
 	}
 
 	nodeConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeKey.Address.ScriptAddress())
@@ -118,7 +131,21 @@ func New() *Test {
 
 	testWallet := wallet.New()
 	if err := testWallet.Add(contractKey); err != nil {
-		logger.Fatal(ctx, "main : Failed to create wallet : %v", err)
+		logger.Fatal(ctx, "main : Failed to add contract key to wallet : %v", err)
+	}
+
+	master2Key, err := GenerateKey(nodeConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "main : Failed to generate master 2 key : %v", err)
+	}
+
+	contract2Key, err := GenerateKey(nodeConfig.ChainParams)
+	if err != nil {
+		logger.Fatal(ctx, "main : Failed to generate contract 2 key : %v", err)
+	}
+
+	if err := testWallet.Add(contract2Key); err != nil {
+		logger.Fatal(ctx, "main : Failed to add contract 2 key to wallet : %v", err)
 	}
 
 	// ============================================================
@@ -137,18 +164,21 @@ func New() *Test {
 	// Result
 
 	return &Test{
-		Context:     ctx,
-		RPCNode:     rpcNode,
-		NodeConfig:  nodeConfig,
-		MasterKey:   masterKey,
-		ContractKey: contractKey,
-		FeeKey:      feeKey,
-		Wallet:      testWallet,
-		MasterDB:    masterDB,
-		UTXOs:       testUTXOs,
-		Scheduler:   testScheduler,
-		schStarted:  true,
-		path:        path,
+		Context:      ctx,
+		RPCNode:      rpcNode,
+		NodeConfig:   nodeConfig,
+		MasterKey:    masterKey,
+		ContractKey:  contractKey,
+		FeeKey:       feeKey,
+		Master2Key:   master2Key,
+		Contract2Key: contract2Key,
+		Fee2Key:      fee2Key,
+		Wallet:       testWallet,
+		MasterDB:     masterDB,
+		UTXOs:        testUTXOs,
+		Scheduler:    testScheduler,
+		schStarted:   true,
+		path:         path,
 	}
 }
 

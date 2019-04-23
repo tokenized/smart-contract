@@ -24,20 +24,22 @@ import (
 func TestGovernance(t *testing.T) {
 	defer tests.Recover(t)
 
-	t.Run("holderProposal", holderProposal)
-	t.Run("sendBallot", sendBallot)
-	t.Run("voteResult", voteResult)
+	t.Run("proposal", holderProposal)
+	t.Run("ballot", sendBallot)
+	t.Run("result", voteResult)
+	t.Run("relativeResult", voteResultRelative)
+	t.Run("absoluteResult", voteResultAbsolute)
 }
 
 func holderProposal(t *testing.T) {
 	ctx := test.Context
 
-	test.ResetDB()
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -113,18 +115,43 @@ func holderProposal(t *testing.T) {
 
 	// Check the response
 	checkResponse(t, "G2")
+
+	// Verify vote
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
+	}
+
+	if vt.Initiator != proposalData.Initiator {
+		t.Fatalf("\t%s\tInitiator incorrect : %d != %d", tests.Failed, vt.Initiator, proposalData.Initiator)
+	}
+
+	t.Logf("\t%s\tVerified initiator : %d", tests.Success, vt.Initiator)
+
+	if vt.VoteSystem != proposalData.VoteSystem {
+		t.Fatalf("\t%s\tVote system incorrect : %d != %d", tests.Failed, vt.VoteSystem, proposalData.VoteSystem)
+	}
+
+	t.Logf("\t%s\tVerified vote system : %d", tests.Success, vt.VoteSystem)
+
+	if vt.Expires != proposalData.VoteCutOffTimestamp {
+		t.Fatalf("\t%s\tCut-off incorrect : %d != %d", tests.Failed, vt.Expires, proposalData.VoteCutOffTimestamp)
+	}
+
+	t.Logf("\t%s\tVerified cut-off : %s", tests.Success, vt.Expires.String())
 }
 
 // sendBallot sends a ballot tx to the contract
 func sendBallot(t *testing.T) {
 	ctx := test.Context
 
-	test.ResetDB()
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -206,12 +233,12 @@ func voteResult(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	test.ResetDB()
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true)
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false, 2)
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -219,7 +246,7 @@ func voteResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
-	err = mockUpVote(ctx)
+	err = mockUpVote(ctx, 0)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
@@ -234,6 +261,177 @@ func voteResult(t *testing.T) {
 
 	// Check the response
 	checkResponse(t, "G5")
+
+	// Verify result
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
+	}
+
+	if vt.CompletedAt.Nano() == 0 {
+		t.Fatalf("\t%s\tVote not completed", tests.Failed)
+	}
+
+	t.Logf("\t%s\tVerified completed : %s", tests.Success, vt.CompletedAt.String())
+
+	if vt.OptionTally[0] != uint64(0) {
+		t.Fatalf("\t%s\tVote option tally 0 incorrect : %d != 0", tests.Failed, vt.OptionTally[0])
+	}
+
+	t.Logf("\t%s\tVerified option tally 0 : %d", tests.Success, vt.OptionTally[0])
+
+	if vt.OptionTally[1] != uint64(0) {
+		t.Fatalf("\t%s\tVote option tally 1 incorrect : %d != 0", tests.Failed, vt.OptionTally[1])
+	}
+
+	t.Logf("\t%s\tVerified option tally 1 : %d", tests.Success, vt.OptionTally[1])
+
+	if len(vt.Result) > 0 {
+		t.Fatalf("\t%s\tVote result incorrect : \"%s\" != \"\"", tests.Failed, vt.Result)
+	}
+
+	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
+}
+
+func voteResultRelative(t *testing.T) {
+	ctx := test.Context
+
+	// Mock up vote with expiration in half a second
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+	err = mockUpVote(ctx, 0)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
+	}
+
+	err = mockUpBallot(ctx, userKey.Address.ScriptAddress(), 250, "A")
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up ballot : %v", tests.Failed, err)
+	}
+
+	// Wait for vote expiration
+	time.Sleep(time.Second)
+
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+	}
+
+	// Check the response
+	checkResponse(t, "G5")
+
+	// Verify result
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
+	}
+
+	if vt.CompletedAt.Nano() == 0 {
+		t.Fatalf("\t%s\tVote not completed", tests.Failed)
+	}
+
+	t.Logf("\t%s\tVerified completed : %s", tests.Success, vt.CompletedAt.String())
+
+	if vt.OptionTally[0] != uint64(250) {
+		t.Fatalf("\t%s\tVote option tally 0 incorrect : %d != 0", tests.Failed, vt.OptionTally[0])
+	}
+
+	t.Logf("\t%s\tVerified option tally 0 : %d", tests.Success, vt.OptionTally[0])
+
+	if vt.OptionTally[1] != uint64(0) {
+		t.Fatalf("\t%s\tVote option tally 1 incorrect : %d != 0", tests.Failed, vt.OptionTally[1])
+	}
+
+	t.Logf("\t%s\tVerified option tally 1 : %d", tests.Success, vt.OptionTally[1])
+
+	if vt.Result != "A" {
+		t.Fatalf("\t%s\tVote result incorrect : \"%s\" != \"A\"", tests.Failed, vt.Result)
+	}
+
+	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
+}
+
+func voteResultAbsolute(t *testing.T) {
+	ctx := test.Context
+
+	// Mock up vote with expiration in half a second
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+	err = mockUpVote(ctx, 1)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
+	}
+
+	err = mockUpBallot(ctx, userKey.Address.ScriptAddress(), 250, "A")
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up ballot : %v", tests.Failed, err)
+	}
+
+	// Wait for vote expiration
+	time.Sleep(time.Second)
+
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+	}
+
+	// Check the response
+	checkResponse(t, "G5")
+
+	// Verify result
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
+	}
+
+	if vt.CompletedAt.Nano() == 0 {
+		t.Fatalf("\t%s\tVote not completed", tests.Failed)
+	}
+
+	t.Logf("\t%s\tVerified completed : %s", tests.Success, vt.CompletedAt.String())
+
+	if vt.OptionTally[0] != uint64(250) {
+		t.Fatalf("\t%s\tVote option tally 0 incorrect : %d != 0", tests.Failed, vt.OptionTally[0])
+	}
+
+	t.Logf("\t%s\tVerified option tally 0 : %d", tests.Success, vt.OptionTally[0])
+
+	if vt.OptionTally[1] != uint64(0) {
+		t.Fatalf("\t%s\tVote option tally 1 incorrect : %d != 0", tests.Failed, vt.OptionTally[1])
+	}
+
+	t.Logf("\t%s\tVerified option tally 1 : %d", tests.Success, vt.OptionTally[1])
+
+	if len(vt.Result) > 0 {
+		t.Fatalf("\t%s\tVote result incorrect : \"%s\" != \"\"", tests.Failed, vt.Result)
+	}
+
+	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
 }
 
 func randomTxId() *protocol.TxId {
@@ -245,7 +443,24 @@ func randomTxId() *protocol.TxId {
 	return protocol.TxIdFromBytes(data)
 }
 
-func mockUpVote(ctx context.Context) error {
+func mockUpBallot(ctx context.Context, pkh []byte, quantity uint64, v string) error {
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
+	if err != nil {
+		return err
+	}
+
+	vt.Ballots = append(vt.Ballots, &state.Ballot{
+		PKH:       *protocol.PublicKeyHashFromBytes(pkh),
+		Vote:      v,
+		Quantity:  quantity,
+		Timestamp: protocol.CurrentTimestamp(),
+	})
+
+	return vote.Save(ctx, test.MasterDB, contractPKH, vt)
+}
+
+func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address.ScriptAddress())
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -253,7 +468,7 @@ func mockUpVote(ctx context.Context) error {
 	proposalData := protocol.Proposal{
 		Initiator:           1,
 		AssetSpecificVote:   false,
-		VoteSystem:          0,
+		VoteSystem:          voteSystem,
 		Specific:            true,
 		VoteOptions:         "AB",
 		VoteMax:             1,
@@ -424,6 +639,29 @@ func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint8, amen
 		AssetSpecificVote: true,
 		AssetType:         testAssetType,
 		AssetCode:         testAssetCode,
+		Specific:          true,
+
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+
+		VoteTxId: *randomTxId(),
+		Expires:  protocol.NewTimestamp(now.Nano() + 5000000000),
+	}
+
+	testVoteTxId = voteData.VoteTxId
+
+	voteData.ProposedAmendments = append(voteData.ProposedAmendments, *amendment)
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	return vote.Save(ctx, test.MasterDB, contractPKH, &voteData)
+}
+
+func mockUpContractAmendmentVote(ctx context.Context, initiator, system uint8, amendment *protocol.Amendment) error {
+	now := protocol.CurrentTimestamp()
+	var voteData = state.Vote{
+		Initiator:         initiator,
+		VoteSystem:        system,
+		AssetSpecificVote: false,
 		Specific:          true,
 
 		CreatedAt: protocol.CurrentTimestamp(),

@@ -22,7 +22,7 @@ type UTXO struct {
 }
 
 // Add adds/spends UTXOs based on the tx.
-func (us *UTXOs) Add(tx *wire.MsgTx, pkh []byte) {
+func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
 		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
@@ -30,26 +30,28 @@ func (us *UTXOs) Add(tx *wire.MsgTx, pkh []byte) {
 			continue
 		}
 
-		if bytes.Equal(hash, pkh) {
-			txHash := tx.TxHash()
-			found := false
+		for _, pkh := range pkhs {
+			if bytes.Equal(hash, pkh) {
+				txHash := tx.TxHash()
+				found := false
 
-			// Ensure not to duplicate
-			for _, existing := range us.list {
-				if bytes.Equal(existing.OutPoint.Hash[:], txHash[:]) &&
-					existing.OutPoint.Index == uint32(index) {
-					found = true
-					break
+				// Ensure not to duplicate
+				for _, existing := range us.list {
+					if bytes.Equal(existing.OutPoint.Hash[:], txHash[:]) &&
+						existing.OutPoint.Index == uint32(index) {
+						found = true
+						break
+					}
 				}
-			}
 
-			if !found {
-				// Add
-				newUTXO := UTXO{
-					OutPoint: wire.OutPoint{Hash: txHash, Index: uint32(index)},
-					Output:   *output,
+				if !found {
+					// Add
+					newUTXO := UTXO{
+						OutPoint: wire.OutPoint{Hash: txHash, Index: uint32(index)},
+						Output:   *output,
+					}
+					us.list = append(us.list, &newUTXO)
 				}
-				us.list = append(us.list, &newUTXO)
 			}
 		}
 	}
@@ -66,20 +68,22 @@ func (us *UTXOs) Add(tx *wire.MsgTx, pkh []byte) {
 }
 
 // Remove removes UTXOs in the tx from the set.
-func (us *UTXOs) Remove(tx *wire.MsgTx, pkh []byte) {
+func (us *UTXOs) Remove(tx *wire.MsgTx, pkhs [][]byte) {
 	for index, output := range tx.TxOut {
 		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err != nil {
 			continue
 		}
 
-		if bytes.Equal(hash, pkh) {
-			txHash := tx.TxHash()
-			// Ensure not to duplicate
-			for i, existing := range us.list {
-				if bytes.Equal(existing.OutPoint.Hash[:], txHash[:]) &&
-					existing.OutPoint.Index == uint32(index) {
-					us.list = append(us.list[:i], us.list[i+1:]...)
+		for _, pkh := range pkhs {
+			if bytes.Equal(hash, pkh) {
+				txHash := tx.TxHash()
+				// Ensure not to duplicate
+				for i, existing := range us.list {
+					if bytes.Equal(existing.OutPoint.Hash[:], txHash[:]) &&
+						existing.OutPoint.Index == uint32(index) {
+						us.list = append(us.list[:i], us.list[i+1:]...)
+					}
 				}
 			}
 		}
@@ -87,11 +91,15 @@ func (us *UTXOs) Remove(tx *wire.MsgTx, pkh []byte) {
 }
 
 // Get returns UTXOs (FIFO) totaling at least the specified amount.
-func (us *UTXOs) Get(amount uint64) ([]*UTXO, error) {
+func (us *UTXOs) Get(amount uint64, pkh []byte) ([]*UTXO, error) {
 	resultAmount := uint64(0)
 	result := make([]*UTXO, 0, 5)
 	for _, existing := range us.list {
 		if bytes.Equal(existing.SpentBy[:], zeroTxId[:]) {
+			hash, err := txbuilder.PubKeyHashFromP2PKH(existing.Output.PkScript)
+			if err != nil || !bytes.Equal(hash, pkh) {
+				continue
+			}
 			result = append(result, existing)
 			resultAmount += uint64(existing.Output.Value)
 			if resultAmount > amount {

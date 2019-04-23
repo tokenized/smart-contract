@@ -171,11 +171,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if len(rawPKHs) != 1 {
-		panic("More than one key in wallet")
-	}
 	tracer := listeners.NewTracer()
-	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs[0], tracer)
+	txFilter := NewTxFilter(&chaincfg.MainNetParams, rawPKHs, tracer)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -210,7 +207,7 @@ func main() {
 	}
 
 	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
-		&sch, tracer, rawPKHs[0], utxos)
+		&sch, tracer, rawPKHs, utxos)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service
@@ -274,20 +271,20 @@ var (
 
 // Filters for transactions with tokenized.com op return scripts.
 type TxFilter struct {
-	chainParams *chaincfg.Params
-	contractPKH []byte
-	tracer      *listeners.Tracer
-	hash256     hash.Hash
-	hash160     hash.Hash
+	chainParams  *chaincfg.Params
+	contractPKHs [][]byte
+	tracer       *listeners.Tracer
+	hash256      hash.Hash
+	hash160      hash.Hash
 }
 
-func NewTxFilter(chainParams *chaincfg.Params, contractPKH []byte, tracer *listeners.Tracer) *TxFilter {
+func NewTxFilter(chainParams *chaincfg.Params, contractPKHs [][]byte, tracer *listeners.Tracer) *TxFilter {
 	result := TxFilter{
-		chainParams: chainParams,
-		contractPKH: contractPKH,
-		tracer:      tracer,
-		hash256:     sha256.New(),
-		hash160:     ripemd160.New(),
+		chainParams:  chainParams,
+		contractPKHs: contractPKHs,
+		tracer:       tracer,
+		hash256:      sha256.New(),
+		hash160:      ripemd160.New(),
 	}
 
 	return &result
@@ -320,10 +317,12 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 		if err != nil {
 			continue
 		}
-		if bytes.Equal(pkh, filter.contractPKH) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
-				"Matches PaymentToContract : %s", tx.TxHash().String())
-			return true
+		for _, cpkh := range filter.contractPKHs {
+			if bytes.Equal(pkh, cpkh) {
+				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+					"Matches PaymentToContract : %s", tx.TxHash().String())
+				return true
+			}
 		}
 	}
 
@@ -335,10 +334,12 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 			continue
 		}
 
-		if bytes.Equal(pkh, filter.contractPKH) {
-			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
-				"Matches PaymentFromContract : %s", tx.TxHash().String())
-			return true
+		for _, cpkh := range filter.contractPKHs {
+			if bytes.Equal(pkh, cpkh) {
+				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+					"Matches PaymentFromContract : %s", tx.TxHash().String())
+				return true
+			}
 		}
 	}
 

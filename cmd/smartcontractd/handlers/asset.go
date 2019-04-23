@@ -683,6 +683,8 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("AssetPayload amendment value failed to deserialize : %s", err)
 			}
 
+			ac.AssetPayload = amendment.Data
+
 		default:
 			return fmt.Errorf("Asset amendment field offset out of range : %d", amendment.FieldIndex)
 		}

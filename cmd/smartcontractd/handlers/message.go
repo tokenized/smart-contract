@@ -224,7 +224,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedInputSize)
 
 	for {
-		utxos, err := m.UTXOs.Get(amount)
+		utxos, err := m.UTXOs.Get(amount, rk.Address.ScriptAddress())
 		if err != nil {
 			return errors.Wrap(err, "Failed to get UTXOs")
 		}
@@ -242,7 +242,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			// Get more utxos
 			amount = uint64(float32(amount) * 1.25)
-			utxos, err = m.UTXOs.Get(amount)
+			utxos, err = m.UTXOs.Get(amount, rk.Address.ScriptAddress())
 			if err != nil {
 				return errors.Wrap(err, "Failed to get UTXOs")
 			}
@@ -561,7 +561,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	logger.Info(ctx, "%s : Sending settlement SignatureRequest to %s", v.TraceID, address.String())
+	logger.Info(ctx, "%s : Sending settlement SignatureRequest to %x", v.TraceID, address.ScriptAddress())
 
 	// Add output to previous contract.
 	// Mark as change so it gets everything except the tx fee.

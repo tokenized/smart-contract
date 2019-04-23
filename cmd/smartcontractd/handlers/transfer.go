@@ -548,8 +548,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 
 		contractOutputPKH := transferOutputPKHs[assetTransfer.ContractIndex]
 		if contractOutputPKH != nil && !bytes.Equal(contractOutputPKH.Bytes(), contractPKH.Bytes()) {
-			logger.Verbose(ctx, "Asset transfer not ours : %s", contractOutputPKH.String())
-			logger.Verbose(ctx, "Contract PKH : %s", contractPKH.String())
 			continue // This asset is not ours. Skip it.
 		}
 
@@ -586,6 +584,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			return fmt.Errorf("Contract input not found: %s %s", contractPKH, assetTransfer.AssetCode)
 		}
 
+		logger.Verbose(ctx, "Adding settlement data for asset : %s", assetTransfer.AssetCode.String())
 		assetSettlement := protocol.AssetSettlement{
 			ContractIndex: contractInputIndex,
 			AssetType:     assetTransfer.AssetType,
@@ -803,6 +802,7 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 	if boomerangIndex == 0xffffffff {
 		return fmt.Errorf("Multi-Contract Transfer missing boomerang output")
 	}
+	logger.Verbose(ctx, "Boomerang output index : %d", boomerangIndex)
 
 	// Find next contract
 	nextContractIndex := uint16(0xffff)
@@ -843,8 +843,8 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	logger.Info(ctx, "%s : Sending settlement Offer to %s", v.TraceID,
-		transferTx.Outputs[nextContractIndex].Address.String())
+	logger.Info(ctx, "%s : Sending settlement offer to %x", v.TraceID,
+		transferTx.Outputs[nextContractIndex].Address.ScriptAddress())
 
 	// Setup M1 response
 	var err error
@@ -861,13 +861,10 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 	}
 
 	// Serialize settlement tx for Message payload.
-	var buf bytes.Buffer
-	err = settleTx.MsgTx.Serialize(&buf)
+	settlementRequest.Settlement, err = protocol.Serialize(settlement)
 	if err != nil {
 		return err
 	}
-
-	settlementRequest.Settlement = buf.Bytes()
 
 	// Setup Message
 	var data []byte
@@ -902,6 +899,7 @@ func settlementIsComplete(ctx context.Context, transfer *protocol.Transfer, sett
 		for _, assetSettle := range settlement.Assets {
 			if assetTransfer.AssetType == assetSettle.AssetType &&
 				bytes.Equal(assetTransfer.AssetCode.Bytes(), assetSettle.AssetCode.Bytes()) {
+				logger.Verbose(ctx, "Found settlement data for asset : %s", assetTransfer.AssetCode.String())
 				found = true
 				break
 			}

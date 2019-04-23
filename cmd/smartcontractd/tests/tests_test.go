@@ -22,11 +22,15 @@ var test *tests.Test
 var responses []*wire.MsgTx
 
 var userKey *wallet.RootKey
+var user2Key *wallet.RootKey
 var issuerKey *wallet.RootKey
 
 var testTokenQty uint64
+var testToken2Qty uint64
 var testAssetType string
+var testAsset2Type string
 var testAssetCode protocol.AssetCode
+var testAsset2Code protocol.AssetCode
 var testVoteTxId protocol.TxId
 var testVoteResultTxId protocol.TxId
 
@@ -36,7 +40,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New()
+	test = tests.New(false)
 	defer test.TearDown()
 
 	// =========================================================================
@@ -71,6 +75,11 @@ func testMain(m *testing.M) int {
 	// Keys
 
 	userKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	if err != nil {
+		panic(err)
+	}
+
+	user2Key, err = tests.GenerateKey(test.NodeConfig.ChainParams)
 	if err != nil {
 		panic(err)
 	}
@@ -135,4 +144,9 @@ func checkResponse(t *testing.T, responseCode string) {
 	}
 
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
+}
+
+func resetTest() {
+	test.ResetDB()
+	responses = nil
 }
