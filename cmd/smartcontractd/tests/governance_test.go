@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"context"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -436,7 +435,6 @@ func voteResultAbsolute(t *testing.T) {
 
 func randomTxId() *protocol.TxId {
 	data := make([]byte, 32)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i, _ := range data {
 		data[i] = byte(r.Intn(256))
 	}

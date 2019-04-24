@@ -2,9 +2,13 @@ package tests
 
 import (
 	"context"
+	"errors"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -20,10 +24,13 @@ var test *tests.Test
 
 // Information about the handlers we have created for testing.
 var responses []*wire.MsgTx
+var headers mockHeaders
+var r *rand.Rand
 
 var userKey *wallet.RootKey
 var user2Key *wallet.RootKey
 var issuerKey *wallet.RootKey
+var oracleKey *wallet.RootKey
 
 var testTokenQty uint64
 var testToken2Qty uint64
@@ -40,7 +47,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(false)
+	test = tests.New(true)
 	defer test.TearDown()
 
 	// =========================================================================
@@ -51,6 +58,7 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// API
 
+	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	tracer := listeners.NewTracer()
 
 	var err error
@@ -61,7 +69,7 @@ func testMain(m *testing.M) int {
 		test.MasterDB,
 		tracer,
 		test.Scheduler,
-		nil,
+		&headers,
 		test.UTXOs,
 	)
 
@@ -85,6 +93,11 @@ func testMain(m *testing.M) int {
 	}
 
 	issuerKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	if err != nil {
+		panic(err)
+	}
+
+	oracleKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
 	if err != nil {
 		panic(err)
 	}
@@ -149,4 +162,60 @@ func checkResponse(t *testing.T, responseCode string) {
 func resetTest() {
 	test.ResetDB()
 	responses = nil
+	headers.height = 0
+	headers.hashes = nil
+	headers.times = nil
+}
+
+type mockHeaders struct {
+	height int
+	hashes []*chainhash.Hash
+	times  []uint32
+}
+
+func (h *mockHeaders) LastHeight(ctx context.Context) int {
+	return h.height
+}
+
+func (h *mockHeaders) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+	if height > h.height {
+		return nil, errors.New("Above current height")
+	}
+	if h.height-height >= len(h.hashes) {
+		return nil, errors.New("Hash unavailable")
+	}
+	return h.hashes[h.height-height], nil
+}
+
+func (h *mockHeaders) Time(ctx context.Context, height int) (uint32, error) {
+	if height > h.height {
+		return 0, errors.New("Above current height")
+	}
+	if h.height-height >= len(h.hashes) {
+		return 0, errors.New("Time unavailable")
+	}
+	return h.times[h.height-height], nil
+}
+
+func randomHash() *chainhash.Hash {
+	data := make([]byte, 32)
+	for i, _ := range data {
+		data[i] = byte(r.Intn(256))
+	}
+	result, _ := chainhash.NewHash(data)
+	return result
+}
+
+func mockUpHeaderHashes(ctx context.Context, height, count int) error {
+	headers.height = height
+	headers.hashes = nil
+	headers.times = nil
+
+	timestamp := uint32(time.Now().Unix())
+	for i := 0; i < count; i++ {
+		headers.hashes = append(headers.hashes, randomHash())
+		headers.times = append(headers.times, timestamp)
+		timestamp -= 600
+	}
+	return nil
 }

@@ -81,12 +81,11 @@ func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr btcutil.Addres
 	}
 
 	// Add a new output for this address. If it is the first output make it the change output.
-	out := Output{
+	w.RejectOutputs = append(w.RejectOutputs, Output{
 		Address: addr,
 		Value:   value,
 		Change:  len(w.RejectOutputs) == 0,
-	}
-	w.RejectOutputs = append(w.Outputs, out)
+	})
 	return nil
 }
 
@@ -96,7 +95,6 @@ func (w *ResponseWriter) ClearRejectOutputValues(changeAddr btcutil.Address) {
 	for i, _ := range w.RejectOutputs {
 		w.RejectOutputs[i].Change = false
 		w.RejectOutputs[i].Value = 0
-
 	}
 }
 

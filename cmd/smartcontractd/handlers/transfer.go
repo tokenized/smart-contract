@@ -188,7 +188,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	if settlementIsComplete(ctx, msg, &settlement) {
 		logger.Info(ctx, "%s : Single contract settlement complete", v.TraceID)
 		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
-			return err
+			logger.Warn(ctx, "%s : Failed to sign settle tx : %s", v.TraceID, err)
+			return node.ErrNoResponse
 		}
 		return node.Respond(ctx, w, settleTx.MsgTx)
 	}
@@ -670,8 +671,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 			}
 
 			// Check Oracle Signature
-			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode,
-				receiverPKH, &receiver, headers); err != nil {
+			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH,
+				&receiver, headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
 
@@ -1010,6 +1011,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
 			}
+			logger.Verbose(ctx, "Checking oracle sig against block hash %d : %s", blockHeight, hash.String())
 			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
 				receiverPKH, tokenReceiver.Quantity, hash)
 			if err != nil {
@@ -1092,13 +1094,15 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Co
 
 	refundBalance := uint64(0)
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
+		if assetTransfer.AssetType == protocol.CodeCurrency && assetTransfer.AssetCode.IsZero() {
 			// Process bitcoin senders refunds
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
 					continue
 				}
 
+				logger.Verbose(ctx, "Bitcoin refund %d : %x", sender.Quantity,
+					transferTx.Inputs[sender.Index].Address.ScriptAddress())
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
 				refundBalance += sender.Quantity
 			}

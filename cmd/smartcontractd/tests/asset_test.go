@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -44,11 +42,12 @@ func createAsset(t *testing.T) {
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address.ScriptAddress())
 
+	testAssetType = protocol.CodeShareCommon
 	testAssetCode = *randomAssetCode()
 
 	// Create AssetDefinition message
 	assetData := protocol.AssetDefinition{
-		AssetType:                  protocol.CodeShareCommon,
+		AssetType:                  testAssetType,
 		AssetCode:                  testAssetCode,
 		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
@@ -159,7 +158,7 @@ func assetAmendment(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address.ScriptAddress())
 
 	amendmentData := protocol.AssetModification{
-		AssetType:     protocol.CodeShareCommon,
+		AssetType:     testAssetType,
 		AssetCode:     testAssetCode,
 		AssetRevision: 0,
 	}
@@ -277,7 +276,7 @@ func assetProposalAmendment(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100003, issuerKey.Address.ScriptAddress())
 
 	amendmentData := protocol.AssetModification{
-		AssetType:     protocol.CodeShareCommon,
+		AssetType:     testAssetType,
 		AssetCode:     testAssetCode,
 		AssetRevision: 0,
 		RefTxID:       testVoteResultTxId,
@@ -361,7 +360,6 @@ var sampleAssetPayload2 = protocol.ShareCommon{
 
 func randomAssetCode() *protocol.AssetCode {
 	data := make([]byte, 32)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i, _ := range data {
 		data[i] = byte(r.Intn(256))
 	}

@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"crypto/elliptic"
 	"crypto/sha256"
 	"os"
 	"path/filepath"
@@ -205,7 +204,7 @@ func NewContext() context.Context {
 
 // GenerateKey does something
 func GenerateKey(chainParams chaincfg.Params) (*wallet.RootKey, error) {
-	key, err := btcec.NewPrivateKey(elliptic.P256())
+	key, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")
 	}

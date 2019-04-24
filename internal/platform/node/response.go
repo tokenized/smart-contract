@@ -81,7 +81,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	if len(utxos) == 0 {
-		return errors.New("Contract UTXOs not found")
+		return ErrNoResponse // Contract UTXOs not found
 	}
 
 	// Create reject tx. Change goes back to requestor.
@@ -115,7 +115,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 			}
 			rejectTx.AddP2PKHOutput(output.Address.ScriptAddress(), output.Value, output.Change)
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(i))
-			if bytes.Equal(output.Address.ScriptAddress(), w.RejectPKH.Bytes()) {
+			if w.RejectPKH != nil && bytes.Equal(output.Address.ScriptAddress(), w.RejectPKH.Bytes()) {
 				rejectAddressFound = true
 				rejection.RejectAddressIndex = uint16(i)
 			}
@@ -146,10 +146,9 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			logger.Warn(ctx, err.Error())
 			return ErrNoResponse
-		} else {
-			Error(ctx, w, err)
-			return ErrNoResponse
 		}
+		Error(ctx, w, err)
+		return ErrNoResponse
 	}
 
 	if err := Respond(ctx, w, rejectTx.MsgTx); err != nil {

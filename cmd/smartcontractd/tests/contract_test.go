@@ -449,3 +449,47 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 
 	return contract.Save(ctx, test.MasterDB, &contractData)
 }
+
+func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string) error {
+	var contractData = state.Contract{
+		ID:                     *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ContractName:           name,
+		BodyOfAgreementType:    1,
+		BodyOfAgreement:        []byte(agreement),
+		SupportingDocsFileType: 1,
+		Issuer: protocol.Entity{
+			Type:           issuerType,
+			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
+			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		IssuerProposal: false,
+		HolderProposal: false,
+		ContractFee:    1000,
+
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH: *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
+		Oracles:   []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.PublicKey.SerializeCompressed()}},
+	}
+
+	// Define permissions for asset fields
+	permissions := make([]protocol.Permission, 21)
+	for i, _ := range permissions {
+		permissions[i].Permitted = false      // Issuer can update field without proposal
+		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	var err error
+	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		return err
+	}
+
+	return contract.Save(ctx, test.MasterDB, &contractData)
+}
