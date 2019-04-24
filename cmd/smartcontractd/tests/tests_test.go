@@ -122,7 +122,7 @@ func checkResponse(t *testing.T, responseCode string) {
 	var responseMsg protocol.OpReturnMessage
 	var err error
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript)
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -135,7 +135,7 @@ func checkResponse(t *testing.T, responseCode string) {
 	}
 
 	// Submit response
-	responseItx, err := inspector.NewTransactionFromWire(ctx, response)
+	responseItx, err := inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}

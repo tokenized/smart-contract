@@ -303,7 +303,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve Proposal
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams, g.Config.IsTest)
 	if err != nil {
 		return errors.New("Proposal not found for vote")
 	}
@@ -411,7 +411,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams, g.Config.IsTest)
 	if err != nil {
 		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -535,7 +535,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
-	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams)
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Ballot cast not found for ballot counted msg : %s", contractPKH.String())
 	}
@@ -601,7 +601,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Proposal not found for vote : %s", contractPKH.String())
 	}

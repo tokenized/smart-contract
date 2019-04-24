@@ -49,7 +49,7 @@ type NodeInterface interface {
 }
 
 // NewTransaction builds an ITX from a raw transaction.
-func NewTransaction(ctx context.Context, raw string) (*Transaction, error) {
+func NewTransaction(ctx context.Context, raw string, isTest bool) (*Transaction, error) {
 	data := strings.Trim(string(raw), "\n ")
 
 	b, err := hex.DecodeString(data)
@@ -65,11 +65,11 @@ func NewTransaction(ctx context.Context, raw string) (*Transaction, error) {
 		return nil, errors.Wrap(ErrDecodeFail, "deserializing wire message")
 	}
 
-	return NewTransactionFromWire(ctx, &tx)
+	return NewTransactionFromWire(ctx, &tx, isTest)
 }
 
 // NewTransactionFromHash builds an ITX from a transaction hash
-func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string) (*Transaction, error) {
+func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string, isTest bool) (*Transaction, error) {
 	h, err := chainhash.NewHashFromStr(hash)
 	if err != nil {
 		return nil, err
@@ -80,11 +80,11 @@ func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string
 		return nil, err
 	}
 
-	return NewTransactionFromWire(ctx, tx)
+	return NewTransactionFromWire(ctx, tx, isTest)
 }
 
 // NewTransactionFromWire builds an ITX from a wire Msg Tx
-func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
+func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
 	// Must have inputs
 	if len(tx.TxIn) == 0 {
 		return nil, errors.Wrap(ErrMissingInputs, "parsing transaction")
@@ -99,8 +99,9 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, 
 	var msg protocol.OpReturnMessage
 	var err error
 	for _, txOut := range tx.TxOut {
-		msg, err = protocol.Deserialize(txOut.PkScript)
+		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
+
 			break // Tokenized output found
 		}
 	}

@@ -14,6 +14,7 @@ type Config struct {
 		FeeRate        float32 `default:"1.1" envconfig:"FEE_RATE"`
 		DustLimit      uint64  `default:"546" envconfig:"DUST_LIMIT"`
 		RequestTimeout uint64  `default:"86400000000000" envconfig:"REQUEST_TIMEOUT"` // Default 24 hours
+		IsTest         bool    `default:"true" envconfig:"IS_TEST"`
 	}
 	Bitcoin struct {
 		Network string `default:"mainnet" envconfig:"BITCOIN_CHAIN"`

@@ -80,6 +80,7 @@ func New(logToStdOut bool) *Test {
 		ChainParams:        config.NewChainParams("mainnet"),
 		FeeRate:            1.0,
 		RequestTimeout:     1000000000000,
+		IsTest:             true,
 	}
 
 	feeKey, err := GenerateKey(nodeConfig.ChainParams)

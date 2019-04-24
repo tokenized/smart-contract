@@ -70,13 +70,13 @@ func freezeOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData)
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
 
-	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
 	}
@@ -160,13 +160,13 @@ func thawOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData)
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
 
-	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
 	}
@@ -246,13 +246,13 @@ func confiscateOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData)
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
 
-	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
 	}
@@ -338,13 +338,13 @@ func reconcileOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData)
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
 
-	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
 	}
@@ -434,13 +434,13 @@ func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData)
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		return nil, err
 	}
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
 
-	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx)
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +465,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64
 
 		test.RPCNode.AddTX(ctx, responses[0])
 
-		freezeItx, err := inspector.NewTransactionFromWire(ctx, responses[0])
+		freezeItx, err := inspector.NewTransactionFromWire(ctx, responses[0], test.NodeConfig.IsTest)
 		if err != nil {
 			return nil, err
 		}

@@ -36,7 +36,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	logger.Info(ctx, "Tx : %s", tx.TxHash().String())
 
 	// Check if transaction relates to protocol
-	itx, err := inspector.NewTransactionFromWire(ctx, tx)
+	itx, err := inspector.NewTransactionFromWire(ctx, tx, server.Config.IsTest)
 	if err != nil {
 		logger.Warn(ctx, "Failed to create inspector tx : %s", err)
 		return false, err
@@ -140,7 +140,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, &server.Config.ChainParams)
+		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, &server.Config.ChainParams, server.Config.IsTest)
 		if err != nil {
 			logger.Warn(ctx, "Failed to get cancelled tx : %s", err)
 		}
@@ -179,7 +179,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	if server.inSync {
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
-			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, &server.Config.ChainParams)
+			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, &server.Config.ChainParams, server.Config.IsTest)
 			if err != nil {
 				logger.Warn(ctx, "Failed to get reverted tx : %s", err)
 			}
@@ -232,7 +232,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			if err != nil {
 				return errors.Wrap(err, "Failed to create tx hash")
 			}
-			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams)
+			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve vote tx")
 			}
@@ -260,7 +260,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			if err != nil {
 				return errors.Wrap(err, "Failed to create tx hash")
 			}
-			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams)
+			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve transfer tx")
 			}

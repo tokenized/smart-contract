@@ -285,7 +285,7 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
+func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTest bool) error {
 	msg := wire.MsgTx{}
 	if err := msg.Deserialize(buf); err != nil {
 		return err
@@ -322,7 +322,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params) erro
 	// Protocol Message
 	var err error
 	for _, txOut := range itx.MsgTx.TxOut {
-		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript)
+		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
 			break // Tokenized output found
 		}

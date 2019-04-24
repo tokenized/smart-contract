@@ -162,7 +162,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Serialize empty settlement data into OP_RETURN output as a placeholder to be updated by addSettlementData.
 	var script []byte
-	script, err = protocol.Serialize(&settlement)
+	script, err = protocol.Serialize(&settlement, t.Config.IsTest)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to serialize settlement : %s", v.TraceID, err)
 		return err
@@ -173,7 +173,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, t.MasterDB, rk, itx, msg, settleTx, &settlement, t.Headers)
+	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement, t.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -498,7 +498,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 }
 
 // addSettlementData appends data to a pending settlement action.
-func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
+func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
@@ -724,7 +724,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	}
 
 	// Serialize settlement data back into OP_RETURN output.
-	script, err := protocol.Serialize(settlement)
+	script, err := protocol.Serialize(settlement, config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Failed to serialize empty settlement : %s", err)
 	}
@@ -733,7 +733,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, rk *wallet.RootKey,
 	found := false
 	settlementOutputIndex := 0
 	for i, output := range settleTx.MsgTx.TxOut {
-		code, err := protocol.Code(output.PkScript)
+		code, err := protocol.Code(output.PkScript, config.IsTest)
 		if err != nil {
 			continue
 		}
@@ -862,7 +862,7 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 	}
 
 	// Serialize settlement tx for Message payload.
-	settlementRequest.Settlement, err = protocol.Serialize(settlement)
+	settlementRequest.Settlement, err = protocol.Serialize(settlement, w.Config.IsTest)
 	if err != nil {
 		return err
 	}

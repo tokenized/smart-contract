@@ -97,6 +97,10 @@ func (p *ProtoMux) HandleDefault(verb string, handler HandlerFunc) {
 // Trigger fires a handler
 func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Transaction) error {
 
+	if itx.MsgProto == nil {
+		return errors.New("Not a protocol tx")
+	}
+
 	var group map[string][]HandlerFunc
 
 	switch verb {

@@ -82,13 +82,13 @@ func holderProposal(t *testing.T) {
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData)
+	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize proposal : %v", tests.Failed, err)
 	}
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(0, script))
 
-	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx)
+	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create proposal itx : %v", tests.Failed, err)
 	}
@@ -182,13 +182,13 @@ func sendBallot(t *testing.T) {
 	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&ballotData)
+	script, err := protocol.Serialize(&ballotData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize ballot : %v", tests.Failed, err)
 	}
 	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(0, script))
 
-	ballotItx, err := inspector.NewTransactionFromWire(ctx, ballotTx)
+	ballotItx, err := inspector.NewTransactionFromWire(ctx, ballotTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create ballot itx : %v", tests.Failed, err)
 	}
@@ -488,13 +488,13 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(3000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData)
+	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(0, script))
 
-	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx)
+	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -525,13 +525,13 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err = protocol.Serialize(&voteActionData)
+	script, err = protocol.Serialize(&voteActionData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(0, script))
 
-	voteItx, err := inspector.NewTransactionFromWire(ctx, voteTx)
+	voteItx, err := inspector.NewTransactionFromWire(ctx, voteTx, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -589,13 +589,13 @@ func mockUpProposal(ctx context.Context) error {
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData)
+	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(0, script))
 
-	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx)
+	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -714,13 +714,13 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		Result:             "A",
 		Timestamp:          protocol.CurrentTimestamp(),
 	}
-	script, err := protocol.Serialize(&resultData)
+	script, err := protocol.Serialize(&resultData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(0, script))
 
-	resultItx, err := inspector.NewTransactionFromWire(ctx, resultTx)
+	resultItx, err := inspector.NewTransactionFromWire(ctx, resultTx, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}

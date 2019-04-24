@@ -110,6 +110,7 @@ func main() {
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
 		RequestTimeout:     cfg.Contract.RequestTimeout,
+		IsTest:             cfg.Contract.IsTest,
 	}
 
 	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)

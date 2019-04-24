@@ -33,7 +33,7 @@ func AddTx(ctx context.Context, masterDb *db.DB, itx *inspector.Transaction) err
 	return masterDb.Put(ctx, buildStoragePath(&itx.Hash), buf.Bytes())
 }
 
-func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams *chaincfg.Params) (*inspector.Transaction, error) {
+func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams *chaincfg.Params, isTest bool) (*inspector.Transaction, error) {
 	data, err := masterDb.Fetch(ctx, buildStoragePath(txid))
 	if err != nil {
 		if err == db.ErrNotFound {
@@ -45,7 +45,7 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams
 
 	buf := bytes.NewBuffer(data)
 	result := inspector.Transaction{}
-	if err := result.Read(buf, netParams); err != nil {
+	if err := result.Read(buf, netParams, isTest); err != nil {
 		return nil, err
 	}
 

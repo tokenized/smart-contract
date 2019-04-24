@@ -69,13 +69,13 @@ func sendTokens(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData)
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx)
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
@@ -104,7 +104,7 @@ func sendTokens(t *testing.T) {
 	// Adjust amount to contract to be appropriate
 	transferTx.TxOut[0].Value = 2000
 
-	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx)
+	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
@@ -239,13 +239,13 @@ func multiExchange(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(user2Key.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData)
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx)
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
@@ -271,7 +271,7 @@ func multiExchange(t *testing.T) {
 	response := responses[0]
 	responses = nil
 
-	responseItx, err := inspector.NewTransactionFromWire(ctx, response)
+	responseItx, err := inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
@@ -310,7 +310,7 @@ func multiExchange(t *testing.T) {
 	response = responses[0]
 	responses = nil
 
-	responseItx, err = inspector.NewTransactionFromWire(ctx, response)
+	responseItx, err = inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
@@ -460,13 +460,13 @@ func oracleTransfer(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData)
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx)
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
@@ -604,13 +604,13 @@ func oracleTransferBad(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData)
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx)
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}

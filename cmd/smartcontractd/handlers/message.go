@@ -143,9 +143,9 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	var problemTx *inspector.Transaction
 	var err error
 	if hash != nil {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, &m.Config.ChainParams)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, &m.Config.ChainParams, m.Config.IsTest)
 	} else {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, &m.Config.ChainParams)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, &m.Config.ChainParams, m.Config.IsTest)
 	}
 	if err != nil {
 		return nil
@@ -214,7 +214,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Serialize payload
-	payload, err := protocol.Serialize(&message)
+	payload, err := protocol.Serialize(&message, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to serialize revert message")
 	}
@@ -262,7 +262,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processSettlementRequest")
 	defer span.End()
 
-	opReturn, err := protocol.Deserialize(settlementRequest.Settlement)
+	opReturn, err := protocol.Deserialize(settlementRequest.Settlement, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to deserialize settlement from settlement request")
 	}
@@ -282,7 +282,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	var transferTx *inspector.Transaction
-	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams)
+	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Transfer tx not found")
 	}
@@ -321,7 +321,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	// Serialize settlement data into OP_RETURN output as a placeholder to be updated by addSettlementData.
 	var script []byte
-	script, err = protocol.Serialize(settlement)
+	script, err = protocol.Serialize(settlement, m.Config.IsTest)
 	if err != nil {
 		logger.Warn(ctx, "%s : Failed to serialize settlement : %s", v.TraceID, err)
 		return err
@@ -343,7 +343,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, m.MasterDB, rk, transferTx, transfer, settleTx, settlement, m.Headers)
+	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx, settlement, m.Headers)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -419,7 +419,7 @@ func (m *Message) processSigRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Find OP_RETURN
 	for _, output := range tx.TxOut {
-		opReturn, err := protocol.Deserialize(output.PkScript)
+		opReturn, err := protocol.Deserialize(output.PkScript, m.Config.IsTest)
 		if err == nil {
 			switch msg := opReturn.(type) {
 			case *protocol.Settlement:
@@ -440,7 +440,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	itx *inspector.Transaction, rk *wallet.RootKey, sigRequest *protocol.SignatureRequest,
 	settleWireTx *wire.MsgTx, settlement *protocol.Settlement) error {
 	// Get transfer tx
-	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash, &m.Config.ChainParams)
+	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash, &m.Config.ChainParams, m.Config.IsTest)
 	if err != nil {
 		return errors.New("Failed to get transfer tx")
 	}

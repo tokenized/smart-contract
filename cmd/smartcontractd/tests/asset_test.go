@@ -92,13 +92,13 @@ func createAsset(t *testing.T) {
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&assetData)
+	script, err := protocol.Serialize(&assetData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
 
-	assetItx, err := inspector.NewTransactionFromWire(ctx, assetTx)
+	assetItx, err := inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create asset itx : %v", tests.Failed, err)
 	}
@@ -188,13 +188,13 @@ func assetAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData)
+	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
 	}
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
 
-	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
@@ -296,13 +296,13 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData)
+	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
 	}
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
 
-	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}

@@ -73,13 +73,13 @@ func createContract(t *testing.T) {
 	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&offerData)
+	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
 	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(0, script))
 
-	offerItx, err := inspector.NewTransactionFromWire(ctx, offerTx)
+	offerItx, err := inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
@@ -107,7 +107,7 @@ func createContract(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript)
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -133,13 +133,13 @@ func createContract(t *testing.T) {
 	offerData.BodyOfAgreementType = 2
 
 	// Reserialize and update tx
-	script, err = protocol.Serialize(&offerData)
+	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
 	offerTx.TxOut[1].PkScript = script
 
-	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx)
+	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
@@ -232,13 +232,13 @@ func contractAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData)
+	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
 	}
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
 
-	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
 	}
@@ -318,13 +318,13 @@ func contractProposalAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData)
+	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
 	}
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
 
-	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx)
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
 	}

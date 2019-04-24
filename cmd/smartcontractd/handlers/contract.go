@@ -171,7 +171,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams, c.Config.IsTest)
 		if err != nil {
 			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -348,7 +348,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
+	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams, c.Config.IsTest)
 	var vt *state.Vote
 	var amendment *protocol.ContractAmendment
 	if err == nil && request != nil {
@@ -362,7 +362,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams)
+			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, &c.Config.ChainParams, c.Config.IsTest)
 			if err != nil {
 				return errors.New("Vote Result tx not found for amendment")
 			}
@@ -394,7 +394,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve issuer and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams)
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams, c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
 		}

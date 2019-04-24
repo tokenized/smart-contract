@@ -133,7 +133,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	// Add the rejection payload
-	payload, err := protocol.Serialize(&rejection)
+	payload, err := protocol.Serialize(&rejection, w.Config.IsTest)
 	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
@@ -194,7 +194,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	}
 
 	// Add the payload
-	payload, err := protocol.Serialize(msg)
+	payload, err := protocol.Serialize(msg, w.Config.IsTest)
 	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
