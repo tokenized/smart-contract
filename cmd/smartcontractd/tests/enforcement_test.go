@@ -21,10 +21,11 @@ import (
 func TestEnforcement(t *testing.T) {
 	defer tests.Recover(t)
 
-	t.Run("freezeOrder", freezeOrder)
-	t.Run("thawOrder", thawOrder)
-	t.Run("confiscateOrder", confiscateOrder)
-	t.Run("reconcileOrder", reconcileOrder)
+	t.Run("freeze", freezeOrder)
+	t.Run("authority", freezeAuthorityOrder)
+	t.Run("thaw", thawOrder)
+	t.Run("confiscate", confiscateOrder)
+	t.Run("reconcile", reconcileOrder)
 }
 
 func freezeOrder(t *testing.T) {
@@ -100,6 +101,112 @@ func freezeOrder(t *testing.T) {
 
 	// Check balance status
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	if asset.CheckBalanceFrozen(ctx, as, userPKH, 101, v.Now) {
+		t.Fatalf("\t%s\tUser unfrozen balance too high", tests.Failed)
+	}
+
+	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
+		t.Fatalf("\t%s\tUser unfrozen balance not high enough", tests.Failed)
+	}
+}
+
+func freezeAuthorityOrder(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 300)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address.ScriptAddress())
+
+	orderData := protocol.Order{
+		ComplianceAction: protocol.ComplianceActionFreeze,
+		AssetType:        testAssetType,
+		AssetCode:        testAssetCode,
+		Message:          "Court order",
+		AuthorityIncluded: true,
+		AuthorityName:    "District Court #345",
+		AuthorityPublicKey: authorityKey.PublicKey.SerializeCompressed(),
+		SignatureAlgorithm: 1,
+	}
+
+	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{
+		Address:  *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		Quantity: 200,
+	})
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	sigHash, err := protocol.OrderAuthoritySigHash(ctx, contractPKH, &orderData)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed generate authority signature hash : %v", tests.Failed, err)
+	}
+
+	signature, err := authorityKey.PrivateKey.Sign(sigHash)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to sign authority sig hash : %v", tests.Failed, err)
+	}
+
+	orderData.OrderSignature = signature.Serialize()
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(2)
+
+	orderInputHash := fundingTx.TxHash()
+
+	// From issuer
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
+	}
+
+	err = orderItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, orderTx)
+
+	err = a.Trigger(ctx, "SEE", orderItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tFreeze order with authority accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "E2")
+
+	// Check balance status
 	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)

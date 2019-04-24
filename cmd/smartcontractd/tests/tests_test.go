@@ -31,6 +31,7 @@ var userKey *wallet.RootKey
 var user2Key *wallet.RootKey
 var issuerKey *wallet.RootKey
 var oracleKey *wallet.RootKey
+var authorityKey *wallet.RootKey
 
 var testTokenQty uint64
 var testToken2Qty uint64
@@ -98,6 +99,11 @@ func testMain(m *testing.M) int {
 	}
 
 	oracleKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	if err != nil {
+		panic(err)
+	}
+
+	authorityKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
 	if err != nil {
 		panic(err)
 	}
