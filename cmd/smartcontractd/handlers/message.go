@@ -752,31 +752,22 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 		// Process receivers
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
-			// Get receiver address from outputs[receiver.Index]
-			if int(receiver.Index) >= len(transferTx.Outputs) {
-				return fmt.Errorf("Receiver output index out of range for asset %d sender %d : %d/%d",
-					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-			}
-
-			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
-
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputPKH := range settleOutputPKHs {
-				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), receiverPKH.Bytes()) {
+				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), receiver.Address.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %d/%d",
-					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
+				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
+					assetOffset, receiverOffset, receiver.Address.String())
 			}
 
 			// Validate Oracle Signature
-			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH, &receiver,
-				headers); err != nil {
+			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, &receiver, headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
 
@@ -786,7 +777,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 					receiverBalance := uint64(0)
 					settlementQuantities[settleOutputIndex] = &receiverBalance
 				} else {
-					receiverBalance := asset.GetBalance(ctx, as, receiverPKH)
+					receiverBalance := asset.GetBalance(ctx, as, &receiver.Address)
 					settlementQuantities[settleOutputIndex] = &receiverBalance
 				}
 			}

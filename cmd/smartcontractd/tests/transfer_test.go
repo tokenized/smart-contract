@@ -49,8 +49,11 @@ func sendTokens(t *testing.T) {
 		AssetCode:     testAssetCode,
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, protocol.TokenReceiver{Index: 1, Quantity: transferAmount})
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Quantity: transferAmount})
 
 	transferData.Assets = append(transferData.Assets, assetTransferData)
 
@@ -64,9 +67,6 @@ func sendTokens(t *testing.T) {
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
-
-	// To user
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -197,8 +197,11 @@ func multiExchange(t *testing.T) {
 		AssetCode:     testAssetCode,
 	}
 
-	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transfer1Amount})
-	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers, protocol.TokenReceiver{Index: 4, Quantity: transfer1Amount})
+	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transfer1Amount})
+	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(user2Key.Address.ScriptAddress()),
+			Quantity: transfer1Amount})
 
 	transferData.Assets = append(transferData.Assets, assetTransfer1Data)
 
@@ -210,8 +213,11 @@ func multiExchange(t *testing.T) {
 		AssetCode:     testAsset2Code,
 	}
 
-	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders, protocol.QuantityIndex{Index: 1, Quantity: transfer2Amount})
-	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers, protocol.TokenReceiver{Index: 3, Quantity: transfer2Amount})
+	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+		protocol.QuantityIndex{Index: 1, Quantity: transfer2Amount})
+	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Quantity: transfer2Amount})
 
 	transferData.Assets = append(transferData.Assets, assetTransfer2Data)
 
@@ -232,11 +238,6 @@ func multiExchange(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, txbuilder.P2PKHScriptForPKH(test.Contract2Key.Address.ScriptAddress())))
 	// To contract1 boomerang
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
-
-	// To user
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
-	// To user2
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(user2Key.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -435,8 +436,8 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := protocol.TokenReceiver{
-		Index:                 1,
+	receiver := protocol.AssetReceiver{
+		Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Serialize(),
@@ -455,9 +456,6 @@ func oracleTransfer(t *testing.T) {
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
-
-	// To user
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -558,8 +556,8 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := protocol.TokenReceiver{
-		Index:                 1,
+	receiver := protocol.AssetReceiver{
+		Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Serialize(),
@@ -576,8 +574,8 @@ func oracleTransferBad(t *testing.T) {
 
 	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders, protocol.QuantityIndex{Index: 1, Quantity: bitcoinTransferAmount})
 
-	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers, protocol.TokenReceiver{
-		Index:    2,
+	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers, protocol.AssetReceiver{
+		Address:  *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
 		Quantity: bitcoinTransferAmount,
 	})
 
@@ -596,12 +594,6 @@ func oracleTransferBad(t *testing.T) {
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
-
-	// To user
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(userKey.Address.ScriptAddress())))
-
-	// To issuer
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(issuerKey.Address.ScriptAddress())))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)

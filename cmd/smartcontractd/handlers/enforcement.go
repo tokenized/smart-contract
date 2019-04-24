@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/elliptic"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -77,7 +76,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
-		authoritySig, err := btcec.ParseSignature(msg.OrderSignature, elliptic.P256())
+		authoritySig, err := btcec.ParseSignature(msg.OrderSignature, btcec.S256())
 		if err != nil {
 			logger.Warn(ctx, "%s : Failed to parse authority signature : %s : %s", v.TraceID, contractPKH.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)

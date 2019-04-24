@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/elliptic"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
@@ -336,34 +335,33 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 		}
 
-		for _, tokenReceiver := range assetTransfer.AssetReceivers {
-			assetBalance -= tokenReceiver.Quantity
+		for _, assetReceiver := range assetTransfer.AssetReceivers {
+			assetBalance -= assetReceiver.Quantity
 
-			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress())
 			if assetIsBitcoin {
 				// Debit from contract's bitcoin balance
-				if tokenReceiver.Quantity > contractBalance {
+				if assetReceiver.Quantity > contractBalance {
 					return nil, fmt.Errorf("Transfer sent more bitcoin than was funded to contract")
 				}
-				contractBalance -= tokenReceiver.Quantity
+				contractBalance -= assetReceiver.Quantity
 			}
 
-			outputIndex, exists := addresses[*receiverPKH]
+			outputIndex, exists := addresses[assetReceiver.Address]
 			if exists {
 				if assetIsBitcoin {
 					// Add bitcoin quantity to receiver's output
-					if err = settleTx.AddValueToOutput(outputIndex, tokenReceiver.Quantity); err != nil {
+					if err = settleTx.AddValueToOutput(outputIndex, assetReceiver.Quantity); err != nil {
 						return nil, err
 					}
 				}
 			} else {
 				// Add output to receiver
-				addresses[*receiverPKH] = uint32(len(settleTx.MsgTx.TxOut))
+				addresses[assetReceiver.Address] = uint32(len(settleTx.MsgTx.TxOut))
 
 				if assetIsBitcoin {
-					err = settleTx.AddP2PKHOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), tokenReceiver.Quantity, false)
+					err = settleTx.AddP2PKHOutput(assetReceiver.Address.Bytes(), assetReceiver.Quantity, false)
 				} else {
-					err = settleTx.AddP2PKHDustOutput(transferTx.Outputs[tokenReceiver.Index].Address.ScriptAddress(), false)
+					err = settleTx.AddP2PKHDustOutput(assetReceiver.Address.Bytes(), false)
 				}
 				if err != nil {
 					return nil, err
@@ -429,15 +427,6 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 
 		// Process receivers
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
-			// Get receiver address from outputs[receiver.Index]
-			if int(receiver.Index) >= len(transferTx.Outputs) {
-				return fmt.Errorf("Receiver output index out of range for asset %d receiver %d : %d/%d",
-					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-			}
-
-			// Find output in settle tx
-			pkh := transferTx.Outputs[receiver.Index].Address.ScriptAddress()
-
 			// Find output for receiver
 			added := false
 			for i, _ := range settleTx.MsgTx.TxOut {
@@ -445,7 +434,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 				if err != nil {
 					continue
 				}
-				if bytes.Equal(pkh, outputPKH) {
+				if bytes.Equal(receiver.Address.Bytes(), outputPKH) {
 					// Add balance to receiver's output
 					settleTx.AddValueToOutput(uint32(i), receiver.Quantity)
 					added = true
@@ -648,37 +637,28 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 		// Process receivers
 		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
-			// Get receiver address from outputs[receiver.Index]
-			if int(receiver.Index) >= len(transferTx.Outputs) {
-				return fmt.Errorf("Receiver output index out of range for asset %d sender %d : %d/%d",
-					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
-			}
-
-			receiverPKH := protocol.PublicKeyHashFromBytes(transferTx.Outputs[receiver.Index].Address.ScriptAddress())
-
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputPKH := range settleOutputPKHs {
-				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), receiverPKH.Bytes()) {
+				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), receiver.Address.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %d/%d",
-					assetOffset, receiverOffset, receiver.Index, len(transferTx.Outputs))
+				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
+					assetOffset, receiverOffset, receiver.Address.String())
 			}
 
 			// Check Oracle Signature
-			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, receiverPKH,
-				&receiver, headers); err != nil {
+			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, &receiver, headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
 				// Get receiver's balance
-				receiverBalance := asset.GetBalance(ctx, as, receiverPKH)
+				receiverBalance := asset.GetBalance(ctx, as, &receiver.Address)
 				settlementQuantities[settleOutputIndex] = &receiverBalance
 			}
 
@@ -978,10 +958,9 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 }
 
 func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
-	assetCode *protocol.AssetCode, receiverPKH *protocol.PublicKeyHash, tokenReceiver *protocol.TokenReceiver,
-	headers BitcoinHeaders) error {
+	assetCode *protocol.AssetCode, assetReceiver *protocol.AssetReceiver, headers BitcoinHeaders) error {
 
-	if tokenReceiver.OracleSigAlgorithm == 0 {
+	if assetReceiver.OracleSigAlgorithm == 0 {
 		if len(ct.Oracles) > 0 {
 			return fmt.Errorf("Missing signature")
 		}
@@ -989,7 +968,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 	}
 
 	// Parse signature
-	oracleSig, err := btcec.ParseSignature(tokenReceiver.OracleConfirmationSig, elliptic.P256())
+	oracleSig, err := btcec.ParseSignature(assetReceiver.OracleConfirmationSig, btcec.S256())
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
@@ -1012,8 +991,8 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
 			}
 			logger.Verbose(ctx, "Checking oracle sig against block hash %d : %s", blockHeight, hash.String())
-			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
-				receiverPKH, tokenReceiver.Quantity, hash)
+			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode, &assetReceiver.Address,
+				assetReceiver.Quantity, hash)
 			if err != nil {
 				return errors.Wrap(err, "Failed to calculate oracle sig hash")
 			}
