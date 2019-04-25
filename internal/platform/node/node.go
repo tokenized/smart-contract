@@ -3,11 +3,13 @@ package node
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"go.opencensus.io/trace"
 )
@@ -76,8 +78,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
-		// Set the context with the required values to
-		// process the event.
+		// Set the context with the required values to process the event.
 		v := Values{
 			TraceID: span.SpanContext().TraceID.String(),
 			Now:     protocol.CurrentTimestamp(),
@@ -94,8 +95,12 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		rootKeys, _ := a.wallet.List(pkhs)
 		handled := false
 		for _, rootKey := range rootKeys {
-			handled = true
+			// Add logger trace of beginning of contract and tx ids.
+			ctx = logger.ContextWithLogTrace(ctx, fmt.Sprintf("%x %x",
+				rootKey.Address.ScriptAddress()[0:5], itx.Hash[0:5]))
+
 			// Call the wrapped handler functions.
+			handled = true
 			if err := handler(ctx, w, itx, rootKey); err != nil {
 				return err
 			}

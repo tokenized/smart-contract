@@ -9,6 +9,7 @@ type Config struct {
 	Main               *SystemConfig
 	IncludedSubSystems map[string]bool          // If true, log in main log
 	SubSystems         map[string]*SystemConfig // SubSystem specific configs
+	Trace              string                   // Identifier added to log entries to trace paths.
 	mutex              sync.Mutex
 }
 

@@ -72,12 +72,12 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	first := firstContractOutputIndex(msg.Assets, itx)
 
 	if first == 0xffff {
-		logger.Warn(ctx, "%s : Transfer first contract not found : %s", v.TraceID, rk.Address.String())
+		logger.Warn(ctx, "Transfer first contract not found : %s", rk.Address.String())
 		return errors.New("Transfer first contract not found")
 	}
 
 	if !bytes.Equal(itx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
-		logger.Verbose(ctx, "%s : Not contract for first transfer. Waiting for Message Offer : %s", v.TraceID,
+		logger.Verbose(ctx, "Not contract for first transfer. Waiting for Message Offer : %s",
 			itx.Outputs[first].Address.String())
 		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
 			return errors.Wrap(err, "Failed to save tx")
@@ -87,17 +87,17 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Transfer invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Transfer invalid : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
-		logger.Warn(ctx, "%s : Transfer expired : %s", v.TraceID, msg.OfferExpiry.String())
+		logger.Warn(ctx, "Transfer expired : %s", msg.OfferExpiry.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
 
 	if len(msg.Assets) == 0 {
-		logger.Warn(ctx, "%s : Transfer has no asset transfers", v.TraceID)
+		logger.Warn(ctx, "Transfer has no asset transfers")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
 
@@ -121,7 +121,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectContractMoved, false)
 	}
 
@@ -145,14 +145,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	var settleTx *txbuilder.Tx
 	settleTx, err = buildSettlementTx(ctx, t.MasterDB, t.Config, itx, msg, &settlementRequest, contractBalance, rk)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to build settlement tx : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to build settlement tx : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
 	// Update outputs to pay bitcoin receivers.
 	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to add bitcoin settlements : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to add bitcoin settlements : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
 	}
 
@@ -163,7 +163,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	var script []byte
 	script, err = protocol.Serialize(&settlement, t.Config.IsTest)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to serialize settlement : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to serialize settlement : %s", err)
 		return err
 	}
 	err = settleTx.AddOutput(script, 0, false, false)
@@ -176,7 +176,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
-			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
+			logger.Warn(ctx, "Rejecting Transfer : %s", err)
 			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, reject.code, false)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
@@ -185,9 +185,9 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
-		logger.Info(ctx, "%s : Single contract settlement complete", v.TraceID)
+		logger.Info(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
-			logger.Warn(ctx, "%s : Failed to sign settle tx : %s", v.TraceID, err)
+			logger.Warn(ctx, "Failed to sign settle tx : %s", err)
 			return node.ErrNoResponse
 		}
 		return node.Respond(ctx, w, settleTx.MsgTx)
@@ -236,8 +236,7 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter, 
 		}
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-	logger.Warn(ctx, "%s : Transfer timed out", v.TraceID)
+	logger.Warn(ctx, "Transfer timed out")
 	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTimeout, true)
 }
 
@@ -612,7 +611,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			// Check sender's available unfrozen balance
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
-				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
+				logger.Warn(ctx, "Frozen funds: contract=%s asset=%s party=%s",
 					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return rejectError{code: protocol.RejectHoldingsFrozen}
 			}
@@ -624,7 +623,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
-				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
+				logger.Warn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
 					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return rejectError{code: protocol.RejectInsufficientQuantity}
 			}
@@ -822,9 +821,7 @@ func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, r
 		return fmt.Errorf("Next contract not found in multi-contract transfer")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	logger.Info(ctx, "%s : Sending settlement offer to %x", v.TraceID,
+	logger.Info(ctx, "Sending settlement offer to %x",
 		transferTx.Outputs[nextContractIndex].Address.ScriptAddress())
 
 	// Setup M1 response

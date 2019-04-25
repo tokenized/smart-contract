@@ -73,7 +73,7 @@ func (config *SystemConfig) SetWriter(writer io.Writer) {
 }
 
 // Logs an entry based on the system config
-func (config *SystemConfig) log(system string, level Level, depth int, format string, values ...interface{}) error {
+func (config *SystemConfig) log(system string, level Level, depth int, trace, format string, values ...interface{}) error {
 	if config.MinLevel > level {
 		return nil // Level is below minimum
 	}
@@ -148,6 +148,12 @@ func (config *SystemConfig) log(system string, level Level, depth int, format st
 		case LevelPanic:
 			entry = append(entry, []byte("Panic - ")...)
 		}
+	}
+
+	if len(trace) > 0 {
+		entry = append(entry, '<')
+		entry = append(entry, []byte(trace)...)
+		entry = append(entry, []byte("> ")...)
 	}
 
 	// Append actual log entry

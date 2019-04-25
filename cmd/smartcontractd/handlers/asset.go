@@ -43,7 +43,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Asset definition invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Asset definition invalid : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -55,18 +55,18 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
-		logger.Warn(ctx, "%s : Only issuer can create assets: %x", v.TraceID, itx.Inputs[0].Address.ScriptAddress())
+		logger.Warn(ctx, "Only issuer can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotIssuer)
 	}
 
 	if msg.AssetCode.IsZero() {
-		logger.Warn(ctx, "%s : Asset creation with zero code", v.TraceID)
+		logger.Warn(ctx, "Asset creation with zero code")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -74,7 +74,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	_, err = asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
 	if err != asset.ErrNotFound {
 		if err == nil {
-			logger.Warn(ctx, "%s : Asset already exists : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Asset already exists : %s", msg.AssetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetCodeExists)
 		} else {
 			return errors.Wrap(err, "Failed to retrieve asset")
@@ -83,29 +83,29 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		logger.Warn(ctx, "%s : Number of assets exceeds contract Qty: %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+		logger.Warn(ctx, "Number of assets exceeds contract Qty: %s %s", contractPKH.String(), msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFixedQuantity)
 	}
 
 	// Validate payload
 	payload := protocol.AssetTypeMapping(msg.AssetType)
 	if payload == nil {
-		logger.Warn(ctx, "%s : Asset payload type unknown : %s", v.TraceID, msg.AssetType)
+		logger.Warn(ctx, "Asset payload type unknown : %s", msg.AssetType)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	_, err = payload.Write(msg.AssetPayload)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to parse asset payload : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to parse asset payload : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if err := payload.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Asset %s payload is invalid : %s", v.TraceID, msg.AssetType, err)
+		logger.Warn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	logger.Info(ctx, "%s : Accepting asset creation request : %s %s", v.TraceID, contractPKH.String(), msg.AssetCode.String())
+	logger.Info(ctx, "Accepting asset creation request : %s %s", contractPKH.String(), msg.AssetCode.String())
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
@@ -152,7 +152,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Asset modification request invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Asset modification request invalid : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -164,13 +164,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		logger.Verbose(ctx, "%s : Requestor is not operator : %s", v.TraceID, msg.AssetCode.String())
+		logger.Verbose(ctx, "Requestor is not operator : %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
@@ -181,13 +181,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Asset could not be found
 	if as == nil {
-		logger.Verbose(ctx, "%s : Asset ID not found: %s", v.TraceID, msg.AssetCode.String())
+		logger.Verbose(ctx, "Asset ID not found: %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		logger.Verbose(ctx, "%s : Asset Revision does not match current: %s", v.TraceID, msg.AssetCode.String())
+		logger.Verbose(ctx, "Asset Revision does not match current: %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetRevision)
 	}
 
@@ -207,43 +207,43 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		// Retrieve Vote Result
 		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams, a.Config.IsTest)
 		if err != nil {
-			logger.Warn(ctx, "%s : Vote Result tx not found for amendment", v.TraceID)
+			logger.Warn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
 		voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
 		if !ok {
-			logger.Warn(ctx, "%s : Vote Result invalid for amendment", v.TraceID)
+			logger.Warn(ctx, "Vote Result invalid for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
 		// Retrieve the vote
 		vt, err := vote.Retrieve(ctx, a.MasterDB, contractPKH, &voteResult.VoteTxId)
 		if err == vote.ErrNotFound {
-			logger.Warn(ctx, "%s : Vote not found : %s", v.TraceID, voteResult.VoteTxId.String())
+			logger.Warn(ctx, "Vote not found : %s", voteResult.VoteTxId.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
 		} else if err != nil {
-			logger.Warn(ctx, "%s : Failed to retrieve vote : %s : %s", v.TraceID, voteResult.VoteTxId.String(), err)
+			logger.Warn(ctx, "Failed to retrieve vote : %s : %s", voteResult.VoteTxId.String(), err)
 			return errors.Wrap(err, "Failed to retrieve vote")
 		}
 
 		if vt.CompletedAt.Nano() == 0 {
-			logger.Warn(ctx, "%s : Vote not complete yet", v.TraceID)
+			logger.Warn(ctx, "Vote not complete yet")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
 		if vt.Result != "A" {
-			logger.Warn(ctx, "%s : Vote result not A(Accept)", v.TraceID)
+			logger.Warn(ctx, "Vote result not A(Accept)")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
 		if !vt.Specific {
-			logger.Warn(ctx, "%s : Vote was not for specific amendments", v.TraceID)
+			logger.Warn(ctx, "Vote was not for specific amendments")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
 		if !vt.AssetSpecificVote || !bytes.Equal(msg.AssetCode.Bytes(), vt.AssetCode.Bytes()) {
-			logger.Warn(ctx, "%s : Vote was not for this asset code", v.TraceID)
+			logger.Warn(ctx, "Vote was not for this asset code")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 
@@ -256,7 +256,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		for i, amendment := range voteResult.ProposedAmendments {
 			if !amendment.Equal(msg.Amendments[i]) {
-				logger.Warn(ctx, "%s : Proposal amendment %d doesn't match", v.TraceID, i)
+				logger.Warn(ctx, "Proposal amendment %d doesn't match", i)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 		}
@@ -266,7 +266,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
-		logger.Warn(ctx, "%s : Asset amendments not permitted : %s", v.TraceID, err)
+		logger.Warn(ctx, "Asset amendments not permitted : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
 	}
 
@@ -282,10 +282,10 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	ac.Timestamp = v.Now
 	ac.AssetCode = msg.AssetCode // Asset code not in state data
 
-	logger.Info(ctx, "%s : Amending asset : %s", v.TraceID, msg.AssetCode.String())
+	logger.Info(ctx, "Amending asset : %s", msg.AssetCode.String())
 
 	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments); err != nil {
-		logger.Warn(ctx, "%s : Asset amendments failed : %s", v.TraceID, err)
+		logger.Warn(ctx, "Asset amendments failed : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -406,7 +406,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		if err := asset.Create(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &na, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to create asset")
 		}
-		logger.Info(ctx, "%s : Created asset : %s", v.TraceID, msg.AssetCode.String())
+		logger.Info(ctx, "Created asset : %s", msg.AssetCode.String())
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -419,47 +419,47 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 		if as.AssetType != string(msg.AssetType) {
 			ua.AssetType = stringPointer(string(msg.AssetType))
-			logger.Info(ctx, "%s : Updating asset type (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.AssetType)
+			logger.Info(ctx, "Updating asset type (%s) : %s", msg.AssetCode.String(), *ua.AssetType)
 		}
 		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
 			ua.AssetAuthFlags = &msg.AssetAuthFlags
-			logger.Info(ctx, "%s : Updating asset auth flags (%s) : %x", v.TraceID, msg.AssetCode.String(), *ua.AssetAuthFlags)
+			logger.Info(ctx, "Updating asset auth flags (%s) : %x", msg.AssetCode.String(), *ua.AssetAuthFlags)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
-			logger.Info(ctx, "%s : Updating asset transfers permitted (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.TransfersPermitted)
+			logger.Info(ctx, "Updating asset transfers permitted (%s) : %t", msg.AssetCode.String(), *ua.TransfersPermitted)
 		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
-			logger.Info(ctx, "%s : Updating asset enforcement orders permitted (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.EnforcementOrdersPermitted)
+			logger.Info(ctx, "Updating asset enforcement orders permitted (%s) : %t", msg.AssetCode.String(), *ua.EnforcementOrdersPermitted)
 		}
 		if as.VoteMultiplier != msg.VoteMultiplier {
 			ua.VoteMultiplier = &msg.VoteMultiplier
-			logger.Info(ctx, "%s : Updating asset vote multiplier (%s) : %02x", v.TraceID, msg.AssetCode.String(), *ua.VoteMultiplier)
+			logger.Info(ctx, "Updating asset vote multiplier (%s) : %02x", msg.AssetCode.String(), *ua.VoteMultiplier)
 		}
 		if as.IssuerProposal != msg.IssuerProposal {
 			ua.IssuerProposal = &msg.IssuerProposal
-			logger.Info(ctx, "%s : Updating asset issuer proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.IssuerProposal)
+			logger.Info(ctx, "Updating asset issuer proposal (%s) : %t", msg.AssetCode.String(), *ua.IssuerProposal)
 		}
 		if as.HolderProposal != msg.HolderProposal {
 			ua.HolderProposal = &msg.HolderProposal
-			logger.Info(ctx, "%s : Updating asset holder proposal (%s) : %t", v.TraceID, msg.AssetCode.String(), *ua.HolderProposal)
+			logger.Info(ctx, "Updating asset holder proposal (%s) : %t", msg.AssetCode.String(), *ua.HolderProposal)
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			logger.Info(ctx, "%s : Updating asset modification governance (%s) : %d", v.TraceID, msg.AssetCode.String(), *ua.AssetModificationGovernance)
+			logger.Info(ctx, "Updating asset modification governance (%s) : %d", msg.AssetCode.String(), *ua.AssetModificationGovernance)
 		}
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
-			logger.Info(ctx, "%s : Updating asset token quantity %d : %s", v.TraceID, *ua.TokenQty, msg.AssetCode.String())
+			logger.Info(ctx, "Updating asset token quantity %d : %s", *ua.TokenQty, msg.AssetCode.String())
 
 			issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
 			if msg.TokenQty > as.TokenQty {
-				logger.Info(ctx, "%s : Increasing token quantity by %d to %d : %s", v.TraceID, msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
+				logger.Info(ctx, "Increasing token quantity by %d to %d : %s", msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
 				// Increasing token quantity. Give tokens to issuer.
 				issuerBalance += msg.TokenQty - as.TokenQty
 			} else {
-				logger.Info(ctx, "%s : Decreasing token quantity by %d to %d : %s", v.TraceID, as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
+				logger.Info(ctx, "Decreasing token quantity by %d to %d : %s", as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
 				// Decreasing token quantity. Take tokens from issuer.
 				issuerBalance -= as.TokenQty - msg.TokenQty
 			}
@@ -468,7 +468,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
-			logger.Info(ctx, "%s : Updating asset payload (%s) : %s", v.TraceID, msg.AssetCode.String(), *ua.AssetPayload)
+			logger.Info(ctx, "Updating asset payload (%s) : %s", msg.AssetCode.String(), *ua.AssetPayload)
 		}
 
 		// Check if trade restrictions are different
@@ -487,10 +487,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 
 		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
-			logger.Warn(ctx, "%s : Failed to update asset : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Failed to update asset : %s", msg.AssetCode.String())
 			return err
 		}
-		logger.Info(ctx, "%s : Updated asset : %s", v.TraceID, msg.AssetCode.String())
+		logger.Info(ctx, "Updated asset : %s", msg.AssetCode.String())
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {

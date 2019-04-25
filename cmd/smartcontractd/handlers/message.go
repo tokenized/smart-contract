@@ -43,8 +43,6 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessMessage")
 	defer span.End()
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	msg, ok := itx.MsgProto.(*protocol.Message)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Message")
@@ -69,7 +67,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Message invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Message invalid : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -80,21 +78,21 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 
 	_, err := messagePayload.Write(msg.MessagePayload)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to parse message payload : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to parse message payload : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if err := messagePayload.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Message %d payload is invalid : %s", v.TraceID, msg.MessageType, err)
+		logger.Warn(ctx, "Message %d payload is invalid : %s", msg.MessageType, err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	switch payload := messagePayload.(type) {
 	case *protocol.SettlementRequest:
-		logger.Verbose(ctx, "%s : Processing Settlement Request", v.TraceID)
+		logger.Verbose(ctx, "Processing Settlement Request")
 		return m.processSettlementRequest(ctx, w, itx, payload, rk)
 	case *protocol.SignatureRequest:
-		logger.Verbose(ctx, "%s : Processing Signature Request", v.TraceID)
+		logger.Verbose(ctx, "Processing Signature Request")
 		return m.processSigRequest(ctx, w, itx, payload, rk)
 	default:
 		return fmt.Errorf("Unknown message payload type : %04d", msg.MessageType)
@@ -269,8 +267,6 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return errors.New("Settlement Request payload not a settlement")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	// Get transfer tx
 	var transferTxId *chainhash.Hash
 	transferTxId, err = chainhash.NewHash(settlementRequest.TransferTxId.Bytes())
@@ -303,7 +299,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	if int(transfer.Assets[firstContractIndex].ContractIndex) >= len(transferTx.Outputs) {
-		logger.Warn(ctx, "%s : Transfer contract index out of range : %s", v.TraceID, rk.Address.String())
+		logger.Warn(ctx, "Transfer contract index out of range : %s", rk.Address.String())
 		return errors.New("Transfer contract index out of range")
 	}
 
@@ -320,7 +316,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	var script []byte
 	script, err = protocol.Serialize(settlement, m.Config.IsTest)
 	if err != nil {
-		logger.Warn(ctx, "%s : Failed to serialize settlement : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to serialize settlement : %s", err)
 		return err
 	}
 	err = settleTx.AddOutput(script, 0, false, false)
@@ -335,7 +331,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractMoved)
 	}
 
@@ -344,7 +340,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
-			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
+			logger.Warn(ctx, "Rejecting Transfer : %s", err)
 			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, reject.code)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
@@ -363,7 +359,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 			if err != nil {
 				return err
 			}
-			logger.Verbose(ctx, "%s : Signed settlement input %d", v.TraceID, i)
+			logger.Verbose(ctx, "Signed settlement input %d", i)
 			signed = true
 		}
 
@@ -381,7 +377,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 				m.Tracer.Remove(ctx, &outpoint)
 			}
 
-			logger.Info(ctx, "%s : Broadcasting settlement tx", v.TraceID)
+			logger.Info(ctx, "Broadcasting settlement tx")
 			// Send complete settlement tx as response
 			return node.Respond(ctx, w, settleTx.MsgTx)
 		}
@@ -412,15 +408,13 @@ func (m *Message) processSigRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to deserialize sig request payload tx")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	// Find OP_RETURN
 	for _, output := range tx.TxOut {
 		opReturn, err := protocol.Deserialize(output.PkScript, m.Config.IsTest)
 		if err == nil {
 			switch msg := opReturn.(type) {
 			case *protocol.Settlement:
-				logger.Verbose(ctx, "%s : Processing Settlement Signature Request", v.TraceID)
+				logger.Verbose(ctx, "Processing Settlement Signature Request")
 				return m.processSigRequestSettlement(ctx, w, itx, rk, sigRequest, &tx, msg)
 			default:
 				return fmt.Errorf("Unsupported signature request tx payload type : %s", opReturn.Type())
@@ -448,8 +442,6 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Transfer invalid for transfer tx")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
 	if err != nil {
@@ -457,7 +449,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, protocol.RejectContractMoved)
 	}
 
@@ -466,7 +458,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
-			logger.Warn(ctx, "%s : Rejecting Transfer : %s", v.TraceID, err)
+			logger.Warn(ctx, "Rejecting Transfer : %s", err)
 			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, reject.code)
 		} else {
 			return errors.Wrap(err, "Failed to verify settlement data")
@@ -491,7 +483,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		if err != nil {
 			return err
 		}
-		logger.Verbose(ctx, "%s : Signed settlement input %d", v.TraceID, i)
+		logger.Verbose(ctx, "Signed settlement input %d", i)
 		signed = true
 	}
 
@@ -512,13 +504,13 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		err := m.Scheduler.CancelJob(ctx, listeners.NewTransferTimeout(nil, transferTx, protocol.NewTimestamp(0)))
 		if err != nil {
 			if err == scheduler.NotFound {
-				logger.Warn(ctx, "%s : Transfer timeout job not found to cancel", v.TraceID)
+				logger.Warn(ctx, "Transfer timeout job not found to cancel")
 			} else {
 				return errors.Wrap(err, "Failed to cancel transfer timeout")
 			}
 		}
 
-		logger.Info(ctx, "%s : Broadcasting settlement tx", v.TraceID)
+		logger.Info(ctx, "Broadcasting settlement tx")
 		// Send complete settlement tx as response
 		return node.Respond(ctx, w, settleTx.MsgTx)
 	}
@@ -558,7 +550,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	logger.Info(ctx, "%s : Sending settlement SignatureRequest to %x", v.TraceID, address.ScriptAddress())
+	logger.Info(ctx, "Sending settlement SignatureRequest to %x", address.ScriptAddress())
 
 	// Add output to previous contract.
 	// Mark as change so it gets everything except the tx fee.
@@ -734,7 +726,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			// Check sender's available unfrozen balance
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !assetIsBitcoin && !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
-				logger.Warn(ctx, "%s : Frozen funds: contract=%s asset=%s party=%s", v.TraceID,
+				logger.Warn(ctx, "Frozen funds: contract=%s asset=%s party=%s",
 					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return rejectError{code: protocol.RejectHoldingsFrozen}
 			}
@@ -751,7 +743,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			}
 
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
-				logger.Warn(ctx, "%s : Insufficient funds: contract=%s asset=%s party=%s", v.TraceID,
+				logger.Warn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
 					contractPKH, assetTransfer.AssetCode, inputAddress)
 				return rejectError{code: protocol.RejectInsufficientQuantity}
 			}
@@ -968,11 +960,10 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 	}
 
 	// Cancel transfer timeout
-	v := ctx.Value(node.KeyValues).(*node.Values)
 	err := sch.CancelJob(ctx, listeners.NewTransferTimeout(nil, transferTx, protocol.NewTimestamp(0)))
 	if err != nil {
 		if err == scheduler.NotFound {
-			logger.Warn(ctx, "%s : Transfer timeout job not found to cancel", v.TraceID)
+			logger.Warn(ctx, "Transfer timeout job not found to cancel")
 		} else {
 			return errors.Wrap(err, "Failed to cancel transfer timeout")
 		}

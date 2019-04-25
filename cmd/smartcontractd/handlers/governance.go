@@ -47,7 +47,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Proposal request invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Proposal request invalid : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -59,19 +59,19 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		logger.Warn(ctx, "%s : Proposal failed. Contract frozen : %s", v.TraceID, contractPKH.String())
+		logger.Warn(ctx, "Proposal failed. Contract frozen : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
 	}
 
 	// Verify first two outputs are to contract
 	if len(itx.Outputs) < 2 || !bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), contractPKH.Bytes()) ||
 		!bytes.Equal(itx.Outputs[1].Address.ScriptAddress(), contractPKH.Bytes()) {
-		logger.Warn(ctx, "%s : Proposal failed to fund vote and result txs", v.TraceID)
+		logger.Warn(ctx, "Proposal failed to fund vote and result txs")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 	}
 
@@ -80,69 +80,69 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	// Check if sender is allowed to make proposal
 	if msg.Initiator == 0 { // Issuer Proposal
 		if !contract.IsOperator(ctx, ct, senderPKH) {
-			logger.Warn(ctx, "%s : Initiator PKH is not issuer or operator", v.TraceID)
+			logger.Warn(ctx, "Initiator PKH is not issuer or operator")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 		}
 	} else if msg.Initiator == 1 { // Holder Proposal
 		// Sender must hold balance of at least one asset
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, senderPKH) {
-			logger.Warn(ctx, "%s : Sender holds no assets : %s", v.TraceID, senderPKH.String())
+			logger.Warn(ctx, "Sender holds no assets : %s", senderPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 		}
 	} else {
-		logger.Warn(ctx, "%s : Invalid Initiator value : %02x", v.TraceID, msg.Initiator)
+		logger.Warn(ctx, "Invalid Initiator value : %02x", msg.Initiator)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if int(msg.VoteSystem) >= len(ct.VotingSystems) {
-		logger.Warn(ctx, "%s : Proposal vote system invalid", v.TraceID)
+		logger.Warn(ctx, "Proposal vote system invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if msg.Specific && ct.VotingSystems[msg.VoteSystem].VoteType == byte('P') {
-		logger.Warn(ctx, "%s : Plurality votes not allowed for specific votes", v.TraceID)
+		logger.Warn(ctx, "Plurality votes not allowed for specific votes")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteSystemNotPermitted)
 	}
 
 	// Validate messages vote related values
 	if !vote.ValidateProposal(msg, v.Now) {
-		logger.Warn(ctx, "%s : Proposal validation failed : %s", v.TraceID, senderPKH.String())
+		logger.Warn(ctx, "Proposal validation failed : %s", senderPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if msg.AssetSpecificVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &msg.AssetCode)
 		if err != nil {
-			logger.Warn(ctx, "%s : Asset not found : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Asset not found : %s", msg.AssetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 		}
 
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
-			logger.Warn(ctx, "%s : Proposal failed. Asset frozen : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Proposal failed. Asset frozen : %s", msg.AssetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
 		}
 
 		// Asset does not allow voting
 		if err := asset.ValidateVoting(ctx, as, msg.Initiator, &ct.VotingSystems[msg.VoteSystem]); err != nil {
-			logger.Warn(ctx, "%s : Asset does not allow voting: %s : %s", v.TraceID, msg.AssetCode.String(), err)
+			logger.Warn(ctx, "Asset does not allow voting: %s : %s", msg.AssetCode.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
 		}
 
 		// Sender does not have any balance of the asset
 		if msg.Initiator > 0 && asset.GetVotingBalance(ctx, as, senderPKH, ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			logger.Warn(ctx, "%s : Requestor is not a holder : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Requestor is not a holder : %s", msg.AssetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 		}
 
 		if msg.Specific {
 			// Asset amendments vote. Validate permissions for fields being amended.
 			if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
-				logger.Warn(ctx, "%s : Asset amendments not permitted : %s", v.TraceID, err)
+				logger.Warn(ctx, "Asset amendments not permitted : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
-				logger.Warn(ctx, "%s : Single option AB votes are required for specific amendments", v.TraceID)
+				logger.Warn(ctx, "Single option AB votes are required for specific amendments")
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 
@@ -158,26 +158,26 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			ac.Timestamp = v.Now
 
 			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments); err != nil {
-				logger.Warn(ctx, "%s : Asset amendments failed : %s", v.TraceID, err)
+				logger.Warn(ctx, "Asset amendments failed : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 		}
 	} else {
 		// Contract does not allow voting
 		if err := contract.ValidateVoting(ctx, ct, msg.Initiator); err != nil {
-			logger.Warn(ctx, "%s : Contract does not allow voting: %s : %s", v.TraceID, contractPKH.String(), err)
+			logger.Warn(ctx, "Contract does not allow voting: %s : %s", contractPKH.String(), err)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
 		}
 
 		if msg.Specific {
 			// Contract amendments vote. Validate permissions for fields being amended.
 			if err := checkContractAmendmentsPermissions(ct, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
-				logger.Warn(ctx, "%s : Asset amendments not permitted : %s", v.TraceID, err)
+				logger.Warn(ctx, "Asset amendments not permitted : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
-				logger.Warn(ctx, "%s : Single option AB votes are required for specific amendments", v.TraceID)
+				logger.Warn(ctx, "Single option AB votes are required for specific amendments")
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 
@@ -195,14 +195,14 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			cf.Timestamp = v.Now
 
 			if err := applyContractAmendments(&cf, msg.ProposedAmendments); err != nil {
-				logger.Warn(ctx, "%s : Contract amendments failed : %s", v.TraceID, err)
+				logger.Warn(ctx, "Contract amendments failed : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 			}
 		}
 
 		// Sender does not have any balance of the asset
 		if msg.Initiator > 0 && contract.GetVotingBalance(ctx, g.MasterDB, ct, senderPKH, ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			logger.Warn(ctx, "%s : Requestor is not a holder : %s", v.TraceID, msg.AssetCode.String())
+			logger.Warn(ctx, "Requestor is not a holder : %s", msg.AssetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 		}
 	}
@@ -233,7 +233,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 				for _, otherField := range vt.ProposedAmendments {
 					if field.FieldIndex == otherField.FieldIndex {
 						// Reject because of conflicting field amendment on unapplied vote.
-						logger.Warn(ctx, "%s : Proposed amendment conflicts with unapplied vote", v.TraceID)
+						logger.Warn(ctx, "Proposed amendment conflicts with unapplied vote")
 						return node.RespondReject(ctx, w, itx, rk, protocol.RejectProposalConflicts)
 					}
 				}
@@ -270,7 +270,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Respond with a vote
-	logger.Verbose(ctx, "%s : Accepting proposal", v.TraceID)
+	logger.Verbose(ctx, "Accepting proposal")
 	return node.RespondSuccess(ctx, w, itx, rk, &vote)
 }
 
@@ -361,7 +361,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to schedule vote finalizer")
 	}
 
-	logger.Verbose(ctx, "%s : Creating vote : %s", v.TraceID, itx.Hash.String())
+	logger.Verbose(ctx, "Creating vote : %s", itx.Hash.String())
 	return nil
 }
 
@@ -379,7 +379,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
-		logger.Warn(ctx, "%s : Ballot cast request invalid : %s", v.TraceID, err)
+		logger.Warn(ctx, "Ballot cast request invalid : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -391,21 +391,21 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	if !ct.MovedTo.IsZero() {
-		logger.Warn(ctx, "%s : Contract address changed : %s", v.TraceID, ct.MovedTo.String())
+		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
 	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &msg.VoteTxId)
 	if err == vote.ErrNotFound {
-		logger.Warn(ctx, "%s : Vote not found : %s", v.TraceID, msg.VoteTxId.String())
+		logger.Warn(ctx, "Vote not found : %s", msg.VoteTxId.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
 	} else if err != nil {
-		logger.Warn(ctx, "%s : Failed to retrieve vote : %s : %s", v.TraceID, msg.VoteTxId.String(), err)
+		logger.Warn(ctx, "Failed to retrieve vote : %s : %s", msg.VoteTxId.String(), err)
 		return errors.Wrap(err, "Failed to retrieve vote")
 	}
 
 	if vt.Expires.Nano() <= v.Now.Nano() {
-		logger.Warn(ctx, "%s : Vote expired : %s", v.TraceID, msg.VoteTxId.String())
+		logger.Warn(ctx, "Vote expired : %s", msg.VoteTxId.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteClosed)
 	}
 
@@ -413,24 +413,24 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams, g.Config.IsTest)
 	if err != nil {
-		logger.Warn(ctx, "%s : Proposal not found for vote : %s", v.TraceID, contractPKH.String())
+		logger.Warn(ctx, "Proposal not found for vote : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
 	if !ok {
-		logger.Warn(ctx, "%s : Proposal invalid for vote : %s", v.TraceID, contractPKH.String())
+		logger.Warn(ctx, "Proposal invalid for vote : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Validate vote
 	if len(msg.Vote) > int(proposal.VoteMax) {
-		logger.Warn(ctx, "%s : Ballot voted on too many options : %s", v.TraceID, contractPKH.String())
+		logger.Warn(ctx, "Ballot voted on too many options : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	if len(msg.Vote) == 0 {
-		logger.Warn(ctx, "%s : Ballot did not vote any options : %s", v.TraceID, contractPKH.String())
+		logger.Warn(ctx, "Ballot did not vote any options : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -444,7 +444,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			}
 		}
 		if !found {
-			logger.Warn(ctx, "%s : Ballot chose an invalid option : %s", v.TraceID, msg.Vote)
+			logger.Warn(ctx, "Ballot chose an invalid option : %s", msg.Vote)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 		}
 	}
@@ -458,7 +458,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	if proposal.AssetSpecificVote && !vt.ContractWideVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
 		if err != nil {
-			logger.Warn(ctx, "%s : Asset not found : %s", v.TraceID, proposal.String())
+			logger.Warn(ctx, "Asset not found : %s", proposal.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 		}
 
@@ -468,13 +468,13 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	if quantity == 0 {
-		logger.Warn(ctx, "%s : User PKH doesn't hold any voting tokens : %s", v.TraceID, holderPKH.String())
+		logger.Warn(ctx, "User PKH doesn't hold any voting tokens : %s", holderPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 	}
 
 	// TODO Check issue where two ballots are sent simultaneously and the second received before the first response is processed.
 	if err := vote.CheckBallot(ctx, vt, holderPKH); err != nil {
-		logger.Warn(ctx, "%s : Failed to check ballot : %s", v.TraceID, err)
+		logger.Warn(ctx, "Failed to check ballot : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectBallotAlreadyCounted)
 	}
 
@@ -505,7 +505,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Respond with a vote
-	logger.Warn(ctx, "%s : Accepting ballot for %d from %s", v.TraceID, quantity, holderPKH.String())
+	logger.Warn(ctx, "Accepting ballot for %d from %s", quantity, holderPKH.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
 
@@ -578,7 +578,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	logger.Verbose(ctx, "%s : Finalizing vote : %s", v.TraceID, itx.Hash.String())
+	logger.Verbose(ctx, "Finalizing vote : %s", itx.Hash.String())
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 

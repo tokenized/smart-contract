@@ -138,12 +138,12 @@ func freezeAuthorityOrder(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address.ScriptAddress())
 
 	orderData := protocol.Order{
-		ComplianceAction: protocol.ComplianceActionFreeze,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCode,
-		Message:          "Court order",
-		AuthorityIncluded: true,
-		AuthorityName:    "District Court #345",
+		ComplianceAction:   protocol.ComplianceActionFreeze,
+		AssetType:          testAssetType,
+		AssetCode:          testAssetCode,
+		Message:            "Court order",
+		AuthorityIncluded:  true,
+		AuthorityName:      "District Court #345",
 		AuthorityPublicKey: authorityKey.PublicKey.SerializeCompressed(),
 		SignatureAlgorithm: 1,
 	}
