@@ -22,6 +22,8 @@ func TestTransfers(t *testing.T) {
 	t.Run("multiExchange", multiExchange)
 	t.Run("oracle", oracleTransfer)
 	t.Run("oracleBad", oracleTransferBad)
+	t.Run("permitted", permitted)
+	t.Run("permittedBad", permittedBad)
 }
 
 func sendTokens(t *testing.T) {
@@ -650,4 +652,213 @@ func oracleTransferBad(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified refund to user", tests.Success)
+}
+
+func permitted(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	// TransfersPermitted = false
+	err = mockUpAsset(ctx, false, true, true, 1000, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
+
+	// Create Transfer message
+	transferAmount := uint64(250)
+	transferData := protocol.Transfer{}
+
+	assetTransferData := protocol.AssetTransfer{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCode,
+	}
+
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Quantity: transferAmount})
+
+	transferData.Assets = append(transferData.Assets, assetTransferData)
+
+	// Build transfer transaction
+	transferTx := wire.NewMsgTx(2)
+
+	transferInputHash := fundingTx.TxHash()
+
+	// From issuer
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, transferTx)
+
+	err = a.Trigger(ctx, "SEE", transferItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept transfer : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tTransfer accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "T2")
+
+	// Check issuer and user balance
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+	}
+
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
+	if issuerBalance != testTokenQty-transferAmount {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-transferAmount)
+	}
+
+	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerBalance)
+
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	userBalance := asset.GetBalance(ctx, as, userPKH)
+	if userBalance != transferAmount {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, transferAmount)
+	}
+
+	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userBalance)
+}
+
+func permittedBad(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	// TransfersPermitted = false
+	err = mockUpAsset(ctx, false, true, true, 1000, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	user2Holding := uint64(100)
+	err = mockUpHolding(ctx, user2Key.Address.ScriptAddress(), user2Holding)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
+	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 256, user2Key.Address.ScriptAddress())
+
+	// Create Transfer message
+	transferAmount := uint64(250)
+	transferData := protocol.Transfer{}
+
+	assetTransferData := protocol.AssetTransfer{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCode,
+	}
+
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 1, Quantity: user2Holding})
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Quantity: transferAmount + user2Holding})
+
+	transferData.Assets = append(transferData.Assets, assetTransferData)
+
+	// Build transfer transaction
+	transferTx := wire.NewMsgTx(2)
+
+	// From issuer
+	transferInputHash := fundingTx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	// From user2
+	transfer2InputHash := funding2Tx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transfer2InputHash, 0), make([]byte, 130)))
+
+	// To contract
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, transferTx)
+
+	err = a.Trigger(ctx, "SEE", transferItx)
+	if err == nil {
+		t.Fatalf("\t%s\tAccepted non-permitted transfer", tests.Failed)
+	}
+	if err != node.ErrRejected {
+		t.Fatalf("\t%s\tWrong error on non-permitted transfer : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tTransfer rejected", tests.Success)
+
+	response := responses[0]
+
+	// Check the response
+	checkResponse(t, "M2")
+
+	rejectItx, err := inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create reject itx : %v", tests.Failed, err)
+	}
+
+	err = rejectItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote reject itx : %v", tests.Failed, err)
+	}
+
+	reject, ok := rejectItx.MsgProto.(*protocol.Rejection)
+	if !ok {
+		t.Fatalf("\t%s\tFailed to convert reject data", tests.Failed)
+	}
+
+	if reject.RejectionCode != protocol.RejectAssetNotPermitted {
+		t.Fatalf("\t%s\tRejection code incorrect : %d", tests.Failed, reject.RejectionCode)
+	}
+
+	t.Logf("\t%s\tVerified rejection code", tests.Success)
 }

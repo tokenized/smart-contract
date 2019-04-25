@@ -556,9 +556,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
 			return rejectError{code: protocol.RejectAssetFrozen}
 		}
-		if !as.TransfersPermitted {
-			return rejectError{code: protocol.RejectAssetNotPermitted}
-		}
 
 		// Find contract input
 		contractInputIndex := uint16(0xffff)
@@ -581,6 +578,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		sendBalance := uint64(0)
+		fromNonIssuer := uint64(0)
+		fromIssuer := uint64(0)
+		toNonIssuer := uint64(0)
+		toIssuer := uint64(0)
 		settlementQuantities := make([]*uint64, len(settleTx.Outputs))
 
 		// Process senders
@@ -593,6 +594,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 
 			inputPKH := transferTx.Inputs[sender.Index].Address.ScriptAddress()
+
+			if bytes.Equal(inputPKH, ct.IssuerPKH.Bytes()) {
+				fromIssuer += sender.Quantity
+			} else {
+				fromNonIssuer += sender.Quantity
+			}
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
@@ -650,6 +657,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					assetOffset, receiverOffset, receiver.Address.String())
 			}
 
+			if bytes.Equal(receiver.Address.Bytes(), ct.IssuerPKH.Bytes()) {
+				toIssuer += receiver.Quantity
+			} else {
+				toNonIssuer += receiver.Quantity
+			}
+
 			// Check Oracle Signature
 			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, &receiver, headers); err != nil {
 				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
@@ -672,6 +685,19 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 		if sendBalance != 0 {
 			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining", assetOffset, sendBalance)
+		}
+
+		if !as.TransfersPermitted {
+			if fromNonIssuer > toIssuer {
+				logger.Warn(ctx, "Transfers not permitted. Sending tokens not all to issuer : %d/%d",
+					fromNonIssuer, toIssuer)
+				return rejectError{code: protocol.RejectAssetNotPermitted}
+			}
+			if toNonIssuer > fromIssuer {
+				logger.Warn(ctx, "Transfers not permitted. Receiving tokens not all from issuer : %d/%d",
+					toNonIssuer, fromIssuer)
+				return rejectError{code: protocol.RejectAssetNotPermitted}
+			}
 		}
 
 		for index, quantity := range settlementQuantities {
