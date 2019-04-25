@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
@@ -20,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/tokenized/smart-contract/pkg/txscript"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -29,7 +27,6 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-	"golang.org/x/crypto/ripemd160"
 )
 
 type Message struct {
@@ -609,36 +606,51 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 	// Generate public key hashes for all the outputs
 	settleOutputPKHs := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
-	for _, output := range settleTx.TxOut {
+	settleOpReturnFound := false
+	for i, output := range settleTx.TxOut {
 		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
 		if err == nil {
 			settleOutputPKHs = append(settleOutputPKHs, protocol.PublicKeyHashFromBytes(pkh))
 		} else {
 			settleOutputPKHs = append(settleOutputPKHs, nil)
+			if txbuilder.IsOpReturnScript(output.PkScript) {
+				code, err := protocol.Code(output.PkScript, config.IsTest)
+				if err != nil {
+					return fmt.Errorf("Unknown OP_RETURN script : output %d", i)
+				}
+				if code == protocol.CodeSettlement && !settleOpReturnFound {
+					settleOpReturnFound = true
+					continue
+				}
+				if code == protocol.CodeMessage {
+					payload, err := protocol.Deserialize(output.PkScript, config.IsTest)
+					if err != nil {
+						return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
+					}
+					message, ok := payload.(*protocol.Message)
+					if !ok {
+						return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
+					}
+					if message.MessageType != protocol.CodeOutputMetadata {
+						return fmt.Errorf("Invalid Tokenized OP_RETURN non-metadata message script : output %d", i)
+					}
+					continue
+				}
+				return fmt.Errorf("Unexpected Tokenized OP_RETURN script : output %d", i)
+			}
 		}
 	}
 
 	// Generate public key hashes for all the inputs
-	hash256 := sha256.New()
-	hash160 := ripemd160.New()
 	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
-		pushes, err := txscript.PushedData(input.SignatureScript)
+		hash, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
 			continue
 		}
-		if len(pushes) != 2 {
-			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
-			continue
-		}
 
-		// Calculate RIPEMD160(SHA256(PublicKey))
-		hash256.Reset()
-		hash256.Write(pushes[1])
-		hash160.Reset()
-		hash160.Write(hash256.Sum(nil))
-		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(hash160.Sum(nil)))
+		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(hash))
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
