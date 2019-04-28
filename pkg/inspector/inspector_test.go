@@ -17,7 +17,7 @@ func TestParseTX(t *testing.T) {
 
 	msgTx := loadFixtureTX("2c68cf3e1216acaa1e274dfd3b665b6a9d1d1d252e68d190f9fffc5f7e11fd27")
 
-	itx, err := NewTransactionFromWire(ctx, &msgTx)
+	itx, err := NewTransactionFromWire(ctx, &msgTx, true)
 	if err != nil {
 		t.Fatal(err)
 	}
