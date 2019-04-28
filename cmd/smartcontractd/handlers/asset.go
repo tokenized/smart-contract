@@ -59,6 +59,16 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
+	if ct.FreezePeriod.Nano() > v.Now.Nano() {
+		logger.Warn(ctx, "Contract frozen : %s", ct.FreezePeriod.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
+	}
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExpired)
+	}
+
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
 		logger.Warn(ctx, "Only issuer can create assets: %x", itx.Inputs[0].Address.ScriptAddress())

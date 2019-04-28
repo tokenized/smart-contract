@@ -55,6 +55,13 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExpired)
+	}
+
 	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, senderPKH) {
 		logger.Warn(ctx, "Requestor PKH is not issuer or operator : %s", contractPKH.String())

@@ -64,8 +64,13 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		logger.Warn(ctx, "Proposal failed. Contract frozen : %s", contractPKH.String())
+		logger.Warn(ctx, "Contract frozen : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
+	}
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExpired)
 	}
 
 	// Verify first two outputs are to contract
@@ -338,7 +343,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	if proposal.AssetSpecificVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
 		if err != nil {
-			return fmt.Errorf("Asset not found : %s", proposal.AssetCode.String(), err)
+			return fmt.Errorf("Asset not found : %s", proposal.AssetCode.String())
 		}
 
 		if as.AssetModificationGovernance == 1 { // Contract wide asset governance

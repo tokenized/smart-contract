@@ -125,6 +125,16 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectContractMoved, false)
 	}
 
+	if ct.FreezePeriod.Nano() > v.Now.Nano() {
+		logger.Warn(ctx, "Contract frozen : %s", contractPKH.String())
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectContractFrozen, false)
+	}
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectContractExpired, false)
+	}
+
 	// Transfer Outputs
 	//   Contract 1 : amount = calculated fee for settlement tx + contract fees + any bitcoins being transfered
 	//   Contract 2 : contract fees if applicable or dust

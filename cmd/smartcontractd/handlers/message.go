@@ -335,6 +335,18 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractMoved)
 	}
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	if ct.FreezePeriod.Nano() > v.Now.Nano() {
+		logger.Warn(ctx, "Contract frozen : %s", contractPKH.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractFrozen)
+	}
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractExpired)
+	}
+
 	// Add this contract's data to the settlement op return data
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx, settlement, m.Headers)
 	if err != nil {
@@ -451,6 +463,18 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	if !ct.MovedTo.IsZero() {
 		logger.Warn(ctx, "Contract address changed : %s", ct.MovedTo.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, protocol.RejectContractMoved)
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	if ct.FreezePeriod.Nano() > v.Now.Nano() {
+		logger.Warn(ctx, "Contract frozen : %s", contractPKH.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, protocol.RejectContractFrozen)
+	}
+
+	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
+		logger.Warn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk, protocol.RejectContractExpired)
 	}
 
 	// Verify all the data for this contract is correct.
