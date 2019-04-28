@@ -69,7 +69,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		return errors.Wrap(err, fmt.Sprintf("Failed to unmarshal %s json file", actionType))
 	}
 
-	script, err := protocol.Serialize(opReturn)
+	script, err := protocol.Serialize(opReturn, true)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s op return", actionType))
 	}
@@ -107,7 +107,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Determine funding required for contract to be able to post response tx.
-		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0, theClient.Config.DustLimit, theClient.Config.ContractFee)
+		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0, theClient.Config.DustLimit, theClient.Config.ContractFee, true)
 		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
 		funding += uint64(float32(estimatedSize) * theClient.Config.FeeRate * 1.1) // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
@@ -145,7 +145,7 @@ func buildAction(c *cobra.Command, args []string) error {
 
 		// Check with inspector
 		var itx *inspector.Transaction
-		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx)
+		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, true)
 		if err != nil {
 			logger.Warn(ctx, "Failed to convert tx to inspector")
 		}
@@ -192,27 +192,39 @@ func buildAction(c *cobra.Command, args []string) error {
 		fmt.Printf(string(data) + "\n")
 	}
 
-	// payload, err := opReturn.PayloadMessage()
-	// if err != nil {
-	// return errors.Wrap(err, fmt.Sprintf("Failed to retreive %s payload", actionType))
-	// }
-	// if payload == nil {
-	// return nil // No payload for this message type
-	// }
+	switch actionType {
+	case "A1":
+		assetDef, ok := opReturn.(*protocol.AssetDefinition)
+		if !ok {
+			return errors.New("Failed to convert to asset definition")
+		}
 
-	// fmt.Printf("Payload : %s\n", payload.Type())
-	// payloadData, err := payload.Serialize()
-	// if hexFormat {
-	// fmt.Printf("%x\n", payloadData)
-	// } else if b64Format {
-	// fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(payloadData))
-	// } else {
-	// data, err = json.MarshalIndent(payload, "", "  ")
-	// if err != nil {
-	// return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s payload %s", actionType, payload.Type()))
-	// }
-	// fmt.Printf(string(data) + "\n")
-	// }
+		payload := protocol.AssetTypeMapping(assetDef.AssetType)
+		if payload == nil {
+			return fmt.Errorf("Invalid asset type : %s", assetDef.AssetType)
+		}
+
+		_, err := payload.Write(assetDef.AssetPayload)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetDef.AssetType))
+		}
+
+		fmt.Printf("Payload : %s\n", assetDef.AssetType)
+		if hexFormat {
+			fmt.Printf("%x\n", payload)
+		} else if b64Format {
+			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetDef.AssetPayload))
+		} else {
+			data, err = json.MarshalIndent(payload, "", "  ")
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetDef.AssetType))
+			}
+			fmt.Printf(string(data) + "\n")
+		}
+
+	case "A2":
+
+	}
 
 	return nil
 }
