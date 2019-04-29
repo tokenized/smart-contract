@@ -18,14 +18,14 @@ func Convert(ctx context.Context, src interface{}, dst interface{}) error {
 	var err error
 	data, err = json.Marshal(src)
 	if err != nil {
-		logger.LogDepth(ctx, logger.LevelWarn, 1, "Failed json marshal : %s", err)
+		LogDepth(ctx, logger.LevelWarn, 1, "Failed json marshal : %s", err)
 		return err
 	}
 
 	// Unmarshal json back into destination object.
 	err = json.Unmarshal(data, dst)
 	if err != nil {
-		logger.LogDepth(ctx, logger.LevelWarn, 1, "Failed json unmarshal : %s\n%s", err, string(data))
+		LogDepth(ctx, logger.LevelWarn, 1, "Failed json unmarshal : %s\n%s", err, string(data))
 		return err
 	}
 

@@ -36,7 +36,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 	// switch errors.Cause(err) {
 	// }
 
-	logger.LogDepth(ctx, logger.LevelError, 1, "%s", err)
+	LogDepth(ctx, logger.LevelError, 1, "%s", err)
 }
 
 // RespondReject sends a rejection message.
@@ -144,7 +144,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
-			logger.Warn(ctx, err.Error())
+			LogWarn(ctx, err.Error())
 			return ErrNoResponse
 		}
 		Error(ctx, w, err)
@@ -205,7 +205,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
-			logger.Warn(ctx, "Sending reject. Failed to sign tx : %s", err)
+			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
 			return RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)

@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -78,13 +77,6 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
-		// Set the context with the required values to process the event.
-		v := Values{
-			TraceID: span.SpanContext().TraceID.String(),
-			Now:     protocol.CurrentTimestamp(),
-		}
-		ctx = context.WithValue(ctx, KeyValues, &v)
-
 		// Prepare response writer
 		w := &ResponseWriter{
 			Mux:    a.ProtoMux,
@@ -95,9 +87,16 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		rootKeys, _ := a.wallet.List(pkhs)
 		handled := false
 		for _, rootKey := range rootKeys {
+			// Set the context with the required values to process the event.
+			v := Values{
+				TraceID: span.SpanContext().TraceID.String(),
+				Now:     protocol.CurrentTimestamp(),
+			}
+			ctx = context.WithValue(ctx, KeyValues, &v)
+
 			// Add logger trace of beginning of contract and tx ids.
-			ctx = logger.ContextWithLogTrace(ctx, fmt.Sprintf("%x %x",
-				rootKey.Address.ScriptAddress()[0:5], itx.Hash[0:5]))
+			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
+			Log(ctx, "Trace Data : Contract %x Tx %x", rootKey.Address.ScriptAddress(), itx.Hash[:])
 
 			// Call the wrapped handler functions.
 			handled = true
