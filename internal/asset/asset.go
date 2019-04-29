@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	FieldCount = 13 // The number of fields that can be changed with amendments.
+	FieldCount = 12 // The number of fields that can be changed with amendments.
 )
 
 var (

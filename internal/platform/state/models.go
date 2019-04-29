@@ -50,6 +50,7 @@ type Asset struct {
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
 	AssetType                   string             `json:"asset_type,omitempty"`
+	AssetIndex                  uint64             `json:"asset_index,omitempty"`
 	AssetAuthFlags              []byte             `json:"asset_auth_flags,omitempty"`
 	TransfersPermitted          bool               `json:"transfers_permitted,omitempty"`
 	TradeRestrictions           [][3]byte          `json:"trade_restrictions,omitempty"`

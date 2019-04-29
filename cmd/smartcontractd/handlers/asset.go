@@ -69,22 +69,25 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExpired)
 	}
 
+	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, asset.FieldCount, len(ct.VotingSystems)); err != nil {
+		logger.Warn(ctx, "Invalid asset auth flags : %s", err)
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+
 	// Verify issuer is sender of tx.
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
 		logger.Warn(ctx, "Only issuer can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotIssuer)
 	}
 
-	if msg.AssetCode.IsZero() {
-		logger.Warn(ctx, "Asset creation with zero code")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
+	// Generate Asset ID
+	assetCode := protocol.AssetCodeFromContract(contractPKH.Bytes(), uint64(len(ct.AssetCodes)))
 
 	// Locate Asset
-	_, err = asset.Retrieve(ctx, a.MasterDB, contractPKH, &msg.AssetCode)
+	_, err = asset.Retrieve(ctx, a.MasterDB, contractPKH, assetCode)
 	if err != asset.ErrNotFound {
 		if err == nil {
-			logger.Warn(ctx, "Asset already exists : %s", msg.AssetCode.String())
+			logger.Warn(ctx, "Asset already exists : %s", assetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetCodeExists)
 		} else {
 			return errors.Wrap(err, "Failed to retrieve asset")
@@ -93,7 +96,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		logger.Warn(ctx, "Number of assets exceeds contract Qty: %s %s", contractPKH.String(), msg.AssetCode.String())
+		logger.Warn(ctx, "Number of assets exceeds contract Qty: %s %s", contractPKH.String(), assetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFixedQuantity)
 	}
 
@@ -115,7 +118,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	logger.Info(ctx, "Accepting asset creation request : %s %s", contractPKH.String(), msg.AssetCode.String())
+	logger.Info(ctx, "Accepting asset creation request : %s %s", contractPKH.String(), assetCode.String())
 
 	// Asset Creation <- Asset Definition
 	ac := protocol.AssetCreation{}
@@ -126,6 +129,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	ac.Timestamp = v.Now
+	ac.AssetCode = *assetCode
+	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
 	// Convert to btcutil.Address
 	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
@@ -562,14 +567,11 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 		case 0: // AssetType
 			return fmt.Errorf("Asset amendment attempting to update asset type")
 
-		case 1: // AssetCode
-			return fmt.Errorf("Asset amendment attempting to update asset code")
-
-		case 2: // AssetAuthFlags
+		case 1: // AssetAuthFlags
 			ac.AssetAuthFlags = amendment.Data
 			authFieldsUpdated = true
 
-		case 3: // TransfersPermitted
+		case 2: // TransfersPermitted
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("TransfersPermitted amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -578,7 +580,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("TransfersPermitted amendment value failed to deserialize : %s", err)
 			}
 
-		case 4: // TradeRestrictions
+		case 3: // TradeRestrictions
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(ac.TradeRestrictions) {
@@ -618,7 +620,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("Invalid asset amendment operation for TradeRestrictions : %d", amendment.Operation)
 			}
 
-		case 5: // EnforcementOrdersPermitted
+		case 4: // EnforcementOrdersPermitted
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("EnforcementOrdersPermitted amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -627,7 +629,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("EnforcementOrdersPermitted amendment value failed to deserialize : %s", err)
 			}
 
-		case 6: // VotingRights
+		case 5: // VotingRights
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("VotingRights amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -636,7 +638,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("VotingRights amendment value failed to deserialize : %s", err)
 			}
 
-		case 7: // VoteMultiplier
+		case 6: // VoteMultiplier
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("VoteMultiplier amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -645,7 +647,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("VoteMultiplier amendment value failed to deserialize : %s", err)
 			}
 
-		case 8: // IssuerProposal
+		case 7: // IssuerProposal
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("IssuerProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -654,7 +656,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("IssuerProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 9: // HolderProposal
+		case 8: // HolderProposal
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -663,7 +665,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 10: // AssetModificationGovernance
+		case 9: // AssetModificationGovernance
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("AssetModificationGovernance amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -672,7 +674,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("AssetModificationGovernance amendment value failed to deserialize : %s", err)
 			}
 
-		case 11: // TokenQty
+		case 10: // TokenQty
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("TokenQty amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -681,7 +683,7 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("TokenQty amendment value failed to deserialize : %s", err)
 			}
 
-		case 12: // AssetPayload
+		case 11: // AssetPayload
 			// Validate payload
 			payload := protocol.AssetTypeMapping(ac.AssetType)
 			if payload == nil {

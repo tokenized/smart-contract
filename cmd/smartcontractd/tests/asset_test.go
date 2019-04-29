@@ -21,6 +21,7 @@ func TestAssets(t *testing.T) {
 	defer tests.Recover(t)
 
 	t.Run("create", createAsset)
+	t.Run("index", assetIndex)
 	t.Run("amendment", assetAmendment)
 	t.Run("proposalAmendment", assetProposalAmendment)
 }
@@ -43,12 +44,11 @@ func createAsset(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address.ScriptAddress())
 
 	testAssetType = protocol.CodeShareCommon
-	testAssetCode = *randomAssetCode()
+	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address.ScriptAddress(), 0)
 
 	// Create AssetDefinition message
 	assetData := protocol.AssetDefinition{
 		AssetType:                  testAssetType,
-		AssetCode:                  testAssetCode,
 		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
@@ -65,7 +65,7 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 13)
+	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
 		permissions[i].Permitted = true       // Issuer can update field without proposal
 		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
@@ -123,7 +123,7 @@ func createAsset(t *testing.T) {
 	// Check issuer balance
 	contractPKH = protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &assetData.AssetCode)
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
@@ -140,6 +140,168 @@ func createAsset(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified asset type : %s", tests.Success, as.AssetType)
+}
+
+func assetIndex(t *testing.T) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address.ScriptAddress())
+
+	testAssetType = protocol.CodeShareCommon
+	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address.ScriptAddress(), 0)
+
+	// Create AssetDefinition message
+	assetData := protocol.AssetDefinition{
+		AssetType:                  testAssetType,
+		TransfersPermitted:         true,
+		EnforcementOrdersPermitted: true,
+		VotingRights:               true,
+		TokenQty:                   1000,
+	}
+
+	assetPayloadData := protocol.ShareCommon{
+		Ticker:      "TST",
+		Description: "Test common shares",
+	}
+	assetData.AssetPayload, err = assetPayloadData.Serialize()
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
+	}
+
+	// Define permissions for asset fields
+	permissions := make([]protocol.Permission, 12)
+	for i, _ := range permissions {
+		permissions[i].Permitted = true       // Issuer can update field without proposal
+		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset auth flags : %v", tests.Failed, err)
+	}
+
+	// Build asset definition transaction
+	assetTx := wire.NewMsgTx(2)
+
+	assetInputHash := fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	script, err := protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
+
+	assetItx, err := inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx : %v", tests.Failed, err)
+	}
+
+	err = assetItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, assetTx)
+
+	err = a.Trigger(ctx, "SEE", assetItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept asset definition : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAsset definition accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "A2")
+
+	// Check issuer balance
+	contractPKH = protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+	}
+
+	if as.AssetIndex != 0 {
+		t.Fatalf("\t%s\tAsset index incorrect : %d != %d", tests.Failed, as.AssetIndex, 0)
+	}
+
+	t.Logf("\t%s\tVerified asset index : %d", tests.Success, as.AssetIndex)
+
+	// Create another asset --------------------------------------------------
+	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100021, issuerKey.Address.ScriptAddress())
+
+	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address.ScriptAddress(), 1)
+
+	// Build asset definition transaction
+	assetTx = wire.NewMsgTx(2)
+
+	assetInputHash = fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+	// Data output
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
+
+	assetItx, err = inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx 2 : %v", tests.Failed, err)
+	}
+
+	err = assetItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx 2 : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.AddTX(ctx, assetTx)
+
+	err = a.Trigger(ctx, "SEE", assetItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept asset definition 2 : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAsset definition 2 accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "A2")
+
+	// Check issuer balance
+	contractPKH = protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	as, err = asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset 2 : %v", tests.Failed, err)
+	}
+
+	if as.AssetIndex != 1 {
+		t.Fatalf("\t%s\tAsset 2 index incorrect : %d != %d", tests.Failed, as.AssetIndex, 1)
+	}
+
+	t.Logf("\t%s\tVerified asset index 2 : %d", tests.Success, as.AssetIndex)
 }
 
 func assetAmendment(t *testing.T) {
@@ -172,7 +334,7 @@ func assetAmendment(t *testing.T) {
 	}
 
 	amendmentData.Amendments = append(amendmentData.Amendments, protocol.Amendment{
-		FieldIndex: 11, // Token quantity
+		FieldIndex: 10, // Token quantity
 		Data:       buf.Bytes(),
 	})
 
@@ -260,7 +422,7 @@ func assetProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
 	assetAmendment := protocol.Amendment{
-		FieldIndex: 12,
+		FieldIndex: 11,
 		Data:       payloadData,
 	}
 	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)
@@ -358,19 +520,11 @@ var sampleAssetPayload2 = protocol.ShareCommon{
 	Description: "Test common shares 2",
 }
 
-func randomAssetCode() *protocol.AssetCode {
-	data := make([]byte, 32)
-	for i, _ := range data {
-		data[i] = byte(r.Intn(256))
-	}
-	return protocol.AssetCodeFromBytes(data)
-}
-
 func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
 	payload protocol.AssetPayload, permitted, issuer, holder bool) error {
 
 	var assetData = state.Asset{
-		ID:                         *randomAssetCode(),
+		ID:                         *protocol.AssetCodeFromContract(test.ContractKey.Address.ScriptAddress(), 0),
 		AssetType:                  payload.Type(),
 		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
@@ -391,7 +545,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 13)
+	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted   // Issuer can update field without proposal
 		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
@@ -434,7 +588,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	payload protocol.AssetPayload, permitted, issuer, holder bool) error {
 
 	var assetData = state.Asset{
-		ID:                         *randomAssetCode(),
+		ID:                         *protocol.AssetCodeFromContract(test.Contract2Key.Address.ScriptAddress(), 0),
 		AssetType:                  payload.Type(),
 		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
@@ -455,7 +609,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 13)
+	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted   // Issuer can update field without proposal
 		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
