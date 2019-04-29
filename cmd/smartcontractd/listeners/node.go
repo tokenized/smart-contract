@@ -12,7 +12,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
@@ -82,19 +81,19 @@ func (server *Server) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		if err := server.SpyNode.Run(ctx); err != nil {
-			logger.Error(ctx, "Spynode failed : %s", err)
+			node.LogError(ctx, "Spynode failed : %s", err)
 			server.Scheduler.Stop(ctx)
 		}
-		logger.Debug(ctx, "Spynode finished")
+		node.LogVerbose(ctx, "Spynode finished")
 	}()
 
 	go func() {
 		defer wg.Done()
 		if err := server.Scheduler.Run(ctx); err != nil {
-			logger.Error(ctx, "Scheduler failed : %s", err)
+			node.LogError(ctx, "Scheduler failed : %s", err)
 			server.SpyNode.Stop(ctx)
 		}
-		logger.Debug(ctx, "Scheduler finished")
+		node.LogVerbose(ctx, "Scheduler finished")
 	}()
 
 	// Block until goroutines finish as a result of Stop()
@@ -122,9 +121,9 @@ func (server *Server) Stop(ctx context.Context) error {
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
 	data, err := json.MarshalIndent(tx, "", "  ")
 	if err != nil {
-		logger.Verbose(ctx, "Failed to marshal tx : %s", err)
+		node.LogVerbose(ctx, "Failed to marshal tx : %s", err)
 	} else {
-		logger.Verbose(ctx, "Broadcast Tx :\n%s", string(data))
+		node.LogVerbose(ctx, "Broadcast Tx :\n%s", string(data))
 	}
 	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 		return err
@@ -143,7 +142,7 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	}
 
 	// Append to pending so it can be monitored
-	logger.Info(ctx, "Saving pending response tx : %s", tx.TxHash().String())
+	node.Log(ctx, "Saving pending response tx : %s", tx.TxHash().String())
 	server.pendingResponses = append(server.pendingResponses, tx)
 	return nil
 }
@@ -157,7 +156,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 			for _, input := range itx.Inputs {
 				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
 					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
-					logger.Info(ctx, "Canceling pending response tx : %s", pendingTx.TxHash().String())
+					node.Log(ctx, "Canceling pending response tx : %s", pendingTx.TxHash().String())
 					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
 					return nil
 				}
@@ -170,7 +169,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 
 func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction) error {
 	if err := server.removeConflictingPending(ctx, itx); err != nil {
-		logger.Warn(ctx, "Failed to remove conflicting pending : %s", err.Error())
+		node.LogWarn(ctx, "Failed to remove conflicting pending : %s", err.Error())
 		return err
 	}
 

@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -46,7 +46,7 @@ func (tracer *Tracer) Save(ctx context.Context, masterDB *db.DB) error {
 		}
 	}
 
-	logger.Verbose(ctx, "Saving %d traces", len(tracer.traces))
+	node.LogVerbose(ctx, "Saving %d traces", len(tracer.traces))
 	return masterDB.Put(ctx, tracerStorageKey, buf.Bytes())
 }
 
@@ -75,7 +75,7 @@ func (tracer *Tracer) Load(ctx context.Context, masterDB *db.DB) error {
 		}
 	}
 
-	logger.Verbose(ctx, "Loaded %d traces", len(tracer.traces))
+	node.LogVerbose(ctx, "Loaded %d traces", len(tracer.traces))
 	return nil
 }
 

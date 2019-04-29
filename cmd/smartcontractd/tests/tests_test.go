@@ -49,6 +49,9 @@ func TestMain(m *testing.M) {
 
 func testMain(m *testing.M) int {
 	test = tests.New(true)
+	if test == nil {
+		return 1
+	}
 	defer test.TearDown()
 
 	// =========================================================================

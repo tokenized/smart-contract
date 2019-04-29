@@ -5,9 +5,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -36,7 +36,7 @@ func (vf *VoteFinalizer) IsReady(ctx context.Context) bool {
 
 // Run executes the job.
 func (vf *VoteFinalizer) Run(ctx context.Context) {
-	logger.Info(ctx, "Finalizing vote : %s", vf.voteTx.Hash.String())
+	node.Log(ctx, "Finalizing vote : %s", vf.voteTx.Hash.String())
 	vf.handler.Trigger(ctx, "REPROCESS", vf.voteTx)
 	vf.finished = true
 }

@@ -13,10 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
-	"github.com/tokenized/smart-contract/pkg/spynode"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -58,14 +55,7 @@ func New(logToStdOut bool) *Test {
 
 	var ctx context.Context
 	if logToStdOut {
-		logConfig := logger.NewDevelopmentConfig()
-		logConfig.Main.SetWriter(os.Stdout)
-		logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-		logConfig.Main.MinLevel = logger.LevelDebug
-		logConfig.EnableSubSystem(txbuilder.SubSystem)
-		logConfig.EnableSubSystem(spynode.SubSystem)
-
-		ctx = logger.ContextWithLogConfig(NewContext(), logConfig)
+		ctx = node.ContextWithProductionLogger(NewContext(), os.Stdout)
 	} else {
 		ctx = NewContext()
 	}
@@ -85,12 +75,14 @@ func New(logToStdOut bool) *Test {
 
 	feeKey, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate fee key : %v", err)
+		node.LogError(ctx, "main : Failed to generate fee key : %v", err)
+		return nil
 	}
 
 	fee2Key, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate fee 2 key : %v", err)
+		node.LogError(ctx, "main : Failed to generate fee 2 key : %v", err)
+		return nil
 	}
 
 	nodeConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeKey.Address.ScriptAddress())
@@ -108,7 +100,8 @@ func New(logToStdOut bool) *Test {
 		Root:   path,
 	})
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to create DB : %v", err)
+		node.LogError(ctx, "main : Failed to create DB : %v", err)
+		return nil
 	}
 
 	// ============================================================
@@ -116,36 +109,43 @@ func New(logToStdOut bool) *Test {
 
 	testUTXOs, err := utxos.Load(ctx, masterDB)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to load UTXOs : %v", err)
+		node.LogError(ctx, "main : Failed to load UTXOs : %v", err)
+		return nil
 	}
 
 	masterKey, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate master key : %v", err)
+		node.LogError(ctx, "main : Failed to generate master key : %v", err)
+		return nil
 	}
 
 	contractKey, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate contract key : %v", err)
+		node.LogError(ctx, "main : Failed to generate contract key : %v", err)
+		return nil
 	}
 
 	testWallet := wallet.New()
 	if err := testWallet.Add(contractKey); err != nil {
-		logger.Fatal(ctx, "main : Failed to add contract key to wallet : %v", err)
+		node.LogError(ctx, "main : Failed to add contract key to wallet : %v", err)
+		return nil
 	}
 
 	master2Key, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate master 2 key : %v", err)
+		node.LogError(ctx, "main : Failed to generate master 2 key : %v", err)
+		return nil
 	}
 
 	contract2Key, err := GenerateKey(nodeConfig.ChainParams)
 	if err != nil {
-		logger.Fatal(ctx, "main : Failed to generate contract 2 key : %v", err)
+		node.LogError(ctx, "main : Failed to generate contract 2 key : %v", err)
+		return nil
 	}
 
 	if err := testWallet.Add(contract2Key); err != nil {
-		logger.Fatal(ctx, "main : Failed to add contract 2 key to wallet : %v", err)
+		node.LogError(ctx, "main : Failed to add contract 2 key to wallet : %v", err)
+		return nil
 	}
 
 	// ============================================================
@@ -155,9 +155,9 @@ func New(logToStdOut bool) *Test {
 
 	go func() {
 		if err := testScheduler.Run(ctx); err != nil {
-			logger.Error(ctx, "Scheduler failed : %s", err)
+			node.LogError(ctx, "Scheduler failed : %s", err)
 		}
-		logger.Info(ctx, "Scheduler finished")
+		node.Log(ctx, "Scheduler finished")
 	}()
 
 	// ============================================================

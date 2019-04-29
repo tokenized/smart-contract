@@ -127,7 +127,8 @@ func Panic(ctx context.Context, format string, values ...interface{}) error {
 func LogDepth(ctx context.Context, level Level, depth int, format string, values ...interface{}) error {
 	configValue := ctx.Value(configKey)
 	if configValue == nil {
-		return nil // Config not specified. Log nothing.
+		// Config not specified. Use default config.
+		configValue = &DefaultConfig
 	}
 
 	config, ok := configValue.(*Config)

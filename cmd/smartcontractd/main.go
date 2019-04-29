@@ -61,20 +61,7 @@ func main() {
 	}
 	defer logFile.Close()
 
-	logConfig := logger.NewDevelopmentConfig()
-	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
-	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.LevelDebug
-	logConfig.EnableSubSystem(rpcnode.SubSystem)
-	logConfig.EnableSubSystem(txbuilder.SubSystem)
-
-	// Configure spynode logs to be verbose
-	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
-	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
-	logConfig.SubSystems[spynode.SubSystem].SetWriter(io.MultiWriter(os.Stdout, logFile))
-
-	ctx = logger.ContextWithLogConfig(ctx, logConfig)
+	ctx = node.ContextWithDevelopmentLogger(ctx, io.MultiWriter(os.Stdout, logFile))
 
 	// -------------------------------------------------------------------------
 	// Config

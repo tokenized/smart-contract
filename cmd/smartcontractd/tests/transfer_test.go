@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -430,7 +429,7 @@ func oracleTransfer(t *testing.T) {
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
 		protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount, blockHash)
-	logger.Verbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
+	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
@@ -550,7 +549,7 @@ func oracleTransferBad(t *testing.T) {
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
 		protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount+1, blockHash)
-	logger.Verbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
+	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}

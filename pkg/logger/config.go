@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"os"
 	"sync"
 )
 
@@ -11,6 +12,14 @@ type Config struct {
 	SubSystems         map[string]*SystemConfig // SubSystem specific configs
 	Trace              string                   // Identifier added to log entries to trace paths.
 	mutex              sync.Mutex
+}
+
+var DefaultConfig = Config{
+	Main: &SystemConfig{
+		Output:   os.Stdout,
+		MinLevel: LevelInfo,
+		Format:   IncludeDate | IncludeTime | IncludeFile | IncludeLevel,
+	},
 }
 
 // Creates a new config with default production values.
