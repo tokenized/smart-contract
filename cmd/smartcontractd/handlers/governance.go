@@ -109,8 +109,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Validate messages vote related values
-	if !vote.ValidateProposal(msg, v.Now) {
-		node.LogWarn(ctx, "Proposal validation failed : %s", senderPKH.String())
+	if err := vote.ValidateProposal(msg, v.Now); err != nil {
+		node.LogWarn(ctx, "Proposal validation failed : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 

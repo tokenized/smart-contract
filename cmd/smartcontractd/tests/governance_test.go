@@ -59,7 +59,7 @@ func holderProposal(t *testing.T) {
 		VoteOptions:         "AB",
 		VoteMax:             1,
 		ProposalDescription: "Change contract name",
-		VoteCutOffTimestamp: protocol.NewTimestamp(v.Now.Nano() + 500000000),
+		VoteCutOffTimestamp: protocol.NewTimestamp(v.Now.Nano() + 10000000000),
 	}
 
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, protocol.Amendment{
