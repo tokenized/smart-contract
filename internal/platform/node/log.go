@@ -50,25 +50,25 @@ func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 
 // Log adds an info level entry to the log.
 func Log(ctx context.Context, format string, values ...interface{}) error {
-	return logger.Info(ctx, format, values...)
+	return logger.LogDepth(ctx, logger.LevelInfo, 1, format, values...)
 }
 
 // Log adds a verbose level entry to the log.
 func LogVerbose(ctx context.Context, format string, values ...interface{}) error {
-	return logger.Verbose(ctx, format, values...)
+	return logger.LogDepth(ctx, logger.LevelVerbose, 1, format, values...)
 }
 
 // Log adds a warning level entry to the log.
 func LogWarn(ctx context.Context, format string, values ...interface{}) error {
-	return logger.Warn(ctx, format, values...)
+	return logger.LogDepth(ctx, logger.LevelWarn, 1, format, values...)
 }
 
 // Log adds a error level entry to the log.
 func LogError(ctx context.Context, format string, values ...interface{}) error {
-	return logger.Error(ctx, format, values...)
+	return logger.LogDepth(ctx, logger.LevelError, 1, format, values...)
 }
 
 // Log adds a specified level entry to the log with file data at the specified depth offset in the stack.
 func LogDepth(ctx context.Context, level logger.Level, depth int, format string, values ...interface{}) error {
-	return logger.LogDepth(ctx, level, depth, format, values...)
+	return logger.LogDepth(ctx, level, depth+1, format, values...)
 }
