@@ -3,10 +3,12 @@ package tests
 import (
 	"context"
 	"crypto/sha256"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -32,6 +34,7 @@ const (
 
 type Test struct {
 	Context      context.Context
+	Headers      *mockHeaders
 	RPCNode      *mockRpcNode
 	NodeConfig   node.Config
 	MasterKey    *wallet.RootKey
@@ -49,6 +52,9 @@ type Test struct {
 }
 
 func New(logToStdOut bool) *Test {
+
+	// Random value used by helpers
+	testHelperRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// =========================================================================
 	// Logging
@@ -165,6 +171,7 @@ func New(logToStdOut bool) *Test {
 
 	return &Test{
 		Context:      ctx,
+		Headers:      newMockHeaders(),
 		RPCNode:      rpcNode,
 		NodeConfig:   nodeConfig,
 		MasterKey:    masterKey,
@@ -180,6 +187,17 @@ func New(logToStdOut bool) *Test {
 		schStarted:   true,
 		path:         path,
 	}
+}
+
+// Reset is used to reset the test state complete.
+func (test *Test) Reset() {
+	test.Headers.Reset()
+	test.ResetDB()
+}
+
+// ResetDB clears all the data in the database.
+func (test *Test) ResetDB() {
+	os.RemoveAll(filepath.FromSlash(test.path))
 }
 
 // TearDown is used for shutting down tests. Calling this should be
@@ -231,9 +249,4 @@ func Recover(t *testing.T) {
 	if r := recover(); r != nil {
 		t.Fatal("Unhandled Exception:", string(debug.Stack()))
 	}
-}
-
-// ResetDB clears all the data in the database.
-func (test *Test) ResetDB() {
-	os.RemoveAll(filepath.FromSlash(test.path))
 }

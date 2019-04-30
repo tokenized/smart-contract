@@ -433,14 +433,6 @@ func voteResultAbsolute(t *testing.T) {
 	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
 }
 
-func randomTxId() *protocol.TxId {
-	data := make([]byte, 32)
-	for i, _ := range data {
-		data[i] = byte(r.Intn(256))
-	}
-	return protocol.TxIdFromBytes(data)
-}
-
 func mockUpBallot(ctx context.Context, pkh []byte, quantity uint64, v string) error {
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
@@ -609,7 +601,7 @@ func mockUpProposal(ctx context.Context) error {
 	transactions.AddTx(ctx, test.MasterDB, proposalItx)
 
 	now := protocol.CurrentTimestamp()
-	testVoteTxId = *randomTxId()
+	testVoteTxId = *tests.RandomTxId()
 
 	var voteData = state.Vote{
 		Initiator:         1,
@@ -642,7 +634,7 @@ func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint8, amen
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 
-		VoteTxId: *randomTxId(),
+		VoteTxId: *tests.RandomTxId(),
 		Expires:  protocol.NewTimestamp(now.Nano() + 5000000000),
 	}
 
@@ -665,7 +657,7 @@ func mockUpContractAmendmentVote(ctx context.Context, initiator, system uint8, a
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 
-		VoteTxId: *randomTxId(),
+		VoteTxId: *tests.RandomTxId(),
 		Expires:  protocol.NewTimestamp(now.Nano() + 5000000000),
 	}
 

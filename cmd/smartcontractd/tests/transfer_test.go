@@ -403,7 +403,7 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHeaderHashes(ctx, 50000, 12)
+	err = test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
@@ -423,7 +423,7 @@ func oracleTransfer(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	blockHash, err := headers.Hash(ctx, headers.LastHeight(ctx)-5)
+	blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-5)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -522,7 +522,7 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHeaderHashes(ctx, 50000, 12)
+	err = test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
@@ -543,7 +543,7 @@ func oracleTransferBad(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	blockHash, err := headers.Hash(ctx, headers.LastHeight(ctx)-4)
+	blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-4)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
