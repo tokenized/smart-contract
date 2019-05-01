@@ -47,7 +47,9 @@ func Load(ctx context.Context, masterDb *db.DB) (*UTXOs, error) {
 	}
 
 	result.list = make([]*UTXO, count)
-	for _, utxo := range result.list {
+	for i, _ := range result.list {
+		utxo := UTXO{}
+		result.list[i] = &utxo
 		if err := utxo.Read(buf); err != nil {
 			return nil, err
 		}
