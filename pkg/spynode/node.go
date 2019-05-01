@@ -47,6 +47,7 @@ type Node struct {
 	untrustedNodes []*UntrustedNode                   // Randomized peer connections to monitor for double spends
 	addresses      map[string]time.Time               // Recently used peer addresses
 	txChannel      chan *wire.MsgTx                   // Channel for directly handled txs so they don't lock the calling thread
+	broadcastTx    *wire.MsgTx                        // Tx to transmit to nodes upon connection
 	needsRestart   bool
 	hardStop       bool
 	stopping       bool
@@ -291,6 +292,130 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
+// Scan opens a lot of connetions at once to try to find peers.
+func (node *Node) Scan(ctx context.Context, connections int) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	logger.Info(ctx, "Scanning for peers")
+
+	if err := node.load(ctx); err != nil {
+		return err
+	}
+
+	node.config.Scanning = true
+	wg := sync.WaitGroup{}
+	count := 0
+
+	peers, err := node.peers.GetUnchecked(ctx)
+	if err != nil {
+		return err
+	}
+	logger.Verbose(ctx, "Found %d peers with no score", len(peers))
+
+	var address string
+	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for !node.isStopping() && count < connections && len(peers) > 0 {
+		// Pick peer randomly
+		random := seed.Intn(len(peers))
+		address = peers[random].Address
+
+		// Remove this address and try again
+		peers = append(peers[:random], peers[random+1:]...)
+
+		// Attempt connection
+		newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs, node.memPool, node.listeners, node.txFilters)
+		node.untrustedLock.Lock()
+		node.untrustedNodes = append(node.untrustedNodes, newNode)
+		node.untrustedLock.Unlock()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			newNode.Run(ctx)
+		}()
+		count++
+	}
+
+	node.sleepUntilStop(30) // Wait for handshake
+
+	// Stop all
+	node.untrustedLock.Lock()
+	nodeCount := len(node.untrustedNodes)
+	for _, untrusted := range node.untrustedNodes {
+		untrusted.Stop(ctx)
+	}
+	node.untrustedLock.Unlock()
+
+	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", nodeCount)
+	wg.Wait()
+	node.peers.Save(ctx)
+	return nil
+}
+
+// AddPeer adds a peer to the database with a specific score.
+func (node *Node) AddPeer(ctx context.Context, address string, score int) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	if err := node.load(ctx); err != nil {
+		return err
+	}
+	if _, err := node.peers.Add(ctx, address); err != nil {
+		return err
+	}
+
+	if !node.peers.UpdateScore(ctx, address, int32(score)) {
+		return errors.New("Failed to update score")
+	}
+
+	return node.peers.Save(ctx)
+}
+
+// ShotgunTransmitTx broadcasts a tx to as many nodes as it can.
+// Don't call Run when using this function. Just create a node and call this.
+func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCount int) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	logger.Info(ctx, "Shotgunning tx : %s", tx.TxHash())
+
+	if err := node.load(ctx); err != nil {
+		return err
+	}
+
+	node.config.ShotgunTx = tx
+	wg := sync.WaitGroup{}
+	count := 0
+
+	// Try for peers with a good score
+	for !node.isStopping() && count < sendCount {
+		if node.addUntrustedNode(ctx, &wg, 5) {
+			count++
+		} else {
+			break
+		}
+	}
+
+	// Try for peers with a non negative score
+	for !node.isStopping() && count < sendCount {
+		if node.addUntrustedNode(ctx, &wg, 0) {
+			count++
+		} else {
+			break
+		}
+	}
+
+	node.sleepUntilStop(30) // Wait for handshake
+
+	// Stop all
+	node.untrustedLock.Lock()
+	nodeCount := len(node.untrustedNodes)
+	for _, untrusted := range node.untrustedNodes {
+		untrusted.Stop(ctx)
+	}
+	node.untrustedLock.Unlock()
+
+	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", nodeCount)
+	wg.Wait()
+	node.peers.Save(ctx)
+	return nil
+}
+
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
@@ -317,6 +442,10 @@ func (node *Node) processTxs(ctx context.Context) error {
 			}
 			logger.Info(ctx, "Directly handling tx : %s", tx.TxHash())
 			if err := node.handleMessage(ctx, tx); err != nil {
+				if tx.Command() == "reject" {
+					logger.Warn(ctx, "Reject message : %s", err.Error())
+					continue
+				}
 				logger.Info(ctx, "Failed to directly handle tx : %s", err.Error())
 			}
 		}
@@ -441,6 +570,10 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
+			if msg.Command() == "reject" {
+				logger.Warn(ctx, "Reject message : %s", err.Error())
+				continue
+			}
 			logger.Warn(ctx, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
@@ -695,6 +828,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	if err != nil {
 		return false
 	}
+	logger.Verbose(ctx, "Found %d peers with score %d", len(peers), minScore)
 
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 	var address string

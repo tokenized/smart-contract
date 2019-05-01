@@ -33,6 +33,8 @@ type Client struct {
 	spyNodeStopChannel chan error
 	blocksAdded        int
 	blockHeight        int
+	TxsToSend          []*wire.MsgTx
+	StopOnSync         bool
 }
 
 type Config struct {
@@ -46,8 +48,8 @@ type Config struct {
 		Address          string `default:"127.0.0.1:8333" envconfig:"CLIENT_NODE_ADDRESS"`
 		UserAgent        string `default:"/Tokenized:0.1.0/" envconfig:"CLIENT_NODE_USER_AGENT"`
 		StartHash        string `envconfig:"CLIENT_START_HASH"`
-		UntrustedClients int    `default:"0" envconfig:"CLIENT_UNTRUSTED_NODES"`
-		SafeTxDelay      int    `default:"0" envconfig:"CLIENT_SAFE_TX_DELAY"`
+		UntrustedClients int    `default:"16" envconfig:"CLIENT_UNTRUSTED_NODES"`
+		SafeTxDelay      int    `default:"10" envconfig:"CLIENT_SAFE_TX_DELAY"`
 	}
 }
 
@@ -104,8 +106,7 @@ func NewClient(ctx context.Context) (*Client, error) {
 	return &client, nil
 }
 
-// RunSpyNode runs spyclient to sync with the network.
-func (client *Client) RunSpyNode(ctx context.Context) error {
+func (client *Client) setupSpyNode(ctx context.Context) error {
 	spyStorage := storage.NewFilesystemStorage(storage.NewConfig("", "", "", "standalone", os.Getenv("CLIENT_PATH")))
 
 	spyConfig, err := data.NewConfig(&client.Config.ChainParams, client.Config.SpyNode.Address,
@@ -119,6 +120,15 @@ func (client *Client) RunSpyNode(ctx context.Context) error {
 	client.spyNode = spynode.NewNode(spyConfig, spyStorage)
 	client.spyNode.AddTxFilter(client)
 	client.spyNode.RegisterListener(client)
+	return nil
+}
+
+// RunSpyNode runs spyclient to sync with the network.
+func (client *Client) RunSpyNode(ctx context.Context, stopOnSync bool) error {
+	if err := client.setupSpyNode(ctx); err != nil {
+		return err
+	}
+	client.StopOnSync = stopOnSync
 
 	// Make a channel to listen for errors coming from the listener. Use a
 	// buffered channel so the goroutine can exit if we don't collect this error.
@@ -153,6 +163,27 @@ func (client *Client) RunSpyNode(ctx context.Context) error {
 		}
 		return saveErr
 	}
+}
+
+func (client *Client) Scan(ctx context.Context, count int) error {
+	if err := client.setupSpyNode(ctx); err != nil {
+		return err
+	}
+	return client.spyNode.Scan(ctx, count)
+}
+
+func (client *Client) AddPeer(ctx context.Context, address string, score int) error {
+	if err := client.setupSpyNode(ctx); err != nil {
+		return err
+	}
+	return client.spyNode.AddPeer(ctx, address, score)
+}
+
+func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) error {
+	if err := client.setupSpyNode(ctx); err != nil {
+		return err
+	}
+	return client.spyNode.ShotgunTransmitTx(ctx, tx, count)
 }
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
@@ -254,6 +285,10 @@ func (client *Client) HandleInSync(ctx context.Context) error {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
 	// TODO Build/Send outgoing transactions
+	for _, tx := range client.TxsToSend {
+		client.spyNode.BroadcastTx(ctx, tx)
+	}
+	client.TxsToSend = nil
 
 	if client.blocksAdded == 0 {
 		logger.Info(ctx, "No new blocks found")
@@ -263,6 +298,8 @@ func (client *Client) HandleInSync(ctx context.Context) error {
 	logger.Info(ctx, "Balance : %.08f", BitcoinsFromSatoshis(client.Wallet.Balance()))
 
 	// Trigger close
-	client.spyNodeStopChannel <- nil
+	if client.StopOnSync {
+		client.spyNodeStopChannel <- nil
+	}
 	return nil
 }

@@ -18,10 +18,10 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 
-	// Configure spynode logs to be verbose
+	// Configure spynode logs to be info
 	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
 	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
+	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelInfo
 	logConfig.SubSystems[spynode.SubSystem].SetWriter(writer)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
@@ -31,15 +31,9 @@ func ContextWithProductionLogger(ctx context.Context, writer io.Writer) context.
 	logConfig := logger.NewProductionConfig()
 	logConfig.Main.SetWriter(writer)
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
-
-	// Configure spynode logs to be verbose
-	logConfig.SubSystems[spynode.SubSystem] = logger.NewProductionSystemConfig()
-	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
-	logConfig.SubSystems[spynode.SubSystem].SetWriter(writer)
+	logConfig.EnableSubSystem(spynode.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

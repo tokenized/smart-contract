@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // Config holds all configuration for the running service.
@@ -16,6 +17,8 @@ type Config struct {
 	StartHash      chainhash.Hash // Hash of first block to start processing on initial run
 	UntrustedCount int            // The number of untrusted nodes to run for double spend monitoring
 	SafeTxDelay    int            // Number of milliseconds without conflict before a tx is "safe"
+	ShotgunTx      *wire.MsgTx    // Transmit shotgun tx and stop
+	Scanning       bool
 }
 
 // NewConfig returns a new Config populated from environment variables.

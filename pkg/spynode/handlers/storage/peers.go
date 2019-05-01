@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
 	"github.com/pkg/errors"
@@ -89,6 +90,8 @@ func (repo *PeerRepository) Load(ctx context.Context) error {
 		repo.lookup[peer.Address] = &peer
 	}
 
+	logger.Verbose(ctx, "Loaded %d peers", len(repo.list))
+
 	repo.LastSaved = time.Now()
 	return nil
 }
@@ -118,7 +121,7 @@ func (repo *PeerRepository) Add(ctx context.Context, address string) (bool, erro
 	return true, nil
 }
 
-// Returns all peers at or above the specified score
+// Get returns all peers at or above the specified score
 func (repo *PeerRepository) Get(ctx context.Context, minScore int32) ([]*Peer, error) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
@@ -126,6 +129,21 @@ func (repo *PeerRepository) Get(ctx context.Context, minScore int32) ([]*Peer, e
 	result := make([]*Peer, 0, 500)
 	for _, peer := range repo.list {
 		if peer.Score >= minScore {
+			result = append(result, peer)
+		}
+	}
+
+	return result, nil
+}
+
+// GetUnchecked returns all peers with a zero score
+func (repo *PeerRepository) GetUnchecked(ctx context.Context) ([]*Peer, error) {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	result := make([]*Peer, 0, 500)
+	for _, peer := range repo.list {
+		if peer.Score == 0 {
 			result = append(result, peer)
 		}
 	}
@@ -159,6 +177,8 @@ func (repo *PeerRepository) Save(ctx context.Context) error {
 	if err := binary.Write(&buffer, binary.LittleEndian, int32(peersVersion)); err != nil {
 		return err
 	}
+
+	logger.Verbose(ctx, "Saving %d peers", len(repo.list))
 
 	// Write count
 	if err := binary.Write(&buffer, binary.LittleEndian, int32(len(repo.list))); err != nil {

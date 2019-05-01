@@ -17,6 +17,7 @@ var scCmd = &cobra.Command{
 
 func Execute() {
 	scCmd.AddCommand(cmdSync)
+	scCmd.AddCommand(cmdScan)
 	scCmd.AddCommand(cmdBuild)
 	scCmd.AddCommand(cmdAuth)
 	scCmd.Execute()

@@ -24,6 +24,7 @@ const (
 	FlagTx           = "tx"
 	FlagHexFormat    = "hex"
 	FlagBase64Format = "b64"
+	FlagSend         = "send"
 )
 
 var cmdBuild = &cobra.Command{
@@ -177,6 +178,13 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			fmt.Printf(string(data) + "\n")
 		}
+
+		send, _ := c.Flags().GetBool(FlagSend)
+		if send {
+			if err := theClient.ShotgunTx(ctx, tx.MsgTx, 250); err != nil {
+				fmt.Printf("Failed to send tx : %s\n", err)
+			}
+		}
 	}
 
 	fmt.Printf("Action : %s\n", actionType)
@@ -281,4 +289,5 @@ func init() {
 	cmdBuild.Flags().Bool(FlagTx, false, "build a tx, if false only op return is built")
 	cmdBuild.Flags().Bool(FlagHexFormat, false, "hex format")
 	cmdBuild.Flags().Bool(FlagBase64Format, false, "base64 format")
+	cmdBuild.Flags().Bool(FlagSend, false, "send to network")
 }

@@ -34,6 +34,7 @@ type UntrustedNode struct {
 	txFilters  []handlers.TxFilter
 	stopping   bool
 	active     bool // Set to false when connection is closed
+	shotgunned bool
 	lock       sync.Mutex
 }
 
@@ -70,7 +71,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	if err := node.connect(); err != nil {
 		node.lock.Unlock()
 		node.peers.UpdateScore(ctx, node.address, -1)
-		logger.Debug(ctx, "Connection failed to %s : %s", node.address, err.Error())
+		logger.Verbose(ctx, "Connection failed to %s : %s", node.address, err.Error())
 		return err
 	}
 
@@ -159,7 +160,7 @@ func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []chainhash.H
 }
 
 func (node *UntrustedNode) connect() error {
-	conn, err := net.DialTimeout("tcp", node.address, 10*time.Second)
+	conn, err := net.DialTimeout("tcp", node.address, 15*time.Second)
 	if err != nil {
 		return err
 	}
@@ -176,7 +177,7 @@ func (node *UntrustedNode) connect() error {
 func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
-			logger.Debug(ctx, "Check failed : %s", err.Error())
+			logger.Verbose(ctx, "Check failed : %s", err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -201,8 +202,12 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
+			if msg.Command() == "reject" {
+				logger.Warn(ctx, "Reject message : %s", err.Error())
+				continue
+			}
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Debug(ctx, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
+			logger.Verbose(ctx, "Node %s failed to handle (%s) message : %s", node.address, msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -242,6 +247,22 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		if node.queueOutgoing(addresses) {
 			node.state.SetAddressesRequested()
 		}
+	}
+
+	if node.config.Scanning {
+		logger.Info(ctx, "Found peer %s", node.address)
+		node.Stop(ctx)
+		return nil
+	}
+
+	if node.config.ShotgunTx != nil {
+		if node.shotgunned {
+			node.Stop(ctx)
+			return nil
+		}
+
+		logger.Info(ctx, "Sending shotgun tx to %s : %s", node.address, node.config.ShotgunTx.TxHash().String())
+		node.queueOutgoing(node.config.ShotgunTx)
 	}
 
 	if !node.state.MemPoolRequested() {
@@ -292,6 +313,10 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 	for !node.isStopping() {
 		// Wait for outgoing message on channel
 		msg, ok := <-node.outgoing
+
+		if node.config.ShotgunTx != nil && msg == node.config.ShotgunTx {
+			node.shotgunned = true
+		}
 
 		if !ok || node.isStopping() {
 			break
