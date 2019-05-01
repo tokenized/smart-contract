@@ -3,7 +3,6 @@ package listeners
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"sync"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -119,12 +118,6 @@ func (server *Server) Stop(ctx context.Context) error {
 }
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
-	data, err := json.MarshalIndent(tx, "", "  ")
-	if err != nil {
-		node.LogVerbose(ctx, "Failed to marshal tx : %s", err)
-	} else {
-		node.LogVerbose(ctx, "Broadcast Tx :\n%s", string(data))
-	}
 	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 		return err
 	}

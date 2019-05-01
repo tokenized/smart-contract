@@ -155,7 +155,7 @@ func main() {
 		panic(err)
 	}
 	tracer := listeners.NewTracer()
-	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, rawPKHs, tracer)
+	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, rawPKHs, tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------

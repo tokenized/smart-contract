@@ -96,7 +96,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %x", rootKey.Address.ScriptAddress(), itx.Hash[:])
+			Log(ctx, "Trace Data : Contract %x Tx %s", rootKey.Address.ScriptAddress(), itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true
