@@ -46,7 +46,7 @@ var (
 )
 
 var (
-	endian = binary.BigEndian
+	endian = binary.LittleEndian
 )
 
 // IsOpReturn returns true if the script is an OP_RETURN output script.
