@@ -20,6 +20,7 @@ func Execute() {
 	scCmd.AddCommand(cmdScan)
 	scCmd.AddCommand(cmdBuild)
 	scCmd.AddCommand(cmdAuth)
+	scCmd.AddCommand(cmdConvert)
 	scCmd.Execute()
 }
 

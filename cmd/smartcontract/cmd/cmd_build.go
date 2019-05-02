@@ -55,24 +55,28 @@ func buildAction(c *cobra.Command, args []string) error {
 	// Create struct
 	opReturn := protocol.TypeMapping(actionType)
 	if opReturn == nil {
-		return fmt.Errorf("Unsupported action type : %s", actionType)
+		fmt.Printf("Unsupported action type : %s\n", actionType)
+		return nil
 	}
 
 	// Read json file
 	path := filepath.FromSlash(args[1])
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return errors.Wrap(err, "Failed to read json file")
+		fmt.Printf("Failed to read json file : %s\n", err)
+		return nil
 	}
 
 	// Put json data into opReturn struct
 	if err := json.Unmarshal(data, opReturn); err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to unmarshal %s json file", actionType))
+		fmt.Printf("Failed to unmarshal %s json file : %s\n", actionType, err)
+		return nil
 	}
 
 	script, err := protocol.Serialize(opReturn, true)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s op return", actionType))
+		fmt.Printf("Failed to serialize %s op return : %s\n", actionType, err)
+		return nil
 	}
 
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
@@ -82,7 +86,8 @@ func buildAction(c *cobra.Command, args []string) error {
 		ctx := client.Context()
 		theClient, err := client.NewClient(ctx)
 		if err != nil {
-			return err
+			fmt.Printf("Failed to create client : %s\n", err)
+			return nil
 		}
 
 		tx := txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit, theClient.Config.FeeRate)
@@ -91,29 +96,25 @@ func buildAction(c *cobra.Command, args []string) error {
 		contractOutputIndex := uint32(0)
 		err = tx.AddP2PKHDustOutput(theClient.ContractPKH, false)
 		if err != nil {
-			return errors.Wrap(err, "Failed to add contract output")
-		}
-
-		switch actionType {
-		case "C1": // No special inputs or outputs required
-		case "A1": // No special inputs or outputs required
-		default:
-			return fmt.Errorf("Inputs/Outputs not defined for type : %s", actionType)
+			fmt.Printf("Failed to add contract output : %s\n", err)
+			return nil
 		}
 
 		// Add op return
 		err = tx.AddOutput(script, 0, false, false)
 		if err != nil {
-			return errors.Wrap(err, "Failed to add op return output")
+			fmt.Printf("Failed to add op return output : %s\n", err)
+			return nil
 		}
 
 		// Determine funding required for contract to be able to post response tx.
 		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0, theClient.Config.DustLimit, theClient.Config.ContractFee, true)
 		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
-		funding += uint64(float32(estimatedSize) * theClient.Config.FeeRate * 1.1) // Add response tx fee
+		funding += uint64(float32(estimatedSize)*theClient.Config.FeeRate*1.1) + 500 // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
 		if err != nil {
-			return errors.Wrap(err, "Failed to add estimated funding to contract output of tx")
+			fmt.Printf("Failed to add estimated funding to contract output of tx : %s\n", err)
+			return nil
 		}
 
 		// Add inputs
@@ -129,19 +130,22 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			err := tx.AddInput(output.OutPoint, output.PkScript, output.Value)
 			if err != nil {
-				return errors.Wrap(err, "Failed to add input")
+				fmt.Printf("Failed to add input : %s\n", err)
+				return nil
 			}
 			inputValue += output.Value
 			fee = tx.EstimatedFee()
 		}
 		if fee > inputValue {
-			return fmt.Errorf("Insufficient balance for tx fee %.08f : balance %.08f",
+			fmt.Printf("Insufficient balance for tx fee %.08f : balance %.08f\n",
 				client.BitcoinsFromSatoshis(fee), client.BitcoinsFromSatoshis(inputValue))
+			return nil
 		}
 
 		err = tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key})
 		if err != nil {
-			return errors.Wrap(err, "Failed to sign tx")
+			fmt.Printf("Failed to sign tx : %s\n", err)
+			return nil
 		}
 
 		// Check with inspector
@@ -204,12 +208,19 @@ func buildAction(c *cobra.Command, args []string) error {
 	case "A1":
 		assetDef, ok := opReturn.(*protocol.AssetDefinition)
 		if !ok {
-			return errors.New("Failed to convert to asset definition")
+			fmt.Printf("Failed to convert to asset definition")
+			return nil
+		}
+
+		if err := assetDef.Validate(); err != nil {
+			fmt.Printf("Invalid asset definition : %s\n", err)
+			return nil
 		}
 
 		payload := protocol.AssetTypeMapping(assetDef.AssetType)
 		if payload == nil {
-			return fmt.Errorf("Invalid asset type : %s", assetDef.AssetType)
+			fmt.Printf("Invalid asset type : %s\n", assetDef.AssetType)
+			return nil
 		}
 
 		_, err := payload.Write(assetDef.AssetPayload)
@@ -231,7 +242,40 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 	case "A2":
+		assetCreation, ok := opReturn.(*protocol.AssetCreation)
+		if !ok {
+			fmt.Printf("Failed to convert to asset creation")
+			return nil
+		}
 
+		if err := assetCreation.Validate(); err != nil {
+			fmt.Printf("Invalid asset creation : %s\n", err)
+			return nil
+		}
+
+		payload := protocol.AssetTypeMapping(assetCreation.AssetType)
+		if payload == nil {
+			fmt.Printf("Invalid asset type : %s\n", assetCreation.AssetType)
+			return nil
+		}
+
+		_, err := payload.Write(assetCreation.AssetPayload)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetCreation.AssetType))
+		}
+
+		fmt.Printf("Payload : %s\n", assetCreation.AssetType)
+		if hexFormat {
+			fmt.Printf("%x\n", payload)
+		} else if b64Format {
+			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetCreation.AssetPayload))
+		} else {
+			data, err = json.MarshalIndent(payload, "", "  ")
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetCreation.AssetType))
+			}
+			fmt.Printf(string(data) + "\n")
+		}
 	}
 
 	return nil

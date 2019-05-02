@@ -24,11 +24,13 @@ var cmdAuth = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		fmt.Printf("%d fields\n", fieldcount)
 
 		votecount, err := strconv.Atoi(args[1])
 		if err != nil {
 			return err
 		}
+		fmt.Printf("%d votes\n", votecount)
 
 		result := ""
 		permit := len(args) > 2 && strings.ToLower(args[2]) == "true"
@@ -75,8 +77,9 @@ var cmdAuth = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		fmt.Printf("%d auth flag bytes\n", len(authFlags))
 
-		fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(authFlags))
+		fmt.Printf("Auth flags : %s\n", base64.StdEncoding.EncodeToString(authFlags))
 		return nil
 	},
 }

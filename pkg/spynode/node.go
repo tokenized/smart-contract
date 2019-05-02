@@ -102,7 +102,6 @@ func (node *Node) load(ctx context.Context) error {
 	if err := node.peers.Load(ctx); err != nil {
 		return err
 	}
-	logger.Verbose(ctx, "Loaded %d peers", node.peers.Count())
 
 	if err := node.blocks.Load(ctx); err != nil {
 		return err
@@ -787,6 +786,15 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 				} else {
 					break
 				}
+			}
+		}
+
+		// Try for peers with a score
+		for !node.isStopping() && count < node.config.UntrustedCount {
+			if node.addUntrustedNode(ctx, &wg, 1) {
+				count++
+			} else {
+				break
 			}
 		}
 
