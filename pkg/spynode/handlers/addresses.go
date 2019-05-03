@@ -27,16 +27,8 @@ func (handler *AddressHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		return nil, errors.New("Could not assert as *wire.MsgAddr")
 	}
 
-	modified := false
 	for _, address := range msg.AddrList {
-		added, _ := handler.peers.Add(ctx, fmt.Sprintf("[%s]:%d", address.IP.To16().String(), address.Port))
-		if added {
-			modified = true
-		}
-	}
-
-	if modified {
-		handler.peers.Save(ctx)
+		handler.peers.Add(ctx, fmt.Sprintf("[%s]:%d", address.IP.To16().String(), address.Port))
 	}
 
 	return nil, nil

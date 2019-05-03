@@ -202,14 +202,16 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			if msg.Command() == "reject" {
-				logger.Warn(ctx, "Reject message : %s", err.Error())
-				continue
-			}
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Verbose(ctx, "Node %s failed to handle (%s) message : %s", node.address, msg.Command(), err.Error())
+			logger.Verbose(ctx, "Node %s failed to handle [%s] message : %s", node.address, msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
+		}
+		if msg.Command() == "reject" {
+			reject, ok := msg.(*wire.MsgReject)
+			if ok {
+				logger.Warn(ctx, "Reject message from %s : %s - %s", node.address, reject.Reason, reject.Hash.String())
+			}
 		}
 	}
 }
@@ -344,7 +346,8 @@ func (node *UntrustedNode) handleMessage(ctx context.Context, msg wire.Message) 
 
 	responses, err := handler.Handle(ctx, msg)
 	if err != nil {
-		return err
+		logger.Warn(ctx, "Failed to handle [%s] message : %s", msg.Command(), err)
+		return nil
 	}
 
 	// Queue messages to be sent in response

@@ -21,6 +21,8 @@ func Execute() {
 	scCmd.AddCommand(cmdBuild)
 	scCmd.AddCommand(cmdAuth)
 	scCmd.AddCommand(cmdConvert)
+	scCmd.AddCommand(cmdSign)
+	scCmd.AddCommand(cmdCode)
 	scCmd.Execute()
 }
 

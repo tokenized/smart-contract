@@ -61,6 +61,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	if !found {
+		node.Log(ctx, "Message not addressed to this contract")
 		return nil // Message not addressed to contract.
 	}
 
@@ -122,11 +123,13 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	if !found {
+		node.Log(ctx, "Reject message not addressed to this contract")
 		return nil // Message not addressed to this contract.
 	}
 
 	// Validate all fields have valid values.
 	if err := msg.Validate(); err != nil {
+		node.LogWarn(ctx, "Reject invalid : %s", err)
 		return errors.Wrap(err, "Invalid rejection tx")
 	}
 

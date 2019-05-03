@@ -21,7 +21,7 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context
 	// Configure spynode logs to be info
 	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
 	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelInfo
+	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
 	logConfig.SubSystems[spynode.SubSystem].SetWriter(writer)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)

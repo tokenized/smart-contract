@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"errors"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -66,14 +65,12 @@ func New(config *Config, wallet wallet.WalletInterface, mw ...Middleware) *App {
 // Handle is our mechanism for mounting Handlers for a given event
 // this makes for really easy, convenient event handling.
 func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
-
 	// Wrap up the application-wide first, this will call the first function
 	// of each middleware which will return a function of type Handler.
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
 	h := func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error {
-
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -106,7 +103,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 
 		if !handled {
-			return errors.New("Unrelated Tx")
+			Log(ctx, "Unrelated tx")
 		}
 
 		return nil
@@ -119,14 +116,12 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 // Handle is our mechanism for mounting default Handlers for a given verb
 // this makes for really easy, convenient event handling.
 func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
-
 	// Wrap up the application-wide first, this will call the first function
 	// of each middleware which will return a function of type Handler.
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
 	h := func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error {
-
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -146,11 +141,28 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 
 		// For each address controlled by this wallet
 		rootKeys, _ := a.wallet.List(pkhs)
+		handled := false
 		for _, rootKey := range rootKeys {
+			// Set the context with the required values to process the event.
+			v := Values{
+				TraceID: span.SpanContext().TraceID.String(),
+				Now:     protocol.CurrentTimestamp(),
+			}
+			ctx = context.WithValue(ctx, KeyValues, &v)
+
+			// Add logger trace of beginning of contract and tx ids.
+			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
+			Log(ctx, "Trace Data : Contract %x Tx %s", rootKey.Address.ScriptAddress(), itx.Hash)
+
 			// Call the wrapped handler functions.
+			handled = true
 			if err := handler(ctx, w, itx, rootKey); err != nil {
 				return err
 			}
+		}
+
+		if !handled {
+			Log(ctx, "Unrelated tx")
 		}
 
 		return nil

@@ -214,6 +214,7 @@ func (node *Node) Run(ctx context.Context) error {
 		logger.Verbose(ctx, "Saving")
 		node.blocks.Save(ctx)
 		node.txs.Save(ctx)
+		node.peers.Save(ctx)
 
 		if !node.needsRestart || node.hardStop {
 			break
@@ -256,6 +257,7 @@ func (node *Node) Stop(ctx context.Context) error {
 }
 
 func (node *Node) requestStop(ctx context.Context) error {
+	logger.Info(ctx, "Stopping")
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
@@ -441,10 +443,6 @@ func (node *Node) processTxs(ctx context.Context) error {
 			}
 			logger.Info(ctx, "Directly handling tx : %s", tx.TxHash())
 			if err := node.handleMessage(ctx, tx); err != nil {
-				if tx.Command() == "reject" {
-					logger.Warn(ctx, "Reject message : %s", err.Error())
-					continue
-				}
 				logger.Info(ctx, "Failed to directly handle tx : %s", err.Error())
 			}
 		}
@@ -493,7 +491,8 @@ func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
 
 	responses, err := handler.Handle(ctx, msg)
 	if err != nil {
-		return err
+		logger.Warn(ctx, "Failed to handle [%s] message : %s", msg.Command(), err)
+		return nil
 	}
 
 	// Queue messages to be sent in response
@@ -569,13 +568,15 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			if msg.Command() == "reject" {
-				logger.Warn(ctx, "Reject message : %s", err.Error())
-				continue
-			}
-			logger.Warn(ctx, "Failed to handle (%s) message : %s", msg.Command(), err.Error())
+			logger.Warn(ctx, "Failed to handle [%s] message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
+		}
+		if msg.Command() == "reject" {
+			reject, ok := msg.(*wire.MsgReject)
+			if ok {
+				logger.Warn(ctx, "Reject message from %s : %s - %s", node.config.NodeAddress, reject.Reason, reject.Hash.String())
+			}
 		}
 	}
 }
@@ -806,8 +807,6 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 				break
 			}
 		}
-
-		node.peers.Save(ctx)
 
 		if node.isStopping() {
 			break

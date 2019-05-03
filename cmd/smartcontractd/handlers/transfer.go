@@ -197,7 +197,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		node.Log(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]*btcec.PrivateKey{rk.PrivateKey}); err != nil {
 			node.LogWarn(ctx, "Failed to sign settle tx : %s", err)
-			return node.ErrNoResponse
+			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectInsufficientValue, false)
 		}
 		return node.Respond(ctx, w, settleTx.MsgTx)
 	}
@@ -1009,7 +1009,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
 
 	// Check all oracles
-	for _, oracle := range ct.Oracles {
+	for i, oracle := range ct.Oracles {
 		oraclePubKey, err := btcec.ParsePubKey(oracle.PublicKey, btcec.S256())
 		if err != nil {
 			return errors.Wrap(err, "Failed to parse oracle pub key")
@@ -1022,7 +1022,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
 			}
-			node.LogVerbose(ctx, "Checking oracle sig against block hash %d : %s", blockHeight, hash.String())
+			node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s", i, blockHeight, hash.String())
 			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode, &assetReceiver.Address,
 				assetReceiver.Quantity, hash)
 			if err != nil {
@@ -1047,7 +1047,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 		}
 	}
 
-	return fmt.Errorf("Signature invalid")
+	return fmt.Errorf("Valid signature not found")
 }
 
 // respondTransferReject sends a reject to all parties involved with a transfer request and refunds
