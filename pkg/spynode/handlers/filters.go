@@ -12,7 +12,7 @@ type TxFilter interface {
 	IsRelevant(context.Context, *wire.MsgTx) bool
 }
 
-func matchesFilter(ctx context.Context, tx *wire.MsgTx, filters []TxFilter) bool {
+func MatchesFilter(ctx context.Context, tx *wire.MsgTx, filters []TxFilter) bool {
 	if len(filters) == 0 {
 		return true // No filters means all tx are "relevant"
 	}

@@ -12,7 +12,7 @@ import (
 // MemPool is used for managing announced transactions that haven't confirmed yet.
 // The mempool is non-persistent and is mainly used to prevent duplicate tx requests.
 type MemPool struct {
-	txs      map[chainhash.Hash]memPoolTx         // Lookup of block height by hash.
+	txs      map[chainhash.Hash]*memPoolTx        // Lookup of block height by hash.
 	inputs   map[chainhash.Hash][]*chainhash.Hash // Lookup by hash of outpoint. Used to find conflicting inputs.
 	requests map[chainhash.Hash]time.Time         // Transactions that have been requested
 	mutex    sync.Mutex
@@ -21,7 +21,7 @@ type MemPool struct {
 // NewMemPool returns a new MemPool.
 func NewMemPool() *MemPool {
 	result := MemPool{
-		txs:      make(map[chainhash.Hash]memPoolTx),
+		txs:      make(map[chainhash.Hash]*memPoolTx),
 		inputs:   make(map[chainhash.Hash][]*chainhash.Hash),
 		requests: make(map[chainhash.Hash]time.Time),
 	}
@@ -37,12 +37,17 @@ func (memPool *MemPool) AddRequest(txid *chainhash.Hash) (bool, bool) {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
-	_, exists := memPool.txs[*txid]
+	now := time.Now()
+	tx, exists := memPool.txs[*txid]
 	if exists {
-		return true, false // Already in the mempool
+		if len(tx.outPoints) > 0 {
+			return true, false // Already in the mempool
+		}
+	} else {
+		// Add tx
+		memPool.txs[*txid] = newMemPoolTx(now)
 	}
 
-	now := time.Now()
 	requestTime, requested := memPool.requests[*txid]
 	if !requested || now.Sub(requestTime).Seconds() > 3 {
 		// Tx has not been requested yet or the previous request is old
@@ -65,17 +70,22 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*chainhash.Hash, bool)
 	result := make([]*chainhash.Hash, 0)
 	hash := tx.TxHash()
 
-	_, exists := memPool.txs[hash]
+	memTx, exists := memPool.txs[hash]
 	if exists {
-		return result, false // Already in the mempool
+		if len(memTx.outPoints) > 0 {
+			return result, false // Already in the mempool
+		}
+	} else {
+		// Add tx
+		memTx = newMemPoolTx(time.Now())
+		memPool.txs[hash] = memTx
 	}
 
-	// Add tx
-	newTx := newMemPoolTx(time.Now(), tx)
-	memPool.txs[hash] = newTx
+	// Add outpoints to mempool tx
+	memTx.populateMemPoolTx(tx)
 
 	// Add inputs while checking for conflicts
-	for _, outpoint := range newTx.outPoints {
+	for _, outpoint := range memTx.outPoints {
 		outpointHash := outpoint.OutpointHash()
 		list, exists := memPool.inputs[outpointHash]
 		if exists {
@@ -150,8 +160,12 @@ func (memPool *MemPool) TransactionExists(hash *chainhash.Hash) bool {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
-	_, exists := memPool.txs[*hash]
-	return exists
+	tx, exists := memPool.txs[*hash]
+	if !exists {
+		return false
+	}
+
+	return len(tx.outPoints) > 0
 }
 
 // Returns txids of any transactions from the mempool with inputs that conflict with the specified
@@ -179,15 +193,20 @@ type memPoolTx struct {
 	outPoints []wire.OutPoint
 }
 
-func newMemPoolTx(time time.Time, tx *wire.MsgTx) memPoolTx {
+func newMemPoolTx(t time.Time) *memPoolTx {
 	result := memPoolTx{
-		time:      time,
-		outPoints: make([]wire.OutPoint, 0, len(tx.TxIn)),
+		time: t,
 	}
+	return &result
+}
 
-	for _, input := range tx.TxIn {
-		result.outPoints = append(result.outPoints, input.PreviousOutPoint)
+func (tx *memPoolTx) populateMemPoolTx(txMsg *wire.MsgTx) {
+	if len(tx.outPoints) > 0 {
+		return // Already populated
 	}
+	tx.outPoints = make([]wire.OutPoint, 0, len(txMsg.TxIn))
 
-	return result
+	for _, input := range txMsg.TxIn {
+		tx.outPoints = append(tx.outPoints, input.PreviousOutPoint)
+	}
 }

@@ -27,6 +27,7 @@ type UntrustedNode struct {
 	txs        *handlerstorage.TxRepository
 	txTracker  *data.TxTracker
 	memPool    *data.MemPool
+	txChannel  *handlers.TxChannel
 	handlers   map[string]handlers.CommandHandler
 	connection net.Conn
 	outgoing   chan wire.Message
@@ -38,7 +39,10 @@ type UntrustedNode struct {
 	lock       sync.Mutex
 }
 
-func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository, blocks *handlerstorage.BlockRepository, txs *handlerstorage.TxRepository, memPool *data.MemPool, listeners []handlers.Listener, txFilters []handlers.TxFilter) *UntrustedNode {
+func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository,
+	blocks *handlerstorage.BlockRepository, txs *handlerstorage.TxRepository, memPool *data.MemPool,
+	txChannel *handlers.TxChannel, listeners []handlers.Listener, txFilters []handlers.TxFilter) *UntrustedNode {
+
 	result := UntrustedNode{
 		address:   address,
 		config:    config,
@@ -51,6 +55,7 @@ func NewUntrustedNode(address string, config data.Config, store storage.Storage,
 		outgoing:  make(chan wire.Message, 100),
 		listeners: listeners,
 		txFilters: txFilters,
+		txChannel: txChannel,
 		stopping:  false,
 		active:    false,
 	}
@@ -66,7 +71,8 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 		return nil
 	}
 
-	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.state, node.peers, node.blocks, node.txs, node.txTracker, node.memPool, node.listeners, node.txFilters)
+	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.state, node.peers, node.blocks, node.txs,
+		node.txTracker, node.memPool, node.txChannel, node.listeners, node.txFilters)
 
 	if err := node.connect(); err != nil {
 		node.lock.Unlock()

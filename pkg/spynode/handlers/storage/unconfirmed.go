@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	unconfirmedTxSize = chainhash.HashSize + 10
+	unconfirmedTxSize = chainhash.HashSize + 11
 )
 
 var (
@@ -21,11 +21,25 @@ var (
 // Mark an unconfirmed tx as unsafe
 // Returns true if the tx was marked
 func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid chainhash.Hash) (bool, error) {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
+	repo.unconfirmedLock.Lock()
+	defer repo.unconfirmedLock.Unlock()
 
 	if tx, exists := repo.unconfirmed[txid]; exists {
 		tx.unsafe = true
+		return true, nil
+	}
+	return false, nil
+}
+
+// Mark an unconfirmed tx as being verified by a trusted node.
+// Returns true if the tx was marked
+func (repo *TxRepository) MarkTrusted(ctx context.Context, txid *chainhash.Hash) (bool, error) {
+	repo.unconfirmedLock.Lock()
+	defer repo.unconfirmedLock.Unlock()
+
+	if tx, exists := repo.unconfirmed[*txid]; exists {
+		tx.time = time.Now() // Reset so the "safe" delay is from when the trusted node verified.
+		tx.trusted = true
 		return true, nil
 	}
 	return false, nil
@@ -35,12 +49,12 @@ func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid chainhash.Hash) (
 //   specified time.
 // Also marks all returned txs as safe
 func (repo *TxRepository) GetNewSafe(ctx context.Context, beforeTime time.Time) ([]chainhash.Hash, error) {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
+	repo.unconfirmedLock.Lock()
+	defer repo.unconfirmedLock.Unlock()
 
 	result := make([]chainhash.Hash, 0)
 	for hash, tx := range repo.unconfirmed {
-		if !tx.safe && !tx.unsafe && tx.time.Before(beforeTime) {
+		if !tx.safe && !tx.unsafe && tx.trusted && tx.time.Before(beforeTime) {
 			tx.safe = true
 			result = append(result, hash)
 		}
@@ -50,16 +64,18 @@ func (repo *TxRepository) GetNewSafe(ctx context.Context, beforeTime time.Time) 
 }
 
 type unconfirmedTx struct { // Tx ID hash is key of map containing this struct
-	time   time.Time // Time first seen
-	unsafe bool      // Conflict seen
-	safe   bool      // Safe notification sent
+	time    time.Time // Time first seen
+	unsafe  bool      // Conflict seen
+	safe    bool      // Safe notification sent
+	trusted bool      // Verified by trusted node
 }
 
-func newUnconfirmedTx() *unconfirmedTx {
+func newUnconfirmedTx(trusted bool) *unconfirmedTx {
 	result := unconfirmedTx{
-		time:   time.Now(),
-		unsafe: false,
-		safe:   false,
+		time:    time.Now(),
+		unsafe:  false,
+		safe:    false,
+		trusted: trusted,
 	}
 	return &result
 }
@@ -99,10 +115,20 @@ func (tx *unconfirmedTx) Write(out io.Writer, txid *chainhash.Hash) error {
 		return err
 	}
 
+	// Trusted
+	if tx.trusted {
+		_, err = out.Write(TrueData[:])
+	} else {
+		_, err = out.Write(FalseData[:])
+	}
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func readUnconfirmedTx(in io.Reader) (chainhash.Hash, *unconfirmedTx, error) {
+func readUnconfirmedTx(in io.Reader, version uint8) (chainhash.Hash, *unconfirmedTx, error) {
 	var txid chainhash.Hash
 	var tx unconfirmedTx
 	var err error
@@ -141,6 +167,17 @@ func readUnconfirmedTx(in io.Reader) (chainhash.Hash, *unconfirmedTx, error) {
 		tx.safe = false
 	} else {
 		tx.safe = true
+	}
+
+	// Trusted
+	_, err = in.Read(value[:])
+	if err != nil {
+		return txid, &tx, err
+	}
+	if value[0] == 0x00 {
+		tx.trusted = false
+	} else {
+		tx.trusted = true
 	}
 
 	return txid, &tx, nil

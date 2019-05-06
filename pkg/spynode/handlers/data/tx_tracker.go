@@ -41,7 +41,9 @@ func (tracker *TxTracker) Add(txid *chainhash.Hash) {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
-	tracker.txids[*txid] = time.Now()
+	if _, exists := tracker.txids[*txid]; !exists {
+		tracker.txids[*txid] = time.Now()
+	}
 }
 
 // Call when a tx is received to cancel tracking
@@ -51,8 +53,8 @@ func (tracker *TxTracker) Remove(ctx context.Context, txids []chainhash.Hash) {
 
 	// Iterate tracker ids first since that list should be much smaller
 	for _, removeid := range txids {
-		if _, exists := tracker.txids[removeid]; exists {
-			logger.Verbose(ctx, "Removing tracking for tx : %s", removeid.String())
+		if time, exists := tracker.txids[removeid]; exists {
+			logger.Verbose(ctx, "Removing tracking for tx (%s) : %s", time.Format("15:04:05.999999"), removeid.String())
 			delete(tracker.txids, removeid)
 		}
 	}

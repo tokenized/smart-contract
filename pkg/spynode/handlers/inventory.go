@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/pkg/errors"
@@ -14,12 +15,14 @@ type InvHandler struct {
 	state   *data.State
 	tracker *data.TxTracker
 	memPool *data.MemPool
+	txs     *storage.TxRepository
 }
 
 // NewInvHandler returns a new InvHandler
-func NewInvHandler(state *data.State, tracker *data.TxTracker, memPool *data.MemPool) *InvHandler {
+func NewInvHandler(state *data.State, txs *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool) *InvHandler {
 	result := InvHandler{
 		state:   state,
+		txs:     txs,
 		tracker: tracker,
 		memPool: memPool,
 	}
@@ -44,6 +47,7 @@ func (handler *InvHandler) Handle(ctx context.Context, m wire.Message) ([]wire.M
 	for _, item := range msg.InvList {
 		switch item.Type {
 		case wire.InvTypeTx:
+			handler.txs.MarkTrusted(ctx, &item.Hash)
 			alreadyHave, shouldRequest := handler.memPool.AddRequest(&item.Hash)
 			if !alreadyHave {
 				if shouldRequest {
@@ -59,6 +63,7 @@ func (handler *InvHandler) Handle(ctx context.Context, m wire.Message) ([]wire.M
 						}
 					}
 				} else {
+					// Track to ensure previous request is successful and if not, this node can request.
 					handler.tracker.Add(&item.Hash)
 				}
 			}

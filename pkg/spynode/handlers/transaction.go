@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"context"
+	"sync"
 
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -14,16 +14,25 @@ import (
 // TXHandler exists to handle the tx command.
 type TXHandler struct {
 	ready     StateReady
+	txChannel *TxChannel
 	memPool   *data.MemPool
 	txs       *storage.TxRepository
 	listeners []Listener
 	txFilters []TxFilter
 }
 
+type TxData struct {
+	Msg             *wire.MsgTx
+	Trusted         bool
+	ConfirmedHeight int
+	Relevant        bool
+}
+
 // NewTXHandler returns a new TXHandler with the given Config.
-func NewTXHandler(ready StateReady, memPool *data.MemPool, txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *TXHandler {
+func NewTXHandler(ready StateReady, txChannel *TxChannel, memPool *data.MemPool, txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *TXHandler {
 	result := TXHandler{
 		ready:     ready,
+		txChannel: txChannel,
 		memPool:   memPool,
 		txs:       txs,
 		listeners: listeners,
@@ -32,10 +41,6 @@ func NewTXHandler(ready StateReady, memPool *data.MemPool, txs *storage.TxReposi
 	return &result
 }
 
-type TxKey int
-
-var DirectTxKey TxKey = 1 // Used in context to flag when a tx is from the system
-
 // Handle implements the handler interface for transaction handler.
 func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
 	msg, ok := m.(*wire.MsgTx)
@@ -43,80 +48,51 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		return nil, errors.New("Could not assert as *wire.MsgTx")
 	}
 
-	hash := msg.TxHash()
-	logger.Debug(ctx, "Received tx : %s", hash)
-
-	// Only notify of transactions when in sync or they might be duplicated
-	if !handler.ready.IsReady() && ctx.Value(DirectTxKey) == nil {
+	// Only notify of transactions when in sync or they might be duplicated, since there isn't a mempool yet.
+	if !handler.ready.IsReady() {
 		return nil, nil
 	}
 
-	// The mempool is needed to track which transactions have been sent to listeners and to check
-	//   for attempted double spends.
-	conflicts, added := handler.memPool.AddTransaction(msg)
-
-	if !added {
-		return nil, nil // Already saw this tx
-	}
-
-	if len(conflicts) > 0 {
-		logger.Warn(ctx, "Found %d conflicts with %s", len(conflicts), hash)
-		// Notify of attempted double spend
-		for _, conflict := range conflicts {
-			marked, err := handler.txs.MarkUnsafe(ctx, *conflict)
-			if err != nil {
-				return nil, errors.Wrap(err, "Failed to check tx repo")
-			}
-			if marked { // Only send for txs that previously matched filters.
-				for _, listener := range handler.listeners {
-					listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, *conflict)
-				}
-			}
-		}
-	}
-
-	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
-	//   processing the same tx twice at the same time.
-	if added, err := handler.txs.Add(ctx, hash, -1); err != nil {
-		return nil, errors.Wrap(err, "Failed to add to tx repo")
-	} else if !added {
-		return nil, nil // Already seen
-	}
-
-	if !matchesFilter(ctx, msg, handler.txFilters) {
-		if _, err := handler.txs.Remove(ctx, hash, -1); err != nil {
-			return nil, errors.Wrap(err, "Failed to remove from tx repo")
-		}
-		return nil, nil // Filter out
-	}
-
-	// Notify of new tx
-	marked := false
-	var mark bool
-	var err error
-	for _, listener := range handler.listeners {
-		if mark, err = listener.HandleTx(ctx, msg); err != nil {
-			continue
-		}
-		if mark {
-			marked = true
-		}
-	}
-
-	if marked {
-		// Notify of conflicting txs
-		if len(conflicts) > 0 {
-			handler.txs.MarkUnsafe(ctx, hash)
-			for _, listener := range handler.listeners {
-				listener.HandleTxState(ctx, ListenerMsgTxStateUnsafe, hash)
-			}
-		}
-	} else {
-		// Remove from tx repository
-		if _, err := handler.txs.Remove(ctx, hash, -1); err != nil {
-			return nil, errors.Wrap(err, "Failed to remove from tx repo")
-		}
-	}
-
+	handler.txChannel.Add(&TxData{Msg: msg, Trusted: true, ConfirmedHeight: -1})
 	return nil, nil
+}
+
+type TxChannel struct {
+	Channel chan *TxData
+	lock    sync.Mutex
+	open    bool
+}
+
+func (c *TxChannel) Add(tx *TxData) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	c.Channel <- tx
+	return nil
+}
+
+func (c *TxChannel) Open(count int) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.Channel = make(chan *TxData, count)
+	c.open = true
+	return nil
+}
+
+func (c *TxChannel) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	close(c.Channel)
+	c.open = false
+	return nil
 }

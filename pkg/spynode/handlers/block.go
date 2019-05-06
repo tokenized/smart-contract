@@ -16,6 +16,7 @@ import (
 // BlockHandler exists to handle the block command.
 type BlockHandler struct {
 	state          *data.State
+	txChannel      *TxChannel
 	memPool        *data.MemPool
 	blocks         *storage.BlockRepository
 	txs            *storage.TxRepository
@@ -25,9 +26,10 @@ type BlockHandler struct {
 }
 
 // NewBlockHandler returns a new BlockHandler with the given Config.
-func NewBlockHandler(state *data.State, memPool *data.MemPool, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) *BlockHandler {
+func NewBlockHandler(state *data.State, txChannel *TxChannel, memPool *data.MemPool, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) *BlockHandler {
 	result := BlockHandler{
 		state:          state,
+		txChannel:      txChannel,
 		memPool:        memPool,
 		blocks:         blockRepo,
 		txs:            txRepo,
@@ -106,14 +108,13 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		var unconfirmed []chainhash.Hash
 		// This locks the tx repo so that propagated txs don't interfere while a block is being
 		//   processed.
-		unconfirmed, err = handler.txs.GetBlock(ctx, -1)
+		unconfirmed, err = handler.txs.GetUnconfirmed(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to get unconfirmed tx hashes")
 		}
 
 		// Send block notification
 		var removed bool = false
-		relevant := make([]chainhash.Hash, 0)
 		height := handler.blocks.LastHeight()
 		blockMessage := BlockMessage{Hash: hash, Height: height}
 		for _, listener := range handler.listeners {
@@ -124,7 +125,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		var hashes []chainhash.Hash
 		hashes, err = block.TxHashes()
 		if err != nil {
-			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+			handler.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
 			return nil, errors.Wrap(err, "Failed to get block tx hashes")
 		}
 
@@ -132,48 +133,20 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		for i, txHash := range hashes {
 			// Remove from unconfirmed. Only matching are in unconfirmed.
 			removed, unconfirmed = removeHash(&txHash, unconfirmed)
-
-			// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
-			// Or if it isn't in the mempool (not sent to listener yet).
-			marked := false
-			if !removed { // Full tx hasn't been sent to listener yet
-				if matchesFilter(ctx, block.Transactions[i], handler.txFilters) {
-					var mark bool
-					for _, listener := range handler.listeners {
-						if mark, err = listener.HandleTx(ctx, block.Transactions[i]); err != nil {
-							continue
-						}
-						if mark {
-							marked = true
-						}
-					}
-					if marked {
-						relevant = append(relevant, txHash)
-					}
-				}
-			}
+			handler.txChannel.Add(&TxData{Msg: block.Transactions[i], ConfirmedHeight: height, Relevant: removed})
 
 			if handler.state.IsReady() && !handler.memPool.RemoveTransaction(&txHash) {
 				// Transaction wasn't in the mempool.
 				// Check for transactions in the mempool with conflicting inputs (double spends).
 				if conflicting := handler.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
-					for _, hash := range conflicting {
-						if containsHash(&txHash, unconfirmed) { // Only send for txs that previously matched filters.
+					for _, confHash := range conflicting {
+						if containsHash(confHash, unconfirmed) { // Only send for txs that previously matched filters.
 							for _, listener := range handler.listeners {
-								if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *hash); err != nil {
+								if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *confHash); err != nil {
 									continue
 								}
 							}
 						}
-					}
-				}
-			}
-
-			if marked || removed {
-				// Notify of confirm
-				for _, listener := range handler.listeners {
-					if err = listener.HandleTxState(ctx, ListenerMsgTxStateConfirm, txHash); err != nil {
-						continue
 					}
 				}
 			}
@@ -183,7 +156,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		err = handler.blockProcessor.ProcessBlock(ctx, block)
 		if err != nil {
 			logger.Debug(ctx, "Failed clean up after block : %s", hash)
-			handler.txs.ReleaseBlock(ctx, -1) // Release unconfirmed
+			handler.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
 			return nil, err
 		}
 
@@ -194,8 +167,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 			}
 		}
 
-		logger.Debug(ctx, "Finalizing block : %s", hash)
-		if err := handler.txs.FinalizeBlock(ctx, unconfirmed, relevant, height); err != nil {
+		if err := handler.txs.FinalizeUnconfirmed(ctx, unconfirmed); err != nil {
 			return nil, err
 		}
 	}

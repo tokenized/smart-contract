@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -21,9 +22,10 @@ const (
 // TxRepository is used for managing which txs for each block are "relevant" and which have been
 //   sent to listeners.
 type TxRepository struct {
-	store       storage.Storage
-	unconfirmed map[chainhash.Hash]*unconfirmedTx
-	mutex       sync.Mutex
+	store           storage.Storage
+	unconfirmed     map[chainhash.Hash]*unconfirmedTx
+	unconfirmedLock sync.Mutex
+	blockLock       sync.Mutex
 }
 
 // NewTxRepository returns a new TxRepository.
@@ -52,8 +54,15 @@ func (repo *TxRepository) Load(ctx context.Context) error {
 	}
 
 	reader := bytes.NewReader(data)
+
+	var version uint8
+	err = binary.Read(reader, binary.LittleEndian, &version)
+	if err != nil {
+		return err
+	}
+
 	for {
-		txid, tx, err := readUnconfirmedTx(reader)
+		txid, tx, err := readUnconfirmedTx(reader, version)
 		if err == io.EOF {
 			break
 		}
@@ -69,30 +78,34 @@ func (repo *TxRepository) Load(ctx context.Context) error {
 
 func (repo *TxRepository) Save(ctx context.Context) error {
 	logger.Verbose(ctx, "Saving %d unconfirmed txs", len(repo.unconfirmed))
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
+	repo.unconfirmedLock.Lock()
+	defer repo.unconfirmedLock.Unlock()
 	return repo.save(ctx)
 }
 
 // Add a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns true if the txid was not already in the repo for the specified height, and was added
-func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
-
+func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted bool, height int) (bool, error) {
 	if height == -1 {
-		if _, exists := repo.unconfirmed[txid]; exists {
+		repo.unconfirmedLock.Lock()
+		defer repo.unconfirmedLock.Unlock()
+		if tx, exists := repo.unconfirmed[txid]; exists {
+			if trusted {
+				tx.trusted = true
+			}
 			return false, nil
 		}
 
-		repo.unconfirmed[txid] = newUnconfirmedTx()
+		repo.unconfirmed[txid] = newUnconfirmedTx(trusted)
 		return true, nil
 	}
 
 	path := repo.buildPath(height)
 
 	// Get current tx data for block
+	repo.blockLock.Lock()
+	defer repo.blockLock.Unlock()
 	data, err := repo.store.Read(ctx, path)
 	if err == storage.ErrNotFound {
 		// Create new tx block file with only one hash
@@ -120,10 +133,9 @@ func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, height i
 // Height of -1 means unconfirmed
 // Returns true if the txid was removed
 func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
-
 	if height == -1 {
+		repo.unconfirmedLock.Lock()
+		defer repo.unconfirmedLock.Unlock()
 		if _, exists := repo.unconfirmed[txid]; exists {
 			delete(repo.unconfirmed, txid)
 			return true, nil
@@ -134,6 +146,8 @@ func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, heigh
 	path := repo.buildPath(height)
 
 	// Get current tx data for block
+	repo.blockLock.Lock()
+	defer repo.blockLock.Unlock()
 	data, err := repo.store.Read(ctx, path)
 	if err == storage.ErrNotFound {
 		return false, nil
@@ -156,10 +170,9 @@ func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, heigh
 // Contains returns true if the tx id is in the specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
-
 	if height == -1 {
+		repo.unconfirmedLock.Lock()
+		defer repo.unconfirmedLock.Unlock()
 		_, exists := repo.unconfirmed[txid]
 		return exists, nil
 	}
@@ -167,6 +180,8 @@ func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, hei
 	path := repo.buildPath(height)
 
 	// Get current tx data for block
+	repo.blockLock.Lock()
+	defer repo.blockLock.Unlock()
 	data, err := repo.store.Read(ctx, path)
 	if err == storage.ErrNotFound {
 		return false, nil
@@ -189,20 +204,24 @@ func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, hei
 // Locks the tx repo.
 // RemoveBlock, SetBlock, or ReleaseBlock must be called after this to release the lock
 // Height of -1 means unconfirmed
-func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
-	repo.mutex.Lock()
-
-	if height == -1 {
-		result := make([]chainhash.Hash, 0, len(repo.unconfirmed))
-		for hash, _ := range repo.unconfirmed {
-			result = append(result, hash)
-		}
-		return result, nil
+func (repo *TxRepository) GetUnconfirmed(ctx context.Context) ([]chainhash.Hash, error) {
+	repo.unconfirmedLock.Lock()
+	result := make([]chainhash.Hash, 0, len(repo.unconfirmed))
+	for hash, _ := range repo.unconfirmed {
+		result = append(result, hash)
 	}
+	return result, nil
+}
 
+// GetBlock returns all "relevant" tx ids in a specified block
+// Locks the tx repo.
+// RemoveBlock, SetBlock, or ReleaseBlock must be called after this to release the lock
+// Height of -1 is invalid for this function
+func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
+	repo.blockLock.Lock()
 	hashes, err := repo.readBlock(ctx, height)
 	if err != nil {
-		repo.mutex.Unlock()
+		repo.blockLock.Unlock()
 		return nil, err
 	}
 
@@ -212,19 +231,8 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 // FinalizeBlock updates all "relevant" tx ids in a specified block and unconfirmed
 // Must only be called after GetBlock
 // Releases the lock made in GetBlock
-func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chainhash.Hash, txids []chainhash.Hash, height int) error {
-	defer repo.mutex.Unlock()
-
-	// Save block
-	if len(txids) > 0 {
-		if err := repo.writeBlock(ctx, txids, height); err != nil {
-			return err
-		}
-	} else {
-		if err := repo.store.Remove(ctx, repo.buildPath(height)); err != nil && err != storage.ErrNotFound {
-			return err
-		}
-	}
+func (repo *TxRepository) FinalizeUnconfirmed(ctx context.Context, unconfirmed []chainhash.Hash) error {
+	defer repo.unconfirmedLock.Unlock()
 
 	// Update unconfirmed
 	newUnconfirmed := make(map[chainhash.Hash]*unconfirmedTx)
@@ -232,7 +240,7 @@ func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chain
 		if tx, exists := repo.unconfirmed[hash]; exists {
 			newUnconfirmed[hash] = tx
 		} else {
-			newUnconfirmed[hash] = newUnconfirmedTx()
+			newUnconfirmed[hash] = newUnconfirmedTx(true)
 		}
 	}
 	repo.unconfirmed = newUnconfirmed
@@ -242,13 +250,9 @@ func (repo *TxRepository) FinalizeBlock(ctx context.Context, unconfirmed []chain
 // Removes all "relevant" tx ids in a specified block and releases lock
 // Must only be called after GetBlock
 // Releases the lock made in GetBlock
-// Height of -1 means unconfirmed
+// Height is invalid for this function
 func (repo *TxRepository) RemoveBlock(ctx context.Context, height int) error {
-	defer repo.mutex.Unlock()
-
-	if height == -1 {
-		repo.unconfirmed = make(map[chainhash.Hash]*unconfirmedTx)
-	}
+	defer repo.blockLock.Unlock()
 
 	err := repo.store.Remove(ctx, repo.buildPath(height))
 	if err == storage.ErrNotFound {
@@ -259,29 +263,38 @@ func (repo *TxRepository) RemoveBlock(ctx context.Context, height int) error {
 
 // ReleaseBlock releases the lock from GetBlock
 // Must only be called after GetBlock
+func (repo *TxRepository) ReleaseUnconfirmed(ctx context.Context) error {
+	repo.unconfirmedLock.Unlock()
+	return nil
+}
+
+// ReleaseBlock releases the lock from GetBlock
+// Must only be called after GetBlock
 func (repo *TxRepository) ReleaseBlock(ctx context.Context, height int) error {
-	repo.mutex.Unlock()
+	repo.blockLock.Unlock()
 	return nil
 }
 
 // SetBlock sets tx ids in a specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, height int) error {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
-
 	if height == -1 {
+		repo.unconfirmedLock.Lock()
+		defer repo.unconfirmedLock.Unlock()
 		newUnconfirmed := make(map[chainhash.Hash]*unconfirmedTx)
 		for _, hash := range txids {
 			if tx, exists := repo.unconfirmed[hash]; exists {
 				newUnconfirmed[hash] = tx
 			} else {
-				newUnconfirmed[hash] = newUnconfirmedTx()
+				newUnconfirmed[hash] = newUnconfirmedTx(true)
 			}
 		}
 		repo.unconfirmed = newUnconfirmed
+		return nil
 	}
 
+	repo.blockLock.Lock()
+	defer repo.blockLock.Unlock()
 	if len(txids) > 0 {
 		if err := repo.writeBlock(ctx, txids, height); err != nil {
 			return err
@@ -298,13 +311,15 @@ func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, 
 // ClearBlock clears all "relevant" tx ids in a specified block
 // Height of -1 means unconfirmed
 func (repo *TxRepository) ClearBlock(ctx context.Context, height int) error {
-	repo.mutex.Lock()
-	defer repo.mutex.Unlock()
-
 	if height == -1 {
+		repo.unconfirmedLock.Lock()
+		defer repo.unconfirmedLock.Unlock()
 		repo.unconfirmed = make(map[chainhash.Hash]*unconfirmedTx)
+		return nil
 	}
 
+	repo.blockLock.Lock()
+	defer repo.blockLock.Unlock()
 	err := repo.store.Remove(ctx, repo.buildPath(height))
 	if err == storage.ErrNotFound {
 		return nil
@@ -369,10 +384,15 @@ func (repo *TxRepository) save(ctx context.Context) error {
 		return nil
 	}
 
-	data := make([]byte, 0, unconfirmedTxSize*len(repo.unconfirmed))
+	data := make([]byte, 0, (unconfirmedTxSize*len(repo.unconfirmed))+1)
 	writer := bytes.NewBuffer(data)
+	version := uint8(0)
+	err := binary.Write(writer, binary.LittleEndian, version) // Milliseconds
+	if err != nil {
+		return err
+	}
 	for hash, tx := range repo.unconfirmed {
-		err := tx.Write(writer, &hash)
+		err = tx.Write(writer, &hash)
 		if err != nil {
 			return err
 		}

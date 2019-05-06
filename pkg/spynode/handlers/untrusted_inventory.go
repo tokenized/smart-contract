@@ -59,6 +59,7 @@ func (handler *UntrustedInvHandler) Handle(ctx context.Context, m wire.Message) 
 						}
 					}
 				} else {
+					// Track to ensure previous request is successful and if not, this node can request.
 					handler.tracker.Add(&item.Hash)
 				}
 			}

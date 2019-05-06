@@ -106,8 +106,11 @@ func TestHandlers(test *testing.T) {
 	testListener := TestListener{test: test, txs: txRepo, height: 0, txTracker: txTracker}
 	listeners := []Listener{&testListener}
 
+	txChannel := TxChannel{}
+	txChannel.Open(100)
+
 	// Create handlers
-	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo, reorgRepo, txTracker, memPool, listeners, nil, &testListener)
+	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo, reorgRepo, txTracker, memPool, &txChannel, listeners, nil, &testListener)
 
 	// Build a bunch of headers
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
