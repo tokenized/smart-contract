@@ -287,6 +287,13 @@ func ReadMessageN(r io.Reader, pver uint32, btcnet BitcoinNet) (int, Message, []
 		return totalBytes, nil, nil, err
 	}
 
+	// Check for messages from the wrong bitcoin network.
+	if hdr.magic != btcnet {
+		discardInput(r, hdr.length)
+		str := fmt.Sprintf("message from other network [%v]", hdr.magic)
+		return totalBytes, nil, nil, messageError("ReadMessage", str)
+	}
+
 	// Enforce maximum message payload.
 	if hdr.length > MaxMessagePayload {
 		str := fmt.Sprintf("message payload is too large - header "+
@@ -294,13 +301,6 @@ func ReadMessageN(r io.Reader, pver uint32, btcnet BitcoinNet) (int, Message, []
 			"bytes.", hdr.length, MaxMessagePayload)
 		return totalBytes, nil, nil, messageError("ReadMessage", str)
 
-	}
-
-	// Check for messages from the wrong bitcoin network.
-	if hdr.magic != btcnet {
-		discardInput(r, hdr.length)
-		str := fmt.Sprintf("message from other network [%v]", hdr.magic)
-		return totalBytes, nil, nil, messageError("ReadMessage", str)
 	}
 
 	// Check for malformed commands.

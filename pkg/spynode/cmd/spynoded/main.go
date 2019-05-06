@@ -150,7 +150,7 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil {
-			logger.Fatal(ctx, "Server failure : %s", err.Error())
+			logger.Error(ctx, "Node failure : %s", err.Error())
 		}
 
 	case <-osSignals:
@@ -158,7 +158,7 @@ func main() {
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Fatal(ctx, "Failed to stop spynode server: %s", err.Error())
+			logger.Error(ctx, "Failed to stop spynode server: %s", err.Error())
 		}
 	}
 }
