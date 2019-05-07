@@ -182,7 +182,7 @@ func TestReadMessageWireErrors(t *testing.T) {
 	// Ensure message errors are as expected with a function specified.
 	wantFunc := "foo"
 	testErr = MessageError{Func: wantFunc, Description: wantErr}
-	if testErr.Error() != wantFunc+": "+wantErr {
+	if testErr.Error() != wantFunc+" : "+wantErr {
 		t.Errorf("MessageError: wrong error - got %v, want %v",
 			testErr.Error(), wantErr)
 	}
@@ -242,7 +242,7 @@ func TestReadMessageWireErrors(t *testing.T) {
 			pver,
 			btcnet,
 			0,
-			io.EOF,
+			&MessageError{Type: MessageErrorConnectionClosed},
 			0,
 		},
 

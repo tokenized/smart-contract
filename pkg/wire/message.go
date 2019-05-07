@@ -284,14 +284,17 @@ func ReadMessageN(r io.Reader, pver uint32, btcnet BitcoinNet) (int, Message, []
 	n, hdr, err := readMessageHeader(r)
 	totalBytes += n
 	if err != nil {
-		return totalBytes, nil, nil, err
+		if err == io.EOF {
+			return totalBytes, nil, nil, messageTypeError("ReadMessage", MessageErrorConnectionClosed, err.Error())
+		}
+		return totalBytes, nil, nil, messageTypeError("ReadMessage", MessageErrorUndefined, err.Error())
 	}
 
 	// Check for messages from the wrong bitcoin network.
 	if hdr.magic != btcnet {
 		discardInput(r, hdr.length)
-		str := fmt.Sprintf("message from other network [%v]", hdr.magic)
-		return totalBytes, nil, nil, messageError("ReadMessage", str)
+		str := fmt.Sprintf("[%v]", hdr.magic)
+		return totalBytes, nil, nil, messageTypeError("ReadMessage", MessageErrorWrongNetwork, str)
 	}
 
 	// Enforce maximum message payload.
@@ -307,16 +310,14 @@ func ReadMessageN(r io.Reader, pver uint32, btcnet BitcoinNet) (int, Message, []
 	command := hdr.command
 	if !utf8.ValidString(command) {
 		discardInput(r, hdr.length)
-		str := fmt.Sprintf("invalid command %v", []byte(command))
-		return totalBytes, nil, nil, messageError("ReadMessage", str)
+		return totalBytes, nil, nil, messageTypeError("ReadMessage", MessageErrorUnknownCommand, command)
 	}
 
 	// Create struct of appropriate message type based on the command.
 	msg, err := makeEmptyMessage(command)
 	if err != nil {
 		discardInput(r, hdr.length)
-		return totalBytes, nil, nil, messageError("ReadMessage",
-			err.Error())
+		return totalBytes, nil, nil, messageTypeError("ReadMessage", MessageErrorUnknownCommand, command)
 	}
 
 	// Check for maximum length based on the message type as a malicious client

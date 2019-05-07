@@ -4,10 +4,6 @@
 
 package wire
 
-import (
-	"fmt"
-)
-
 // MessageError describes an issue with a message.
 // An example of some potential issues are messages from the wrong bitcoin
 // network, invalid commands, mismatched checksums, and exceeding max payloads.
@@ -17,18 +13,56 @@ import (
 // resulted from malformed messages.
 type MessageError struct {
 	Func        string // Function name
+	Type        int
 	Description string // Human readable description of the issue
 }
 
 // Error satisfies the error interface and prints human-readable errors.
 func (e *MessageError) Error() string {
-	if e.Func != "" {
-		return fmt.Sprintf("%v: %v", e.Func, e.Description)
+	result := ""
+	if len(e.Func) > 0 {
+		result += e.Func + " : "
 	}
-	return e.Description
+	typeName := messageErrorTypeName(e.Type)
+	if len(typeName) > 0 {
+		result += typeName
+		if len(e.Description) > 0 {
+			result += " : " + e.Description
+		}
+	} else {
+		result += e.Description
+	}
+	return result
 }
 
 // messageError creates an error for the given function and description.
 func messageError(f string, desc string) *MessageError {
-	return &MessageError{Func: f, Description: desc}
+	return &MessageError{Func: f, Type: MessageErrorUndefined, Description: desc}
+}
+
+// messageTypeError creates an error for the given function, type, and description.
+func messageTypeError(f string, t int, desc string) *MessageError {
+	return &MessageError{Func: f, Type: t, Description: desc}
+}
+
+const (
+	MessageErrorUndefined        = 0
+	MessageErrorConnectionClosed = 1
+	MessageErrorWrongNetwork     = 2
+	MessageErrorUnknownCommand   = 3
+)
+
+func messageErrorTypeName(t int) string {
+	switch t {
+	case MessageErrorUndefined:
+		return ""
+	case MessageErrorConnectionClosed:
+		return "Connection Closed"
+	case MessageErrorWrongNetwork:
+		return "Wrong Network"
+	case MessageErrorUnknownCommand:
+		return "Unknown Command"
+	default:
+		return ""
+	}
 }
