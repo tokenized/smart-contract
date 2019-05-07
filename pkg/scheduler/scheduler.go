@@ -5,6 +5,12 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/tokenized/smart-contract/pkg/logger"
+)
+
+const (
+	SubSystem = "Scheduler" // For logger
 )
 
 var (
@@ -91,12 +97,19 @@ func (sch *Scheduler) stillRunning() bool {
 
 // Stop requests Run finish and waits for it to finish.
 func (sch *Scheduler) Stop(ctx context.Context) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	sch.lock.Lock()
 	sch.stopRequested = true
 	sch.lock.Unlock()
 
+	count := 0
 	for sch.stillRunning() {
 		time.Sleep(200 * time.Millisecond)
+		if count > 30 { // 3 seconds
+			logger.Info(ctx, "Waiting for scheduler to stop")
+			count = 0
+		}
+		count++
 	}
 	return nil
 }

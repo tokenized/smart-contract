@@ -412,5 +412,5 @@ func (repo *BlockRepository) read(ctx context.Context, height int) ([]wire.Block
 }
 
 func (repo *BlockRepository) buildPath(height int) string {
-	return fmt.Sprintf("blocks/%08x", height/blocksPerKey)
+	return fmt.Sprintf("spynode/blocks/%08x", height/blocksPerKey)
 }

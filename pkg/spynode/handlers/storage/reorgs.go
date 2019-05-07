@@ -103,7 +103,7 @@ func (repo *ReorgRepository) ClearActive(ctx context.Context) error {
 // List all reorgs
 func (repo *ReorgRepository) List(ctx context.Context) ([]*Reorg, error) {
 	query := make(map[string]string)
-	query["path"] = "reorgs"
+	query["path"] = "spynode/reorgs"
 	data, err := repo.store.Search(ctx, query)
 	if err != nil {
 		return nil, err
@@ -121,11 +121,11 @@ func (repo *ReorgRepository) List(ctx context.Context) ([]*Reorg, error) {
 }
 
 func (repo *ReorgRepository) buildPath(reorg *Reorg) string {
-	return fmt.Sprintf("reorgs/%x", reorg.Id())
+	return fmt.Sprintf("spynode/reorgs/%x", reorg.Id())
 }
 
 func (repo *ReorgRepository) buildActivePath() string {
-	return "reorgs/active"
+	return "spynode/reorgs/active"
 }
 
 func (reorg *Reorg) Id() []byte {

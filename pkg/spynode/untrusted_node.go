@@ -3,7 +3,6 @@ package spynode
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -36,12 +35,13 @@ type UntrustedNode struct {
 	stopping   bool
 	active     bool // Set to false when connection is closed
 	shotgunned bool
+	scanning   bool
 	lock       sync.Mutex
 }
 
 func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository,
 	blocks *handlerstorage.BlockRepository, txs *handlerstorage.TxRepository, memPool *data.MemPool,
-	txChannel *handlers.TxChannel, listeners []handlers.Listener, txFilters []handlers.TxFilter) *UntrustedNode {
+	txChannel *handlers.TxChannel, listeners []handlers.Listener, txFilters []handlers.TxFilter, scanning bool) *UntrustedNode {
 
 	result := UntrustedNode{
 		address:   address,
@@ -58,6 +58,7 @@ func NewUntrustedNode(address string, config data.Config, store storage.Storage,
 		txChannel: txChannel,
 		stopping:  false,
 		active:    false,
+		scanning:  scanning,
 	}
 	return &result
 }
@@ -194,17 +195,23 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 		// read new messages, blocking
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.ChainParams.Net))
-		if err == io.EOF {
-			// Happens when the connection is closed
-			logger.Debug(ctx, "Connection closed")
-			node.Stop(ctx)
-			break
-		}
 		if err != nil {
-			// Happens when the connection is closed
-			logger.Debug(ctx, "Failed to read message : %s", err.Error())
-			node.Stop(ctx)
-			break
+			wireError, ok := err.(*wire.MessageError)
+			if ok {
+				if wireError.Type == wire.MessageErrorUnknownCommand {
+					logger.Verbose(ctx, wireError.Error())
+					continue
+				} else {
+					logger.Warn(ctx, wireError.Error())
+					node.Stop(ctx)
+					break
+				}
+
+			} else {
+				logger.Warn(ctx, "Failed to read message : %s", err.Error())
+				node.Stop(ctx)
+				break
+			}
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
@@ -257,7 +264,7 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		}
 	}
 
-	if node.config.Scanning {
+	if node.scanning {
 		logger.Info(ctx, "Found peer %s", node.address)
 		node.Stop(ctx)
 		return nil

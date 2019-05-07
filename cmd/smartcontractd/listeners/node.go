@@ -81,8 +81,9 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.SpyNode.Run(ctx); err != nil {
 			node.LogError(ctx, "Spynode failed : %s", err)
-			server.Scheduler.Stop(ctx)
 		}
+		node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
+		server.Scheduler.Stop(ctx)
 		node.LogVerbose(ctx, "Spynode finished")
 	}()
 
@@ -90,8 +91,9 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.Scheduler.Run(ctx); err != nil {
 			node.LogError(ctx, "Scheduler failed : %s", err)
-			server.SpyNode.Stop(ctx)
 		}
+		node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
+		server.SpyNode.Stop(ctx)
 		node.LogVerbose(ctx, "Scheduler finished")
 	}()
 

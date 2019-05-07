@@ -8,8 +8,8 @@ import (
 
 const (
 	// Request timeouts in seconds
-	handshakeTimeout = 60
-	headerTimeout    = 120
+	handshakeTimeout = 30
+	headerTimeout    = 60
 	blockTimeout     = 600
 
 	// Maximum number of restarts allowed in a minute before stopping

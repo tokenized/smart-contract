@@ -6,6 +6,7 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
@@ -17,6 +18,7 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context
 	logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
+	logConfig.EnableSubSystem(scheduler.SubSystem)
 
 	// Configure spynode logs to be info
 	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
@@ -34,6 +36,7 @@ func ContextWithProductionLogger(ctx context.Context, writer io.Writer) context.
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(spynode.SubSystem)
+	logConfig.EnableSubSystem(scheduler.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

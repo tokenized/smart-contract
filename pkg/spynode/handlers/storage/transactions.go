@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	unconfirmedPath = "txs/unconfirmed"
+	unconfirmedPath = "spynode/txs/unconfirmed"
 )
 
 // TxRepository is used for managing which txs for each block are "relevant" and which have been
@@ -376,7 +376,7 @@ func (repo *TxRepository) readBlock(ctx context.Context, height int) ([]chainhas
 }
 
 func (repo *TxRepository) buildPath(height int) string {
-	return fmt.Sprintf("txs/%08x", height)
+	return fmt.Sprintf("spynode/txs/%08x", height)
 }
 
 func (repo *TxRepository) save(ctx context.Context) error {

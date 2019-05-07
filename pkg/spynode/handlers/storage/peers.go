@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	peersPath    = "peers"
+	peersPath    = "spynode/peers"
 	peersVersion = 1
 )
 

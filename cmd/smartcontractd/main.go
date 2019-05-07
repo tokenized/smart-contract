@@ -224,7 +224,7 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil {
-			logger.Fatal(ctx, "Error starting server: %s", err)
+			logger.Error(ctx, "Error starting server: %s", err)
 		}
 
 	case <-osSignals:
@@ -232,7 +232,7 @@ func main() {
 
 		// Asking listener to shutdown and load shed.
 		if err := node.Stop(ctx); err != nil {
-			logger.Fatal(ctx, "Could not stop server: %s", err)
+			logger.Error(ctx, "Could not stop server: %s", err)
 		}
 	}
 
@@ -240,6 +240,6 @@ func main() {
 	wg.Wait()
 	err = utxos.Save(ctx, masterDB)
 	if err != nil {
-		logger.Fatal(ctx, "Save UTXOs : %s", err)
+		logger.Error(ctx, "Save UTXOs : %s", err)
 	}
 }

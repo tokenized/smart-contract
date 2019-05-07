@@ -2,7 +2,6 @@ package spynode
 
 import (
 	"context"
-	"io"
 	"math/rand"
 	"net"
 	"sync"
@@ -51,6 +50,7 @@ type Node struct {
 	hardStop       bool
 	stopping       bool
 	stopped        bool
+	scanning       bool
 	lock           sync.Mutex
 	untrustedLock  sync.Mutex
 }
@@ -142,18 +142,19 @@ func (node *Node) Run(ctx context.Context) error {
 	}
 
 	initial := true
-	for {
+	for !node.isStopping() {
 		if initial {
 			logger.Verbose(ctx, "Connecting to %s", node.config.NodeAddress)
 		} else {
 			logger.Verbose(ctx, "Re-connecting to %s", node.config.NodeAddress)
 			node.state.LogRestart()
 		}
+		initial = false
 		if err = node.connect(ctx); err != nil {
 			logger.Verbose(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
-			break
+			time.Sleep(5 * time.Second)
+			continue
 		}
-		initial = false
 
 		node.outgoing = make(chan wire.Message, 100)
 		node.txChannel.Open(1000)
@@ -249,24 +250,36 @@ func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	node.hardStop = true
 	err := node.requestStop(ctx)
+	count := 0
 	for !node.isStopped() {
 		time.Sleep(100 * time.Millisecond)
+		if count > 30 { // 3 seconds
+			logger.Info(ctx, "Waiting for spynode to stop")
+			count = 0
+		}
+		count++
 	}
 	return err
 }
 
 func (node *Node) requestStop(ctx context.Context) error {
-	logger.Info(ctx, "Stopping")
+	logger.Verbose(ctx, "Requesting stop")
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
 	if node.stopping || node.stopped {
 		return nil
 	}
+	logger.Info(ctx, "Stopping")
 	node.stopping = true
-	close(node.outgoing)
+	if node.outgoing != nil {
+		close(node.outgoing)
+	}
 	node.txChannel.Close()
-	return node.connection.Close()
+	if node.connection != nil {
+		node.connection.Close()
+	}
+	return nil
 }
 
 // BroadcastTx broadcasts a tx to the network.
@@ -292,64 +305,19 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
-// Scan opens a lot of connetions at once to try to find peers.
+// Scan opens a lot of connections at once to try to find peers.
 func (node *Node) Scan(ctx context.Context, connections int) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Info(ctx, "Scanning for peers")
 
 	if err := node.load(ctx); err != nil {
 		return err
 	}
 
-	node.config.Scanning = true
-	wg := sync.WaitGroup{}
-	count := 0
-
-	peers, err := node.peers.GetUnchecked(ctx)
-	if err != nil {
+	if err := node.scan(ctx, connections, 0); err != nil {
 		return err
 	}
-	logger.Debug(ctx, "Found %d peers with no score", len(peers))
 
-	var address string
-	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	for !node.isStopping() && count < connections && len(peers) > 0 {
-		// Pick peer randomly
-		random := seed.Intn(len(peers))
-		address = peers[random].Address
-
-		// Remove this address and try again
-		peers = append(peers[:random], peers[random+1:]...)
-
-		// Attempt connection
-		newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-			node.memPool, &node.txChannel, node.listeners, node.txFilters)
-		node.untrustedLock.Lock()
-		node.untrustedNodes = append(node.untrustedNodes, newNode)
-		node.untrustedLock.Unlock()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			newNode.Run(ctx)
-		}()
-		count++
-	}
-
-	node.sleepUntilStop(30) // Wait for handshake
-
-	// Stop all
-	node.untrustedLock.Lock()
-	nodeCount := len(node.untrustedNodes)
-	for _, untrusted := range node.untrustedNodes {
-		untrusted.Stop(ctx)
-	}
-	node.untrustedLock.Unlock()
-
-	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", nodeCount)
-	wg.Wait()
-	node.peers.Save(ctx)
-	return nil
+	return node.peers.Save(ctx)
 }
 
 // AddPeer adds a peer to the database with a specific score.
@@ -435,9 +403,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 			if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
 				var mark bool
 				for _, listener := range node.listeners {
-					if mark, err = listener.HandleTx(ctx, tx.Msg); err != nil {
-						continue
-					}
+					mark, _ = listener.HandleTx(ctx, tx.Msg)
 					if mark {
 						marked = true
 					}
@@ -448,9 +414,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 		if marked || tx.Relevant {
 			// Notify of confirm
 			for _, listener := range node.listeners {
-				if err = listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, hash); err != nil {
-					return err
-				}
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, hash)
 			}
 
 			// Add to txs for block
@@ -503,11 +467,8 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 	// Notify of new tx
 	marked := false
 	var mark bool
-	var err error
 	for _, listener := range node.listeners {
-		if mark, err = listener.HandleTx(ctx, tx.Msg); err != nil {
-			continue
-		}
+		mark, _ = listener.HandleTx(ctx, tx.Msg)
 		if mark {
 			marked = true
 		}
@@ -639,16 +600,23 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 			break
 		}
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.ChainParams.Net))
-		if err == io.EOF {
-			// Happens when the connection is closed
-			logger.Verbose(ctx, "Connection closed")
-			node.restart(ctx)
-			break
-		}
 		if err != nil {
-			logger.Warn(ctx, "Failed to read message : %s", err.Error())
-			node.restart(ctx)
-			break
+			wireError, ok := err.(*wire.MessageError)
+			if ok {
+				if wireError.Type == wire.MessageErrorUnknownCommand {
+					logger.Verbose(ctx, wireError.Error())
+					continue
+				} else {
+					logger.Warn(ctx, wireError.Error())
+					node.restart(ctx)
+					break
+				}
+
+			} else {
+				logger.Warn(ctx, "Failed to read message : %s", err.Error())
+				node.restart(ctx)
+				break
+			}
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
@@ -814,6 +782,58 @@ func (node *Node) checkTxDelays(ctx context.Context) {
 	}
 }
 
+// Scan opens a lot of connections at once to try to find peers.
+func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) error {
+	if node.scanning {
+		return nil
+	}
+	node.scanning = true
+
+	peers, err := node.peers.GetUnchecked(ctx)
+	if err != nil {
+		return err
+	}
+	logger.Debug(ctx, "Found %d peers with no score", len(peers))
+	if len(peers) < uncheckedCount {
+		return nil // Not enough unchecked peers to run a scan
+	}
+
+	logger.Info(ctx, "Scanning %d peers", connections)
+
+	count := 0
+	nodes := make([]*UntrustedNode, 0, connections)
+	wg := sync.WaitGroup{}
+	var address string
+	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for !node.isStopping() && count < connections && len(peers) > 0 {
+		// Pick peer randomly
+		random := seed.Intn(len(peers))
+		address = peers[random].Address
+
+		// Remove this address and try again
+		peers = append(peers[:random], peers[random+1:]...)
+
+		// Attempt connection
+		newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
+			node.memPool, &node.txChannel, node.listeners, node.txFilters, true)
+		nodes = append(nodes, newNode)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			newNode.Run(ctx)
+		}()
+		count++
+	}
+
+	node.sleepUntilStop(30) // Wait for handshake
+
+	wg.Wait()
+	node.scanning = false
+	logger.Info(ctx, "Finished scanning")
+	return nil
+}
+
 // monitorUntrustedNodes monitors untrusted nodes.
 // Attempt to keep the specified number running.
 // Watch for when they become inactive and replace them.
@@ -830,6 +850,8 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			node.sleepUntilStop(5)
 			continue
 		}
+
+		node.scan(ctx, 1000, 1000)
 
 		// Check for inactive
 		for {
@@ -873,18 +895,9 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			}
 		}
 
-		// Try for peers with a score
+		// Try for peers with a score above zero
 		for !node.isStopping() && count < node.config.UntrustedCount {
 			if node.addUntrustedNode(ctx, &wg, 1) {
-				count++
-			} else {
-				break
-			}
-		}
-
-		// Try for peers with a non-negative score
-		for !node.isStopping() && count < node.config.UntrustedCount {
-			if node.addUntrustedNode(ctx, &wg, 0) {
 				count++
 			} else {
 				break
@@ -949,7 +962,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 
 	// Attempt connection
 	newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-		node.memPool, &node.txChannel, node.listeners, node.txFilters)
+		node.memPool, &node.txChannel, node.listeners, node.txFilters, false)
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
 	node.untrustedLock.Unlock()

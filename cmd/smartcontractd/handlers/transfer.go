@@ -560,7 +560,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		// Locate Asset
 		as, err := asset.Retrieve(ctx, masterDB, contractPKH, &assetTransfer.AssetCode)
 		if err != nil {
-			return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode, err)
+			return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode.String(), err)
 		}
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
 			return rejectError{code: protocol.RejectAssetFrozen}
@@ -576,7 +576,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		if contractInputIndex == uint16(0xffff) {
-			return fmt.Errorf("Contract input not found: %s %s", contractPKH, assetTransfer.AssetCode)
+			return fmt.Errorf("Contract input not found: %s %s", contractPKH, assetTransfer.AssetCode.String())
 		}
 
 		node.LogVerbose(ctx, "Adding settlement data for asset : %s", assetTransfer.AssetCode.String())
@@ -628,7 +628,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				node.LogWarn(ctx, "Frozen funds: contract=%s asset=%s party=%s",
-					contractPKH, assetTransfer.AssetCode, inputAddress)
+					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
 				return rejectError{code: protocol.RejectHoldingsFrozen}
 			}
 
@@ -640,7 +640,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
 				node.LogWarn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
-					contractPKH, assetTransfer.AssetCode, inputAddress)
+					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
 				return rejectError{code: protocol.RejectInsufficientQuantity}
 			}
 
@@ -957,7 +957,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 
 		if int(assetSettlement.ContractIndex) >= len(itx.Inputs) {
-			return fmt.Errorf("Settlement contract index out of range : %x", assetSettlement.AssetCode)
+			return fmt.Errorf("Settlement contract index out of range : %s", assetSettlement.AssetCode.String())
 		}
 
 		if !bytes.Equal(itx.Inputs[assetSettlement.ContractIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
