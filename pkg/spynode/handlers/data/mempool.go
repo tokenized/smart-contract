@@ -128,6 +128,12 @@ func (memPool *MemPool) RemoveTransaction(hash *chainhash.Hash) bool {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
+	return memPool.removeTransaction(hash)
+}
+
+// Removes a tx hash from the mempool
+// Returns true if the tx was in the mempool
+func (memPool *MemPool) removeTransaction(hash *chainhash.Hash) bool {
 	tx, exists := memPool.txs[*hash]
 	if exists {
 		// Remove outpoints
@@ -181,7 +187,7 @@ func (memPool *MemPool) Conflicting(tx *wire.MsgTx) []*chainhash.Hash {
 		if list, exists := memPool.inputs[input.PreviousOutPoint.OutpointHash()]; exists {
 			for _, hash := range list {
 				result = append(result, hash)
-				memPool.RemoveTransaction(hash)
+				memPool.removeTransaction(hash)
 			}
 		}
 	}
