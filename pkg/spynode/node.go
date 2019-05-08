@@ -789,13 +789,13 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 	}
 	node.scanning = true
 
-	ctx = logger.ContextWithLogTrace(ctx, "scanning")
+	ctx = logger.ContextWithLogTrace(ctx, "scan")
 
 	peers, err := node.peers.GetUnchecked(ctx)
 	if err != nil {
 		return err
 	}
-	logger.Debug(ctx, "Found %d peers with no score", len(peers))
+	logger.Info(ctx, "Found %d peers with no score", len(peers))
 	if len(peers) < uncheckedCount {
 		return nil // Not enough unchecked peers to run a scan
 	}
@@ -830,6 +830,11 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 
 	node.sleepUntilStop(30) // Wait for handshake
 
+	for _, node := range nodes {
+		node.Stop(ctx)
+	}
+
+	logger.Info(ctx, "Waiting for %d scanning nodes to stop", len(nodes))
 	wg.Wait()
 	node.scanning = false
 	logger.Info(ctx, "Finished scanning")
@@ -845,15 +850,22 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	wg := sync.WaitGroup{}
 	for !node.isStopping() {
-		node.untrustedLock.Lock()
-
 		if !node.state.IsReady() {
-			node.untrustedLock.Unlock()
 			node.sleepUntilStop(5)
 			continue
 		}
 
 		node.scan(ctx, 1000, 1000)
+		if node.isStopping() {
+			break
+		}
+
+		node.untrustedLock.Lock()
+		if !node.state.IsReady() {
+			node.untrustedLock.Unlock()
+			node.sleepUntilStop(5)
+			continue
+		}
 
 		// Check for inactive
 		for {
@@ -967,8 +979,8 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 		node.memPool, &node.txChannel, node.listeners, node.txFilters, false)
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
-	node.untrustedLock.Unlock()
 	wg.Add(1)
+	node.untrustedLock.Unlock()
 	go func() {
 		defer wg.Done()
 		newNode.Run(ctx)
