@@ -587,10 +587,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		sendBalance := uint64(0)
-		fromNonIssuer := uint64(0)
-		fromIssuer := uint64(0)
-		toNonIssuer := uint64(0)
-		toIssuer := uint64(0)
+		fromNonAdministration := uint64(0)
+		fromAdministration := uint64(0)
+		toNonAdministration := uint64(0)
+		toAdministration := uint64(0)
 		settlementQuantities := make([]*uint64, len(settleTx.Outputs))
 
 		// Process senders
@@ -604,10 +604,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			inputPKH := transferTx.Inputs[sender.Index].Address.ScriptAddress()
 
-			if bytes.Equal(inputPKH, ct.IssuerPKH.Bytes()) {
-				fromIssuer += sender.Quantity
+			if bytes.Equal(inputPKH, ct.AdministrationPKH.Bytes()) {
+				fromAdministration += sender.Quantity
 			} else {
-				fromNonIssuer += sender.Quantity
+				fromNonAdministration += sender.Quantity
 			}
 
 			// Find output in settle tx
@@ -666,10 +666,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					assetOffset, receiverOffset, receiver.Address.String())
 			}
 
-			if bytes.Equal(receiver.Address.Bytes(), ct.IssuerPKH.Bytes()) {
-				toIssuer += receiver.Quantity
+			if bytes.Equal(receiver.Address.Bytes(), ct.AdministrationPKH.Bytes()) {
+				toAdministration += receiver.Quantity
 			} else {
-				toNonIssuer += receiver.Quantity
+				toNonAdministration += receiver.Quantity
 			}
 
 			// Check Oracle Signature
@@ -697,14 +697,14 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		if !as.TransfersPermitted {
-			if fromNonIssuer > toIssuer {
-				node.LogWarn(ctx, "Transfers not permitted. Sending tokens not all to issuer : %d/%d",
-					fromNonIssuer, toIssuer)
+			if fromNonAdministration > toAdministration {
+				node.LogWarn(ctx, "Transfers not permitted. Sending tokens not all to administration : %d/%d",
+					fromNonAdministration, toAdministration)
 				return rejectError{code: protocol.RejectAssetNotPermitted}
 			}
-			if toNonIssuer > fromIssuer {
-				node.LogWarn(ctx, "Transfers not permitted. Receiving tokens not all from issuer : %d/%d",
-					toNonIssuer, fromIssuer)
+			if toNonAdministration > fromAdministration {
+				node.LogWarn(ctx, "Transfers not permitted. Receiving tokens not all from administration : %d/%d",
+					toNonAdministration, fromAdministration)
 				return rejectError{code: protocol.RejectAssetNotPermitted}
 			}
 		}
@@ -1136,9 +1136,9 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Co
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
-		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the issuer to hold.
-		issuerAddress, err := btcutil.NewAddressPubKeyHash(ct.IssuerPKH.Bytes(), &config.ChainParams)
-		w.ClearRejectOutputValues(issuerAddress)
+		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
+		administrationAddress, err := btcutil.NewAddressPubKeyHash(ct.AdministrationPKH.Bytes(), &config.ChainParams)
+		w.ClearRejectOutputValues(administrationAddress)
 	}
 
 	return node.RespondReject(ctx, w, transferTx, rk, code)

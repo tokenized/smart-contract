@@ -82,9 +82,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 
 	// Check if sender is allowed to make proposal
-	if msg.Initiator == 0 { // Issuer Proposal
+	if msg.Initiator == 0 { // Administration Proposal
 		if !contract.IsOperator(ctx, ct, senderPKH) {
-			node.LogWarn(ctx, "Initiator PKH is not issuer or operator")
+			node.LogWarn(ctx, "Initiator PKH is not administration or operator")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 		}
 	} else if msg.Initiator == 1 { // Holder Proposal

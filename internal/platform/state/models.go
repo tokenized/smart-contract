@@ -13,10 +13,10 @@ type Contract struct {
 	Timestamp    protocol.Timestamp     `json:"timestamp,omitempty"`
 	FreezePeriod protocol.Timestamp     `json:"freeze_period,omitempty"`
 
-	IssuerPKH   protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
-	OperatorPKH protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
-	MasterPKH   protocol.PublicKeyHash `json:"master_pkh,omitempty"`
-	MovedTo     protocol.PublicKeyHash `json:"moved_to,omitempty"`
+	AdministrationPKH protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
+	OperatorPKH       protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	MasterPKH         protocol.PublicKeyHash `json:"master_pkh,omitempty"`
+	MovedTo           protocol.PublicKeyHash `json:"moved_to,omitempty"`
 
 	ContractName           string                  `json:"contract_name,omitempty"`
 	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
@@ -35,7 +35,7 @@ type Contract struct {
 	ContractFee            uint64                  `json:"contract_fee,omitempty"`
 	VotingSystems          []protocol.VotingSystem `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
-	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
+	AdministrationProposal bool                    `json:"administration_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
 	Oracles                []protocol.Oracle       `json:"oracles,omitempty"`
 
@@ -57,7 +57,7 @@ type Asset struct {
 	EnforcementOrdersPermitted  bool               `json:"enforcement_orders_permitted,omitempty"`
 	VotingRights                bool               `json:"voting_rights,omitempty"`
 	VoteMultiplier              uint8              `json:"vote_multiplier,omitempty"`
-	IssuerProposal              bool               `json:"issuer_proposal,omitempty"`
+	AdministrationProposal      bool               `json:"administration_proposal,omitempty"`
 	HolderProposal              bool               `json:"holder_proposal,omitempty"`
 	AssetModificationGovernance uint8              `json:"asset_modification_governance,omitempty"`
 	TokenQty                    uint64             `json:"token_qty,omitempty"`

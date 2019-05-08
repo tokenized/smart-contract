@@ -7,7 +7,7 @@ import (
 
 // NewAsset defines what we require when creating a Asset record.
 type NewAsset struct {
-	IssuerPKH protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
+	AdministrationPKH protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
 
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
@@ -19,7 +19,7 @@ type NewAsset struct {
 	EnforcementOrdersPermitted  bool      `json:"enforcement_orders_permitted,omitempty"`
 	VotingRights                bool      `json:"voting_rights,omitempty"`
 	VoteMultiplier              uint8     `json:"vote_multiplier,omitempty"`
-	IssuerProposal              bool      `json:"issuer_proposal,omitempty"`
+	AdministrationProposal      bool      `json:"administration_proposal,omitempty"`
 	HolderProposal              bool      `json:"holder_proposal,omitempty"`
 	AssetModificationGovernance uint8     `json:"asset_modification_governance,omitempty"`
 	TokenQty                    uint64    `json:"token_qty,omitempty"`
@@ -46,7 +46,7 @@ type UpdateAsset struct {
 	EnforcementOrdersPermitted  *bool               `json:"enforcement_orders_permitted,omitempty"`
 	VotingRights                *bool               `json:"voting_rights,omitempty"`
 	VoteMultiplier              *uint8              `json:"vote_multiplier,omitempty"`
-	IssuerProposal              *bool               `json:"issuer_proposal,omitempty"`
+	AdministrationProposal      *bool               `json:"administration_proposal,omitempty"`
 	HolderProposal              *bool               `json:"holder_proposal,omitempty"`
 	AssetModificationGovernance *uint8              `json:"asset_modification_governance,omitempty"`
 	TokenQty                    *uint64             `json:"token_qty,omitempty"`

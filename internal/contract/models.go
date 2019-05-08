@@ -8,9 +8,9 @@ import (
 type NewContract struct {
 	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
 
-	IssuerPKH   protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
-	OperatorPKH protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
-	MasterPKH   protocol.PublicKeyHash `json:"master_pkh,omitempty"`
+	AdministrationPKH protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
+	OperatorPKH       protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	MasterPKH         protocol.PublicKeyHash `json:"master_pkh,omitempty"`
 
 	ContractName           string                  `json:"contract_name,omitempty"`
 	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
@@ -29,7 +29,7 @@ type NewContract struct {
 	ContractFee            uint64                  `json:"contract_fee,omitempty"`
 	VotingSystems          []protocol.VotingSystem `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
-	IssuerProposal         bool                    `json:"issuer_proposal,omitempty"`
+	AdministrationProposal bool                    `json:"administration_proposal,omitempty"`
 	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
 	Oracle                 []protocol.Oracle       `json:"oracle,omitempty"`
 }
@@ -44,8 +44,8 @@ type UpdateContract struct {
 	Revision  *uint32             `json:"revision,omitempty"`
 	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
 
-	IssuerPKH   *protocol.PublicKeyHash `json:"issuer_pkh,omitempty"`
-	OperatorPKH *protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	AdministrationPKH *protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
+	OperatorPKH       *protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
 
 	ContractName           *string                  `json:"contract_name,omitempty"`
 	BodyOfAgreementType    *uint8                   `json:"body_of_agreement_type,omitempty"`
@@ -64,7 +64,7 @@ type UpdateContract struct {
 	ContractFee            *uint64                  `json:"contract_fee,omitempty"`
 	VotingSystems          *[]protocol.VotingSystem `json:"voting_systems,omitempty"`
 	RestrictedQtyAssets    *uint64                  `json:"restricted_qty_assets,omitempty"`
-	IssuerProposal         *bool                    `json:"issuer_proposal,omitempty"`
+	AdministrationProposal *bool                    `json:"administration_proposal,omitempty"`
 	HolderProposal         *bool                    `json:"holder_proposal,omitempty"`
 	Oracles                *[]protocol.Oracle       `json:"oracle,omitempty"`
 

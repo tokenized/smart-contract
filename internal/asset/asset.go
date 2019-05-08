@@ -68,7 +68,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 
 	a.Holdings = make([]state.Holding, 0, 1)
 	a.Holdings = append(a.Holdings, state.Holding{
-		PKH:       nu.IssuerPKH,
+		PKH:       nu.AdministrationPKH,
 		Balance:   nu.TokenQty,
 		CreatedAt: a.CreatedAt,
 		UpdatedAt: a.UpdatedAt,
@@ -116,8 +116,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.VoteMultiplier != nil {
 		a.VoteMultiplier = *upd.VoteMultiplier
 	}
-	if upd.IssuerProposal != nil {
-		a.IssuerProposal = *upd.IssuerProposal
+	if upd.AdministrationProposal != nil {
+		a.AdministrationProposal = *upd.AdministrationProposal
 	}
 	if upd.HolderProposal != nil {
 		a.HolderProposal = *upd.HolderProposal
@@ -365,9 +365,9 @@ func HoldingStatusExpired(ctx context.Context, hs *state.HoldingStatus, now prot
 // ValidateVoting returns an error if voting is not allowed.
 func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint8, votingSystem *protocol.VotingSystem) error {
 	switch initiatorType {
-	case 0: // Issuer
-		if !as.IssuerProposal {
-			return errors.New("Issuer proposals not allowed")
+	case 0: // Administration
+		if !as.AdministrationProposal {
+			return errors.New("Administration proposals not allowed")
 		}
 	case 1: // Holder
 		if !as.HolderProposal {

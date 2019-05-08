@@ -90,8 +90,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		c.Timestamp = *upd.Timestamp
 	}
 
-	if upd.IssuerPKH != nil {
-		c.IssuerPKH = *upd.IssuerPKH
+	if upd.AdministrationPKH != nil {
+		c.AdministrationPKH = *upd.AdministrationPKH
 	}
 	if upd.OperatorPKH != nil {
 		c.OperatorPKH = *upd.OperatorPKH
@@ -151,8 +151,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.RestrictedQtyAssets != nil {
 		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
 	}
-	if upd.IssuerProposal != nil {
-		c.IssuerProposal = *upd.IssuerProposal
+	if upd.AdministrationProposal != nil {
+		c.AdministrationProposal = *upd.AdministrationProposal
 	}
 	if upd.HolderProposal != nil {
 		c.HolderProposal = *upd.HolderProposal
@@ -323,9 +323,9 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, us
 	return result
 }
 
-// IsOperator will check if the supplied pkh has operator permission (issuer or operator)
+// IsOperator will check if the supplied pkh has operator permission (Administration or operator)
 func IsOperator(ctx context.Context, ct *state.Contract, pkh *protocol.PublicKeyHash) bool {
-	return bytes.Equal(ct.IssuerPKH.Bytes(), pkh.Bytes()) || bytes.Equal(ct.OperatorPKH.Bytes(), pkh.Bytes())
+	return bytes.Equal(ct.AdministrationPKH.Bytes(), pkh.Bytes()) || bytes.Equal(ct.OperatorPKH.Bytes(), pkh.Bytes())
 }
 
 // ValidateVoting returns an error if voting is not allowed.
@@ -335,9 +335,9 @@ func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint8
 	}
 
 	switch initiatorType {
-	case 0: // Issuer
-		if !ct.IssuerProposal {
-			return errors.New("Issuer proposals not allowed")
+	case 0: // Administration
+		if !ct.AdministrationProposal {
+			return errors.New("Administration proposals not allowed")
 		}
 	case 1: // Holder
 		if !ct.HolderProposal {

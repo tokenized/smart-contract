@@ -186,7 +186,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 		return errors.Wrap(err, "Failed to serialize revert payload")
 	}
 	message := protocol.Message{
-		AddressIndexes: []uint16{0}, // First receiver is issuer
+		AddressIndexes: []uint16{0}, // First receiver is administration
 		MessageType:    messagePayload.Type(),
 		MessagePayload: data,
 	}
@@ -200,8 +200,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	// Create tx
 	tx := txbuilder.NewTx(contractPKH.Bytes(), m.Config.DustLimit, m.Config.FeeRate)
 
-	// Add outputs to issuer/operator
-	tx.AddP2PKHDustOutput(ct.IssuerPKH.Bytes(), false)
+	// Add outputs to administration/operator
+	tx.AddP2PKHDustOutput(ct.AdministrationPKH.Bytes(), false)
 	outputAmount := uint64(m.Config.DustLimit)
 	if !ct.OperatorPKH.IsZero() {
 		// Add operator
@@ -964,9 +964,9 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
-		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the issuer to hold.
-		issuerAddress, err := btcutil.NewAddressPubKeyHash(ct.IssuerPKH.Bytes(), &m.Config.ChainParams)
-		w.ClearRejectOutputValues(issuerAddress)
+		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
+		administrationAddress, err := btcutil.NewAddressPubKeyHash(ct.AdministrationPKH.Bytes(), &m.Config.ChainParams)
+		w.ClearRejectOutputValues(administrationAddress)
 	}
 
 	return node.RespondReject(ctx, w, transferTx, rk, code)
@@ -1081,8 +1081,8 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone.
-		issuerAddress, err := btcutil.NewAddressPubKeyHash(ct.IssuerPKH.Bytes(), &config.ChainParams)
-		w.ClearRejectOutputValues(issuerAddress)
+		administrationAddress, err := btcutil.NewAddressPubKeyHash(ct.AdministrationPKH.Bytes(), &config.ChainParams)
+		w.ClearRejectOutputValues(administrationAddress)
 	}
 
 	// Set rejection address from previous rejection

@@ -73,10 +73,10 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Verify issuer is sender of tx.
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.IssuerPKH.Bytes()) {
-		node.LogWarn(ctx, "Only issuer can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotIssuer)
+	// Verify administration is sender of tx.
+	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.AdministrationPKH.Bytes()) {
+		node.LogWarn(ctx, "Only administration can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotAdministration)
 	}
 
 	// Generate Asset ID
@@ -303,11 +303,11 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Check issuer balance for token quantity reductions. Issuer has to hold any tokens being "burned".
-	issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
-	if ac.TokenQty < as.TokenQty && issuerBalance < as.TokenQty-ac.TokenQty {
-		node.LogWarn(ctx, "%s : Issuer doesn't hold required amount for token quantity reduction : %d < %d",
-			v.TraceID, issuerBalance, as.TokenQty-ac.TokenQty)
+	// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
+	administrationBalance := asset.GetBalance(ctx, as, &ct.AdministrationPKH)
+	if ac.TokenQty < as.TokenQty && administrationBalance < as.TokenQty-ac.TokenQty {
+		node.LogWarn(ctx, "%s : Administration doesn't hold required amount for token quantity reduction : %d < %d",
+			v.TraceID, administrationBalance, as.TokenQty-ac.TokenQty)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -411,7 +411,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return err
 		}
 
-		na.IssuerPKH = ct.IssuerPKH
+		na.AdministrationPKH = ct.AdministrationPKH
 
 		if err := contract.AddAssetCode(ctx, a.MasterDB, contractPKH, &msg.AssetCode, v.Now); err != nil {
 			return err
@@ -451,9 +451,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.VoteMultiplier = &msg.VoteMultiplier
 			node.Log(ctx, "Updating asset vote multiplier (%s) : %02x", msg.AssetCode.String(), *ua.VoteMultiplier)
 		}
-		if as.IssuerProposal != msg.IssuerProposal {
-			ua.IssuerProposal = &msg.IssuerProposal
-			node.Log(ctx, "Updating asset issuer proposal (%s) : %t", msg.AssetCode.String(), *ua.IssuerProposal)
+		if as.AdministrationProposal != msg.AdministrationProposal {
+			ua.AdministrationProposal = &msg.AdministrationProposal
+			node.Log(ctx, "Updating asset administration proposal (%s) : %t", msg.AssetCode.String(), *ua.AdministrationProposal)
 		}
 		if as.HolderProposal != msg.HolderProposal {
 			ua.HolderProposal = &msg.HolderProposal
@@ -467,18 +467,18 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.TokenQty = &msg.TokenQty
 			node.Log(ctx, "Updating asset token quantity %d : %s", *ua.TokenQty, msg.AssetCode.String())
 
-			issuerBalance := asset.GetBalance(ctx, as, &ct.IssuerPKH)
+			administrationBalance := asset.GetBalance(ctx, as, &ct.AdministrationPKH)
 			if msg.TokenQty > as.TokenQty {
 				node.Log(ctx, "Increasing token quantity by %d to %d : %s", msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
-				// Increasing token quantity. Give tokens to issuer.
-				issuerBalance += msg.TokenQty - as.TokenQty
+				// Increasing token quantity. Give tokens to administration.
+				administrationBalance += msg.TokenQty - as.TokenQty
 			} else {
 				node.Log(ctx, "Decreasing token quantity by %d to %d : %s", as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
-				// Decreasing token quantity. Take tokens from issuer.
-				issuerBalance -= as.TokenQty - msg.TokenQty
+				// Decreasing token quantity. Take tokens from administration.
+				administrationBalance -= as.TokenQty - msg.TokenQty
 			}
 			ua.NewBalances = make(map[protocol.PublicKeyHash]uint64)
-			ua.NewBalances[ct.IssuerPKH] = issuerBalance
+			ua.NewBalances[ct.AdministrationPKH] = administrationBalance
 		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
@@ -533,9 +533,9 @@ func checkAssetAmendmentsPermissions(as *state.Asset, votingSystems []protocol.V
 		}
 		if proposed {
 			switch proposalInitiator {
-			case 0: // Issuer
-				if !permissions[amendment.FieldIndex].IssuerProposal {
-					return fmt.Errorf("Field %d amendment not permitted by issuer proposal", amendment.FieldIndex)
+			case 0: // Administration
+				if !permissions[amendment.FieldIndex].AdministrationProposal {
+					return fmt.Errorf("Field %d amendment not permitted by administration proposal", amendment.FieldIndex)
 				}
 			case 1: // Holder
 				if !permissions[amendment.FieldIndex].HolderProposal {
@@ -646,13 +646,13 @@ func applyAssetAmendments(ac *protocol.AssetCreation, votingSystems []protocol.V
 				return fmt.Errorf("VoteMultiplier amendment value failed to deserialize : %s", err)
 			}
 
-		case 7: // IssuerProposal
+		case 7: // AdministrationProposal
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("IssuerProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.IssuerProposal); err != nil {
-				return fmt.Errorf("IssuerProposal amendment value failed to deserialize : %s", err)
+			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AdministrationProposal); err != nil {
+				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
 			}
 
 		case 8: // HolderProposal

@@ -237,7 +237,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
 	}
 
-	if msg.ChangeIssuerAddress || msg.ChangeOperatorAddress {
+	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
 		if len(itx.Inputs) < 2 {
 			node.LogVerbose(ctx, "Both operators required for operator change")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
@@ -287,18 +287,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	w.AddOutput(ctx, contractAddress, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
-	// Issuer change. New issuer in second input
-	if msg.ChangeIssuerAddress {
+	// Administration change. New administration in second input
+	if msg.ChangeAdministrationAddress {
 		if len(itx.Inputs) < 2 {
-			node.LogWarn(ctx, "New issuer specified but not included in inputs (%s)", ct.ContractName)
+			node.LogWarn(ctx, "New administration specified but not included in inputs (%s)", ct.ContractName)
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
 		}
 	}
 
-	// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+	// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
 	if msg.ChangeOperatorAddress {
 		index := 1
-		if msg.ChangeIssuerAddress {
+		if msg.ChangeAdministrationAddress {
 			index++
 		}
 		if index >= len(itx.Inputs) {
@@ -391,7 +391,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return err
 		}
 
-		// Get contract offer message to retrieve issuer and operator.
+		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
 		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, &c.Config.ChainParams, c.Config.IsTest)
 		if err != nil {
@@ -404,7 +404,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.IssuerPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[0].Address.ScriptAddress()) // First input of offer tx
+		nc.AdministrationPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[0].Address.ScriptAddress()) // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
 			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(offerTx.Inputs[1].Address.ScriptAddress()) // Second input of offer tx
 		}
@@ -422,20 +422,20 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Pull from amendment tx.
-		// Issuer change. New issuer in second input
-		if amendment != nil && amendment.ChangeIssuerAddress {
+		// Administration change. New administration in second input
+		if amendment != nil && amendment.ChangeAdministrationAddress {
 			if len(request.Inputs) < 2 {
-				return errors.New("New issuer specified but not included in inputs")
+				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.IssuerPKH = protocol.PublicKeyHashFromBytes(request.Inputs[1].Address.ScriptAddress())
-			node.Log(ctx, "Updating contract issuer PKH : %s", uc.IssuerPKH.String())
+			uc.AdministrationPKH = protocol.PublicKeyHashFromBytes(request.Inputs[1].Address.ScriptAddress())
+			node.Log(ctx, "Updating contract administration PKH : %s", uc.AdministrationPKH.String())
 		}
 
-		// Operator changes. New operator in second input unless there is also a new issuer, then it is in the third input
+		// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
 		if amendment != nil && amendment.ChangeOperatorAddress {
 			index := 1
-			if amendment.ChangeIssuerAddress {
+			if amendment.ChangeAdministrationAddress {
 				index++
 			}
 			if index >= len(request.Inputs) {
@@ -530,9 +530,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating contract restricted quantity assets (%s) : %d", ct.ContractName, *uc.RestrictedQtyAssets)
 		}
 
-		if ct.IssuerProposal != msg.IssuerProposal {
-			uc.IssuerProposal = &msg.IssuerProposal
-			node.Log(ctx, "Updating contract issuer proposal (%s) : %t", ct.ContractName, *uc.IssuerProposal)
+		if ct.AdministrationProposal != msg.AdministrationProposal {
+			uc.AdministrationProposal = &msg.AdministrationProposal
+			node.Log(ctx, "Updating contract administration proposal (%s) : %t", ct.ContractName, *uc.AdministrationProposal)
 		}
 
 		if ct.HolderProposal != msg.HolderProposal {
@@ -661,9 +661,9 @@ func checkContractAmendmentsPermissions(ct *state.Contract, amendments []protoco
 		}
 		if proposed {
 			switch proposalInitiator {
-			case 0: // Issuer
-				if !permissions[amendment.FieldIndex].IssuerProposal {
-					return fmt.Errorf("Field %d amendment not permitted by issuer proposal", amendment.FieldIndex)
+			case 0: // Administration
+				if !permissions[amendment.FieldIndex].AdministrationProposal {
+					return fmt.Errorf("Field %d amendment not permitted by administration proposal", amendment.FieldIndex)
 				}
 			case 1: // Holder
 				if !permissions[amendment.FieldIndex].HolderProposal {
@@ -1033,13 +1033,13 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("RestrictedQtyAssets amendment value failed to deserialize : %s", err)
 			}
 
-		case 18: // IssuerProposal
+		case 18: // AdministrationProposal
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("IssuerProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &cf.IssuerProposal); err != nil {
-				return fmt.Errorf("IssuerProposal amendment value failed to deserialize : %s", err)
+			if err := binary.Read(buf, protocol.DefaultEndian, &cf.AdministrationProposal); err != nil {
+				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
 			}
 
 		case 19: // HolderProposal

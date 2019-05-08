@@ -63,7 +63,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 
 	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
 	if !contract.IsOperator(ctx, ct, senderPKH) {
-		node.LogWarn(ctx, "Requestor PKH is not issuer or operator : %s", contractPKH.String())
+		node.LogWarn(ctx, "Requestor PKH is not administration or operator : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
