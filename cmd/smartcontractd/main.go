@@ -49,7 +49,7 @@ func main() {
 
 	os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
 	logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Printf("Failed to open log file : %v\n", err)
 		return
