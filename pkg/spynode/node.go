@@ -789,6 +789,8 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 	}
 	node.scanning = true
 
+	ctx = logger.ContextWithLogTrace(ctx, "scanning")
+
 	peers, err := node.peers.GetUnchecked(ctx)
 	if err != nil {
 		return err

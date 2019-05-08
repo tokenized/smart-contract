@@ -64,18 +64,7 @@ func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 
 // Returns a context with the logging subsystem cleared. Used when a context is passed back from a subsystem.
 func ContextWithLogTrace(ctx context.Context, trace string) context.Context {
-	configValue := ctx.Value(configKey)
-	if configValue == nil {
-		return ctx // Config not specified.
-	}
-
-	config, ok := configValue.(*Config)
-	if !ok {
-		return ctx // Invalid config.
-	}
-
-	config.Trace = trace
-	return context.WithValue(ctx, configKey, config)
+	return context.WithValue(ctx, traceKey, trace)
 }
 
 // Log an entry to the main Outputs if:
@@ -122,6 +111,20 @@ func Panic(ctx context.Context, format string, values ...interface{}) error {
 	return LogDepth(ctx, LevelPanic, 1, format, values...)
 }
 
+func getTrace(ctx context.Context) string {
+	traceValue := ctx.Value(traceKey)
+	if traceValue == nil {
+		return ""
+	}
+
+	trace, ok := traceValue.(string)
+	if !ok {
+		return ""
+	}
+
+	return trace
+}
+
 // Same as Log, but the number of levels above the current call in the stack from which to get the
 //   file name/line of code can be specified as depth.
 func LogDepth(ctx context.Context, level Level, depth int, format string, values ...interface{}) error {
@@ -135,6 +138,8 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 	if !ok {
 		return errors.New("Invalid Config Type")
 	}
+
+	trace := getTrace(ctx)
 
 	config.mutex.Lock()
 	defer config.mutex.Unlock()
@@ -150,7 +155,7 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 		// Log to subsystem specific config
 		subConfig, subExists := config.SubSystems[subsystem]
 		if subExists {
-			if err := subConfig.log(subsystem, level, depth, config.Trace, format, values...); err != nil {
+			if err := subConfig.log(subsystem, level, depth, trace, format, values...); err != nil {
 				return err
 			}
 		}
@@ -162,7 +167,7 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 	}
 
 	// Log to main config
-	return config.Main.log(subsystem, level, depth, config.Trace, format, values...)
+	return config.Main.log(subsystem, level, depth, trace, format, values...)
 }
 
 // Keys for context key/pairs
@@ -171,4 +176,5 @@ type loggerkey int
 const (
 	configKey    loggerkey = 1
 	subSystemKey loggerkey = 2
+	traceKey     loggerkey = 3
 )
