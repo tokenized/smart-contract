@@ -63,7 +63,7 @@ func New(logToStdOut bool) *Test {
 	if logToStdOut {
 		ctx = node.ContextWithProductionLogger(NewContext(), os.Stdout)
 	} else {
-		ctx = NewContext()
+		ctx = node.ContextWithNoLogger(NewContext())
 	}
 
 	// ============================================================
@@ -245,7 +245,7 @@ func GenerateKey(chainParams chaincfg.Params) (*wallet.RootKey, error) {
 }
 
 // Recover is used to prevent panics from allowing the test to cleanup.
-func Recover(t *testing.T) {
+func Recover(t testing.TB) {
 	if r := recover(); r != nil {
 		t.Fatal("Unhandled Exception:", string(debug.Stack()))
 	}

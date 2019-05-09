@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(true)
+	test = tests.New(false)
 	if test == nil {
 		return 1
 	}
@@ -112,7 +112,7 @@ func respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
-func checkResponse(t *testing.T, responseCode string) {
+func checkResponse(t testing.TB, responseCode string) {
 	ctx := test.Context
 
 	if len(responses) != 1 {

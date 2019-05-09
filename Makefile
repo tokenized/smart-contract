@@ -74,5 +74,8 @@ test: prepare
 test-win: prepare-win
 	go test ./...
 
+bench: prepare
+	go test -bench . ./...
+
 clean:
 	rm -rf dist

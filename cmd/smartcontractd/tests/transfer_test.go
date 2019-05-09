@@ -25,6 +25,194 @@ func TestTransfers(t *testing.T) {
 	t.Run("permittedBad", permittedBad)
 }
 
+func BenchmarkTransfers(b *testing.B) {
+	defer tests.Recover(b)
+
+	b.Run("simple", simpleTransfersBenchmark)
+	b.Run("oracle", oracleTransfersBenchmark)
+}
+
+func simpleTransfersBenchmark(b *testing.B) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+
+	requests := make([]*wire.MsgTx, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(b.N), issuerKey.Address.ScriptAddress())
+
+		// Create Transfer message
+		transferAmount := uint64(1)
+		transferData := protocol.Transfer{}
+
+		assetTransferData := protocol.AssetTransfer{
+			ContractIndex: 0, // first output
+			AssetType:     testAssetType,
+			AssetCode:     testAssetCode,
+		}
+
+		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+				Quantity: transferAmount})
+
+		transferData.Assets = append(transferData.Assets, assetTransferData)
+
+		// Build transfer transaction
+		transferTx := wire.NewMsgTx(2)
+
+		transferInputHash := fundingTx.TxHash()
+
+		// From issuer
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+
+		// To contract
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+		// Data output
+		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+		}
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+		test.RPCNode.AddTX(ctx, transferTx)
+		requests = append(requests, transferTx)
+	}
+
+	b.ResetTimer()
+	for _, request := range requests {
+		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+		}
+
+		err = transferItx.Promote(ctx, test.RPCNode)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+		}
+
+		if err := a.Trigger(ctx, "SEE", transferItx); err != nil {
+			b.Fatalf("\t%s\tTransfer failed : %v", tests.Failed, err)
+		}
+
+		// Commented because validation isn't part of smartcontract benchmark.
+		// Uncomment to ensure benchmark is still functioning properly.
+		// checkResponse(b, "T2")
+	}
+}
+
+func oracleTransfersBenchmark(b *testing.B) {
+	ctx := test.Context
+
+	resetTest()
+	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	err = test.Headers.Populate(ctx, 50000, 12)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
+	}
+
+	requests := make([]*wire.MsgTx, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(b.N), issuerKey.Address.ScriptAddress())
+
+		// Create Transfer message
+		transferAmount := uint64(1)
+		transferData := protocol.Transfer{}
+
+		assetTransferData := protocol.AssetTransfer{
+			ContractIndex: 0, // first output
+			AssetType:     testAssetType,
+			AssetCode:     testAssetCode,
+		}
+
+		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+
+		contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+		blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-5)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
+		}
+		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
+			protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount, blockHash)
+		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
+		}
+		oracleSig, err := oracleKey.PrivateKey.Sign(oracleSigHash)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
+		}
+		receiver := protocol.AssetReceiver{
+			Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Quantity:              transferAmount,
+			OracleSigAlgorithm:    1,
+			OracleConfirmationSig: oracleSig.Serialize(),
+		}
+		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
+
+		transferData.Assets = append(transferData.Assets, assetTransferData)
+
+		// Build transfer transaction
+		transferTx := wire.NewMsgTx(2)
+
+		transferInputHash := fundingTx.TxHash()
+
+		// From issuer
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+
+		// To contract
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+
+		// Data output
+		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+		}
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+		test.RPCNode.AddTX(ctx, transferTx)
+		requests = append(requests, transferTx)
+	}
+
+	b.ResetTimer()
+	for _, request := range requests {
+		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+		}
+
+		err = transferItx.Promote(ctx, test.RPCNode)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+		}
+
+		if err := a.Trigger(ctx, "SEE", transferItx); err != nil {
+			b.Fatalf("\t%s\tTransfer failed : %v", tests.Failed, err)
+		}
+
+		// Commented because validation isn't part of smartcontract benchmark.
+		// Uncomment to ensure benchmark is still functioning properly.
+		// checkResponse(b, "T2")
+	}
+}
+
 func sendTokens(t *testing.T) {
 	ctx := test.Context
 
