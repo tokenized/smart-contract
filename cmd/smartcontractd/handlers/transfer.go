@@ -563,6 +563,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			return fmt.Errorf("Asset ID not found : %s %s : %s", contractPKH, assetTransfer.AssetCode.String(), err)
 		}
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
+			node.LogWarn(ctx, "Asset frozen until %s", as.FreezePeriod.String())
 			return rejectError{code: protocol.RejectAssetFrozen}
 		}
 
@@ -626,12 +627,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			// Check sender's available unfrozen balance
 			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
-			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
-				node.LogWarn(ctx, "Frozen funds: contract=%s asset=%s party=%s",
-					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
-				return rejectError{code: protocol.RejectHoldingsFrozen}
-			}
-
 			if settlementQuantities[settleOutputIndex] == nil {
 				// Get sender's balance
 				senderBalance := asset.GetBalance(ctx, as, inputAddress)
@@ -642,6 +637,11 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				node.LogWarn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
 					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
 				return rejectError{code: protocol.RejectInsufficientQuantity}
+			}
+			
+			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
+				node.LogWarn(ctx, "Frozen funds: asset=%s party=%s", assetTransfer.AssetCode.String(), inputAddress.String())
+				return rejectError{code: protocol.RejectHoldingsFrozen}
 			}
 
 			*settlementQuantities[settleOutputIndex] -= sender.Quantity
