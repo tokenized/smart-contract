@@ -21,6 +21,12 @@ var DefaultConfig = Config{
 	},
 }
 
+var emptyConfig = Config{
+	Main: &SystemConfig{
+		Output: nil,
+	},
+}
+
 // Creates a new config with default production values.
 //   Logs info level and above to stderr.
 func NewProductionConfig() *Config {

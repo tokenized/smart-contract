@@ -52,6 +52,10 @@ func ContextWithLogConfig(ctx context.Context, config *Config) context.Context {
 	return context.WithValue(ctx, configKey, config)
 }
 
+func ContextWithNoLogger(ctx context.Context) context.Context {
+	return context.WithValue(ctx, configKey, &emptyConfig)
+}
+
 // Returns a context with the logging subsystem attached.
 func ContextWithLogSubSystem(ctx context.Context, subsystem string) context.Context {
 	return context.WithValue(ctx, subSystemKey, subsystem)
@@ -137,6 +141,10 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 	config, ok := configValue.(*Config)
 	if !ok {
 		return errors.New("Invalid Config Type")
+	}
+
+	if config == &emptyConfig {
+		return nil
 	}
 
 	trace := getTrace(ctx)

@@ -41,6 +41,10 @@ func ContextWithProductionLogger(ctx context.Context, writer io.Writer) context.
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
 
+func ContextWithNoLogger(ctx context.Context) context.Context {
+	return logger.ContextWithNoLogger(ctx)
+}
+
 func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 	return logger.ContextWithOutLogSubSystem(ctx)
 }
