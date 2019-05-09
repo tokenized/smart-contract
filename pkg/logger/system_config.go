@@ -41,7 +41,7 @@ func NewDevelopmentSystemConfig() *SystemConfig {
 // Adds a file to the existing log outputs
 func (config *SystemConfig) AddFile(filePath string) error {
 	logFileName := filepath.FromSlash(filePath)
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (config *SystemConfig) AddFile(filePath string) error {
 // Sets a file as the only log output
 func (config *SystemConfig) SetFile(filePath string) error {
 	logFileName := filepath.FromSlash(filePath)
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
