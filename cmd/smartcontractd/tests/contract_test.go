@@ -44,9 +44,9 @@ func createContract(t *testing.T) {
 	// Define permissions for contract fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = false      // Issuer can update field without proposal
-		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+		permissions[i].Permitted = false              // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -193,8 +193,8 @@ func createContract(t *testing.T) {
 
 	t.Logf("\t%s\tVerified holder proposal", tests.Success)
 
-	if ct.IssuerProposal {
-		t.Fatalf("\t%s\tContract issuer proposal incorrect : %t", tests.Failed, ct.IssuerProposal)
+	if ct.AdministrationProposal {
+		t.Fatalf("\t%s\tContract issuer proposal incorrect : %t", tests.Failed, ct.AdministrationProposal)
 	}
 
 	t.Logf("\t%s\tVerified issuer proposal", tests.Success)
@@ -375,22 +375,22 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 		},
 		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
 			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
-		IssuerProposal: issuerProposal,
-		HolderProposal: holderProposal,
-		ContractFee:    1000,
+		AdministrationProposal: issuerProposal,
+		HolderProposal:         holderProposal,
+		ContractFee:            1000,
 
-		CreatedAt: protocol.CurrentTimestamp(),
-		UpdatedAt: protocol.CurrentTimestamp(),
-		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH: *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
+		CreatedAt:         protocol.CurrentTimestamp(),
+		UpdatedAt:         protocol.CurrentTimestamp(),
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
 	}
 
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = permitted   // Issuer can update field without proposal
-		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+		permissions[i].Permitted = permitted           // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -420,22 +420,22 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 		},
 		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
 			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
-		IssuerProposal: issuerProposal,
-		HolderProposal: holderProposal,
-		ContractFee:    1000,
+		AdministrationProposal: issuerProposal,
+		HolderProposal:         holderProposal,
+		ContractFee:            1000,
 
-		CreatedAt: protocol.CurrentTimestamp(),
-		UpdatedAt: protocol.CurrentTimestamp(),
-		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH: *protocol.PublicKeyHashFromBytes(test.Master2Key.Address.ScriptAddress()),
+		CreatedAt:         protocol.CurrentTimestamp(),
+		UpdatedAt:         protocol.CurrentTimestamp(),
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.Master2Key.Address.ScriptAddress()),
 	}
 
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = permitted   // Issuer can update field without proposal
-		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+		permissions[i].Permitted = permitted           // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -463,23 +463,23 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 		},
 		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
 			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
-		IssuerProposal: false,
-		HolderProposal: false,
-		ContractFee:    1000,
+		AdministrationProposal: false,
+		HolderProposal:         false,
+		ContractFee:            1000,
 
-		CreatedAt: protocol.CurrentTimestamp(),
-		UpdatedAt: protocol.CurrentTimestamp(),
-		IssuerPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH: *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
-		Oracles:   []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.PublicKey.SerializeCompressed()}},
+		CreatedAt:         protocol.CurrentTimestamp(),
+		UpdatedAt:         protocol.CurrentTimestamp(),
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
+		Oracles:           []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.PublicKey.SerializeCompressed()}},
 	}
 
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 21)
 	for i, _ := range permissions {
-		permissions[i].Permitted = false      // Issuer can update field without proposal
-		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+		permissions[i].Permitted = false              // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.

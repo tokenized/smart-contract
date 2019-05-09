@@ -67,9 +67,9 @@ func createAsset(t *testing.T) {
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
-		permissions[i].Permitted = true       // Issuer can update field without proposal
-		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+		permissions[i].Permitted = true               // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -183,9 +183,9 @@ func assetIndex(t *testing.T) {
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
-		permissions[i].Permitted = true       // Issuer can update field without proposal
-		permissions[i].IssuerProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false // Holder's can initiate proposals to update field
+		permissions[i].Permitted = true               // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -547,9 +547,9 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
-		permissions[i].Permitted = permitted   // Issuer can update field without proposal
-		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+		permissions[i].Permitted = permitted           // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, 2)
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
@@ -611,9 +611,9 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	// Define permissions for asset fields
 	permissions := make([]protocol.Permission, 12)
 	for i, _ := range permissions {
-		permissions[i].Permitted = permitted   // Issuer can update field without proposal
-		permissions[i].IssuerProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+		permissions[i].Permitted = permitted           // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
+		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
 
 		permissions[i].VotingSystemsAllowed = make([]bool, 2)
 		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
