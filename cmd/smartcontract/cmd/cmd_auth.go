@@ -66,9 +66,9 @@ var cmdAuth = &cobra.Command{
 
 		permissions := make([]protocol.Permission, fieldcount)
 		for i, _ := range permissions {
-			permissions[i].Permitted = permit      // Issuer can update field without proposal
+			permissions[i].Permitted = permit              // Issuer can update field without proposal
 			permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-			permissions[i].HolderProposal = holder // Holder's can initiate proposals to update field
+			permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
 
 			permissions[i].VotingSystemsAllowed = votes
 		}

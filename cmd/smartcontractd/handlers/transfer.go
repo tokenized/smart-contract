@@ -638,7 +638,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
 				return rejectError{code: protocol.RejectInsufficientQuantity}
 			}
-			
+
 			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
 				node.LogWarn(ctx, "Frozen funds: asset=%s party=%s", assetTransfer.AssetCode.String(), inputAddress.String())
 				return rejectError{code: protocol.RejectHoldingsFrozen}

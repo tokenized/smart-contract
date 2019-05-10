@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -27,6 +28,7 @@ type Block struct {
 
 // BlockRepository is used for managing Block data.
 type BlockRepository struct {
+	config      *data.Config
 	store       storage.Storage
 	height      int                    // Height of the latest block
 	lastHeaders []wire.BlockHeader     // Hashes in the latest key/file
@@ -35,8 +37,9 @@ type BlockRepository struct {
 }
 
 // NewBlockRepository returns a new BlockRepository.
-func NewBlockRepository(store storage.Storage) *BlockRepository {
+func NewBlockRepository(config *data.Config, store storage.Storage) *BlockRepository {
 	result := BlockRepository{
+		config:      config,
 		store:       store,
 		height:      -1,
 		lastHeaders: make([]wire.BlockHeader, 0, blocksPerKey),
@@ -107,27 +110,52 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 
 	if filesLoaded == 0 {
 		// Add genesis
-		// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-		prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
-		if err != nil {
-			return errors.Wrap(err, "Failed to create genesis prev hash")
+		logger.Verbose(ctx, "Adding %s genesis block", repo.config.ChainParams.Name)
+		if repo.config.ChainParams.Name == "mainnet" {
+			// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+			prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+			if err != nil {
+				return errors.Wrap(err, "Failed to create genesis prev hash")
+			}
+			merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
+			if err != nil {
+				return errors.Wrap(err, "Failed to create genesis merkle hash")
+			}
+			genesisHeader := wire.BlockHeader{
+				Version:    1,
+				PrevBlock:  *prevhash,
+				MerkleRoot: *merklehash,
+				Timestamp:  time.Unix(1231006505, 0),
+				Bits:       0x1d00ffff,
+				Nonce:      2083236893,
+			}
+			repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
+			repo.height = 0
+			repo.heights[genesisHeader.BlockHash()] = repo.height
+			logger.Verbose(ctx, "Added genesis block : %s", genesisHeader.BlockHash().String())
+		} else { // testnet
+			// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+			prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+			if err != nil {
+				return errors.Wrap(err, "Failed to create genesis prev hash")
+			}
+			merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
+			if err != nil {
+				return errors.Wrap(err, "Failed to create genesis merkle hash")
+			}
+			genesisHeader := wire.BlockHeader{
+				Version:    1,
+				PrevBlock:  *prevhash,
+				MerkleRoot: *merklehash,
+				Timestamp:  time.Unix(1296688602, 0),
+				Bits:       0x1d00ffff,
+				Nonce:      414098458,
+			}
+			repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
+			repo.height = 0
+			repo.heights[genesisHeader.BlockHash()] = repo.height
+			logger.Verbose(ctx, "Added testnet genesis block : %s", genesisHeader.BlockHash().String())
 		}
-		merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
-		if err != nil {
-			return errors.Wrap(err, "Failed to create genesis merkle hash")
-		}
-		genesisHeader := wire.BlockHeader{
-			Version:    1,
-			PrevBlock:  *prevhash,
-			MerkleRoot: *merklehash,
-			Timestamp:  time.Unix(1231006505, 0),
-			Bits:       0x1d00ffff,
-			Nonce:      2083236893,
-		}
-		repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
-		repo.height = 0
-		repo.heights[genesisHeader.BlockHash()] = repo.height
-		logger.Verbose(ctx, "Added genesis block")
 	}
 
 	return nil

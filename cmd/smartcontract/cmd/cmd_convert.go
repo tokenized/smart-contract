@@ -10,7 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const ()
+const (
+	FlagTestNetMode = "testnet"
+)
 
 var cmdConvert = &cobra.Command{
 	Use:   "convert [address/hash]",
@@ -20,7 +22,15 @@ var cmdConvert = &cobra.Command{
 			return errors.New("Incorrect argument count")
 		}
 
-		address, err := btcutil.DecodeAddress(args[0], &chaincfg.MainNetParams)
+		var params *chaincfg.Params
+		testnet, _ := c.Flags().GetBool(FlagTestNetMode)
+		if testnet {
+			params = &chaincfg.TestNet3Params
+		} else {
+			params = &chaincfg.MainNetParams
+		}
+
+		address, err := btcutil.DecodeAddress(args[0], params)
 		if err == nil {
 			fmt.Printf("Hash : %x\n", address.ScriptAddress())
 			return nil
@@ -37,7 +47,7 @@ var cmdConvert = &cobra.Command{
 			return nil
 		}
 
-		address, err = btcutil.NewAddressPubKeyHash(hash, &chaincfg.MainNetParams)
+		address, err = btcutil.NewAddressPubKeyHash(hash, params)
 		if err != nil {
 			fmt.Printf("Invalid hash : %s\n", err)
 			return nil
@@ -49,4 +59,5 @@ var cmdConvert = &cobra.Command{
 }
 
 func init() {
+	cmdConvert.Flags().Bool(FlagTestNetMode, false, "Testnet mode")
 }

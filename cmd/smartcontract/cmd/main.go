@@ -23,6 +23,7 @@ func Execute() {
 	scCmd.AddCommand(cmdConvert)
 	scCmd.AddCommand(cmdSign)
 	scCmd.AddCommand(cmdCode)
+	scCmd.AddCommand(cmdGen)
 	scCmd.Execute()
 }
 

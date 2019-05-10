@@ -84,6 +84,7 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Node Config
+	logger.Info(ctx, "Configuring for %s network", cfg.Bitcoin.Network)
 
 	appConfig := &node.Config{
 		ContractProviderID: cfg.Contract.OperatorName,
