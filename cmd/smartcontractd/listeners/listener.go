@@ -119,6 +119,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			if itx.Hash == txid {
 				// Remove from unsafeRequests
 				server.unsafeRequests = append(server.unsafeRequests[:i], server.unsafeRequests[i+1:]...)
+				node.LogVerbose(ctx, "Unsafe Tx confirm : %s", txid.String())
 				err := server.processTx(ctx, itx)
 				if err != nil {
 					node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s", err)
@@ -127,7 +128,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			}
 		}
 
-		node.LogVerbose(ctx, "Tx confirm not found : %s", txid.String())
+		node.LogVerbose(ctx, "Tx confirm not found (probably already processed): %s", txid.String())
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:

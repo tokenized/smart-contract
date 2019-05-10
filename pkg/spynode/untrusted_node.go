@@ -74,7 +74,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	}
 
 	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.state, node.peers, node.blocks, node.txs,
-		node.txTracker, node.memPool, node.txChannel, node.listeners, node.txFilters)
+		node.txTracker, node.memPool, node.txChannel, node.listeners, node.txFilters, node.address)
 
 	if err := node.connect(); err != nil {
 		node.lock.Unlock()
@@ -84,6 +84,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	}
 
 	logger.Debug(ctx, "(%s) Starting", node.address)
+	node.peers.UpdateTime(ctx, node.address)
 	node.outgoing.Open(100)
 	node.active = true
 	node.lock.Unlock()

@@ -16,13 +16,14 @@ import (
 
 const (
 	peersPath    = "spynode/peers"
-	peersVersion = 1
+	peersVersion = 2
 )
 
 // Peer address database. Used to find Tx Peers.
 type Peer struct {
-	Address string
-	Score   int32
+	Address  string
+	Score    int32
+	LastTime uint32
 }
 
 // TxRepository is used for managing Block data
@@ -142,8 +143,10 @@ func (repo *PeerRepository) GetUnchecked(ctx context.Context) ([]*Peer, error) {
 	defer repo.mutex.Unlock()
 
 	result := make([]*Peer, 0, 500)
+	now := time.Now()
+	cutoff := uint32(now.Unix()) - 86400 // 24 hours
 	for _, peer := range repo.list {
-		if peer.Score == 0 {
+		if peer.Score == 0 && peer.LastTime < cutoff {
 			result = append(result, peer)
 		}
 	}
@@ -159,7 +162,25 @@ func (repo *PeerRepository) UpdateScore(ctx context.Context, address string, del
 
 	peer, exists := repo.lookup[address]
 	if exists {
+		now := time.Now()
+		peer.LastTime = uint32(now.Unix())
 		peer.Score += delta
+		return true
+	}
+
+	return false
+}
+
+// Modifies the score of a peer
+// Returns true if found and updated
+func (repo *PeerRepository) UpdateTime(ctx context.Context, address string) bool {
+	repo.mutex.Lock()
+	defer repo.mutex.Unlock()
+
+	peer, exists := repo.lookup[address]
+	if exists {
+		now := time.Now()
+		peer.LastTime = uint32(now.Unix())
 		return true
 	}
 
@@ -229,6 +250,13 @@ func readPeer(input io.Reader, version int32) (Peer, error) {
 		return result, err
 	}
 
+	if version > 1 {
+		// Read score
+		if err := binary.Read(input, binary.LittleEndian, &result.LastTime); err != nil {
+			return result, err
+		}
+	}
+
 	return result, nil
 }
 
@@ -245,6 +273,12 @@ func (peer *Peer) write(output io.Writer) error {
 
 	// Write score
 	err = binary.Write(output, binary.LittleEndian, peer.Score)
+	if err != nil {
+		return err
+	}
+
+	// Write time
+	err = binary.Write(output, binary.LittleEndian, peer.LastTime)
 	if err != nil {
 		return err
 	}

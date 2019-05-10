@@ -19,10 +19,6 @@ import (
 )
 
 const (
-	MainNetBch wire.BitcoinNet = 0xe8f3e1e3
-	TestNetBch wire.BitcoinNet = 0xf4f3e5f4
-	RegTestBch wire.BitcoinNet = 0xfabfb5da
-
 	SubSystem = "SpyNode" // For logger
 )
 
@@ -63,7 +59,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		state:          data.NewState(),
 		store:          store,
 		peers:          handlerstorage.NewPeerRepository(store),
-		blocks:         handlerstorage.NewBlockRepository(store),
+		blocks:         handlerstorage.NewBlockRepository(&config, store),
 		txs:            handlerstorage.NewTxRepository(store),
 		reorgs:         handlerstorage.NewReorgRepository(store),
 		txTracker:      data.NewTxTracker(),
@@ -313,7 +309,7 @@ func (node *Node) Scan(ctx context.Context, connections int) error {
 		return err
 	}
 
-	if err := node.scan(ctx, connections, 0); err != nil {
+	if err := node.scan(ctx, connections, 1); err != nil {
 		return err
 	}
 
@@ -580,6 +576,7 @@ func (node *Node) connect(ctx context.Context) error {
 
 	node.connection = conn
 	node.state.MarkConnected()
+	node.peers.UpdateTime(ctx, node.config.NodeAddress)
 	return nil
 }
 
@@ -855,7 +852,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			continue
 		}
 
-		node.scan(ctx, 1000, 1000)
+		node.scan(ctx, 1000, 1)
 		if node.isStopping() {
 			break
 		}

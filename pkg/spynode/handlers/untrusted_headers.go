@@ -17,15 +17,19 @@ const (
 
 // HeadersHandler exists to handle the headers command.
 type UntrustedHeadersHandler struct {
-	state  *data.UntrustedState
-	blocks *storage.BlockRepository
+	state   *data.UntrustedState
+	peers   *storage.PeerRepository
+	address string
+	blocks  *storage.BlockRepository
 }
 
 // NewUntrustedHeadersHandler returns a new UntrustedHeadersHandler with the given Config.
-func NewUntrustedHeadersHandler(state *data.UntrustedState, blockRepo *storage.BlockRepository) *UntrustedHeadersHandler {
+func NewUntrustedHeadersHandler(state *data.UntrustedState, peers *storage.PeerRepository, address string, blockRepo *storage.BlockRepository) *UntrustedHeadersHandler {
 	result := UntrustedHeadersHandler{
-		state:  state,
-		blocks: blockRepo,
+		state:   state,
+		peers:   peers,
+		address: address,
+		blocks:  blockRepo,
 	}
 	return &result
 }
@@ -57,6 +61,7 @@ func (handler *UntrustedHeadersHandler) Handle(ctx context.Context, m wire.Messa
 	}
 
 	if height < handler.blocks.LastHeight()-UntrustedHeaderDelta-1 {
+		handler.peers.UpdateScore(ctx, handler.address, -1)
 		return nil, errors.New(fmt.Sprintf("Returned header at low height : %d", height))
 	}
 

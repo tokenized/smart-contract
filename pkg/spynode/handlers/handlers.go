@@ -99,7 +99,7 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 // NewUntrustedCommandHandlers returns a mapping of commands and Handler's.
 func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState, peers *storage.PeerRepository,
 	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool,
-	txChannel *TxChannel, listeners []Listener, txFilters []TxFilter) map[string]CommandHandler {
+	txChannel *TxChannel, listeners []Listener, txFilters []TxFilter, address string) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
@@ -107,7 +107,7 @@ func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewUntrustedInvHandler(state, tracker, memPool),
 		wire.CmdTx:      NewUntrustedTXHandler(state, txChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdHeaders: NewUntrustedHeadersHandler(state, blockRepo),
+		wire.CmdHeaders: NewUntrustedHeadersHandler(state, peers, address, blockRepo),
 		wire.CmdReject:  NewRejectHandler(),
 	}
 }
