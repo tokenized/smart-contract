@@ -270,6 +270,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	node.stopping = true
 	if node.outgoing != nil {
 		close(node.outgoing)
+		node.outgoing = nil
 	}
 	node.txChannel.Close()
 	if node.connection != nil {
