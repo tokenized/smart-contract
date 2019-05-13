@@ -86,7 +86,7 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
-		wire.CmdVersion: NewVersionHandler(state),
+		wire.CmdVersion: NewVersionHandler(state, config.NodeAddress),
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewInvHandler(state, txRepo, tracker, memPool),
 		wire.CmdTx:      NewTXHandler(state, txChannel, memPool, txRepo, listeners, txFilters),
@@ -103,7 +103,7 @@ func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
-		wire.CmdVersion: NewUntrustedVersionHandler(state),
+		wire.CmdVersion: NewUntrustedVersionHandler(state, address),
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewUntrustedInvHandler(state, tracker, memPool),
 		wire.CmdTx:      NewUntrustedTXHandler(state, txChannel, memPool, txRepo, listeners, txFilters),
