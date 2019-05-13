@@ -50,6 +50,17 @@ func (u UTXO) PublicAddress(params *chaincfg.Params) (btcutil.Address, error) {
 	return btcutil.NewAddressPubKeyHash(u.PkScript[3:23], params)
 }
 
+func (u UTXO) ScriptAddress() ([]byte, error) {
+	if len(u.PkScript) != 25 &&
+		u.PkScript[0] != txscript.OP_DUP &&
+		u.PkScript[1] != txscript.OP_HASH160 {
+
+		return nil, fmt.Errorf("Invalid pkScript %s : %v", u.Hash, u.PkScript)
+	}
+
+	return u.PkScript[3:23], nil
+}
+
 // UTXOs is a wrapper for a []UTXO.
 type UTXOs []UTXO
 
@@ -68,15 +79,15 @@ func (u UTXOs) Value() int64 {
 func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
 	filtered := UTXOs{}
 
-	s := address.String()
+	s := address.ScriptAddress()
 
 	for _, utxo := range u {
-		publicAddress, err := utxo.PublicAddress(&chaincfg.MainNetParams)
+		utxoAddress, err := utxo.ScriptAddress()
 		if err != nil {
 			continue
 		}
 
-		if publicAddress.String() != s {
+		if !bytes.Equal(utxoAddress, s) {
 			continue
 		}
 
