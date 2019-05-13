@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -33,27 +32,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 
 	node.Log(ctx, "Tx : %s", tx.TxHash().String())
-
-	// Check if transaction relates to protocol
-	itx, err := inspector.NewTransactionFromWire(ctx, tx, server.Config.IsTest)
-	if err != nil {
-		node.LogWarn(ctx, "Failed to create inspector tx : %s", err)
-		return false, nil
-	}
-
-	// Prefilter out non-protocol messages
-	if !itx.IsTokenized() {
-		node.LogVerbose(ctx, "Not tokenized tx : %s", tx.TxHash().String())
-		return false, nil
-	}
-
-	// Promote TX
-	if err := itx.Promote(ctx, server.RpcNode); err != nil {
-		node.LogError(ctx, "Failed to promote inspector tx : %s", err)
-		return false, nil
-	}
-
-	server.pendingRequests = append(server.pendingRequests, itx)
+	server.pendingRequests = append(server.pendingRequests, tx)
 	return true, nil
 }
 
@@ -79,13 +58,13 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
-		for i, itx := range server.pendingRequests {
-			if itx.Hash == txid {
+		for i, tx := range server.pendingRequests {
+			if tx.TxHash() == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				err := server.processTx(ctx, itx)
+				err := server.processTx(ctx, tx)
 				if err != nil {
-					node.LogWarn(ctx, "Failed to process safe tx : %s", err)
+					node.LogWarn(ctx, "Failed to process safe tx : %s : %s", err, txid.String())
 				}
 				return nil
 			}
@@ -102,26 +81,26 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted and reconfirmed by reorg
 		}
 
-		for i, itx := range server.pendingRequests {
-			if itx.Hash == txid {
+		for i, tx := range server.pendingRequests {
+			if tx.TxHash() == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				err := server.processTx(ctx, itx)
+				err := server.processTx(ctx, tx)
 				if err != nil {
-					node.LogWarn(ctx, "Failed to process confirm tx : %s", err)
+					node.LogWarn(ctx, "Failed to process confirm tx : %s : %s", err, txid.String())
 				}
 				return nil
 			}
 		}
 
-		for i, itx := range server.unsafeRequests {
-			if itx.Hash == txid {
+		for i, tx := range server.unsafeRequests {
+			if tx.TxHash() == txid {
 				// Remove from unsafeRequests
 				server.unsafeRequests = append(server.unsafeRequests[:i], server.unsafeRequests[i+1:]...)
 				node.LogVerbose(ctx, "Unsafe Tx confirm : %s", txid.String())
-				err := server.processTx(ctx, itx)
+				err := server.processTx(ctx, tx)
 				if err != nil {
-					node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s", err)
+					node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s : %s", err, txid.String())
 				}
 				return nil
 			}
@@ -131,8 +110,8 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 
 	case handlers.ListenerMsgTxStateCancel:
 		node.Log(ctx, "Tx cancel : %s", txid.String())
-		for i, itx := range server.pendingRequests {
-			if itx.Hash == txid {
+		for i, tx := range server.pendingRequests {
+			if tx.TxHash() == txid {
 				// Remove from pending
 				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
 				return nil
@@ -151,8 +130,8 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 
 	case handlers.ListenerMsgTxStateUnsafe:
 		node.Log(ctx, "Tx unsafe : %s", txid.String())
-		for i, itx := range server.pendingRequests {
-			if itx.Hash == txid {
+		for i, tx := range server.pendingRequests {
+			if tx.TxHash() == txid {
 				// Add to unsafe
 				server.unsafeRequests = append(server.unsafeRequests, server.pendingRequests[i])
 

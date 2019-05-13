@@ -3,6 +3,7 @@ package listeners
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -31,8 +32,8 @@ type Server struct {
 	utxos            *utxos.UTXOs
 	Handler          protomux.Handler
 	contractPKHs     [][]byte // Used to determine which txs will be needed again
-	pendingRequests  []*inspector.Transaction
-	unsafeRequests   []*inspector.Transaction
+	pendingRequests  []*wire.MsgTx
+	unsafeRequests   []*wire.MsgTx
 	pendingResponses []*wire.MsgTx
 	revertedTxs      []*chainhash.Hash
 	blockHeight      int // track current block height for confirm messages
@@ -53,8 +54,8 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 		Handler:          handler,
 		contractPKHs:     contractPKHs,
 		utxos:            utxos,
-		pendingRequests:  make([]*inspector.Transaction, 0),
-		unsafeRequests:   make([]*inspector.Transaction, 0),
+		pendingRequests:  make([]*wire.MsgTx, 0),
+		unsafeRequests:   make([]*wire.MsgTx, 0),
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
@@ -162,10 +163,28 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 	return nil
 }
 
-func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction) error {
+func (server *Server) processTx(ctx context.Context, tx *wire.MsgTx) error {
+	server.Tracer.AddTx(ctx, tx)
+	server.utxos.Add(tx, server.contractPKHs)
+
+	// Check if transaction relates to protocol
+	itx, err := inspector.NewTransactionFromWire(ctx, tx, server.Config.IsTest)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create inspector tx")
+	}
+
+	// Prefilter out non-protocol messages
+	if !itx.IsTokenized() {
+		return fmt.Errorf("Not tokenized tx")
+	}
+
+	// Promote TX
+	if err := itx.Promote(ctx, server.RpcNode); err != nil {
+		return errors.Wrap(err, "Failed to promote inspector tx")
+	}
+
 	if err := server.removeConflictingPending(ctx, itx); err != nil {
-		node.LogWarn(ctx, "Failed to remove conflicting pending : %s", err.Error())
-		return err
+		return errors.Wrap(err, "Failed to remove conflicting pending")
 	}
 
 	// Save tx to cache so it can be used to process the response
@@ -179,8 +198,6 @@ func (server *Server) processTx(ctx context.Context, itx *inspector.Transaction)
 		}
 	}
 
-	server.Tracer.AddTx(ctx, itx.MsgTx)
-	server.utxos.Add(itx.MsgTx, server.contractPKHs)
 	return server.Handler.Trigger(ctx, "SEE", itx)
 }
 
