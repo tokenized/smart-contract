@@ -135,6 +135,7 @@ func (tx *Tx) adjustFee(amount int64) error {
 			}
 			// Remove change output since it is less than dust. Dust will go to miner.
 			tx.MsgTx.TxOut = append(tx.MsgTx.TxOut[:changeOutputIndex], tx.MsgTx.TxOut[changeOutputIndex+1:]...)
+			tx.Outputs = append(tx.Outputs[:changeOutputIndex], tx.Outputs[changeOutputIndex+1:]...)
 		}
 	} else {
 		// Decrease fee, transfer to change

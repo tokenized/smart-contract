@@ -279,6 +279,19 @@ func (node *Node) requestStop(ctx context.Context) error {
 	return nil
 }
 
+func (node *Node) OutgoingCount() int {
+	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
+
+	result := 0
+	for _, untrusted := range node.untrustedNodes {
+		if untrusted.IsReady() {
+			result++
+		}
+	}
+	return result
+}
+
 // BroadcastTx broadcasts a tx to the network.
 func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
@@ -296,7 +309,30 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
 	for _, untrusted := range node.untrustedNodes {
-		untrusted.BroadcastTx(ctx, tx)
+		if untrusted.IsReady() {
+			untrusted.BroadcastTx(ctx, tx)
+		}
+	}
+	node.untrustedLock.Unlock()
+	return nil
+}
+
+// BroadcastTx broadcasts a tx to the network.
+func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) error {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	logger.Info(ctx, "Broadcasting tx : %s", tx.TxHash())
+
+	if node.isStopping() { // TODO Resolve issue when node is restarting
+		return errors.New("Node inactive")
+	}
+
+	// Send to untrusted nodes
+	node.untrustedLock.Lock()
+	for _, untrusted := range node.untrustedNodes {
+		if untrusted.IsReady() {
+			logger.Info(ctx, "(%s) Broadcasting tx : %s", untrusted.address, tx.TxHash())
+			untrusted.BroadcastTx(ctx, tx)
+		}
 	}
 	node.untrustedLock.Unlock()
 	return nil
@@ -460,6 +496,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 		}
 		return nil // Filter out
 	}
+	logger.Verbose(ctx, "Trusted tx added : %s", hash.String())
 
 	// Notify of new tx
 	marked := false
@@ -756,8 +793,9 @@ func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) checkTxDelays(ctx context.Context) {
+	logger.Info(ctx, "Safe tx delay : %d ms", node.config.SafeTxDelay)
 	for !node.isStopping() {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		if !node.state.IsReady() {
 			continue

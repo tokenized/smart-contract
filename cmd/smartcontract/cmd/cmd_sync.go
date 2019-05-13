@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 
 	"github.com/spf13/cobra"
@@ -17,7 +19,11 @@ var cmdSync = &cobra.Command{
 	Long:  "Synchronize with the Bitcoin network. This is required after any txs effect the wallet are posted to update UTXOs so that valid/spendable txs can be created.",
 	RunE: func(c *cobra.Command, args []string) error {
 		ctx := client.Context()
-		theClient, err := client.NewClient(ctx)
+		if ctx == nil {
+			return nil
+		}
+		fmt.Printf("Using network : %s\n", network(c))
+		theClient, err := client.NewClient(ctx, network(c))
 		if err != nil {
 			return err
 		}

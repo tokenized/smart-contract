@@ -14,7 +14,6 @@ import (
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/pkg/errors"
 )
 
 // Implement the SpyNode Listener interface.
@@ -39,7 +38,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	itx, err := inspector.NewTransactionFromWire(ctx, tx, server.Config.IsTest)
 	if err != nil {
 		node.LogWarn(ctx, "Failed to create inspector tx : %s", err)
-		return false, err
+		return false, nil
 	}
 
 	// Prefilter out non-protocol messages
@@ -51,7 +50,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	// Promote TX
 	if err := itx.Promote(ctx, server.RpcNode); err != nil {
 		node.LogError(ctx, "Failed to promote inspector tx : %s", err)
-		return false, err
+		return false, nil
 	}
 
 	server.pendingRequests = append(server.pendingRequests, itx)
@@ -88,7 +87,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 				if err != nil {
 					node.LogWarn(ctx, "Failed to process safe tx : %s", err)
 				}
-				return err
+				return nil
 			}
 		}
 
@@ -111,7 +110,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 				if err != nil {
 					node.LogWarn(ctx, "Failed to process confirm tx : %s", err)
 				}
-				return err
+				return nil
 			}
 		}
 
@@ -124,11 +123,10 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 				if err != nil {
 					node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s", err)
 				}
-				return err
+				return nil
 			}
 		}
 
-		node.LogVerbose(ctx, "Tx confirm not found (probably already processed): %s", txid.String())
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
@@ -208,7 +206,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			if err != nil {
 				node.LogWarn(ctx, "Failed to send tx : %s", err)
 			}
-			return errors.Wrap(err, "Failed to send tx") // TODO Probably a fatal error
+			return nil // TODO Probably a fatal error
 		}
 	}
 
@@ -220,7 +218,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
 		votes, err := vote.List(ctx, server.MasterDB, contractPKH)
 		if err != nil {
-			return errors.Wrap(err, "Failed to list votes")
+			node.LogWarn(ctx, "Failed to list votes : %s", err)
+			return nil
 		}
 		for _, vt := range votes {
 			if vt.CompletedAt.Nano() != 0 {
@@ -231,16 +230,19 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			var hash *chainhash.Hash
 			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
 			if err != nil {
-				return errors.Wrap(err, "Failed to create tx hash")
+				node.LogWarn(ctx, "ailed to create tx hash : %s", err)
+				return nil
 			}
 			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
 			if err != nil {
-				return errors.Wrap(err, "Failed to retrieve vote tx")
+				node.LogWarn(ctx, "Failed to retrieve vote tx : %s", err)
+				return nil
 			}
 
 			// Schedule vote finalizer
 			if err = server.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(server.Handler, voteTx, vt.Expires)); err != nil {
-				return errors.Wrap(err, "Failed to schedule vote finalizer")
+				node.LogWarn(ctx, "Failed to schedule vote finalizer : %s", err)
+				return nil
 			}
 		}
 	}
@@ -252,23 +254,27 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
 		transfers, err := transfer.List(ctx, server.MasterDB, contractPKH)
 		if err != nil {
-			return errors.Wrap(err, "Failed to list transfers")
+			node.LogWarn(ctx, "Failed to list transfers : %s", err)
+			return nil
 		}
 		for _, pt := range transfers {
 			// Retrieve transferTx
 			var hash *chainhash.Hash
 			hash, err = chainhash.NewHash(pt.TransferTxId.Bytes())
 			if err != nil {
-				return errors.Wrap(err, "Failed to create tx hash")
+				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
+				return nil
 			}
 			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
 			if err != nil {
-				return errors.Wrap(err, "Failed to retrieve transfer tx")
+				node.LogWarn(ctx, "Failed to retrieve transfer tx : %s", err)
+				return nil
 			}
 
 			// Schedule transfer timeout
 			if err = server.Scheduler.ScheduleJob(ctx, NewTransferTimeout(server.Handler, transferTx, pt.Timeout)); err != nil {
-				return errors.Wrap(err, "Failed to schedule transfer timeout")
+				node.LogWarn(ctx, "Failed to schedule transfer timeout : %s", err)
+				return nil
 			}
 		}
 	}

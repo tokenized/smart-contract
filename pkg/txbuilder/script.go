@@ -165,11 +165,9 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	}
 
 	// Hash public key
-	hash256 := sha256.New()
 	hash160 := ripemd160.New()
-
-	hash256.Write(publicKey)
-	hash160.Write(hash256.Sum(nil))
+	hash256 := sha256.Sum256(publicKey)
+	hash160.Write(hash256[:])
 	return hash160.Sum(nil), nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/logger"
 )
 
 const (
@@ -38,6 +39,7 @@ func (repo *TxRepository) MarkTrusted(ctx context.Context, txid *chainhash.Hash)
 	defer repo.unconfirmedLock.Unlock()
 
 	if tx, exists := repo.unconfirmed[*txid]; exists {
+		logger.Verbose(ctx, "Tx marked trusted : %s", txid.String())
 		tx.time = time.Now() // Reset so the "safe" delay is from when the trusted node verified.
 		tx.trusted = true
 		return true, nil

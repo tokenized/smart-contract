@@ -84,7 +84,11 @@ func buildAction(c *cobra.Command, args []string) error {
 	txFormat, _ := c.Flags().GetBool(FlagTx)
 	if txFormat {
 		ctx := client.Context()
-		theClient, err := client.NewClient(ctx)
+		if ctx == nil {
+			return nil
+		}
+
+		theClient, err := client.NewClient(ctx, network(c))
 		if err != nil {
 			fmt.Printf("Failed to create client : %s\n", err)
 			return nil

@@ -25,7 +25,10 @@ var cmdScan = &cobra.Command{
 		}
 
 		ctx := client.Context()
-		theClient, err := client.NewClient(ctx)
+		if ctx == nil {
+			return nil
+		}
+		theClient, err := client.NewClient(ctx, network(c))
 		if err != nil {
 			return err
 		}

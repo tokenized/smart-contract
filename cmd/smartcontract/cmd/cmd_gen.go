@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -8,6 +9,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/ripemd160"
 )
 
 var cmdGen = &cobra.Command{
@@ -19,11 +21,14 @@ var cmdGen = &cobra.Command{
 		}
 
 		var params *chaincfg.Params
-		testnet, _ := c.Flags().GetBool(FlagTestNetMode)
-		if testnet {
+		network, err := c.Flags().GetString(FlagNetMode)
+		if err != nil || network == "testnet" {
 			params = &chaincfg.TestNet3Params
-		} else {
+		} else if network == "mainnet" {
 			params = &chaincfg.MainNetParams
+		} else {
+			fmt.Printf("Unknown network : %s\n", network)
+			return nil
 		}
 
 		key, err := btcec.NewPrivateKey(btcec.S256())
@@ -38,11 +43,20 @@ var cmdGen = &cobra.Command{
 			return nil
 		}
 
+		hash160 := ripemd160.New()
+		hash256 := sha256.Sum256(key.PubKey().SerializeCompressed())
+		hash160.Write(hash256[:])
+		address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), params)
+		if err != nil {
+			fmt.Printf("Failed to generate address : %s\n", err)
+			return nil
+		}
+
 		fmt.Printf("WIF : %s\n", wif.String())
+		fmt.Printf("Addr : %s\n", address.String())
 		return nil
 	},
 }
 
 func init() {
-	cmdGen.Flags().Bool(FlagTestNetMode, false, "Testnet mode")
 }

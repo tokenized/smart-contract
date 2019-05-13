@@ -124,11 +124,22 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net *chainc
 			return errors.Wrap(err, "Failed to unmarshal wallet outputs")
 		}
 	} else if !os.IsNotExist(err) {
+		wallet.outputs = nil
 		return errors.Wrap(err, "Failed to read wallet outputs")
 	}
 
-	logger.Info(ctx, "Loaded wallet with %d outputs and balance of %.08f", len(wallet.outputs),
-		BitcoinsFromSatoshis(wallet.Balance()))
+	var emptyHash chainhash.Hash
+	unspentCount := 0
+	for _, output := range wallet.outputs {
+		if output.SpentByTxId == emptyHash {
+			logger.Info(ctx, "Loaded unspent UTXO %.08f : %s", BitcoinsFromSatoshis(output.Value),
+				output.OutPoint.Hash)
+			unspentCount++
+		}
+	}
+
+	logger.Info(ctx, "Loaded wallet with %d outputs, %d unspent, and balance of %.08f",
+		len(wallet.outputs), unspentCount, BitcoinsFromSatoshis(wallet.Balance()))
 
 	address, err := wallet.Address(net)
 	if err != nil {

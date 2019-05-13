@@ -29,7 +29,7 @@ func AddTx(ctx context.Context, masterDb *db.DB, itx *inspector.Transaction) err
 		return err
 	}
 
-	logger.Verbose(ctx, "Adding tx : %x", itx.Hash[:])
+	logger.Verbose(ctx, "Adding tx : %s", itx.Hash.String())
 	return masterDb.Put(ctx, buildStoragePath(&itx.Hash), buf.Bytes())
 }
 
@@ -54,5 +54,5 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(txid *chainhash.Hash) string {
-	return fmt.Sprintf("%s/%x", storageKey, txid[:])
+	return fmt.Sprintf("%s/%s", storageKey, txid.String())
 }

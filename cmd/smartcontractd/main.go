@@ -148,6 +148,8 @@ func main() {
 		panic(err)
 	}
 
+	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String())
+
 	// -------------------------------------------------------------------------
 	// Tx Filter
 

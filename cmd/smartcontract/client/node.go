@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"sync"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -16,6 +17,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
@@ -34,7 +36,11 @@ type Client struct {
 	blocksAdded        int
 	blockHeight        int
 	TxsToSend          []*wire.MsgTx
+	IncomingTx         TxChannel
+	pendingTxs         []*wire.MsgTx
 	StopOnSync         bool
+	spyNodeInSync      bool
+	lock               sync.Mutex
 }
 
 type Config struct {
@@ -60,7 +66,7 @@ func Context() context.Context {
 	// Logging
 	os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
 	logFileName := filepath.FromSlash(os.Getenv("CLIENT_LOG_FILE_PATH"))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModeAppend)
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Printf("Failed to open log file : %v\n", err)
 		return nil
@@ -76,7 +82,7 @@ func Context() context.Context {
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
 
-func NewClient(ctx context.Context) (*Client, error) {
+func NewClient(ctx context.Context, network string) (*Client, error) {
 	client := Client{}
 
 	// -------------------------------------------------------------------------
@@ -84,8 +90,8 @@ func NewClient(ctx context.Context) (*Client, error) {
 	if err := envconfig.Process("API", &client.Config); err != nil {
 		return nil, err
 	}
-	client.Config.ChainParams = chaincfg.MainNetParams
-	client.Config.ChainParams.Net = 0xe8f3e1e3 // BCH MainNet Magic bytes
+
+	client.Config.ChainParams = config.NewChainParams(network)
 
 	// -------------------------------------------------------------------------
 	// Wallet
@@ -129,11 +135,19 @@ func (client *Client) RunSpyNode(ctx context.Context, stopOnSync bool) error {
 		return err
 	}
 	client.StopOnSync = stopOnSync
+	client.IncomingTx.Open(100)
+	defer client.IncomingTx.Close()
+	defer func() {
+		if saveErr := client.Wallet.Save(ctx); saveErr != nil {
+			logger.Info(ctx, "Failed to save UTXOs : %s", saveErr)
+		}
+	}()
 
 	// Make a channel to listen for errors coming from the listener. Use a
 	// buffered channel so the goroutine can exit if we don't collect this error.
 	finishChannel := make(chan error, 1)
 	client.spyNodeStopChannel = make(chan error, 1)
+	client.spyNodeInSync = false
 
 	// Start the service listening for requests.
 	go func() {
@@ -148,21 +162,33 @@ func (client *Client) RunSpyNode(ctx context.Context, stopOnSync bool) error {
 		return err
 	case _ = <-client.spyNodeStopChannel:
 		logger.Info(ctx, "Stopping")
-		stopErr := client.spyNode.Stop(ctx)
-		saveErr := client.Wallet.Save(ctx)
-		if stopErr != nil {
-			return stopErr
-		}
-		return saveErr
+		return client.spyNode.Stop(ctx)
 	case <-osSignals:
 		logger.Info(ctx, "Shutting down")
-		stopErr := client.spyNode.Stop(ctx)
-		saveErr := client.Wallet.Save(ctx)
-		if stopErr != nil {
-			return stopErr
-		}
-		return saveErr
+		return client.spyNode.Stop(ctx)
 	}
+}
+
+func (client *Client) OutgoingCount() int {
+	return client.spyNode.OutgoingCount()
+}
+
+func (client *Client) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
+	if err := client.spyNode.BroadcastTx(ctx, tx); err != nil {
+		return err
+	}
+	return client.spyNode.HandleTx(ctx, tx)
+}
+
+func (client *Client) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) error {
+	if err := client.spyNode.BroadcastTxUntrustedOnly(ctx, tx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (client *Client) StopSpyNode(ctx context.Context) error {
+	return client.spyNode.Stop(ctx)
 }
 
 func (client *Client) Scan(ctx context.Context, count int) error {
@@ -198,6 +224,12 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 				"Matches PaymentToWallet : %s", tx.TxHash().String())
 			return true
 		}
+
+		if bytes.Equal(client.ContractPKH, pkh) {
+			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+				"Matches PaymentToContract : %s", tx.TxHash().String())
+			return true
+		}
 	}
 
 	for _, input := range tx.TxIn {
@@ -227,6 +259,9 @@ func (client *Client) HandleBlock(ctx context.Context, msgType int, block *handl
 		if client.blocksAdded%100 == 0 {
 			logger.Info(ctx, "Added 100 blocks to height %d", client.blockHeight)
 		}
+		if client.spyNodeInSync {
+			logger.Info(ctx, "New block (%d) : %s", block.Height, block.Hash.String())
+		}
 	case handlers.ListenerMsgBlockRevert:
 	}
 	return nil
@@ -236,52 +271,70 @@ func (client *Client) HandleBlock(ctx context.Context, msgType int, block *handl
 // Return true for txs that are relevant to ensure spynode sends further notifications for
 //   that tx.
 func (client *Client) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
-	ctx = logger.ContextWithOutLogSubSystem(ctx)
-
-	result := false
-	for _, input := range tx.TxIn {
-		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
-		if err != nil {
-			continue
-		}
-
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-			// Spend UTXO
-			spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
-			if spent {
-				logger.Info(ctx, "Sent Payment of %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
-			}
-			result = true
-		}
-	}
-
-	for index, output := range tx.TxOut {
-		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
-		if err != nil {
-			continue
-		}
-
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-			// Add UTXO
-			if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
-				logger.Info(ctx, "Received Payment of %.08f : %s", BitcoinsFromSatoshis(uint64(output.Value)), tx.TxHash())
-			}
-			result = true
-		}
-	}
-
-	return result, nil
+	client.pendingTxs = append(client.pendingTxs, tx)
+	client.IncomingTx.Channel <- tx
+	return true, nil
 }
 
 // Tx confirm, cancel, unsafe, and revert messages.
 func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
+	var tx *wire.MsgTx
+	for i, pendingTx := range client.pendingTxs {
+		if pendingTx.TxHash() == txid {
+			tx = pendingTx
+			client.pendingTxs = append(client.pendingTxs[:i], client.pendingTxs[i+1:]...)
+			break
+		}
+	}
+
+	if tx == nil {
+		return nil
+	}
+
+	switch msgType {
+	case handlers.ListenerMsgTxStateSafe:
+
+	case handlers.ListenerMsgTxStateConfirm:
+		for _, input := range tx.TxIn {
+			pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
+			if err != nil {
+				continue
+			}
+
+			if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+				// Spend UTXO
+				spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
+				if spent {
+					logger.Info(ctx, "Confirmed sent payment of %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
+				}
+			}
+		}
+
+		for index, output := range tx.TxOut {
+			pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+			if err != nil {
+				continue
+			}
+
+			if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+				// Add UTXO
+				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+					logger.Info(ctx, "Confirmed received payment of %.08f : %s", BitcoinsFromSatoshis(uint64(output.Value)), tx.TxHash())
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
 // When in sync with network
 func (client *Client) HandleInSync(ctx context.Context) error {
+	client.lock.Lock()
+	defer client.lock.Unlock()
+
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
 	// TODO Build/Send outgoing transactions
@@ -301,5 +354,52 @@ func (client *Client) HandleInSync(ctx context.Context) error {
 	if client.StopOnSync {
 		client.spyNodeStopChannel <- nil
 	}
+	client.spyNodeInSync = true
+	return nil
+}
+
+func (client *Client) IsInSync() bool {
+	client.lock.Lock()
+	defer client.lock.Unlock()
+	return client.spyNodeInSync
+}
+
+type TxChannel struct {
+	Channel chan *wire.MsgTx
+	lock    sync.Mutex
+	open    bool
+}
+
+func (c *TxChannel) Add(tx *wire.MsgTx) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	c.Channel <- tx
+	return nil
+}
+
+func (c *TxChannel) Open(count int) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.Channel = make(chan *wire.MsgTx, count)
+	c.open = true
+	return nil
+}
+
+func (c *TxChannel) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	close(c.Channel)
+	c.open = false
 	return nil
 }

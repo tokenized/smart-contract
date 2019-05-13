@@ -81,6 +81,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	if len(utxos) == 0 {
+		Error(ctx, w, errors.New("Contract UTXOs not found"))
 		return ErrNoResponse // Contract UTXOs not found
 	}
 
@@ -143,10 +144,6 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	// Sign the tx
 	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
 	if err != nil {
-		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
-			LogWarn(ctx, err.Error())
-			return ErrNoResponse
-		}
 		Error(ctx, w, err)
 		return ErrNoResponse
 	}

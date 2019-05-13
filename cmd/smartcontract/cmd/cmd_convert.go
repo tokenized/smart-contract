@@ -10,10 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	FlagTestNetMode = "testnet"
-)
-
 var cmdConvert = &cobra.Command{
 	Use:   "convert [address/hash]",
 	Short: "Convert bitcoin addresses to hashes and vice versa",
@@ -23,11 +19,14 @@ var cmdConvert = &cobra.Command{
 		}
 
 		var params *chaincfg.Params
-		testnet, _ := c.Flags().GetBool(FlagTestNetMode)
-		if testnet {
+		network, err := c.Flags().GetString(FlagNetMode)
+		if err != nil || network == "testnet" {
 			params = &chaincfg.TestNet3Params
-		} else {
+		} else if network == "mainnet" {
 			params = &chaincfg.MainNetParams
+		} else {
+			fmt.Printf("Unknown network : %s\n", network)
+			return nil
 		}
 
 		address, err := btcutil.DecodeAddress(args[0], params)
@@ -59,5 +58,4 @@ var cmdConvert = &cobra.Command{
 }
 
 func init() {
-	cmdConvert.Flags().Bool(FlagTestNetMode, false, "Testnet mode")
 }
