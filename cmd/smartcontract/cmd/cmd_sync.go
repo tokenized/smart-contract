@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 
 	"github.com/spf13/cobra"
@@ -22,7 +20,6 @@ var cmdSync = &cobra.Command{
 		if ctx == nil {
 			return nil
 		}
-		fmt.Printf("Using network : %s\n", network(c))
 		theClient, err := client.NewClient(ctx, network(c))
 		if err != nil {
 			return err

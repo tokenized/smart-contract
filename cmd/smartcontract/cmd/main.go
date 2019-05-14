@@ -2,16 +2,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-)
-
-const (
-	FlagNetMode = "network"
 )
 
 var scCmd = &cobra.Command{
@@ -30,7 +28,6 @@ func Execute() {
 	scCmd.AddCommand(cmdGen)
 	scCmd.AddCommand(cmdBench)
 	scCmd.AddCommand(cmdDoubleSpend)
-	scCmd.Flags().StringP(FlagNetMode, FlagNetMode[:1], "testnet", "Network, i.e. testnet/mainnet")
 	scCmd.Execute()
 }
 
@@ -46,9 +43,9 @@ func Context() context.Context {
 
 // network returns the network string. It is necessary because cobra default values don't seem to work.
 func network(c *cobra.Command) string {
-	network, err := c.Flags().GetString(FlagNetMode)
-	if err != nil {
-		return "testnet"
+	network := os.Getenv("BITCOIN_CHAIN")
+	if len(network) == 0 {
+		fmt.Printf("WARNING!! No Bitcoin network specified. Set environment value BITCOIN_CHAIN=testnet")
 	}
 	return network
 }

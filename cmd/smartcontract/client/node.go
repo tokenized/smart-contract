@@ -83,6 +83,9 @@ func Context() context.Context {
 }
 
 func NewClient(ctx context.Context, network string) (*Client, error) {
+	if len(network) == 0 {
+		return nil, errors.New("No Bitcoin network specified")
+	}
 	client := Client{}
 
 	// -------------------------------------------------------------------------

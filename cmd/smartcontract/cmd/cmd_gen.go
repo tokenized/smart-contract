@@ -21,8 +21,11 @@ var cmdGen = &cobra.Command{
 		}
 
 		var params *chaincfg.Params
-		network, err := c.Flags().GetString(FlagNetMode)
-		if err != nil || network == "testnet" {
+		network := network(c)
+		if len(network) == 0 {
+			return nil
+		}
+		if network == "testnet" {
 			params = &chaincfg.TestNet3Params
 		} else if network == "mainnet" {
 			params = &chaincfg.MainNetParams
