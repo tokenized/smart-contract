@@ -142,10 +142,12 @@ func oracleTransfersBenchmark(b *testing.B) {
 			AssetCode:     testAssetCode,
 		}
 
-		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
 		contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-		blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-5)
+		blockHeight := test.Headers.LastHeight(ctx) - 5
+		blockHash, err := test.Headers.Hash(ctx, blockHeight)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
@@ -164,6 +166,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			Quantity:              transferAmount,
 			OracleSigAlgorithm:    1,
 			OracleConfirmationSig: oracleSig.Serialize(),
+			OracleSigBlockHeight:  uint32(blockHeight),
 		}
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
 
@@ -611,7 +614,8 @@ func oracleTransfer(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-5)
+	blockHeight := test.Headers.LastHeight(ctx) - 5
+	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -630,6 +634,7 @@ func oracleTransfer(t *testing.T) {
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Serialize(),
+		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
 
@@ -728,10 +733,12 @@ func oracleTransferBad(t *testing.T) {
 		AssetCode:     testAssetCode,
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	blockHash, err := test.Headers.Hash(ctx, test.Headers.LastHeight(ctx)-4)
+	blockHeight := test.Headers.LastHeight(ctx) - 4
+	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -750,6 +757,7 @@ func oracleTransferBad(t *testing.T) {
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Serialize(),
+		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
 

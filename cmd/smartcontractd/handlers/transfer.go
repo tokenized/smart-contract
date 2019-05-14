@@ -1006,7 +1006,17 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	// Check if block time is beyond expiration
 	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
+	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
+			assetReceiver.OracleSigBlockHeight))
+	}
+	if blockTime < expire {
+		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
+	}
 
 	// Check all oracles
 	for i, oracle := range ct.Oracles {
@@ -1015,35 +1025,21 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 			return errors.Wrap(err, "Failed to parse oracle pub key")
 		}
 
-		// Check block headers until they are beyond expiration
-		previousExpired := 0
-		for blockHeight := headers.LastHeight(ctx); ; blockHeight-- {
-			hash, err := headers.Hash(ctx, blockHeight)
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d", blockHeight))
-			}
-			node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s", i, blockHeight, hash.String())
-			sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode, &assetReceiver.Address,
-				assetReceiver.Quantity, hash)
-			if err != nil {
-				return errors.Wrap(err, "Failed to calculate oracle sig hash")
-			}
+		hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
+				assetReceiver.OracleSigBlockHeight))
+		}
+		node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s", i,
+			assetReceiver.OracleSigBlockHeight, hash.String())
+		sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
+			&assetReceiver.Address, assetReceiver.Quantity, hash)
+		if err != nil {
+			return errors.Wrap(err, "Failed to calculate oracle sig hash")
+		}
 
-			if oracleSig.Verify(sigHash, oraclePubKey) {
-				return nil // Valid signature found
-			}
-
-			if previousExpired == 4 {
-				break
-			} else {
-				blockTime, err := headers.Time(ctx, blockHeight)
-				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d", blockHeight))
-				}
-				if blockTime < expire {
-					previousExpired++
-				}
-			}
+		if oracleSig.Verify(sigHash, oraclePubKey) {
+			return nil // Valid signature found
 		}
 	}
 
