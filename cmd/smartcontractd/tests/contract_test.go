@@ -25,7 +25,9 @@ func TestContracts(t *testing.T) {
 func createContract(t *testing.T) {
 	ctx := test.Context
 
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 
 	// New Contract Offer
 	offerData := protocol.ContractOffer{
@@ -95,7 +97,7 @@ func createContract(t *testing.T) {
 	if err == nil {
 		t.Fatalf("\t%s\tAccepted invalid contract offer", tests.Failed)
 	}
-	t.Logf("Rejected invalid contract offer : %s", err)
+	t.Logf("\t%s\tRejected invalid contract offer : %s", tests.Success, err)
 
 	// ********************************************************************************************
 	// Check reject response
@@ -126,7 +128,8 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tWrong reject code for contract offer reject", tests.Failed)
 	}
 
-	t.Logf("Invalid Contract offer rejection : (%d) %s", reject.RejectionCode, reject.Message)
+	t.Logf("\t%s\tInvalid Contract offer rejection : (%d) %s", tests.Success, reject.RejectionCode,
+		reject.Message)
 
 	// ********************************************************************************************
 	// Correct Contract Offer
@@ -203,7 +206,9 @@ func createContract(t *testing.T) {
 func contractAmendment(t *testing.T) {
 	ctx := test.Context
 
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
@@ -277,7 +282,9 @@ func contractAmendment(t *testing.T) {
 func contractProposalAmendment(t *testing.T) {
 	ctx := test.Context
 
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, true, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)

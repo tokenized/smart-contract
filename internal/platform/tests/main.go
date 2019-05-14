@@ -190,14 +190,14 @@ func New(logToStdOut bool) *Test {
 }
 
 // Reset is used to reset the test state complete.
-func (test *Test) Reset() {
+func (test *Test) Reset() error {
 	test.Headers.Reset()
-	test.ResetDB()
+	return test.ResetDB()
 }
 
 // ResetDB clears all the data in the database.
-func (test *Test) ResetDB() {
-	os.RemoveAll(filepath.FromSlash(test.path))
+func (test *Test) ResetDB() error {
+	return os.RemoveAll(filepath.FromSlash(test.path))
 }
 
 // TearDown is used for shutting down tests. Calling this should be

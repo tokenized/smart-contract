@@ -161,7 +161,7 @@ func checkResponse(t testing.TB, responseCode string) {
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
 }
 
-func resetTest() {
+func resetTest() error {
 	responses = nil
-	test.Reset()
+	return test.Reset()
 }

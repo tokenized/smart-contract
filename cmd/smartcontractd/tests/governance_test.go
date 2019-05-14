@@ -33,7 +33,9 @@ func TestGovernance(t *testing.T) {
 func holderProposal(t *testing.T) {
 	ctx := test.Context
 
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
@@ -145,7 +147,9 @@ func holderProposal(t *testing.T) {
 func sendBallot(t *testing.T) {
 	ctx := test.Context
 
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
@@ -232,7 +236,9 @@ func voteResult(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
@@ -297,7 +303,9 @@ func voteResultRelative(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
@@ -367,7 +375,9 @@ func voteResultAbsolute(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	resetTest()
+	if err := resetTest(); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
