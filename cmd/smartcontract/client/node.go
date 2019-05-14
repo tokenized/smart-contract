@@ -281,10 +281,11 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
 	var tx *wire.MsgTx
+	txIndex := 0
 	for i, pendingTx := range client.pendingTxs {
 		if pendingTx.TxHash() == txid {
 			tx = pendingTx
-			client.pendingTxs = append(client.pendingTxs[:i], client.pendingTxs[i+1:]...)
+			txIndex = i
 			break
 		}
 	}
@@ -297,41 +298,47 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
 		logger.Info(ctx, "Tx safe : %s", txid.String())
+		client.applyTx(ctx, tx)
 
 	case handlers.ListenerMsgTxStateConfirm:
 		logger.Info(ctx, "Tx confirmed : %s", txid.String())
-		for _, input := range tx.TxIn {
-			pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
-			if err != nil {
-				continue
-			}
+		client.pendingTxs = append(client.pendingTxs[:txIndex], client.pendingTxs[txIndex+1:]...)
+		client.applyTx(ctx, tx)
+	}
 
-			if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-				// Spend UTXO
-				spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
-				if spent {
-					logger.Info(ctx, "Confirmed sent payment of %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
-				}
-			}
+	return nil
+}
+
+func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx) {
+	for _, input := range tx.TxIn {
+		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
+		if err != nil {
+			continue
 		}
 
-		for index, output := range tx.TxOut {
-			pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
-			if err != nil {
-				continue
-			}
-
-			if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-				// Add UTXO
-				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
-					logger.Info(ctx, "Confirmed received payment of %.08f : %d of %s",
-						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
-				}
+		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+			// Spend UTXO
+			spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
+			if spent {
+				logger.Info(ctx, "Confirmed sent payment of %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
 			}
 		}
 	}
 
-	return nil
+	for index, output := range tx.TxOut {
+		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		if err != nil {
+			continue
+		}
+
+		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+			// Add UTXO
+			if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+				logger.Info(ctx, "Confirmed received payment of %.08f : %d of %s",
+					BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
+			}
+		}
+	}
 }
 
 // When in sync with network

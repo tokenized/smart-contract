@@ -29,6 +29,7 @@ func Execute() {
 	scCmd.AddCommand(cmdCode)
 	scCmd.AddCommand(cmdGen)
 	scCmd.AddCommand(cmdBench)
+	scCmd.AddCommand(cmdDoubleSpend)
 	scCmd.Flags().StringP(FlagNetMode, FlagNetMode[:1], "testnet", "Network, i.e. testnet/mainnet")
 	scCmd.Execute()
 }

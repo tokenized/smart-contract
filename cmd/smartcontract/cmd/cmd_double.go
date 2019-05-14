@@ -19,18 +19,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	payload = protocol.ShareCommon{
-		Ticker:      "BENCH",
-		Description: "Tokenized protocol benchmarking asset",
-	}
-	assetCode   *protocol.AssetCode
-	receiverPKH []byte
-)
-
-var cmdBench = &cobra.Command{
-	Use:   "bench <N> <receiver addr>",
-	Short: "Sends N consecutive transfer requests.",
+var cmdDoubleSpend = &cobra.Command{
+	Use:   "double <N> <receiver addr>",
+	Short: "Sends N consecutive transfer requests with double spend tests.",
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) != 2 {
 			return errors.New("Incorrect argument count")
@@ -229,6 +220,7 @@ var cmdBench = &cobra.Command{
 
 		// Create transfer txs =====================================================================
 		transferTxs := make([]*txbuilder.Tx, 0, count)
+		doubleTxs := make([]*txbuilder.Tx, 0, count)
 
 		for i := 0; i < count; i++ {
 			tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
@@ -274,6 +266,12 @@ var cmdBench = &cobra.Command{
 			}
 
 			transferTxs = append(transferTxs, tx)
+
+			// TODO Build double spend tx
+			tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+				theClient.Config.FeeRate)
+
+			doubleTxs = append(doubleTxs, tx)
 		}
 
 		var incomingTx *wire.MsgTx
@@ -359,13 +357,15 @@ var cmdBench = &cobra.Command{
 		times := make([]uint64, 0, count)
 		for i, transferTx := range transferTxs {
 			start := time.Now()
-			incomingTx = sendRequest(ctx, theClient, transferTx.MsgTx, fmt.Sprintf("transfer %d", i))
+			incomingTx = sendDoubleRequests(ctx, theClient, transferTx.MsgTx, doubleTxs[i].MsgTx, fmt.Sprintf("transfer %d", i))
 			if incomingTx == nil {
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
 				return nil
 			}
 			end := time.Now()
+
+			// TODO Determine if the tx was accepted
 
 			response, err := getResponse(incomingTx)
 			if err != nil {
@@ -393,6 +393,9 @@ var cmdBench = &cobra.Command{
 			}
 		}
 
+		// TODO Wait for confirms and determine which double spends were successful and if any were
+		//   accepted by the smart-contract.
+
 		total := uint64(0)
 		for _, round := range times {
 			total += round
@@ -405,72 +408,7 @@ var cmdBench = &cobra.Command{
 	},
 }
 
-func contractOpReturn() ([]byte, error) {
-	contract := protocol.ContractOffer{
-		ContractName:           "End to End Tokenized Bench Test Contract",
-		BodyOfAgreementType:    2,
-		SupportingDocsFileType: 1,
-		ContractFee:            0,
-		Issuer: protocol.Entity{
-			Type: 'I',
-		},
-	}
-
-	var err error
-	contract.ContractAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, 21))
-	if err != nil {
-		return nil, err
-	}
-
-	return protocol.Serialize(&contract, true)
-}
-
-func assetOpReturn() ([]byte, error) {
-	payloadData, err := payload.Serialize()
-	if err != nil {
-		return nil, err
-	}
-
-	asset := protocol.AssetDefinition{
-		AssetType:          payload.Type(),
-		TransfersPermitted: true,
-		TokenQty:           1000000,
-		AssetPayload:       payloadData,
-	}
-
-	asset.AssetAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, 12))
-	if err != nil {
-		return nil, err
-	}
-
-	return protocol.Serialize(&asset, true)
-}
-
-func transferOpReturn() ([]byte, error) {
-	transfer := protocol.Transfer{
-		Assets: []protocol.AssetTransfer{
-			protocol.AssetTransfer{
-				ContractIndex: 0,
-				AssetType:     payload.Type(),
-				AssetCode:     *assetCode,
-			},
-		},
-	}
-
-	transfer.Assets[0].AssetSenders = append(transfer.Assets[0].AssetSenders, protocol.QuantityIndex{
-		Index:    0,
-		Quantity: 1,
-	})
-
-	transfer.Assets[0].AssetReceivers = append(transfer.Assets[0].AssetReceivers, protocol.AssetReceiver{
-		Address:  *protocol.PublicKeyHashFromBytes(receiverPKH),
-		Quantity: 1,
-	})
-
-	return protocol.Serialize(&transfer, true)
-}
-
-func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, name string) *wire.MsgTx {
+func sendDoubleRequests(ctx context.Context, client *client.Client, tx *wire.MsgTx, tx2 *wire.MsgTx, name string) *wire.MsgTx {
 	logger.Info(ctx, "Sending %s tx", name)
 	if err := client.BroadcastTxUntrustedOnly(ctx, tx); err != nil {
 		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
@@ -478,6 +416,7 @@ func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, nam
 	}
 
 	// Wait for response on tx channel
+	// TODO Add delay in case request was not accepted
 	hash := tx.TxHash()
 	for incomingTx := range client.IncomingTx.Channel {
 		for _, input := range incomingTx.TxIn {
@@ -489,16 +428,6 @@ func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, nam
 
 	logger.Warn(ctx, "Channel closed")
 	return nil
-}
-
-func getResponse(tx *wire.MsgTx) (protocol.OpReturnMessage, error) {
-	for _, output := range tx.TxOut {
-		data, err := protocol.Deserialize(output.PkScript, true)
-		if err == nil {
-			return data, nil
-		}
-	}
-	return nil, fmt.Errorf("Op return not found")
 }
 
 func init() {

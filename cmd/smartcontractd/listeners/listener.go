@@ -58,10 +58,9 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
-		for i, tx := range server.pendingRequests {
+		for _, tx := range server.pendingRequests {
 			if tx.TxHash() == txid {
 				// Remove from pending
-				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
 				err := server.processTx(ctx, tx)
 				if err != nil {
 					node.LogWarn(ctx, "Failed to process safe tx : %s : %s", err, txid.String())
