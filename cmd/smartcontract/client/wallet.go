@@ -132,8 +132,8 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net *chainc
 	unspentCount := 0
 	for _, output := range wallet.outputs {
 		if output.SpentByTxId == emptyHash {
-			logger.Info(ctx, "Loaded unspent UTXO %.08f : %s", BitcoinsFromSatoshis(output.Value),
-				output.OutPoint.Hash)
+			logger.Info(ctx, "Loaded unspent UTXO %.08f : %d of %s", BitcoinsFromSatoshis(output.Value),
+				output.OutPoint.Index, output.OutPoint.Hash)
 			unspentCount++
 		}
 	}

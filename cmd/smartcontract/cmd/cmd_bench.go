@@ -7,15 +7,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil"
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -61,9 +61,10 @@ var cmdBench = &cobra.Command{
 		receiverPKH = receiver.ScriptAddress()
 
 		assetCode = protocol.AssetCodeFromContract(theClient.ContractPKH, 0)
-
-		requiredBalance := uint64(4000)                                              // Create contract and asset
-		requiredBalance += uint64(theClient.Config.ContractFee+1500) * uint64(count) // Transfers
+		fundingAmount := uint64(2000)
+		utxoAmount := uint64(fundingAmount + 500)
+		requiredBalance := utxoAmount * 2             // Create contract and asset
+		requiredBalance += utxoAmount * uint64(count) // Transfers
 
 		// Start SpyNode ===========================================================================
 		wg := sync.WaitGroup{}
@@ -89,10 +90,10 @@ var cmdBench = &cobra.Command{
 			time.Sleep(time.Second)
 		}
 
+		// Create UTXOs ============================================================================
 		tx := txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		// Get UTXOs
 		UTXOs := theClient.Wallet.UnspentOutputs()
 		balance := uint64(0)
 		for _, utxo := range UTXOs {
@@ -115,8 +116,42 @@ var cmdBench = &cobra.Command{
 			return nil
 		}
 
+		utxoCount := count + 2
+		for i := 0; i < utxoCount; i++ {
+			if err := tx.AddP2PKHOutput(theClient.Wallet.PublicKeyHash, utxoAmount, false); err != nil {
+				logger.Warn(ctx, "Failed to add utxo output : %s", err)
+				theClient.StopSpyNode(ctx)
+				wg.Wait()
+				return nil
+			}
+		}
+
+		// Sign tx
+		if err := tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key}); err != nil {
+			logger.Warn(ctx, "Failed to sign utxo tx : %s", err)
+			theClient.StopSpyNode(ctx)
+			wg.Wait()
+			return nil
+		}
+
+		utxoTx := tx
+		utxoIndex := uint32(0)
+
 		// Create contract =========================================================================
-		if err := tx.AddP2PKHOutput(theClient.ContractPKH, 2000, false); err != nil {
+		tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+			theClient.Config.FeeRate)
+
+		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
+			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
+			theClient.StopSpyNode(ctx)
+			wg.Wait()
+			return nil
+		}
+		utxoIndex++
+
+		if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
 			logger.Warn(ctx, "Failed to add contract output : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -151,16 +186,17 @@ var cmdBench = &cobra.Command{
 		tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		if err := tx.AddInput(wire.OutPoint{Hash: contractTx.MsgTx.TxHash(), Index: uint32(len(contractTx.MsgTx.TxOut) - 1)},
-			contractTx.MsgTx.TxOut[len(contractTx.MsgTx.TxOut)-1].PkScript,
-			uint64(contractTx.MsgTx.TxOut[len(contractTx.MsgTx.TxOut)-1].Value)); err != nil {
+		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		}
+		utxoIndex++
 
-		if err := tx.AddP2PKHOutput(theClient.ContractPKH, 2000, false); err != nil {
+		if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
 			logger.Warn(ctx, "Failed to add contract output : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -193,23 +229,22 @@ var cmdBench = &cobra.Command{
 
 		// Create transfer txs =====================================================================
 		transferTxs := make([]*txbuilder.Tx, 0, count)
-		previousTx := tx
 
 		for i := 0; i < count; i++ {
 			tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
 				theClient.Config.FeeRate)
 
-			if err := tx.AddInput(wire.OutPoint{Hash: previousTx.MsgTx.TxHash(),
-				Index: uint32(len(previousTx.MsgTx.TxOut) - 1)},
-				previousTx.MsgTx.TxOut[len(previousTx.MsgTx.TxOut)-1].PkScript,
-				uint64(previousTx.MsgTx.TxOut[len(previousTx.MsgTx.TxOut)-1].Value)); err != nil {
+			if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
 				return nil
 			}
+			utxoIndex++
 
-			if err := tx.AddP2PKHOutput(theClient.ContractPKH, 2000, false); err != nil {
+			if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
 				logger.Warn(ctx, "Failed to add contract output to transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
@@ -239,7 +274,6 @@ var cmdBench = &cobra.Command{
 			}
 
 			transferTxs = append(transferTxs, tx)
-			previousTx = tx
 		}
 
 		var incomingTx *wire.MsgTx
@@ -247,6 +281,15 @@ var cmdBench = &cobra.Command{
 		// Clear any previous incoming txs
 		for len(theClient.IncomingTx.Channel) > 0 {
 			_ = <-theClient.IncomingTx.Channel
+		}
+
+		// Send UTXO tx ============================================================================
+		logger.Info(ctx, "Sending utxo tx")
+		if err := theClient.BroadcastTxUntrustedOnly(ctx, utxoTx.MsgTx); err != nil {
+			logger.Warn(ctx, "Failed to broadcast UTXO tx : %s", err)
+			theClient.StopSpyNode(ctx)
+			wg.Wait()
+			return nil
 		}
 
 		// Send contract tx ========================================================================
@@ -428,6 +471,7 @@ func transferOpReturn() ([]byte, error) {
 }
 
 func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, name string) *wire.MsgTx {
+	logger.Info(ctx, "Sending %s tx", name)
 	if err := client.BroadcastTxUntrustedOnly(ctx, tx); err != nil {
 		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
 		return nil

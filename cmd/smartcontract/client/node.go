@@ -290,13 +290,16 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 	}
 
 	if tx == nil {
+		logger.Info(ctx, "Confirmed tx not found : %s", txid.String())
 		return nil
 	}
 
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
+		logger.Info(ctx, "Tx safe : %s", txid.String())
 
 	case handlers.ListenerMsgTxStateConfirm:
+		logger.Info(ctx, "Tx confirmed : %s", txid.String())
 		for _, input := range tx.TxIn {
 			pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
 			if err != nil {
@@ -321,7 +324,8 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 			if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
 				// Add UTXO
 				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
-					logger.Info(ctx, "Confirmed received payment of %.08f : %s", BitcoinsFromSatoshis(uint64(output.Value)), tx.TxHash())
+					logger.Info(ctx, "Confirmed received payment of %.08f : %d of %s",
+						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
 				}
 			}
 		}
