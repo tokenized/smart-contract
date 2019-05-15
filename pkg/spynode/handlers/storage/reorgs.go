@@ -132,7 +132,7 @@ func (reorg *Reorg) Id() []byte {
 	digest := sha256.New()
 
 	height := uint32(reorg.BlockHeight)
-	binary.Write(digest, binary.BigEndian, &height)
+	binary.Write(digest, binary.LittleEndian, &height)
 
 	for i, _ := range reorg.Blocks {
 		hash := reorg.Blocks[i].Header.BlockHash()
@@ -145,12 +145,12 @@ func (reorg *Reorg) Id() []byte {
 
 func (reorg *Reorg) Write(buf *bytes.Buffer) error {
 	height := uint32(reorg.BlockHeight)
-	if err := binary.Write(buf, binary.BigEndian, &height); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &height); err != nil {
 		return err
 	}
 
 	count := uint32(len(reorg.Blocks))
-	if err := binary.Write(buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 
@@ -165,13 +165,13 @@ func (reorg *Reorg) Write(buf *bytes.Buffer) error {
 
 func (reorg *Reorg) Read(buf *bytes.Buffer) error {
 	var height uint32
-	if err := binary.Read(buf, binary.BigEndian, &height); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &height); err != nil {
 		return err
 	}
 	reorg.BlockHeight = int(height)
 
 	var count uint32
-	if err := binary.Read(buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 
@@ -191,7 +191,7 @@ func (block *ReorgBlock) Write(buf *bytes.Buffer) error {
 	}
 
 	count := uint32(len(block.TxIds))
-	if err := binary.Write(buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 
@@ -211,7 +211,7 @@ func (block *ReorgBlock) Read(buf *bytes.Buffer) error {
 	}
 
 	var count uint32
-	if err := binary.Read(buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 

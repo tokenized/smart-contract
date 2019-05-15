@@ -16,7 +16,7 @@ func (us *UTXOs) Save(ctx context.Context, masterDb *db.DB) error {
 	var buf bytes.Buffer
 
 	count := uint32(len(us.list))
-	if err := binary.Write(&buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Write(&buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 
@@ -42,7 +42,7 @@ func Load(ctx context.Context, masterDb *db.DB) (*UTXOs, error) {
 	buf := bytes.NewBuffer(data)
 
 	var count uint32
-	if err := binary.Read(buf, binary.BigEndian, &count); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
 		return nil, err
 	}
 
@@ -63,16 +63,16 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &utxo.OutPoint.Index); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &utxo.OutPoint.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &utxo.Output.Value); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &utxo.Output.Value); err != nil {
 		return err
 	}
 
 	scriptSize := uint32(len(utxo.Output.PkScript))
-	if err := binary.Write(buf, binary.BigEndian, &scriptSize); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &scriptSize); err != nil {
 		return err
 	}
 
@@ -92,16 +92,16 @@ func (utxo *UTXO) Read(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, &utxo.OutPoint.Index); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &utxo.OutPoint.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, &utxo.Output.Value); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &utxo.Output.Value); err != nil {
 		return err
 	}
 
 	var scriptSize uint32
-	if err := binary.Read(buf, binary.BigEndian, &scriptSize); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &scriptSize); err != nil {
 		return err
 	}
 

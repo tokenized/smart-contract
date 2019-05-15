@@ -335,7 +335,7 @@ func assetAmendment(t *testing.T) {
 	// Serialize new token quantity
 	newQuantity := uint64(1200)
 	var buf bytes.Buffer
-	err = binary.Write(&buf, binary.BigEndian, &newQuantity)
+	err = binary.Write(&buf, binary.LittleEndian, &newQuantity)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}

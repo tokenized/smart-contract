@@ -105,11 +105,11 @@ func (in *Input) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &in.Index); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &in.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &in.Value); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &in.Value); err != nil {
 		return err
 	}
 
@@ -127,11 +127,11 @@ func (in *Input) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
 	}
 	in.FullTx = &msg
 
-	if err := binary.Read(buf, binary.BigEndian, &in.Index); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &in.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, &in.Value); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &in.Value); err != nil {
 		return err
 	}
 
@@ -155,7 +155,7 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 	}
 
 	scriptSize := uint32(len(utxo.PkScript))
-	if err := binary.Write(buf, binary.BigEndian, &scriptSize); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &scriptSize); err != nil {
 		return err
 	}
 
@@ -163,11 +163,11 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &utxo.Index); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &utxo.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, &utxo.Value); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, &utxo.Value); err != nil {
 		return err
 	}
 
@@ -180,7 +180,7 @@ func (utxo *UTXO) Read(buf *bytes.Buffer) error {
 	}
 
 	var scriptSize uint32
-	if err := binary.Read(buf, binary.BigEndian, &scriptSize); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &scriptSize); err != nil {
 		return err
 	}
 
@@ -189,11 +189,11 @@ func (utxo *UTXO) Read(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, &utxo.Index); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &utxo.Index); err != nil {
 		return err
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, &utxo.Value); err != nil {
+	if err := binary.Read(buf, binary.LittleEndian, &utxo.Value); err != nil {
 		return err
 	}
 
