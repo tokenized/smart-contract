@@ -186,8 +186,9 @@ func (r *RPCNode) SendRawTransaction(ctx context.Context,
 // SaveTX saves a tx to be used later.
 func (r *RPCNode) SaveTX(ctx context.Context, msg *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Verbose(ctx, "Saving tx to rpc cache : %s\n", msg.TxHash().String())
-	r.txCache[msg.TxHash()] = msg
+	hash := msg.TxHash()
+	logger.Verbose(ctx, "Saving tx to rpc cache : %s\n", hash.String())
+	r.txCache[hash] = msg
 	return nil
 }
 
