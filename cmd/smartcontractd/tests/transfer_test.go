@@ -2,6 +2,8 @@ package tests
 
 import (
 	"bytes"
+	"os"
+	"runtime/pprof"
 	"testing"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -91,6 +93,15 @@ func simpleTransfersBenchmark(b *testing.B) {
 		requests = append(requests, transferTx)
 	}
 
+	profFile, err := os.OpenFile("simple_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
+	}
+	err = pprof.StartCPUProfile(profFile)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
+	}
+	defer pprof.StopCPUProfile()
 	b.ResetTimer()
 	for _, request := range requests {
 		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
@@ -198,6 +209,15 @@ func oracleTransfersBenchmark(b *testing.B) {
 		requests = append(requests, transferTx)
 	}
 
+	profFile, err := os.OpenFile("oracle_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
+	}
+	err = pprof.StartCPUProfile(profFile)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
+	}
+	defer pprof.StopCPUProfile()
 	b.ResetTimer()
 	for _, request := range requests {
 		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
