@@ -72,10 +72,10 @@ func (itx *Transaction) IsPromoted(ctx context.Context) bool {
 
 // ParseOutputs sets the Outputs property of the Transaction
 func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) error {
-	outputs := []Output{}
+	outputs := make([]Output, 0, len(itx.MsgTx.TxOut))
 
 	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(itx.MsgTx, n, node.GetChainParams())
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, n, node.GetChainParams())
 
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	return nil
 }
 
-func buildOutput(tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, error) {
+func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, error) {
 	txout := tx.TxOut[n]
 
 	// Zero value output
@@ -105,7 +105,7 @@ func buildOutput(tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, er
 		return nil, nil
 	}
 
-	utxo := NewUTXOFromWire(tx, uint32(n))
+	utxo := NewUTXOFromHashWire(hash, tx, uint32(n))
 
 	address, err := utxo.PublicAddress(netParams)
 	if err != nil {
@@ -124,7 +124,7 @@ func buildOutput(tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, er
 
 // ParseInputs sets the Inputs property of the Transaction
 func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
-	inputs := []Input{}
+	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
 
 	for _, txin := range itx.MsgTx.TxIn {
 		h := txin.PreviousOutPoint.Hash
@@ -134,7 +134,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 			return err
 		}
 
-		input, err := buildInput(inputTX, txin.PreviousOutPoint.Index, node.GetChainParams())
+		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index, node.GetChainParams())
 		if err != nil {
 			return err
 		}
@@ -146,8 +146,8 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 	return nil
 }
 
-func buildInput(tx *wire.MsgTx, n uint32, netParams *chaincfg.Params) (*Input, error) {
-	utxo := NewUTXOFromWire(tx, n)
+func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32, netParams *chaincfg.Params) (*Input, error) {
+	utxo := NewUTXOFromHashWire(hash, tx, n)
 
 	address, err := utxo.PublicAddress(netParams)
 	if err != nil {
@@ -304,7 +304,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 	// Outputs
 	outputs := []Output{}
 	for i := range itx.MsgTx.TxOut {
-		output, err := buildOutput(itx.MsgTx, i, netParams)
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, i, netParams)
 
 		if err != nil {
 			return err

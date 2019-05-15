@@ -80,11 +80,17 @@ func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string
 		return nil, err
 	}
 
-	return NewTransactionFromWire(ctx, tx, isTest)
+	return NewTransactionFromHashWire(ctx, h, tx, isTest)
 }
 
 // NewTransactionFromWire builds an ITX from a wire Msg Tx
 func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
+	hash := tx.TxHash()
+	return NewTransactionFromHashWire(ctx, &hash, tx, isTest)
+}
+
+// NewTransactionFromWire builds an ITX from a wire Msg Tx
+func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
 	// Must have inputs
 	if len(tx.TxIn) == 0 {
 		return nil, errors.Wrap(ErrMissingInputs, "parsing transaction")
@@ -107,7 +113,7 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*
 	}
 
 	return &Transaction{
-		Hash:     tx.TxHash(),
+		Hash:     *hash,
 		MsgTx:    tx,
 		MsgProto: msg,
 	}, nil
@@ -117,6 +123,16 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*
 func NewUTXOFromWire(tx *wire.MsgTx, index uint32) UTXO {
 	return UTXO{
 		Hash:     tx.TxHash(),
+		Index:    index,
+		PkScript: tx.TxOut[index].PkScript,
+		Value:    tx.TxOut[index].Value,
+	}
+}
+
+// NewUTXOFromHashWire returns a new UTXO from a wire message.
+func NewUTXOFromHashWire(hash *chainhash.Hash, tx *wire.MsgTx, index uint32) UTXO {
+	return UTXO{
+		Hash:     *hash,
 		Index:    index,
 		PkScript: tx.TxOut[index].PkScript,
 		Value:    tx.TxOut[index].Value,
