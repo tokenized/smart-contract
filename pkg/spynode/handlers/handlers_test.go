@@ -81,7 +81,7 @@ func TestHandlers(test *testing.T) {
 
 	// Create block repo
 	t := uint32(time.Now().Unix())
-	blockRepo := handlerStorage.NewBlockRepository(store)
+	blockRepo := handlerStorage.NewBlockRepository(&config, store)
 	if err := blockRepo.Initialize(ctx, t); err != nil {
 		test.Errorf("Failed to initialize block repo : %v", err)
 	}

@@ -6,9 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestBlocks(test *testing.T) {
@@ -20,10 +23,17 @@ func TestBlocks(test *testing.T) {
 	seed := rand.NewSource(time.Now().UnixNano())
 	randGen := rand.New(seed)
 
+	// Setup config
+	startHash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+	config, err := data.NewConfig(&chaincfg.MainNetParams, "test", "Tokenized Test", startHash.String(), 8, 2000)
+	if err != nil {
+		test.Errorf("Failed to create config : %v", err)
+	}
+
 	ctx := context.Background()
 	storageConfig := storage.NewConfig("ap-southeast-2", "", "", "standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
-	repo := NewBlockRepository(store)
+	repo := NewBlockRepository(&config, store)
 
 	t := uint32(time.Now().Unix())
 	header := wire.BlockHeader{Version: 1}
