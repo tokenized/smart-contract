@@ -93,9 +93,7 @@ func New(logToStdOut bool) *Test {
 
 	nodeConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeKey.Address.ScriptAddress())
 
-	rpcNode := &mockRpcNode{
-		params: &nodeConfig.ChainParams,
-	}
+	rpcNode := newMockRpcNode(&nodeConfig.ChainParams)
 
 	// ============================================================
 	// Database

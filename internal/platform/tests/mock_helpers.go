@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"time"
@@ -25,21 +24,27 @@ func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, pkh []b
 // RPC Node
 
 type mockRpcNode struct {
-	txs    []*wire.MsgTx
+	txs    map[chainhash.Hash]*wire.MsgTx
 	params *chaincfg.Params
 }
 
+func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
+	result := mockRpcNode{
+		txs:    make(map[chainhash.Hash]*wire.MsgTx),
+		params: params,
+	}
+	return &result
+}
+
 func (cache *mockRpcNode) AddTX(ctx context.Context, tx *wire.MsgTx) error {
-	cache.txs = append(cache.txs, tx)
+	cache.txs[tx.TxHash()] = tx
 	return nil
 }
 
 func (cache *mockRpcNode) GetTX(ctx context.Context, txid *chainhash.Hash) (*wire.MsgTx, error) {
-	for _, tx := range cache.txs {
-		hash := tx.TxHash()
-		if bytes.Equal(hash[:], txid[:]) {
-			return tx, nil
-		}
+	tx, ok := cache.txs[*txid]
+	if ok {
+		return tx, nil
 	}
 	return nil, errors.New("Couldn't find tx in cache")
 }
