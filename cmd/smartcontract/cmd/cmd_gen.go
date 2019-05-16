@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -56,6 +57,7 @@ var cmdGen = &cobra.Command{
 		}
 
 		fmt.Printf("WIF : %s\n", wif.String())
+		fmt.Printf("PubKey : %s\n", base64.StdEncoding.EncodeToString(key.PubKey().SerializeCompressed()))
 		fmt.Printf("Addr : %s\n", address.String())
 		return nil
 	},

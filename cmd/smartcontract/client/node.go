@@ -294,25 +294,30 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 	}
 
 	if tx == nil {
-		logger.Info(ctx, "Confirmed tx not found : %s", txid.String())
 		return nil
 	}
 
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
 		logger.Info(ctx, "Tx safe : %s", txid.String())
-		client.applyTx(ctx, tx)
+		client.pendingTxs = append(client.pendingTxs[:txIndex], client.pendingTxs[txIndex+1:]...)
+		client.applyTx(ctx, tx, false)
 
 	case handlers.ListenerMsgTxStateConfirm:
 		logger.Info(ctx, "Tx confirmed : %s", txid.String())
 		client.pendingTxs = append(client.pendingTxs[:txIndex], client.pendingTxs[txIndex+1:]...)
-		client.applyTx(ctx, tx)
+		client.applyTx(ctx, tx, false)
+
+		// case handlers.ListenerMsgTxStateRevert:
+		// 	logger.Info(ctx, "Tx reverted : %s", txid.String())
+		//
+		// 	client.applyTx(ctx, tx, true)
 	}
 
 	return nil
 }
 
-func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx) {
+func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
 		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
 		if err != nil {
@@ -320,10 +325,16 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx) {
 		}
 
 		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-			// Spend UTXO
-			spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
-			if spent {
-				logger.Info(ctx, "Confirmed sent payment of %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
+			if reverse {
+				spentValue, spent := client.Wallet.Unspend(&input.PreviousOutPoint, tx.TxHash())
+				if spent {
+					logger.Info(ctx, "Reverted send %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
+				}
+			} else {
+				spentValue, spent := client.Wallet.Spend(&input.PreviousOutPoint, tx.TxHash())
+				if spent {
+					logger.Info(ctx, "Sent %.08f : %s", BitcoinsFromSatoshis(spentValue), tx.TxHash())
+				}
 			}
 		}
 	}
@@ -335,10 +346,16 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx) {
 		}
 
 		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
-			// Add UTXO
-			if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
-				logger.Info(ctx, "Confirmed received payment of %.08f : %d of %s",
-					BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
+			if reverse {
+				if client.Wallet.RemoveUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+					logger.Info(ctx, "Reverted receipt of %.08f : %d of %s",
+						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
+				}
+			} else {
+				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+					logger.Info(ctx, "Received %.08f : %d of %s",
+						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
+				}
 			}
 		}
 	}

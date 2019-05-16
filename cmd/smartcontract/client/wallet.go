@@ -78,6 +78,24 @@ func (wallet *Wallet) Spend(outpoint *wire.OutPoint, spentByTxId chainhash.Hash)
 	return 0, false
 }
 
+func (wallet *Wallet) Unspend(outpoint *wire.OutPoint, spentByTxId chainhash.Hash) (uint64, bool) {
+	var emptyHash chainhash.Hash
+	for i, output := range wallet.outputs {
+		if !bytes.Equal(output.OutPoint.Hash[:], outpoint.Hash[:]) ||
+			output.OutPoint.Index != outpoint.Index {
+			continue
+		}
+
+		if output.SpentByTxId == emptyHash {
+			return output.Value, false // Not spent
+		}
+
+		wallet.outputs[i].SpentByTxId = emptyHash
+		return output.Value, true
+	}
+	return 0, false
+}
+
 func (wallet *Wallet) AddUTXO(txId chainhash.Hash, index uint32, script []byte, value uint64) bool {
 	for _, output := range wallet.outputs {
 		if bytes.Equal(txId[:], output.OutPoint.Hash[:]) &&
@@ -93,6 +111,18 @@ func (wallet *Wallet) AddUTXO(txId chainhash.Hash, index uint32, script []byte, 
 	}
 	wallet.outputs = append(wallet.outputs, newOutput)
 	return true
+}
+
+func (wallet *Wallet) RemoveUTXO(txId chainhash.Hash, index uint32, script []byte, value uint64) bool {
+	for i, output := range wallet.outputs {
+		if bytes.Equal(txId[:], output.OutPoint.Hash[:]) &&
+			index == output.OutPoint.Index {
+			wallet.outputs = append(wallet.outputs[:i], wallet.outputs[i+1:]...)
+			return true
+		}
+	}
+
+	return false
 }
 
 func (wallet *Wallet) Address(net *chaincfg.Params) (btcutil.Address, error) {

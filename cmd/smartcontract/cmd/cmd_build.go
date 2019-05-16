@@ -118,7 +118,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
-		funding += uint64(float32(estimatedSize)*theClient.Config.FeeRate*1.1) + 1500 // Add response tx fee
+		funding += uint64(float32(estimatedSize)*theClient.Config.FeeRate*1.1) + 2500 // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
 		if err != nil {
 			fmt.Printf("Failed to add estimated funding to contract output of tx : %s\n", err)

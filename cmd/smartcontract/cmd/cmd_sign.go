@@ -9,8 +9,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
-	"strings"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
@@ -19,11 +19,11 @@ import (
 )
 
 var cmdSign = &cobra.Command{
-	Use:   "sign <typeCode> <jsonFile> <contract PKH> <receiverIndex> <blockhash> <wifkey>",
+	Use:   "sign <jsonFile> <contract address> <receiverIndex> <blockhash> <oracle wifkey>",
 	Short: "Provide oracle signature",
 	RunE: func(c *cobra.Command, args []string) error {
-		if len(args) != 6 {
-			return errors.New("Missing json file parameter")
+		if len(args) != 5 {
+			return errors.New("Invalid parameter count")
 		}
 
 		return transferSign(c, args)
@@ -31,17 +31,29 @@ var cmdSign = &cobra.Command{
 }
 
 func transferSign(c *cobra.Command, args []string) error {
-	actionType := strings.ToUpper(args[0])
+	var params *chaincfg.Params
+	network := network(c)
+	if len(network) == 0 {
+		return nil
+	}
+	if network == "testnet" {
+		params = &chaincfg.TestNet3Params
+	} else if network == "mainnet" {
+		params = &chaincfg.MainNetParams
+	} else {
+		fmt.Printf("Unknown network : %s\n", network)
+		return nil
+	}
 
 	// Create struct
-	opReturn := protocol.TypeMapping(actionType)
+	opReturn := protocol.TypeMapping(protocol.CodeTransfer)
 	if opReturn == nil {
-		fmt.Printf("Unsupported action type : %s\n", actionType)
+		fmt.Printf("Unsupported action type : %s\n", protocol.CodeTransfer)
 		return nil
 	}
 
 	// Read json file
-	path := filepath.FromSlash(args[1])
+	path := filepath.FromSlash(args[0])
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		fmt.Printf("Failed to read json file : %s\n", err)
@@ -50,24 +62,20 @@ func transferSign(c *cobra.Command, args []string) error {
 
 	// Put json data into opReturn struct
 	if err := json.Unmarshal(data, opReturn); err != nil {
-		fmt.Printf("Failed to unmarshal %s json file : %s\n", actionType, err)
+		fmt.Printf("Failed to unmarshal %s json file : %s\n", protocol.CodeTransfer, err)
 		return nil
 	}
 
 	// Contract key
 	hash := make([]byte, 20)
-	n, err := hex.Decode(hash, []byte(args[2]))
+	contractAddress, err := btcutil.DecodeAddress(args[1], params)
 	if err != nil {
-		fmt.Printf("Invalid hash : %s\n", err)
+		fmt.Printf("Invalid contract address : %s\n", err)
 		return nil
 	}
-	if n != 20 {
-		fmt.Printf("Invalid hash size : %d\n", n)
-		return nil
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(hash)
+	contractPKH := protocol.PublicKeyHashFromBytes(contractAddress.ScriptAddress())
 
-	receiverIndex, err := strconv.Atoi(args[3])
+	receiverIndex, err := strconv.Atoi(args[2])
 	if err != nil {
 		fmt.Printf("Invalid receiver index : %s\n", err)
 		return nil
@@ -75,7 +83,7 @@ func transferSign(c *cobra.Command, args []string) error {
 
 	// Block hash
 	hash = make([]byte, 32)
-	n, err = hex.Decode(hash, []byte(args[4]))
+	n, err := hex.Decode(hash, []byte(args[3]))
 	if err != nil {
 		fmt.Printf("Failed to parse block hash : %s\n", err)
 		return nil
@@ -95,7 +103,7 @@ func transferSign(c *cobra.Command, args []string) error {
 		return nil
 	}
 
-	wif, err := btcutil.DecodeWIF(args[5])
+	wif, err := btcutil.DecodeWIF(args[4])
 	if err != nil {
 		fmt.Printf("Invalid WIF key : %s\n", err)
 		return nil
