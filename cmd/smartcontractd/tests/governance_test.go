@@ -33,7 +33,7 @@ func TestGovernance(t *testing.T) {
 func holderProposal(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
@@ -147,7 +147,7 @@ func holderProposal(t *testing.T) {
 func sendBallot(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, true)
@@ -236,7 +236,7 @@ func voteResult(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -303,7 +303,7 @@ func voteResultRelative(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -375,7 +375,7 @@ func voteResultAbsolute(t *testing.T) {
 	ctx := test.Context
 
 	// Mock up vote with expiration in half a second
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)

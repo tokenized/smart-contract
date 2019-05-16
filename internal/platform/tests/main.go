@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -188,14 +187,14 @@ func New(logToStdOut bool) *Test {
 }
 
 // Reset is used to reset the test state complete.
-func (test *Test) Reset() error {
+func (test *Test) Reset(ctx context.Context) error {
 	test.Headers.Reset()
-	return test.ResetDB()
+	return test.ResetDB(ctx)
 }
 
 // ResetDB clears all the data in the database.
-func (test *Test) ResetDB() error {
-	return os.RemoveAll(filepath.FromSlash(test.path))
+func (test *Test) ResetDB(ctx context.Context) error {
+	return test.MasterDB.Clear(ctx, "")
 }
 
 // TearDown is used for shutting down tests. Calling this should be

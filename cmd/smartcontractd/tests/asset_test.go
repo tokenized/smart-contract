@@ -29,7 +29,7 @@ func TestAssets(t *testing.T) {
 func createAsset(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -147,7 +147,7 @@ func createAsset(t *testing.T) {
 func assetIndex(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 
@@ -312,7 +312,7 @@ func assetIndex(t *testing.T) {
 func assetAmendment(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -410,7 +410,7 @@ func assetAmendment(t *testing.T) {
 func assetProposalAmendment(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)

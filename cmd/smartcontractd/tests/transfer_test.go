@@ -37,7 +37,7 @@ func BenchmarkTransfers(b *testing.B) {
 func simpleTransfersBenchmark(b *testing.B) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -127,7 +127,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 func oracleTransfersBenchmark(b *testing.B) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
@@ -243,7 +243,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 func sendTokens(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -372,7 +372,7 @@ func sendTokens(t *testing.T) {
 func multiExchange(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -613,7 +613,7 @@ func multiExchange(t *testing.T) {
 func oracleTransfer(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
@@ -736,7 +736,7 @@ func oracleTransfer(t *testing.T) {
 func oracleTransferBad(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
@@ -884,7 +884,7 @@ func oracleTransferBad(t *testing.T) {
 func permitted(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -984,7 +984,7 @@ func permitted(t *testing.T) {
 func permittedBad(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)

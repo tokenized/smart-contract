@@ -7,6 +7,8 @@ import (
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -161,7 +163,9 @@ func checkResponse(t testing.TB, responseCode string) {
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
 }
 
-func resetTest() error {
+func resetTest(ctx context.Context) error {
 	responses = nil
-	return test.Reset()
+	asset.Reset(ctx)
+	contract.Reset(ctx)
+	return test.Reset(ctx)
 }

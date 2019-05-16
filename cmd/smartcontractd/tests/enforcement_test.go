@@ -31,7 +31,7 @@ func TestEnforcement(t *testing.T) {
 func freezeOrder(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -123,7 +123,7 @@ func freezeOrder(t *testing.T) {
 func freezeAuthorityOrder(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -231,7 +231,7 @@ func freezeAuthorityOrder(t *testing.T) {
 func thawOrder(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -319,7 +319,7 @@ func thawOrder(t *testing.T) {
 func confiscateOrder(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
@@ -412,7 +412,7 @@ func confiscateOrder(t *testing.T) {
 func reconcileOrder(t *testing.T) {
 	ctx := test.Context
 
-	if err := resetTest(); err != nil {
+	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
