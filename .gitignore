@@ -22,6 +22,7 @@ _testmain.go
 *.exe
 *.test
 *.prof
+*.log
 
 Thumbs.db
 .#*
@@ -35,6 +36,7 @@ dist
 config/*.env
 conf/*.env
 log
+json
 
 # IDEs
 .idea/
