@@ -137,3 +137,11 @@ func (db *DB) List(ctx context.Context, keyStart string) ([][]byte, error) {
 
 	return db.storage.Search(ctx, query)
 }
+
+func (db *DB) Clear(ctx context.Context, keyStart string) error {
+	query := map[string]string{
+		"path": keyStart,
+	}
+
+	return db.storage.Clear(ctx, query)
+}

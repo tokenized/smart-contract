@@ -159,6 +159,40 @@ func (s S3Storage) Search(ctx context.Context,
 	return buf.objects(), nil
 }
 
+func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
+	path := query["path"]
+
+	keys, err := s.findKeys(ctx, path)
+	if err != nil {
+		return err
+	}
+
+	svc := s3manager.NewBatchDelete(s.Session)
+
+	objects := make([]s3manager.BatchDeleteObject, len(keys), len(keys))
+
+	bucket := &s.Config.Bucket
+
+	for i, k := range keys {
+		o := s3manager.BatchDeleteObject{
+			Object: &s3.DeleteObjectInput{
+				Bucket: bucket,
+				Key:    aws.String(k),
+			},
+		}
+
+		objects[i] = o
+	}
+
+	iter := &s3manager.DeleteObjectsIterator{Objects: objects}
+
+	if err := svc.Delete(ctx, iter); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s S3Storage) findKeys(ctx context.Context,
 	path string) ([]string, error) {
 
