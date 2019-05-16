@@ -14,6 +14,8 @@ import (
 
 const storageKey = "contracts"
 
+var cache map[protocol.PublicKeyHash]*state.Contract
+
 // Put a single contract in storage
 func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
 	b, err := json.Marshal(contract)
@@ -23,11 +25,26 @@ func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
 
 	key := buildStoragePath(&contract.ID)
 
-	return dbConn.Put(ctx, key, b)
+	if err := dbConn.Put(ctx, key, b); err != nil {
+		return err
+	}
+
+	if cache == nil {
+		cache = make(map[protocol.PublicKeyHash]*state.Contract)
+	}
+	cache[contract.ID] = contract
+	return nil
 }
 
 // Fetch a single contract from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
+	if cache != nil {
+		result, exists := cache[*contractPKH]
+		if exists {
+			return result, nil
+		}
+	}
+
 	key := buildStoragePath(contractPKH)
 
 	b, err := dbConn.Fetch(ctx, key)
@@ -45,6 +62,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	}
 
 	return &contract, nil
+}
+
+func Reset(ctx context.Context) {
+	cache = nil
 }
 
 // Returns the storage path prefix for a given identifier.

@@ -15,6 +15,8 @@ import (
 const storageKey = "contracts"
 const storageSubKey = "assets"
 
+var cache map[protocol.AssetCode]*state.Asset
+
 // Put a single asset in storage
 func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, asset *state.Asset) error {
 	data, err := json.Marshal(asset)
@@ -22,11 +24,26 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 		return errors.Wrap(err, "Failed to marshal asset")
 	}
 
-	return dbConn.Put(ctx, buildStoragePath(contractPKH, &asset.ID), data)
+	if err := dbConn.Put(ctx, buildStoragePath(contractPKH, &asset.ID), data); err != nil {
+		return err
+	}
+
+	if cache == nil {
+		cache = make(map[protocol.AssetCode]*state.Asset)
+	}
+	cache[asset.ID] = asset
+	return nil
 }
 
 // Fetch a single asset from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode) (*state.Asset, error) {
+	if cache != nil {
+		result, exists := cache[*assetCode]
+		if exists {
+			return result, nil
+		}
+	}
+
 	key := buildStoragePath(contractPKH, assetCode)
 
 	b, err := dbConn.Fetch(ctx, key)
@@ -45,6 +62,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	}
 
 	return &asset, nil
+}
+
+func Reset(ctx context.Context) {
+	cache = nil
 }
 
 // Returns the storage path prefix for a given identifier.
