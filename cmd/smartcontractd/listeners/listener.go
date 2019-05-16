@@ -31,8 +31,9 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 
-	node.Log(ctx, "Tx : %s", tx.TxHash().String())
-	server.pendingRequests = append(server.pendingRequests, tx)
+	hash := tx.TxHash()
+	node.Log(ctx, "Tx : %s", hash.String())
+	server.pendingRequests[hash] = tx
 	return true, nil
 }
 
@@ -58,15 +59,16 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
-		for _, tx := range server.pendingRequests {
-			if tx.TxHash() == txid {
-				// Remove from pending
-				err := server.processTx(ctx, tx)
-				if err != nil {
-					node.LogWarn(ctx, "Failed to process safe tx : %s : %s", err, txid.String())
-				}
-				return nil
+		tx, ok := server.pendingRequests[txid]
+		if ok {
+			// Remove from pending
+			delete(server.pendingRequests, txid)
+			server.processedRequests[txid] = tx
+			err := server.processTx(ctx, tx)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to process safe tx : %s : %s", err, txid.String())
 			}
+			return nil
 		}
 
 		node.LogVerbose(ctx, "Tx safe not found : %s", txid.String())
@@ -80,41 +82,45 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted and reconfirmed by reorg
 		}
 
-		for i, tx := range server.pendingRequests {
-			if tx.TxHash() == txid {
-				// Remove from pending
-				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				err := server.processTx(ctx, tx)
-				if err != nil {
-					node.LogWarn(ctx, "Failed to process confirm tx : %s : %s", err, txid.String())
-				}
-				return nil
+		tx, ok := server.pendingRequests[txid]
+		if ok {
+			// Remove from pending
+			delete(server.pendingRequests, txid)
+			err := server.processTx(ctx, tx)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to process confirm tx : %s : %s", err, txid.String())
 			}
+			return nil
 		}
 
-		for i, tx := range server.unsafeRequests {
-			if tx.TxHash() == txid {
-				// Remove from unsafeRequests
-				server.unsafeRequests = append(server.unsafeRequests[:i], server.unsafeRequests[i+1:]...)
-				node.LogVerbose(ctx, "Unsafe Tx confirm : %s", txid.String())
-				err := server.processTx(ctx, tx)
-				if err != nil {
-					node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s : %s", err, txid.String())
-				}
-				return nil
+		tx, ok = server.processedRequests[txid]
+		if ok {
+			// Remove from processed
+			delete(server.processedRequests, txid)
+			return nil
+		}
+
+		tx, ok = server.unsafeRequests[txid]
+		if ok {
+			// Remove from unsafeRequests
+			delete(server.unsafeRequests, txid)
+			node.LogVerbose(ctx, "Unsafe Tx confirm : %s", txid.String())
+			err := server.processTx(ctx, tx)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s : %s", err, txid.String())
 			}
+			return nil
 		}
 
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
 		node.Log(ctx, "Tx cancel : %s", txid.String())
-		for i, tx := range server.pendingRequests {
-			if tx.TxHash() == txid {
-				// Remove from pending
-				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-				return nil
-			}
+		_, ok := server.pendingRequests[txid]
+		if ok {
+			// Remove from pending
+			delete(server.pendingRequests, txid)
+			return nil
 		}
 
 		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, &server.Config.ChainParams, server.Config.IsTest)
@@ -129,16 +135,15 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 
 	case handlers.ListenerMsgTxStateUnsafe:
 		node.Log(ctx, "Tx unsafe : %s", txid.String())
-		for i, tx := range server.pendingRequests {
-			if tx.TxHash() == txid {
-				// Add to unsafe
-				server.unsafeRequests = append(server.unsafeRequests, server.pendingRequests[i])
+		tx, ok := server.pendingRequests[txid]
+		if ok {
+			// Add to unsafe
+			server.unsafeRequests[txid] = tx
 
-				// Remove from pending
-				server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
+			// Remove from pending
+			delete(server.pendingRequests, txid)
 
-				return nil
-			}
+			return nil
 		}
 
 		// This shouldn't happen. We should only get unsafe messages for txs that are not marked

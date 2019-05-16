@@ -45,7 +45,7 @@ func Context() context.Context {
 func network(c *cobra.Command) string {
 	network := os.Getenv("BITCOIN_CHAIN")
 	if len(network) == 0 {
-		fmt.Printf("WARNING!! No Bitcoin network specified. Set environment value BITCOIN_CHAIN=testnet")
+		fmt.Printf("WARNING!! No Bitcoin network specified. Set environment value BITCOIN_CHAIN=testnet\n")
 	}
 	return network
 }

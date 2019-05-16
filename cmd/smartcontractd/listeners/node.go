@@ -22,43 +22,45 @@ import (
 )
 
 type Server struct {
-	wallet           wallet.WalletInterface
-	Config           *node.Config
-	MasterDB         *db.DB
-	RpcNode          *rpcnode.RPCNode
-	SpyNode          *spynode.Node
-	Scheduler        *scheduler.Scheduler
-	Tracer           *Tracer
-	utxos            *utxos.UTXOs
-	Handler          protomux.Handler
-	contractPKHs     [][]byte // Used to determine which txs will be needed again
-	pendingRequests  []*wire.MsgTx
-	unsafeRequests   []*wire.MsgTx
-	pendingResponses []*wire.MsgTx
-	revertedTxs      []*chainhash.Hash
-	blockHeight      int // track current block height for confirm messages
-	inSync           bool
+	wallet            wallet.WalletInterface
+	Config            *node.Config
+	MasterDB          *db.DB
+	RpcNode           *rpcnode.RPCNode
+	SpyNode           *spynode.Node
+	Scheduler         *scheduler.Scheduler
+	Tracer            *Tracer
+	utxos             *utxos.UTXOs
+	Handler           protomux.Handler
+	contractPKHs      [][]byte // Used to determine which txs will be needed again
+	pendingRequests   map[chainhash.Hash]*wire.MsgTx
+	processedRequests map[chainhash.Hash]*wire.MsgTx // Processed, but not confirmed
+	unsafeRequests    map[chainhash.Hash]*wire.MsgTx
+	pendingResponses  []*wire.MsgTx
+	revertedTxs       []*chainhash.Hash
+	blockHeight       int // track current block height for confirm messages
+	inSync            bool
 }
 
 func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
 	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler,
 	tracer *Tracer, contractPKHs [][]byte, utxos *utxos.UTXOs) *Server {
 	result := Server{
-		wallet:           wallet,
-		Config:           config,
-		MasterDB:         masterDB,
-		RpcNode:          rpcNode,
-		SpyNode:          spyNode,
-		Scheduler:        sch,
-		Tracer:           tracer,
-		Handler:          handler,
-		contractPKHs:     contractPKHs,
-		utxos:            utxos,
-		pendingRequests:  make([]*wire.MsgTx, 0),
-		unsafeRequests:   make([]*wire.MsgTx, 0),
-		pendingResponses: make([]*wire.MsgTx, 0),
-		blockHeight:      0,
-		inSync:           false,
+		wallet:            wallet,
+		Config:            config,
+		MasterDB:          masterDB,
+		RpcNode:           rpcNode,
+		SpyNode:           spyNode,
+		Scheduler:         sch,
+		Tracer:            tracer,
+		Handler:           handler,
+		contractPKHs:      contractPKHs,
+		utxos:             utxos,
+		pendingRequests:   make(map[chainhash.Hash]*wire.MsgTx),
+		processedRequests: make(map[chainhash.Hash]*wire.MsgTx),
+		unsafeRequests:    make(map[chainhash.Hash]*wire.MsgTx),
+		pendingResponses:  make([]*wire.MsgTx, 0),
+		blockHeight:       0,
+		inSync:            false,
 	}
 
 	return &result

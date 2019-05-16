@@ -496,7 +496,11 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 		}
 		return nil // Filter out
 	}
-	logger.Verbose(ctx, "Trusted tx added : %s", hash.String())
+	if tx.Trusted {
+		logger.Verbose(ctx, "Trusted tx added : %s", hash.String())
+	} else {
+		logger.Verbose(ctx, "Untrusted tx added : %s", hash.String())
+	}
 
 	// Notify of new tx
 	marked := false

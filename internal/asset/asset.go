@@ -209,7 +209,7 @@ func updateBalance(ctx context.Context, as *state.Asset, userPKH *protocol.Publi
 	}
 
 	// New holding
-	logger.Verbose(ctx, "Creating new balance to %d for %s", balance, userPKH.String())
+	logger.Verbose(ctx, "Creating new balance of %d for %s", balance, userPKH.String())
 	as.Holdings = append(as.Holdings, state.Holding{
 		PKH:       *userPKH,
 		Balance:   balance,
