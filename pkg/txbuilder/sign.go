@@ -71,11 +71,16 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	outputValue := tx.OutputValue(true)
 
 	if inputValue < outputValue+uint64(estimatedFee) {
-		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(estimatedFee)))
+		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue,
+			outputValue+uint64(estimatedFee)))
 	}
 
+	var err error
+	done := false
+
 	currentFee := int64(inputValue) - int64(outputValue)
-	if err := tx.adjustFee(estimatedFee - currentFee); err != nil {
+	done, err = tx.adjustFee(estimatedFee - currentFee)
+	if err != nil {
 		return err
 	}
 
@@ -102,7 +107,7 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 			}
 		}
 
-		if attempt == 0 {
+		if done || attempt == 0 {
 			break
 		}
 
@@ -112,15 +117,17 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 		outputValue = tx.OutputValue(false)
 		changeValue := tx.changeSum()
 		if inputValue < outputValue+uint64(targetFee) {
-			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue, outputValue+uint64(targetFee)))
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue,
+				outputValue+uint64(targetFee)))
 		}
 
 		currentFee = int64(inputValue) - int64(outputValue) - int64(changeValue)
-		if currentFee >= targetFee && currentFee-targetFee < 10 {
-			break // Within 10 satoshis of target fee
+		if currentFee >= targetFee && float32(currentFee-targetFee)/float32(targetFee) < 0.05 {
+			break // Within 10% of target fee
 		}
 
-		if err := tx.adjustFee(targetFee - currentFee); err != nil {
+		done, err = tx.adjustFee(targetFee - currentFee)
+		if err != nil {
 			return err
 		}
 
