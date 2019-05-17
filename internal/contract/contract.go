@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	FieldCount       = 21 // The count of fields that can be changed with amendments.
+	FieldCount       = 20 // The count of fields that can be changed with amendments.
 	EntityFieldCount = 15 // The count of fields in an entity that can be changed with amendments.
 )
 
@@ -108,9 +108,6 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	}
 	if upd.BodyOfAgreement != nil {
 		c.BodyOfAgreement = *upd.BodyOfAgreement
-	}
-	if upd.SupportingDocsFileType != nil {
-		c.SupportingDocsFileType = *upd.SupportingDocsFileType
 	}
 	if upd.SupportingDocs != nil {
 		c.SupportingDocs = *upd.SupportingDocs

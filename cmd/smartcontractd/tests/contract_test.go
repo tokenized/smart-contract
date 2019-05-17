@@ -31,10 +31,9 @@ func createContract(t *testing.T) {
 
 	// New Contract Offer
 	offerData := protocol.ContractOffer{
-		ContractName:           "Test Name",
-		BodyOfAgreementType:    0,
-		SupportingDocsFileType: 1,
-		BodyOfAgreement:        []byte("This is a test contract and not to be used for any official purpose."),
+		ContractName:        "Test Name",
+		BodyOfAgreementType: 0,
+		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
 		Issuer: protocol.Entity{
 			Type:           'I',
 			Administration: []protocol.Administrator{protocol.Administrator{Type: 1, Name: "John Smith"}},
@@ -44,7 +43,7 @@ func createContract(t *testing.T) {
 	}
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, 21)
+	permissions := make([]protocol.Permission, 20)
 	for i, _ := range permissions {
 		permissions[i].Permitted = false              // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
@@ -371,11 +370,10 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                     *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
-		ContractName:           name,
-		BodyOfAgreementType:    1,
-		BodyOfAgreement:        []byte(agreement),
-		SupportingDocsFileType: 1,
+		ID:                  *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
 		Issuer: protocol.Entity{
 			Type:           issuerType,
 			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
@@ -393,7 +391,7 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 21)
+	permissions := make([]protocol.Permission, 20)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
@@ -416,11 +414,10 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                     *protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress()),
-		ContractName:           name,
-		BodyOfAgreementType:    1,
-		BodyOfAgreement:        []byte(agreement),
-		SupportingDocsFileType: 1,
+		ID:                  *protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress()),
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
 		Issuer: protocol.Entity{
 			Type:           issuerType,
 			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
@@ -438,7 +435,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 21)
+	permissions := make([]protocol.Permission, 20)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
@@ -459,11 +456,10 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 
 func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string) error {
 	var contractData = state.Contract{
-		ID:                     *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
-		ContractName:           name,
-		BodyOfAgreementType:    1,
-		BodyOfAgreement:        []byte(agreement),
-		SupportingDocsFileType: 1,
+		ID:                  *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
 		Issuer: protocol.Entity{
 			Type:           issuerType,
 			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
@@ -482,7 +478,7 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 21)
+	permissions := make([]protocol.Permission, 20)
 	for i, _ := range permissions {
 		permissions[i].Permitted = false              // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal

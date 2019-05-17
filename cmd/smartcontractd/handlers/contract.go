@@ -469,14 +469,20 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating agreement (%s)", ct.ContractName)
 		}
 
-		if ct.SupportingDocsFileType != msg.SupportingDocsFileType {
-			uc.SupportingDocsFileType = &msg.SupportingDocsFileType
-			node.Log(ctx, "Updating supporting docs file type (%s) : %02x", ct.ContractName, msg.SupportingDocsFileType)
+		// Check if SupportingDocs are different
+		different := len(ct.SupportingDocs) != len(msg.SupportingDocs)
+		if !different {
+			for i, doc := range ct.SupportingDocs {
+				if !doc.Equal(msg.SupportingDocs[i]) {
+					different = true
+					break
+				}
+			}
 		}
 
-		if !bytes.Equal(ct.SupportingDocs, msg.SupportingDocs) {
+		if different {
+			node.Log(ctx, "Updating contract supporting docs (%s)", ct.ContractName)
 			uc.SupportingDocs = &msg.SupportingDocs
-			node.Log(ctx, "Updating supporting docs (%s)", ct.ContractName)
 		}
 
 		if ct.GoverningLaw != string(msg.GoverningLaw) {
@@ -541,7 +547,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Check if oracles are different
-		different := len(ct.Oracles) != len(msg.Oracles)
+		different = len(ct.Oracles) != len(msg.Oracles)
 		if !different {
 			for i, oracle := range ct.Oracles {
 				if !oracle.Equal(msg.Oracles[i]) {
@@ -707,22 +713,48 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 		case 3: // ContractType
 			cf.ContractType = string(amendment.Data)
 
-		case 4: // SupportingDocsFileType
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("SupportingDocsFileType amendment value is wrong size : %d", len(amendment.Data))
+		case 4: // SupportingDocs
+			switch amendment.Operation {
+			case 0: // Modify
+				if int(amendment.Element) >= len(cf.SupportingDocs) {
+					return fmt.Errorf("Contract amendment element out of range for SupportingDocs : %d",
+						amendment.Element)
+				}
+
+				buf := bytes.NewBuffer(amendment.Data)
+				if err := cf.SupportingDocs[amendment.Element].Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment SupportingDocs[%d] failed to deserialize : %s",
+						amendment.Element, err)
+				}
+
+			case 1: // Add element
+				buf := bytes.NewBuffer(amendment.Data)
+				newDocument := protocol.Document{}
+				if err := newDocument.Write(buf); err != nil {
+					return fmt.Errorf("Contract amendment addition to SupportingDocs failed to deserialize : %s",
+						err)
+				}
+				cf.SupportingDocs = append(cf.SupportingDocs, newDocument)
+
+			case 2: // Delete element
+				if int(amendment.Element) >= len(cf.SupportingDocs) {
+					return fmt.Errorf("Contract amendment element out of range for SupportingDocs : %d",
+						amendment.Element)
+				}
+				cf.SupportingDocs = append(cf.SupportingDocs[:amendment.Element],
+					cf.SupportingDocs[amendment.Element+1:]...)
+
+			default:
+				return fmt.Errorf("Invalid contract amendment operation for SupportingDocs : %d", amendment.Operation)
 			}
-			cf.SupportingDocsFileType = uint8(amendment.Data[0])
 
-		case 5: // SupportingDocs
-			cf.SupportingDocs = amendment.Data
-
-		case 6: // GoverningLaw
+		case 5: // GoverningLaw
 			cf.GoverningLaw = string(amendment.Data)
 
-		case 7: // Jurisdiction
+		case 6: // Jurisdiction
 			cf.Jurisdiction = string(amendment.Data)
 
-		case 8: // ContractExpiration
+		case 7: // ContractExpiration
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -731,10 +763,10 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("ContractExpiration amendment value failed to deserialize : %s", err)
 			}
 
-		case 9: // ContractURI
+		case 8: // ContractURI
 			cf.ContractURI = string(amendment.Data)
 
-		case 10: // Issuer
+		case 9: // Issuer
 			switch amendment.SubfieldIndex {
 			case 0: // Name
 				cf.Issuer.Name = string(amendment.Data)
@@ -852,13 +884,13 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("Contract amendment subfield offset for Issuer out of range : %d", amendment.SubfieldIndex)
 			}
 
-		case 11: // IssuerLogoURL
+		case 10: // IssuerLogoURL
 			cf.IssuerLogoURL = string(amendment.Data)
 
-		case 12: // ContractOperatorIncluded
+		case 11: // ContractOperatorIncluded
 			return fmt.Errorf("Amendment attempting to change ContractOperatorIncluded")
 
-		case 13: // ContractOperator
+		case 12: // ContractOperator
 			switch amendment.SubfieldIndex {
 			case 0: // Name
 				cf.ContractOperator.Name = string(amendment.Data)
@@ -976,11 +1008,11 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("Contract amendment subfield offset for ContractOperator out of range : %d", amendment.SubfieldIndex)
 			}
 
-		case 14: // ContractAuthFlags
+		case 13: // ContractAuthFlags
 			cf.ContractAuthFlags = amendment.Data
 			authFieldsUpdated = true
 
-		case 15: // ContractFee
+		case 14: // ContractFee
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractFee amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -989,7 +1021,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("ContractFee amendment value failed to deserialize : %s", err)
 			}
 
-		case 16: // VotingSystems
+		case 15: // VotingSystems
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(cf.VotingSystems) {
@@ -1024,7 +1056,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d", amendment.Operation)
 			}
 
-		case 17: // RestrictedQtyAssets
+		case 16: // RestrictedQtyAssets
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1033,7 +1065,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("RestrictedQtyAssets amendment value failed to deserialize : %s", err)
 			}
 
-		case 18: // AdministrationProposal
+		case 17: // AdministrationProposal
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1042,7 +1074,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 19: // HolderProposal
+		case 18: // HolderProposal
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1051,7 +1083,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 20: // Oracles
+		case 19: // Oracles
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(cf.Oracles) {
@@ -1069,7 +1101,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				buf := bytes.NewBuffer(amendment.Data)
 				newOracle := protocol.Oracle{}
 				if err := newOracle.Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to Registries failed to deserialize : %s",
+					return fmt.Errorf("Contract amendment addition to Oracles failed to deserialize : %s",
 						err)
 				}
 				cf.Oracles = append(cf.Oracles, newOracle)
@@ -1083,7 +1115,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 					cf.Oracles[amendment.Element+1:]...)
 
 			default:
-				return fmt.Errorf("Invalid contract amendment operation for Registries : %d", amendment.Operation)
+				return fmt.Errorf("Invalid contract amendment operation for Oracles : %d", amendment.Operation)
 			}
 
 		default:

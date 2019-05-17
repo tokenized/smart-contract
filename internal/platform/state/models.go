@@ -22,8 +22,7 @@ type Contract struct {
 	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
 	BodyOfAgreement        []byte                  `json:"body_of_agreement,omitempty"`
 	ContractType           string                  `json:"contract_type,omitempty"`
-	SupportingDocsFileType uint8                   `json:"supporting_docs_file_type,omitempty"`
-	SupportingDocs         []byte                  `json:"supporting_docs,omitempty"`
+	SupportingDocs         []protocol.Document     `json:"supporting_docs,omitempty"`
 	GoverningLaw           string                  `json:"governing_law,omitempty"`
 	Jurisdiction           string                  `json:"jurisdiction,omitempty"`
 	ContractExpiration     protocol.Timestamp      `json:"contract_expiration,omitempty"`
