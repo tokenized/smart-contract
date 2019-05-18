@@ -66,6 +66,10 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	}
 	if contract.Oracles == nil {
 		contract.Oracles = []protocol.Oracle{}
+
+		if err := ExpandOracles(ctx, &contract); err != nil {
+			return err
+		}
 	}
 
 	return Save(ctx, dbConn, &contract)
@@ -158,6 +162,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		c.Oracles = *upd.Oracles
 		if c.Oracles == nil {
 			c.Oracles = []protocol.Oracle{}
+		}
+
+		if err := ExpandOracles(ctx, c); err != nil {
+			return err
 		}
 	}
 	if upd.FreezePeriod != nil {

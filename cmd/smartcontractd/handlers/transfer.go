@@ -1019,12 +1019,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 	}
 
 	// Check all oracles
-	for i, oracle := range ct.Oracles {
-		oraclePubKey, err := btcec.ParsePubKey(oracle.PublicKey, btcec.S256())
-		if err != nil {
-			return errors.Wrap(err, "Failed to parse oracle pub key")
-		}
-
+	for i, oracle := range ct.FullOracles {
 		hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
@@ -1038,7 +1033,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 			return errors.Wrap(err, "Failed to calculate oracle sig hash")
 		}
 
-		if oracleSig.Verify(sigHash, oraclePubKey) {
+		if oracleSig.Verify(sigHash, oracle) {
 			return nil // Valid signature found
 		}
 	}

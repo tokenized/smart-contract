@@ -494,5 +494,9 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 		return err
 	}
 
+	if err := contract.ExpandOracles(ctx, &contractData); err != nil {
+		return err
+	}
+
 	return contract.Save(ctx, test.MasterDB, &contractData)
 }

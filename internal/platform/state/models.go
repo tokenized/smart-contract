@@ -2,6 +2,8 @@ package state
 
 import (
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/btcsuite/btcd/btcec"
 )
 
 // Contract represents a Smart Contract.
@@ -39,6 +41,8 @@ type Contract struct {
 	Oracles                []protocol.Oracle       `json:"oracles,omitempty"`
 
 	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`
+
+	FullOracles []*btcec.PublicKey
 }
 
 type Asset struct {

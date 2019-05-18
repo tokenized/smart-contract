@@ -9,6 +9,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/pkg/errors"
 )
 
@@ -61,6 +62,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return nil, errors.Wrap(err, "Failed to unmarshal contract")
 	}
 
+	if err := ExpandOracles(ctx, &contract); err != nil {
+		return nil, err
+	}
+
 	return &contract, nil
 }
 
@@ -71,4 +76,17 @@ func Reset(ctx context.Context) {
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
 	return fmt.Sprintf("%s/%s/contract", storageKey, contractPKH.String())
+}
+
+func ExpandOracles(ctx context.Context, data *state.Contract) error {
+	// Expand oracle public keys
+	data.FullOracles = make([]*btcec.PublicKey, 0, len(data.Oracles))
+	for _, key := range data.Oracles {
+		fullKey, err := btcec.ParsePubKey(key.PublicKey, btcec.S256())
+		if err != nil {
+			return err
+		}
+		data.FullOracles = append(data.FullOracles, fullKey)
+	}
+	return nil
 }
