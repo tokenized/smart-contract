@@ -999,6 +999,11 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 		return nil // No signature required
 	}
 
+	if int(assetReceiver.OracleIndex) >= len(ct.FullOracles) {
+		return fmt.Errorf("Oracle index out of range : %d / %d", assetReceiver.OracleIndex,
+			len(ct.FullOracles))
+	}
+
 	// Parse signature
 	oracleSig, err := btcec.ParseSignature(assetReceiver.OracleConfirmationSig, btcec.S256())
 	if err != nil {
@@ -1018,24 +1023,22 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
 	}
 
-	// Check all oracles
-	for i, oracle := range ct.FullOracles {
-		hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-				assetReceiver.OracleSigBlockHeight))
-		}
-		node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s", i,
-			assetReceiver.OracleSigBlockHeight, hash.String())
-		sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
-			&assetReceiver.Address, assetReceiver.Quantity, hash)
-		if err != nil {
-			return errors.Wrap(err, "Failed to calculate oracle sig hash")
-		}
+	oracle := ct.FullOracles[assetReceiver.OracleIndex]
+	hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
+			assetReceiver.OracleSigBlockHeight))
+	}
+	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
+		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
+		&assetReceiver.Address, assetReceiver.Quantity, hash)
+	if err != nil {
+		return errors.Wrap(err, "Failed to calculate oracle sig hash")
+	}
 
-		if oracleSig.Verify(sigHash, oracle) {
-			return nil // Valid signature found
-		}
+	if oracleSig.Verify(sigHash, oracle) {
+		return nil // Valid signature found
 	}
 
 	return fmt.Errorf("Valid signature not found")
