@@ -70,6 +70,8 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 		},
+		DataIsValid: true,
+		SignaturesAreValid: true,
 	}
 
 	ignore := cmpopts.IgnoreUnexported(btcutil.AddressPubKeyHash{})
@@ -83,6 +85,14 @@ type TestNode struct{}
 
 func (n *TestNode) GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error) {
 	return nil, nil
+}
+
+func (n *TestNode) GetTXs(context.Context, []*chainhash.Hash) ([]*wire.MsgTx, error) {
+	return nil, nil
+}
+
+func (n *TestNode) SaveTX(context.Context, *wire.MsgTx) error {
+	return nil
 }
 
 func (n *TestNode) GetChainParams() *chaincfg.Params {
