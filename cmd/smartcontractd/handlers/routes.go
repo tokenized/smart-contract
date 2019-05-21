@@ -11,21 +11,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
-
-// BitcoinHeaders provides functions for retrieving information about headers on the currently
-//   longest chain.
-type BitcoinHeaders interface {
-	LastHeight(ctx context.Context) int
-	Hash(ctx context.Context, height int) (*chainhash.Hash, error)
-	Time(ctx context.Context, height int) (uint32, error)
-}
 
 // API returns a handler for a set of routes for protocol actions.
 func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB,
-	tracer *listeners.Tracer, sch *scheduler.Scheduler, headers BitcoinHeaders, utxos *utxos.UTXOs) (protomux.Handler, error) {
+	tracer *listeners.Tracer, sch *scheduler.Scheduler, headers node.BitcoinHeaders, utxos *utxos.UTXOs) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
 

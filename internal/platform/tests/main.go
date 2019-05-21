@@ -60,7 +60,7 @@ func New(logToStdOut bool) *Test {
 
 	var ctx context.Context
 	if logToStdOut {
-		ctx = node.ContextWithProductionLogger(NewContext(), os.Stdout)
+		ctx = node.ContextWithDevelopmentLogger(NewContext(), os.Stdout)
 	} else {
 		ctx = node.ContextWithNoLogger(NewContext())
 	}

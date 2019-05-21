@@ -19,17 +19,22 @@ type RootKey struct {
 }
 
 type KeyStore struct {
-	Keys map[string]*RootKey
+	Keys      map[string]*RootKey
+	KeysByPKH map[[20]byte]*RootKey
 }
 
 func NewKeyStore() *KeyStore {
 	return &KeyStore{
-		Keys: make(map[string]*RootKey),
+		Keys:      make(map[string]*RootKey),
+		KeysByPKH: make(map[[20]byte]*RootKey),
 	}
 }
 
 func (k KeyStore) Add(key *RootKey) error {
 	k.Keys[key.Address.String()] = key
+	var pkh [20]byte
+	copy(pkh[:], key.Address.ScriptAddress())
+	k.KeysByPKH[pkh] = key
 	return nil
 }
 
@@ -47,6 +52,18 @@ func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.Publi
 
 func (k KeyStore) Get(address string) (*RootKey, error) {
 	key, ok := k.Keys[address]
+
+	if !ok {
+		return nil, ErrKeyNotFound
+	}
+
+	return key, nil
+}
+
+func (k KeyStore) GetPKH(pkh []byte) (*RootKey, error) {
+	var spkh [20]byte
+	copy(spkh[:], pkh)
+	key, ok := k.KeysByPKH[spkh]
 
 	if !ok {
 		return nil, ErrKeyNotFound

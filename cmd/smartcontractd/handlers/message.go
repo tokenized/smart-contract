@@ -31,7 +31,7 @@ import (
 type Message struct {
 	MasterDB  *db.DB
 	Config    *node.Config
-	Headers   BitcoinHeaders
+	Headers   node.BitcoinHeaders
 	Tracer    *listeners.Tracer
 	Scheduler *scheduler.Scheduler
 	UTXOs     *utxos.UTXOs
@@ -45,6 +45,11 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	msg, ok := itx.MsgProto.(*protocol.Message)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Message")
+	}
+
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Message invalid")
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	// Check if message is addressed to contract.
@@ -63,12 +68,6 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 	if !found {
 		node.Log(ctx, "Message not addressed to this contract")
 		return nil // Message not addressed to contract.
-	}
-
-	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Message invalid : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
 	messagePayload := protocol.MessageTypeMapping(msg.MessageType)
@@ -107,6 +106,11 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	msg, ok := itx.MsgProto.(*protocol.Rejection)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Rejection")
+	}
+
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Rejection message invalid")
+		return nil
 	}
 
 	// Check if message is addressed to this contract.
@@ -277,7 +281,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	var transferTx *inspector.Transaction
-	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams, m.Config.IsTest)
+	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams,
+		m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Transfer tx not found")
 	}
@@ -347,6 +352,11 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectContractExpired)
+	}
+
+	// Check Oracle Signature
+	if !transferTx.SignaturesAreValid {
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectInvalidSignature)
 	}
 
 	// Add this contract's data to the settlement op return data
@@ -445,7 +455,8 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	itx *inspector.Transaction, rk *wallet.RootKey, sigRequest *protocol.SignatureRequest,
 	settleWireTx *wire.MsgTx, settlement *protocol.Settlement) error {
 	// Get transfer tx
-	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash, &m.Config.ChainParams, m.Config.IsTest)
+	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash,
+		&m.Config.ChainParams, m.Config.IsTest)
 	if err != nil {
 		return errors.New("Failed to get transfer tx")
 	}
@@ -616,7 +627,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 // verifySettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
 func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer, settleTx *wire.MsgTx,
-	settlement *protocol.Settlement, headers BitcoinHeaders) error {
+	settlement *protocol.Settlement, headers node.BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.verifySettlement")
 	defer span.End()
 
@@ -794,11 +805,6 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			if settleOutputIndex == uint16(0xffff) {
 				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
 					assetOffset, receiverOffset, receiver.Address.String())
-			}
-
-			// Validate Oracle Signature
-			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, &receiver, headers); err != nil {
-				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {

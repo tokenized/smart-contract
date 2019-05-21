@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -24,6 +25,14 @@ type Values struct {
 	Now        protocol.Timestamp
 	StatusCode int
 	Error      bool
+}
+
+// BitcoinHeaders provides functions for retrieving information about headers on the currently
+//   longest chain.
+type BitcoinHeaders interface {
+	LastHeight(ctx context.Context) int
+	Hash(ctx context.Context, height int) (*chainhash.Hash, error)
+	Time(ctx context.Context, height int) (uint32, error)
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
@@ -49,6 +58,7 @@ type Config struct {
 	ChainParams        chaincfg.Params
 	FeeRate            float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
+	PreprocessThreads  int
 	IsTest             bool
 }
 
@@ -70,7 +80,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error {
+	h := func(ctx context.Context, itx *inspector.Transaction, pkhs [][]byte) error {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -81,7 +91,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys, _ := a.wallet.List(pkhs)
+		rootKeys, _ := a.wallet.ListPKH(pkhs)
 		handled := false
 		for _, rootKey := range rootKeys {
 			// Set the context with the required values to process the event.
@@ -121,7 +131,7 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error {
+	h := func(ctx context.Context, itx *inspector.Transaction, pkhs [][]byte) error {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -140,7 +150,7 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys, _ := a.wallet.List(pkhs)
+		rootKeys, _ := a.wallet.ListPKH(pkhs)
 		handled := false
 		for _, rootKey := range rootKeys {
 			// Set the context with the required values to process the event.

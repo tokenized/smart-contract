@@ -89,7 +89,7 @@ func freezeOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
@@ -198,7 +198,7 @@ func freezeAuthorityOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
@@ -289,7 +289,7 @@ func thawOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
@@ -377,7 +377,7 @@ func confiscateOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
@@ -471,7 +471,7 @@ func reconcileOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
@@ -567,7 +567,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64
 		return nil, err
 	}
 
-	test.RPCNode.AddTX(ctx, orderTx)
+	test.RPCNode.SaveTX(ctx, orderTx)
 	transactions.AddTx(ctx, test.MasterDB, orderItx)
 
 	err = a.Trigger(ctx, "SEE", orderItx)
@@ -580,7 +580,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64
 		hash := responses[0].TxHash()
 		freezeTxId = protocol.TxIdFromBytes(hash[:])
 
-		test.RPCNode.AddTX(ctx, responses[0])
+		test.RPCNode.SaveTX(ctx, responses[0])
 
 		freezeItx, err := inspector.NewTransactionFromWire(ctx, responses[0], test.NodeConfig.IsTest)
 		if err != nil {

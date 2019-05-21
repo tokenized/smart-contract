@@ -149,7 +149,7 @@ func checkResponse(t testing.TB, responseCode string) {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, response)
+	test.RPCNode.SaveTX(ctx, response)
 
 	err = a.Trigger(ctx, "SEE", responseItx)
 	if err != nil {
@@ -161,6 +161,26 @@ func checkResponse(t testing.TB, responseCode string) {
 	}
 
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
+}
+
+func checkResponses(t testing.TB, responseCode string) {
+	var responseMsg protocol.OpReturnMessage
+	var err error
+
+	for i, response := range responses {
+		for _, output := range response.TxOut {
+			responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+			if err == nil {
+				break
+			}
+		}
+		if responseMsg == nil {
+			t.Fatalf("\t%s\t%s Response %d doesn't contain tokenized op return", tests.Failed, responseCode, i)
+		}
+		if responseMsg.Type() != responseCode {
+			t.Fatalf("\t%s\tResponse %d is the wrong type : %s != %s", tests.Failed, i, responseMsg.Type(), responseCode)
+		}
+	}
 }
 
 func resetTest(ctx context.Context) error {

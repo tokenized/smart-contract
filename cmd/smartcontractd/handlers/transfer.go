@@ -31,7 +31,7 @@ type Transfer struct {
 	handler   protomux.Handler
 	MasterDB  *db.DB
 	Config    *node.Config
-	Headers   BitcoinHeaders
+	Headers   node.BitcoinHeaders
 	Tracer    *listeners.Tracer
 	Scheduler *scheduler.Scheduler
 }
@@ -84,10 +84,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
-	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Transfer invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Transfer request invalid")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
+	}
+
+	// Check Oracle Signature
+	if !itx.SignaturesAreValid {
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectInvalidSignature, false)
 	}
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
@@ -497,7 +501,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
-	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers BitcoinHeaders) error {
+	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers node.BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -505,6 +509,14 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	dataAdded := false
+
+	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
+	if err != nil {
+		return errors.Wrap(err, "Failed to retrieve contract")
+	}
+	if ct.FreezePeriod.Nano() > v.Now.Nano() {
+		return rejectError{code: protocol.RejectContractFrozen}
+	}
 
 	// Generate public key hashes for all the outputs
 	transferOutputPKHs := make([]*protocol.PublicKeyHash, 0, len(transferTx.Outputs))
@@ -540,21 +552,13 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 
-		if len(settleTx.Outputs) <= int(assetTransfer.ContractIndex) {
+		if len(transferTx.Outputs) <= int(assetTransfer.ContractIndex) {
 			return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
 		}
 
 		contractOutputPKH := transferOutputPKHs[assetTransfer.ContractIndex]
-		if contractOutputPKH != nil && !bytes.Equal(contractOutputPKH.Bytes(), contractPKH.Bytes()) {
+		if contractOutputPKH == nil || !bytes.Equal(contractOutputPKH.Bytes(), contractPKH.Bytes()) {
 			continue // This asset is not ours. Skip it.
-		}
-
-		ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
-		if err != nil {
-			return errors.Wrap(err, "Failed to retrieve contract")
-		}
-		if ct.FreezePeriod.Nano() > v.Now.Nano() {
-			return rejectError{code: protocol.RejectContractFrozen}
 		}
 
 		// Locate Asset
@@ -670,11 +674,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				toAdministration += receiver.Quantity
 			} else {
 				toNonAdministration += receiver.Quantity
-			}
-
-			// Check Oracle Signature
-			if err := validateOracle(ctx, contractPKH, ct, &assetTransfer.AssetCode, &receiver, headers); err != nil {
-				return rejectError{code: protocol.RejectInvalidSignature, text: err.Error()}
 			}
 
 			if settlementQuantities[settleOutputIndex] == nil {
@@ -937,6 +936,10 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return errors.New("Could not assert as *protocol.Settlement")
 	}
 
+	if !itx.DataIsValid {
+		return errors.New("Settlement response invalid")
+	}
+
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, t.MasterDB, contractPKH)
 	if err != nil {
@@ -987,61 +990,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	}
 
 	return nil
-}
-
-func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
-	assetCode *protocol.AssetCode, assetReceiver *protocol.AssetReceiver, headers BitcoinHeaders) error {
-
-	if assetReceiver.OracleSigAlgorithm == 0 {
-		if len(ct.Oracles) > 0 {
-			return fmt.Errorf("Missing signature")
-		}
-		return nil // No signature required
-	}
-
-	if int(assetReceiver.OracleIndex) >= len(ct.FullOracles) {
-		return fmt.Errorf("Oracle index out of range : %d / %d", assetReceiver.OracleIndex,
-			len(ct.FullOracles))
-	}
-
-	// Parse signature
-	oracleSig, err := btcec.ParseSignature(assetReceiver.OracleConfirmationSig, btcec.S256())
-	if err != nil {
-		return errors.Wrap(err, "Failed to parse oracle signature")
-	}
-
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	// Check if block time is beyond expiration
-	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
-	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
-			assetReceiver.OracleSigBlockHeight))
-	}
-	if blockTime < expire {
-		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
-	}
-
-	oracle := ct.FullOracles[assetReceiver.OracleIndex]
-	hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-			assetReceiver.OracleSigBlockHeight))
-	}
-	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
-		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
-		&assetReceiver.Address, assetReceiver.Quantity, hash)
-	if err != nil {
-		return errors.Wrap(err, "Failed to calculate oracle sig hash")
-	}
-
-	if oracleSig.Verify(sigHash, oracle) {
-		return nil // Valid signature found
-	}
-
-	return fmt.Errorf("Valid signature not found")
 }
 
 // respondTransferReject sends a reject to all parties involved with a transfer request and refunds

@@ -38,8 +38,8 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Order request invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Order request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -550,6 +550,10 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.New("Could not assert as *protocol.Freeze")
 	}
 
+	if !itx.DataIsValid {
+		return errors.New("Freeze response invalid")
+	}
+
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
 		return fmt.Errorf("Freeze not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
@@ -629,6 +633,10 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 	msg, ok := itx.MsgProto.(*protocol.Thaw)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Thaw")
+	}
+
+	if !itx.DataIsValid {
+		return errors.New("Thaw response invalid")
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -718,6 +726,10 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return errors.New("Could not assert as *protocol.Confiscation")
 	}
 
+	if !itx.DataIsValid {
+		return errors.New("Confiscation response invalid")
+	}
+
 	// Locate Asset
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
@@ -765,6 +777,10 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	msg, ok := itx.MsgProto.(*protocol.Reconciliation)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Reconciliation")
+	}
+
+	if !itx.DataIsValid {
+		return errors.New("Reconciliation response invalid")
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())

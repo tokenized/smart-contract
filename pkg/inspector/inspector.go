@@ -44,7 +44,9 @@ var (
 // NodeInterface represents a configured bitcoin node that is capable
 // of looking up transactions and parameters for its network
 type NodeInterface interface {
+	SaveTX(context.Context, *wire.MsgTx) error
 	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
+	GetTXs(context.Context, []*chainhash.Hash) ([]*wire.MsgTx, error)
 	GetChainParams() *chaincfg.Params
 }
 
@@ -113,9 +115,20 @@ func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *w
 	}
 
 	return &Transaction{
-		Hash:     *hash,
-		MsgTx:    tx,
-		MsgProto: msg,
+		Hash:               *hash,
+		MsgTx:              tx,
+		MsgProto:           msg,
+		DataIsValid:        true,
+		SignaturesAreValid: true,
+	}, nil
+}
+
+func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
+	return &Transaction{
+		Hash:               tx.TxHash(),
+		MsgTx:              tx,
+		DataIsValid:        true,
+		SignaturesAreValid: true,
 	}, nil
 }
 

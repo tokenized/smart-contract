@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -36,6 +37,7 @@ type RPCNode struct {
 	client      *rpcclient.Client
 	txCache     map[chainhash.Hash]*wire.MsgTx
 	chainParams *chaincfg.Params
+	lock        sync.Mutex
 }
 
 // NewNode returns a new instance of an RPC node
@@ -72,12 +74,15 @@ func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, e
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "GetTX")
 
+	r.lock.Lock()
 	msg, ok := r.txCache[*id]
 	if ok {
 		logger.Verbose(ctx, "Using tx from RPC cache : %s\n", id.String())
 		delete(r.txCache, *id)
+		r.lock.Unlock()
 		return msg, nil
 	}
+	r.lock.Unlock()
 
 	logger.Verbose(ctx, "Requesting tx from RPC : %s\n", id.String())
 	raw, err := r.client.GetRawTransactionVerbose(id)
@@ -98,6 +103,56 @@ func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, e
 	}
 
 	return &tx, nil
+}
+
+// GetTXs requests a list of txs from the remote server.
+func (r *RPCNode) GetTXs(ctx context.Context, txids []*chainhash.Hash) ([]*wire.MsgTx, error) {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	defer logger.Elapsed(ctx, time.Now(), "GetTXs")
+
+	results := make([]*wire.MsgTx, len(txids))
+	requests := make([]*rpcclient.FutureGetRawTransactionVerboseResult, len(txids))
+
+	r.lock.Lock()
+	for i, txid := range txids {
+		msg, ok := r.txCache[*txid]
+		if ok {
+			logger.Verbose(ctx, "Using tx from RPC cache : %s\n", txid.String())
+			delete(r.txCache, *txid)
+			results[i] = msg
+		} else {
+			logger.Verbose(ctx, "Requesting tx from RPC : %s\n", txid.String())
+			request := r.client.GetRawTransactionVerboseAsync(txid)
+			requests[i] = &request
+		}
+	}
+	r.lock.Unlock()
+
+	for i, request := range requests {
+		if request == nil {
+			continue
+		}
+		rawTx, err := request.Receive()
+		if err != nil {
+			return results, err // TODO Determine when error is tx not seen yet
+		}
+
+		b, err := hex.DecodeString(rawTx.Hex)
+		if err != nil {
+			return results, err
+		}
+
+		tx := wire.MsgTx{}
+		buf := bytes.NewReader(b)
+
+		if err := tx.Deserialize(buf); err != nil {
+			return results, err
+		}
+
+		results[i] = &tx
+	}
+
+	return results, nil
 }
 
 // WatchAddress instructs the RPC node to watch an address without rescan
@@ -185,6 +240,9 @@ func (r *RPCNode) SendRawTransaction(ctx context.Context,
 
 // SaveTX saves a tx to be used later.
 func (r *RPCNode) SaveTX(ctx context.Context, msg *wire.MsgTx) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	hash := msg.TxHash()
 	logger.Verbose(ctx, "Saving tx to rpc cache : %s\n", hash.String())

@@ -45,8 +45,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Proposal request invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Proposal request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -288,6 +288,10 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.New("Could not assert as *protocol.Vote")
 	}
 
+	if !itx.DataIsValid {
+		return errors.New("Vote response invalid")
+	}
+
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -382,8 +386,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Ballot cast request invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Ballot cast request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -524,6 +528,9 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+	if !itx.DataIsValid {
+		return errors.New("Ballot counted response invalid")
+	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
@@ -582,6 +589,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
 	node.LogVerbose(ctx, "Finalizing vote : %s", itx.Hash.String())
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -666,6 +674,10 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	if !itx.DataIsValid {
+		return errors.New("Result reponse invalid")
+	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {

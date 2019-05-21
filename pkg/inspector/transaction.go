@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -44,11 +45,52 @@ var (
 // Transaction represents an ITX (Inspector Transaction) containing
 // information about a transaction that is useful to the protocol.
 type Transaction struct {
-	Hash     chainhash.Hash
-	MsgTx    *wire.MsgTx
-	MsgProto protocol.OpReturnMessage
-	Inputs   []Input
-	Outputs  []Output
+	Hash               chainhash.Hash
+	MsgTx              *wire.MsgTx
+	MsgProto           protocol.OpReturnMessage
+	Inputs             []Input
+	Outputs            []Output
+	DataIsValid        bool
+	SignaturesAreValid bool
+}
+
+// Setup finds the tokenized message. It is required if the inspector transaction was created using
+//   the NewBaseTransactionFromWire function.
+func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
+	// Find and deserialize protocol message
+	var msg protocol.OpReturnMessage
+	var err error
+	for _, txOut := range itx.MsgTx.TxOut {
+		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
+		if err == nil {
+			itx.MsgProto = msg
+			if err := msg.Validate(); err != nil {
+				itx.DataIsValid = false
+				logger.Warn(ctx, "Protocol message is invalid : %s", err)
+				return nil
+			}
+			itx.DataIsValid = true
+			return nil // Tokenized output found
+		}
+	}
+
+	return nil
+}
+
+// Validate checks the validity of the data in the protocol message.
+func (itx *Transaction) Validate(ctx context.Context) error {
+	if itx.MsgProto == nil {
+		return nil
+	}
+
+	if err := itx.MsgProto.Validate(); err != nil {
+		logger.Warn(ctx, "Protocol message is invalid : %s", err)
+		itx.DataIsValid = false
+		return nil
+	}
+
+	itx.DataIsValid = true
+	return nil
 }
 
 // Promote will populate the inputs and outputs accordingly
@@ -220,6 +262,11 @@ func (itx *Transaction) ContractAddresses() []btcutil.Address {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
+// ContractAddresses returns the contract address, which may include more than one
+func (itx *Transaction) ContractPKHs() [][]byte {
+	return GetProtocolContractPKHs(itx, itx.MsgProto)
+}
+
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []btcutil.Address {
 	l := len(itx.Inputs) + len(itx.Outputs)
@@ -282,6 +329,17 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 		}
 	}
 
+	if itx.DataIsValid {
+		buf.WriteByte(0xff)
+	} else {
+		buf.WriteByte(0)
+	}
+	if itx.SignaturesAreValid {
+		buf.WriteByte(0xff)
+	} else {
+		buf.WriteByte(0)
+	}
+
 	return nil
 }
 
@@ -300,6 +358,17 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 			return err
 		}
 	}
+
+	byte, err := buf.ReadByte()
+	if err != nil {
+		return err
+	}
+	itx.DataIsValid = byte != 0
+	byte, err = buf.ReadByte()
+	if err != nil {
+		return err
+	}
+	itx.SignaturesAreValid = byte != 0
 
 	// Outputs
 	outputs := []Output{}
@@ -320,7 +389,6 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 	itx.Outputs = outputs
 
 	// Protocol Message
-	var err error
 	for _, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {

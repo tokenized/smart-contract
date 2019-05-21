@@ -33,7 +33,7 @@ type Handler interface {
 }
 
 // A Handler is a type that handles a protocol messages
-type HandlerFunc func(ctx context.Context, itx *inspector.Transaction, pkhs []string) error
+type HandlerFunc func(ctx context.Context, itx *inspector.Transaction, pkhs [][]byte) error
 
 // A ResponderFunc will handle responses
 type ResponderFunc func(ctx context.Context, tx *wire.MsgTx) error
@@ -136,14 +136,11 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 	}
 
 	// Find contract PKHs
-	var pkhs []string
-	for _, addr := range itx.ContractAddresses() {
-		pkhs = append(pkhs, addr.String())
-	}
+	pkhs := itx.ContractPKHs()
 
-	// Notify the listeners
-	for _, listener := range handlers {
-		if err := listener(ctx, itx, pkhs); err != nil {
+	// Notify the handlers
+	for _, handler := range handlers {
+		if err := handler(ctx, itx, pkhs); err != nil {
 			return err
 		}
 	}

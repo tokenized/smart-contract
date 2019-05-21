@@ -30,10 +30,13 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 
 func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
+	err := server.AddTx(ctx, tx)
+	if err != nil {
+		node.LogError(ctx, "Failed to add tx : %s", err)
+		return true, nil
+	}
 
-	hash := tx.TxHash()
-	node.Log(ctx, "Tx : %s", hash.String())
-	server.pendingRequests[hash] = tx
+	node.Log(ctx, "Tx : %s", tx.TxHash().String())
 	return true, nil
 }
 
@@ -59,19 +62,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
-		tx, ok := server.pendingRequests[txid]
-		if ok {
-			// Remove from pending
-			delete(server.pendingRequests, txid)
-			server.processedRequests[txid] = tx
-			err := server.processTx(ctx, tx)
-			if err != nil {
-				node.LogWarn(ctx, "Failed to process safe tx : %s : %s", err, txid.String())
-			}
-			return nil
-		}
-
-		node.LogVerbose(ctx, "Tx safe not found : %s", txid.String())
+		server.MarkSafe(ctx, &txid)
 		return nil
 
 	case handlers.ListenerMsgTxStateConfirm:
@@ -82,44 +73,13 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil // Already accepted. Reverted and reconfirmed by reorg
 		}
 
-		tx, ok := server.pendingRequests[txid]
-		if ok {
-			// Remove from pending
-			delete(server.pendingRequests, txid)
-			err := server.processTx(ctx, tx)
-			if err != nil {
-				node.LogWarn(ctx, "Failed to process confirm tx : %s : %s", err, txid.String())
-			}
-			return nil
-		}
-
-		tx, ok = server.processedRequests[txid]
-		if ok {
-			// Remove from processed
-			delete(server.processedRequests, txid)
-			return nil
-		}
-
-		tx, ok = server.unsafeRequests[txid]
-		if ok {
-			// Remove from unsafeRequests
-			delete(server.unsafeRequests, txid)
-			node.LogVerbose(ctx, "Unsafe Tx confirm : %s", txid.String())
-			err := server.processTx(ctx, tx)
-			if err != nil {
-				node.LogWarn(ctx, "Failed to process unsafe confirm tx : %s : %s", err, txid.String())
-			}
-			return nil
-		}
-
+		server.MarkConfirmed(ctx, &txid)
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
 		node.Log(ctx, "Tx cancel : %s", txid.String())
-		_, ok := server.pendingRequests[txid]
-		if ok {
-			// Remove from pending
-			delete(server.pendingRequests, txid)
+
+		if server.CancelPendingTx(ctx, &txid) {
 			return nil
 		}
 
@@ -135,20 +95,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 
 	case handlers.ListenerMsgTxStateUnsafe:
 		node.Log(ctx, "Tx unsafe : %s", txid.String())
-		tx, ok := server.pendingRequests[txid]
-		if ok {
-			// Add to unsafe
-			server.unsafeRequests[txid] = tx
-
-			// Remove from pending
-			delete(server.pendingRequests, txid)
-
-			return nil
-		}
-
-		// This shouldn't happen. We should only get unsafe messages for txs that are not marked
-		//   safe or confirmed yet.
-		node.LogError(ctx, "Tx unsafe not found : %s", txid.String())
+		server.MarkUnsafe(ctx, &txid)
 
 	case handlers.ListenerMsgTxStateRevert:
 		node.Log(ctx, "Tx revert : %s", txid.String())
@@ -213,7 +160,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			var hash *chainhash.Hash
 			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
 			if err != nil {
-				node.LogWarn(ctx, "ailed to create tx hash : %s", err)
+				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
 			}
 			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)

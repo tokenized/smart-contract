@@ -17,7 +17,9 @@ import (
 
 type WalletInterface interface {
 	Get(string) (*RootKey, error)
+	GetPKH([]byte) (*RootKey, error)
 	List([]string) ([]*RootKey, error)
+	ListPKH([][]byte) ([]*RootKey, error)
 	ListAll() []*RootKey
 }
 
@@ -85,10 +87,32 @@ func (w Wallet) List(addrs []string) ([]*RootKey, error) {
 	return rks, nil
 }
 
+func (w Wallet) ListPKH(pkhs [][]byte) ([]*RootKey, error) {
+	var rks []*RootKey
+
+	for _, pkh := range pkhs {
+		rk, err := w.GetPKH(pkh)
+		if err != nil {
+			if err == ErrKeyNotFound {
+				continue
+			}
+			return nil, err
+		}
+
+		rks = append(rks, rk)
+	}
+
+	return rks, nil
+}
+
 func (w Wallet) ListAll() []*RootKey {
 	return w.KeyStore.GetAll()
 }
 
 func (w Wallet) Get(addr string) (*RootKey, error) {
 	return w.KeyStore.Get(addr)
+}
+
+func (w Wallet) GetPKH(pkh []byte) (*RootKey, error) {
+	return w.KeyStore.GetPKH(pkh)
 }

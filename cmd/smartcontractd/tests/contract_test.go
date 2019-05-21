@@ -90,7 +90,12 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, offerTx)
+	err = offerItx.Validate(ctx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to validate itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, offerTx)
 
 	err = a.Trigger(ctx, "SEE", offerItx)
 	if err == nil {
@@ -151,7 +156,12 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, offerTx)
+	err = offerItx.Validate(ctx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to validate itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, offerTx)
 
 	// Resubmit to handler
 	err = a.Trigger(ctx, "SEE", offerItx)
@@ -252,7 +262,7 @@ func contractAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, amendmentTx)
+	test.RPCNode.SaveTX(ctx, amendmentTx)
 
 	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {
@@ -340,7 +350,7 @@ func contractProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, amendmentTx)
+	test.RPCNode.SaveTX(ctx, amendmentTx)
 
 	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {

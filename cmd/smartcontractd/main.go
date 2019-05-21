@@ -93,6 +93,7 @@ func main() {
 		DustLimit:          cfg.Contract.DustLimit,
 		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
 		RequestTimeout:     cfg.Contract.RequestTimeout,
+		PreprocessThreads:  cfg.Contract.PreprocessThreads,
 		IsTest:             cfg.Contract.IsTest,
 	}
 
@@ -193,7 +194,7 @@ func main() {
 	}
 
 	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
-		&sch, tracer, rawPKHs, utxos)
+		spyNode, &sch, tracer, rawPKHs, utxos)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

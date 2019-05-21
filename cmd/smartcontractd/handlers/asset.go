@@ -41,8 +41,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Asset definition invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Asset definition invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -165,8 +165,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Asset modification request invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Asset modification request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -343,6 +343,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	if !itx.DataIsValid {
+		return errors.New("Asset creation response invalid")
+	}
 
 	// Locate Asset
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())

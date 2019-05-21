@@ -1,9 +1,7 @@
 package listeners
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -12,56 +10,67 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
 type Server struct {
-	wallet            wallet.WalletInterface
-	Config            *node.Config
-	MasterDB          *db.DB
-	RpcNode           *rpcnode.RPCNode
-	SpyNode           *spynode.Node
-	Scheduler         *scheduler.Scheduler
-	Tracer            *Tracer
-	utxos             *utxos.UTXOs
-	Handler           protomux.Handler
-	contractPKHs      [][]byte // Used to determine which txs will be needed again
-	pendingRequests   map[chainhash.Hash]*wire.MsgTx
-	processedRequests map[chainhash.Hash]*wire.MsgTx // Processed, but not confirmed
-	unsafeRequests    map[chainhash.Hash]*wire.MsgTx
-	pendingResponses  []*wire.MsgTx
-	revertedTxs       []*chainhash.Hash
-	blockHeight       int // track current block height for confirm messages
-	inSync            bool
+	wallet           wallet.WalletInterface
+	Config           *node.Config
+	MasterDB         *db.DB
+	RpcNode          inspector.NodeInterface
+	SpyNode          *spynode.Node
+	Headers          node.BitcoinHeaders
+	Scheduler        *scheduler.Scheduler
+	Tracer           *Tracer
+	utxos            *utxos.UTXOs
+	lock             sync.Mutex
+	Handler          protomux.Handler
+	contractPKHs     [][]byte // Used to determine which txs will be needed again
+	pendingResponses []*wire.MsgTx
+	revertedTxs      []*chainhash.Hash
+	blockHeight      int // track current block height for confirm messages
+	inSync           bool
+
+	pendingTxs  map[chainhash.Hash]*IncomingTxData
+	approvedTxs []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
+	pendingLock sync.Mutex
+
+	incomingTxs   IncomingTxChannel
+	processingTxs ProcessingTxChannel
+
+	TxSentCount        int
+	AlternateResponder protomux.ResponderFunc
 }
 
 func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
-	rpcNode *rpcnode.RPCNode, spyNode *spynode.Node, sch *scheduler.Scheduler,
+	rpcNode inspector.NodeInterface, spyNode *spynode.Node, headers node.BitcoinHeaders, sch *scheduler.Scheduler,
 	tracer *Tracer, contractPKHs [][]byte, utxos *utxos.UTXOs) *Server {
 	result := Server{
-		wallet:            wallet,
-		Config:            config,
-		MasterDB:          masterDB,
-		RpcNode:           rpcNode,
-		SpyNode:           spyNode,
-		Scheduler:         sch,
-		Tracer:            tracer,
-		Handler:           handler,
-		contractPKHs:      contractPKHs,
-		utxos:             utxos,
-		pendingRequests:   make(map[chainhash.Hash]*wire.MsgTx),
-		processedRequests: make(map[chainhash.Hash]*wire.MsgTx),
-		unsafeRequests:    make(map[chainhash.Hash]*wire.MsgTx),
-		pendingResponses:  make([]*wire.MsgTx, 0),
-		blockHeight:       0,
-		inSync:            false,
+		wallet:           wallet,
+		Config:           config,
+		MasterDB:         masterDB,
+		RpcNode:          rpcNode,
+		SpyNode:          spyNode,
+		Headers:          headers,
+		Scheduler:        sch,
+		Tracer:           tracer,
+		Handler:          handler,
+		contractPKHs:     contractPKHs,
+		utxos:            utxos,
+		pendingTxs:       make(map[chainhash.Hash]*IncomingTxData),
+		pendingResponses: make([]*wire.MsgTx, 0),
+		blockHeight:      0,
+		inSync:           false,
 	}
+
+	result.incomingTxs.Open(100)
+	result.processingTxs.Open(100)
 
 	return &result
 }
@@ -71,33 +80,73 @@ func (server *Server) Run(ctx context.Context) error {
 	server.Handler.SetResponder(server.respondTx)
 
 	// Register listeners
-	server.SpyNode.RegisterListener(server)
+	if server.SpyNode != nil {
+		server.SpyNode.RegisterListener(server)
+	}
 
 	if err := server.Tracer.Load(ctx, server.MasterDB); err != nil {
 		return err
 	}
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
 
-	go func() {
-		defer wg.Done()
-		if err := server.SpyNode.Run(ctx); err != nil {
-			node.LogError(ctx, "Spynode failed : %s", err)
-		}
-		node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
-		server.Scheduler.Stop(ctx)
-		node.LogVerbose(ctx, "Spynode finished")
-	}()
+	if server.SpyNode != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := server.SpyNode.Run(ctx); err != nil {
+				node.LogError(ctx, "Spynode failed : %s", err)
+			}
+			node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
+			server.Scheduler.Stop(ctx)
+			server.incomingTxs.Close()
+			server.processingTxs.Close()
+			node.LogVerbose(ctx, "Spynode finished")
+		}()
+	}
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if err := server.Scheduler.Run(ctx); err != nil {
 			node.LogError(ctx, "Scheduler failed : %s", err)
 		}
-		node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
-		server.SpyNode.Stop(ctx)
+		if server.SpyNode != nil {
+			node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
+			server.SpyNode.Stop(ctx)
+		}
+		server.incomingTxs.Close()
+		server.processingTxs.Close()
 		node.LogVerbose(ctx, "Scheduler finished")
+	}()
+
+	rks := server.wallet.ListAll()
+	contractPKHs := make([]*protocol.PublicKeyHash, 0, len(rks))
+	for _, rk := range rks {
+		pkh := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		contractPKHs = append(contractPKHs, pkh)
+	}
+	for i := 0; i < server.Config.PreprocessThreads; i++ {
+		node.Log(ctx, "Starting pre-process thread %d", i)
+		// Start preprocess thread
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, contractPKHs, server.Headers); err != nil {
+				node.LogError(ctx, "Pre-process failed : %s", err)
+			}
+			node.LogVerbose(ctx, "Pre-process thread finished")
+		}()
+	}
+
+	// Start process thread
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.ProcessTxs(ctx); err != nil {
+			node.LogError(ctx, "Process failed : %s", err)
+		}
+		node.LogVerbose(ctx, "Process thread finished")
 	}()
 
 	// Block until goroutines finish as a result of Stop()
@@ -107,8 +156,13 @@ func (server *Server) Run(ctx context.Context) error {
 }
 
 func (server *Server) Stop(ctx context.Context) error {
-	spynodeErr := server.SpyNode.Stop(ctx)
+	var spynodeErr error
+	if server.SpyNode != nil {
+		spynodeErr = server.SpyNode.Stop(ctx)
+	}
 	schedulerErr := server.Scheduler.Stop(ctx)
+	server.incomingTxs.Close()
+	server.processingTxs.Close()
 
 	if spynodeErr != nil && schedulerErr != nil {
 		return errors.Wrap(errors.Wrap(spynodeErr, schedulerErr.Error()), "SpyNode and Scheduler failed")
@@ -122,12 +176,26 @@ func (server *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
+func (server *Server) SetInSync() {
+	server.inSync = true
+}
+
+func (server *Server) SetAlternateResponder(responder protomux.ResponderFunc) {
+	server.AlternateResponder = responder
+}
+
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
-	if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
-		return err
+	server.TxSentCount++
+	if server.AlternateResponder != nil {
+		server.AlternateResponder(ctx, tx)
 	}
-	if err := server.SpyNode.HandleTx(ctx, tx); err != nil {
-		return err
+	if server.SpyNode != nil {
+		if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
+			return err
+		}
+		if err := server.SpyNode.HandleTx(ctx, tx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -165,45 +233,10 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 	return nil
 }
 
-func (server *Server) processTx(ctx context.Context, tx *wire.MsgTx) error {
-	server.Tracer.AddTx(ctx, tx)
-	server.utxos.Add(tx, server.contractPKHs)
-
-	// Check if transaction relates to protocol
-	itx, err := inspector.NewTransactionFromWire(ctx, tx, server.Config.IsTest)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create inspector tx")
-	}
-
-	// Prefilter out non-protocol messages
-	if !itx.IsTokenized() {
-		return fmt.Errorf("Not tokenized tx")
-	}
-
-	// Promote TX
-	if err := itx.Promote(ctx, server.RpcNode); err != nil {
-		return errors.Wrap(err, "Failed to promote inspector tx")
-	}
-
-	if err := server.removeConflictingPending(ctx, itx); err != nil {
-		return errors.Wrap(err, "Failed to remove conflicting pending")
-	}
-
-	// Save tx to cache so it can be used to process the response
-	for _, output := range itx.Outputs {
-		for _, pkh := range server.contractPKHs {
-			if bytes.Equal(output.Address.ScriptAddress(), pkh) {
-				if err := server.RpcNode.SaveTX(ctx, itx.MsgTx); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	return server.Handler.Trigger(ctx, "SEE", itx)
-}
-
 func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) error {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
 	server.Tracer.RevertTx(ctx, &itx.Hash)
 	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
 	return server.Handler.Trigger(ctx, "STOLE", itx)

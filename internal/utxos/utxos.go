@@ -23,6 +23,7 @@ type UTXO struct {
 
 // Add adds/spends UTXOs based on the tx.
 func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
+	txHash := tx.TxHash()
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
 		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
@@ -32,7 +33,6 @@ func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
 
 		for _, pkh := range pkhs {
 			if bytes.Equal(hash, pkh) {
-				txHash := tx.TxHash()
 				found := false
 
 				// Ensure not to duplicate
@@ -61,7 +61,7 @@ func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
 		for _, existing := range us.list {
 			if bytes.Equal(input.PreviousOutPoint.Hash[:], existing.OutPoint.Hash[:]) &&
 				input.PreviousOutPoint.Index == existing.OutPoint.Index {
-				existing.SpentBy = tx.TxHash()
+				existing.SpentBy = txHash
 			}
 		}
 	}

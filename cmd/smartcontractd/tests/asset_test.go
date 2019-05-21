@@ -110,7 +110,7 @@ func createAsset(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, assetTx)
+	test.RPCNode.SaveTX(ctx, assetTx)
 
 	err = a.Trigger(ctx, "SEE", assetItx)
 	if err != nil {
@@ -229,7 +229,7 @@ func assetIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, assetTx)
+	test.RPCNode.SaveTX(ctx, assetTx)
 
 	err = a.Trigger(ctx, "SEE", assetItx)
 	if err != nil {
@@ -283,7 +283,7 @@ func assetIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote asset itx 2 : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, assetTx)
+	test.RPCNode.SaveTX(ctx, assetTx)
 
 	err = a.Trigger(ctx, "SEE", assetItx)
 	if err != nil {
@@ -373,7 +373,7 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, amendmentTx)
+	test.RPCNode.SaveTX(ctx, amendmentTx)
 
 	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {
@@ -483,7 +483,7 @@ func assetProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, amendmentTx)
+	test.RPCNode.SaveTX(ctx, amendmentTx)
 
 	err = a.Trigger(ctx, "SEE", amendmentItx)
 	if err != nil {

@@ -41,8 +41,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Contract offer invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Contract offer request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -128,8 +128,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Contract amendment request invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Contract amendment request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
@@ -329,6 +329,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
+	if !itx.DataIsValid {
+		return errors.New("Contract formation response invalid")
+	}
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -606,8 +609,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Validate all fields have valid values.
-	if err := msg.Validate(); err != nil {
-		node.LogWarn(ctx, "Contract address change invalid : %s", err)
+	if !itx.DataIsValid {
+		node.LogWarn(ctx, "Contract address change request invalid")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 

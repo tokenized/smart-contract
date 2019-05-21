@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -16,7 +18,7 @@ import (
 func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, pkh []byte) *wire.MsgTx {
 	result := wire.NewMsgTx(2)
 	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), txbuilder.P2PKHScriptForPKH(pkh)))
-	node.AddTX(ctx, result)
+	node.SaveTX(ctx, result)
 	return result
 }
 
@@ -26,6 +28,7 @@ func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, pkh []b
 type mockRpcNode struct {
 	txs    map[chainhash.Hash]*wire.MsgTx
 	params *chaincfg.Params
+	lock   sync.Mutex
 }
 
 func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
@@ -36,17 +39,35 @@ func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
 	return &result
 }
 
-func (cache *mockRpcNode) AddTX(ctx context.Context, tx *wire.MsgTx) error {
+func (cache *mockRpcNode) SaveTX(ctx context.Context, tx *wire.MsgTx) error {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
 	cache.txs[tx.TxHash()] = tx
 	return nil
 }
 
 func (cache *mockRpcNode) GetTX(ctx context.Context, txid *chainhash.Hash) (*wire.MsgTx, error) {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
 	tx, ok := cache.txs[*txid]
 	if ok {
 		return tx, nil
 	}
 	return nil, errors.New("Couldn't find tx in cache")
+}
+
+func (cache *mockRpcNode) GetTXs(ctx context.Context, txids []*chainhash.Hash) ([]*wire.MsgTx, error) {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	result := make([]*wire.MsgTx, len(txids))
+	for i, txid := range txids {
+		tx, ok := cache.txs[*txid]
+		if !ok {
+			return result, fmt.Errorf("Couldn't find tx in cache : %s", txid.String())
+		}
+		result[i] = tx
+	}
+	return result, nil
 }
 
 func (cache *mockRpcNode) GetChainParams() *chaincfg.Params {

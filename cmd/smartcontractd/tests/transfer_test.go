@@ -4,12 +4,18 @@ import (
 	"bytes"
 	"os"
 	"runtime/pprof"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
+	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -32,6 +38,14 @@ func BenchmarkTransfers(b *testing.B) {
 
 	b.Run("simple", simpleTransfersBenchmark)
 	b.Run("oracle", oracleTransfersBenchmark)
+	// b.Run("null", nullBenchmark)
+}
+
+func nullBenchmark(b *testing.B) {
+	count := 0
+	for i := 0; i < b.N; i++ {
+		count++
+	}
 }
 
 func simpleTransfersBenchmark(b *testing.B) {
@@ -50,8 +64,9 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 
 	requests := make([]*wire.MsgTx, 0, b.N)
+	hashes := make([]*chainhash.Hash, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(b.N), issuerKey.Address.ScriptAddress())
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address.ScriptAddress())
 
 		// Create Transfer message
 		transferAmount := uint64(1)
@@ -89,9 +104,34 @@ func simpleTransfersBenchmark(b *testing.B) {
 		}
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-		test.RPCNode.AddTX(ctx, transferTx)
+		test.RPCNode.SaveTX(ctx, transferTx)
 		requests = append(requests, transferTx)
+		hash := transferTx.TxHash()
+		hashes = append(hashes, &hash)
 	}
+
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := listeners.NewTracer()
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, [][]byte{test.ContractKey.Address.ScriptAddress()},
+		test.UTXOs)
+
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	responses = make([]*wire.MsgTx, 0, b.N)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			b.Logf("Server failed : %s", err)
+		}
+	}()
 
 	profFile, err := os.OpenFile("simple_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
 	if err != nil {
@@ -101,27 +141,31 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
 	}
-	defer pprof.StopCPUProfile()
 	b.ResetTimer()
-	for _, request := range requests {
-		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
-		if err != nil {
-			b.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+
+	for i, request := range requests {
+		if _, err := server.HandleTx(ctx, request); err != nil {
+			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
 		}
 
-		err = transferItx.Promote(ctx, test.RPCNode)
-		if err != nil {
-			b.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
 		}
-
-		if err := a.Trigger(ctx, "SEE", transferItx); err != nil {
-			b.Fatalf("\t%s\tTransfer failed : %v", tests.Failed, err)
-		}
-
-		// Commented because validation isn't part of smartcontract benchmark.
-		// Uncomment to ensure benchmark is still functioning properly.
-		// checkResponse(b, "T2")
 	}
+
+	timeout := b.N * 100
+	for len(responses) < b.N && timeout > 0 {
+		time.Sleep(10 * time.Millisecond)
+		timeout--
+	}
+
+	pprof.StopCPUProfile()
+	b.StopTimer()
+
+	checkResponses(b, "T2")
+
+	server.Stop(ctx)
+	wg.Wait()
 }
 
 func oracleTransfersBenchmark(b *testing.B) {
@@ -144,8 +188,9 @@ func oracleTransfersBenchmark(b *testing.B) {
 	}
 
 	requests := make([]*wire.MsgTx, 0, b.N)
+	hashes := make([]*chainhash.Hash, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(b.N), issuerKey.Address.ScriptAddress())
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address.ScriptAddress())
 
 		// Create Transfer message
 		transferAmount := uint64(1)
@@ -205,9 +250,34 @@ func oracleTransfersBenchmark(b *testing.B) {
 		}
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-		test.RPCNode.AddTX(ctx, transferTx)
+		test.RPCNode.SaveTX(ctx, transferTx)
 		requests = append(requests, transferTx)
+		hash := transferTx.TxHash()
+		hashes = append(hashes, &hash)
 	}
+
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := listeners.NewTracer()
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, [][]byte{test.ContractKey.Address.ScriptAddress()},
+		test.UTXOs)
+
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	responses = make([]*wire.MsgTx, 0, b.N)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			b.Logf("Server failed : %s", err)
+		}
+	}()
 
 	profFile, err := os.OpenFile("oracle_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
 	if err != nil {
@@ -217,27 +287,34 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
 	}
-	defer pprof.StopCPUProfile()
 	b.ResetTimer()
-	for _, request := range requests {
-		transferItx, err := inspector.NewTransactionFromWire(ctx, request, test.NodeConfig.IsTest)
-		if err != nil {
-			b.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	for i, request := range requests {
+		if _, err := server.HandleTx(ctx, request); err != nil {
+			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
 		}
 
-		err = transferItx.Promote(ctx, test.RPCNode)
-		if err != nil {
-			b.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
-		}
-
-		if err := a.Trigger(ctx, "SEE", transferItx); err != nil {
-			b.Fatalf("\t%s\tTransfer failed : %v", tests.Failed, err)
+		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
 		}
 
 		// Commented because validation isn't part of smartcontract benchmark.
 		// Uncomment to ensure benchmark is still functioning properly.
 		// checkResponse(b, "T2")
 	}
+
+	timeout := b.N * 100
+	for len(responses) < b.N && timeout > 0 {
+		time.Sleep(10 * time.Millisecond)
+		timeout--
+	}
+
+	pprof.StopCPUProfile()
+	b.StopTimer()
+
+	checkResponses(b, "T2")
+
+	server.Stop(ctx)
+	wg.Wait()
 }
 
 func sendTokens(t *testing.T) {
@@ -303,7 +380,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {
@@ -333,7 +410,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	// Resubmit
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -476,7 +553,7 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -515,7 +592,7 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tResponse itx is not Settlement Request : %d", tests.Failed, settlementRequestMessage.MessageType)
 	}
 
-	test.RPCNode.AddTX(ctx, response)
+	test.RPCNode.SaveTX(ctx, response)
 
 	err = a.Trigger(ctx, "SEE", responseItx)
 	if err != nil {
@@ -554,7 +631,7 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tResponse itx is not Signature Request : %d", tests.Failed, signatureRequestMessage.MessageType)
 	}
 
-	test.RPCNode.AddTX(ctx, response)
+	test.RPCNode.SaveTX(ctx, response)
 
 	err = a.Trigger(ctx, "SEE", responseItx)
 	if err != nil {
@@ -698,7 +775,7 @@ func oracleTransfer(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -841,7 +918,7 @@ func oracleTransferBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {
@@ -945,7 +1022,7 @@ func permitted(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -1055,7 +1132,7 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, transferTx)
+	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {

@@ -1,8 +1,11 @@
 package inspector
 
 import (
-	"github.com/btcsuite/btcutil"
+	"bytes"
+
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/btcsuite/btcutil"
 )
 
 type Balance struct {
@@ -94,6 +97,36 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 
 	// Default behavior is contract as first output
 	addresses = append(addresses, itx.Outputs[0].Address)
+
+	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
+
+	return addresses
+}
+
+func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]byte {
+
+	addresses := make([][]byte, 1)
+
+	// Settlements may contain a second contract, although optional
+	if m.Type() == protocol.CodeSettlement {
+		addresses = append(addresses, itx.Inputs[0].Address.ScriptAddress())
+
+		if len(itx.Inputs) > 1 && !bytes.Equal(itx.Inputs[1].Address.ScriptAddress(), itx.Inputs[0].Address.ScriptAddress()) {
+			addresses = append(addresses, itx.Inputs[1].Address.ScriptAddress())
+		}
+
+		return addresses
+	}
+
+	// Some specific actions have the contract address as an input
+	isOutgoing, ok := outgoingMessageTypes[m.Type()]
+	if ok && isOutgoing {
+		addresses = append(addresses, itx.Inputs[0].Address.ScriptAddress())
+		return addresses
+	}
+
+	// Default behavior is contract as first output
+	addresses = append(addresses, itx.Outputs[0].Address.ScriptAddress())
 
 	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
 

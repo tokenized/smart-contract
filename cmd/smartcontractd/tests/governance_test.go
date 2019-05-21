@@ -100,7 +100,7 @@ func holderProposal(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote proposal itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, proposalTx)
+	test.RPCNode.SaveTX(ctx, proposalTx)
 
 	err = a.Trigger(ctx, "SEE", proposalItx)
 	if err != nil {
@@ -202,7 +202,7 @@ func sendBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote ballot itx : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.AddTX(ctx, ballotTx)
+	test.RPCNode.SaveTX(ctx, ballotTx)
 
 	err = a.Trigger(ctx, "SEE", ballotItx)
 	if err != nil {
@@ -506,7 +506,7 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 		return err
 	}
 
-	test.RPCNode.AddTX(ctx, proposalTx)
+	test.RPCNode.SaveTX(ctx, proposalTx)
 	transactions.AddTx(ctx, test.MasterDB, proposalItx)
 
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 1000014, test.ContractKey.Address.ScriptAddress())
@@ -545,7 +545,7 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 
 	testVoteTxId = *protocol.TxIdFromBytes(voteItx.Hash[:])
 
-	test.RPCNode.AddTX(ctx, voteTx)
+	test.RPCNode.SaveTX(ctx, voteTx)
 
 	err = a.Trigger(ctx, "SEE", voteItx)
 	if err != nil {
@@ -607,7 +607,7 @@ func mockUpProposal(ctx context.Context) error {
 		return err
 	}
 
-	test.RPCNode.AddTX(ctx, proposalTx)
+	test.RPCNode.SaveTX(ctx, proposalTx)
 	transactions.AddTx(ctx, test.MasterDB, proposalItx)
 
 	now := protocol.CurrentTimestamp()
