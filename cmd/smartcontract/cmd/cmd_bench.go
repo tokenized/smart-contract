@@ -409,7 +409,6 @@ func contractOpReturn() ([]byte, error) {
 	contract := protocol.ContractOffer{
 		ContractName:           "End to End Tokenized Bench Test Contract",
 		BodyOfAgreementType:    2,
-		SupportingDocsFileType: 1,
 		ContractFee:            0,
 		Issuer: protocol.Entity{
 			Type: 'I',
