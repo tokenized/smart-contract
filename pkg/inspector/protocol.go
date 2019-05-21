@@ -81,7 +81,7 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 	if m.Type() == protocol.CodeSettlement {
 		addresses = append(addresses, itx.Inputs[0].Address)
 
-		if len(itx.Inputs) > 1 && itx.Inputs[1].Address.String() != itx.Inputs[0].Address.String() {
+		if len(itx.Inputs) > 1 && !bytes.Equal(itx.Inputs[1].Address.ScriptAddress(), itx.Inputs[0].Address.ScriptAddress()) {
 			addresses = append(addresses, itx.Inputs[1].Address)
 		}
 

@@ -137,7 +137,7 @@ func PubKeyHashFromP2PKH(script []byte) ([]byte, error) {
 	return script[3:23], nil
 }
 
-func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
+func PubKeyFromP2PKHSigScript(script []byte) ([]byte, error) {
 	buf := bytes.NewBuffer(script)
 
 	// Signature
@@ -162,6 +162,15 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 	_, err = buf.Read(publicKey)
 	if err != nil {
 		return nil, newError(ErrorCodeNotP2PKHScript, err.Error())
+	}
+
+	return publicKey, nil
+}
+
+func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
+	publicKey, err := PubKeyFromP2PKHSigScript(script)
+	if err != nil {
+		return nil, err
 	}
 
 	// Hash public key

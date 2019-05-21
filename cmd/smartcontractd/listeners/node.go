@@ -50,7 +50,7 @@ type Server struct {
 
 func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
 	rpcNode inspector.NodeInterface, spyNode *spynode.Node, headers node.BitcoinHeaders, sch *scheduler.Scheduler,
-	tracer *Tracer, contractPKHs [][]byte, utxos *utxos.UTXOs) *Server {
+	tracer *Tracer, utxos *utxos.UTXOs) *Server {
 	result := Server{
 		wallet:           wallet,
 		Config:           config,
@@ -61,7 +61,6 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 		Scheduler:        sch,
 		Tracer:           tracer,
 		Handler:          handler,
-		contractPKHs:     contractPKHs,
 		utxos:            utxos,
 		pendingTxs:       make(map[chainhash.Hash]*IncomingTxData),
 		pendingResponses: make([]*wire.MsgTx, 0),
@@ -71,6 +70,12 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 
 	result.incomingTxs.Open(100)
 	result.processingTxs.Open(100)
+
+	keys := wallet.ListAll()
+	result.contractPKHs = make([][]byte, 0, len(keys))
+	for _, key := range keys {
+		result.contractPKHs = append(result.contractPKHs, key.Address.ScriptAddress())
+	}
 
 	return &result
 }
@@ -122,8 +127,8 @@ func (server *Server) Run(ctx context.Context) error {
 
 	rks := server.wallet.ListAll()
 	contractPKHs := make([]*protocol.PublicKeyHash, 0, len(rks))
-	for _, rk := range rks {
-		pkh := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	for _, cpkh := range server.contractPKHs {
+		pkh := protocol.PublicKeyHashFromBytes(cpkh)
 		contractPKHs = append(contractPKHs, pkh)
 	}
 	for i := 0; i < server.Config.PreprocessThreads; i++ {

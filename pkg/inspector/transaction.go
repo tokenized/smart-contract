@@ -257,6 +257,20 @@ func (itx *Transaction) UTXOs() UTXOs {
 	return utxos
 }
 
+func (itx *Transaction) IsRelevant(contractAddress btcutil.Address) bool {
+	for _, input := range itx.Inputs {
+		if bytes.Equal(input.Address.ScriptAddress(), contractAddress.ScriptAddress()) {
+			return true
+		}
+	}
+	for _, output := range itx.Outputs {
+		if bytes.Equal(output.Address.ScriptAddress(), contractAddress.ScriptAddress()) {
+			return true
+		}
+	}
+	return false
+}
+
 // ContractAddresses returns the contract address, which may include more than one
 func (itx *Transaction) ContractAddresses() []btcutil.Address {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)

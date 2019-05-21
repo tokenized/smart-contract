@@ -29,6 +29,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 )
@@ -154,12 +155,13 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Tx Filter
 
-	rawPKHs, err := masterWallet.KeyStore.GetRawPubKeyHashes()
-	if err != nil {
-		panic(err)
+	rootKeys := masterWallet.ListAll()
+	pubKeys := make([]*btcec.PublicKey, 0, len(rootKeys))
+	for _, rootKey := range rootKeys {
+		pubKeys = append(pubKeys, rootKey.PublicKey)
 	}
 	tracer := listeners.NewTracer()
-	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, rawPKHs, tracer, appConfig.IsTest)
+	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -194,7 +196,7 @@ func main() {
 	}
 
 	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
-		spyNode, &sch, tracer, rawPKHs, utxos)
+		spyNode, &sch, tracer, utxos)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

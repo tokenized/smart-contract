@@ -116,8 +116,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, [][]byte{test.ContractKey.Address.ScriptAddress()},
-		test.UTXOs)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -262,8 +261,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, [][]byte{test.ContractKey.Address.ScriptAddress()},
-		test.UTXOs)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()

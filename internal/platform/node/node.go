@@ -80,7 +80,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(ctx context.Context, itx *inspector.Transaction, pkhs [][]byte) error {
+	h := func(ctx context.Context, itx *inspector.Transaction) error {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -91,9 +91,13 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys, _ := a.wallet.ListPKH(pkhs)
+		rootKeys := a.wallet.ListAll()
 		handled := false
 		for _, rootKey := range rootKeys {
+			if !itx.IsRelevant(rootKey.Address) {
+				continue
+			}
+
 			// Set the context with the required values to process the event.
 			v := Values{
 				TraceID: span.SpanContext().TraceID.String(),
@@ -131,7 +135,7 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 	handler = wrapMiddleware(wrapMiddleware(handler, mw), a.mw)
 
 	// The function to execute for each event.
-	h := func(ctx context.Context, itx *inspector.Transaction, pkhs [][]byte) error {
+	h := func(ctx context.Context, itx *inspector.Transaction) error {
 		// Start trace span.
 		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
 
@@ -150,9 +154,13 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys, _ := a.wallet.ListPKH(pkhs)
+		rootKeys := a.wallet.ListAll()
 		handled := false
 		for _, rootKey := range rootKeys {
+			if !itx.IsRelevant(rootKey.Address) {
+				continue
+			}
+
 			// Set the context with the required values to process the event.
 			v := Values{
 				TraceID: span.SpanContext().TraceID.String(),
