@@ -13,7 +13,7 @@ type Config struct {
 		FeeAddress        string  `envconfig:"FEE_ADDRESS"`
 		FeeRate           float32 `default:"1.1" envconfig:"FEE_RATE"`
 		DustLimit         uint64  `default:"546" envconfig:"DUST_LIMIT"`
-		RequestTimeout    uint64  `default:"86400000000000" envconfig:"REQUEST_TIMEOUT"` // Default 24 hours
+		RequestTimeout    uint64  `default:"60000000000" envconfig:"REQUEST_TIMEOUT"` // Default 1 minute
 		PreprocessThreads int     `default:"4" envconfig:"PREPROCESS_THREADS"`
 		IsTest            bool    `default:"true" envconfig:"IS_TEST"`
 	}
