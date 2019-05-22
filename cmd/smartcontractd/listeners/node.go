@@ -38,7 +38,7 @@ type Server struct {
 	inSync           bool
 
 	pendingTxs  map[chainhash.Hash]*IncomingTxData
-	approvedTxs []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
+	readyTxs    []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
 	pendingLock sync.Mutex
 
 	incomingTxs   IncomingTxChannel

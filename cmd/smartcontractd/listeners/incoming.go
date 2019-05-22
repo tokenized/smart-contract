@@ -60,7 +60,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB, c
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *protocol.Transfer:
 			if err := validateOracles(ctx, masterDB, contractPKHs, intx.Itx, msg, headers); err != nil {
-				intx.Itx.SignaturesAreValid = false
+				intx.Itx.RejectCode = protocol.RejectInvalidSignature
 				node.LogWarn(ctx, "Invalid oracle signature : %s", err)
 			}
 		}
@@ -80,19 +80,19 @@ func (server *Server) markPreprocessed(ctx context.Context, txid *chainhash.Hash
 	}
 
 	intx.IsPreprocessed = true
-	if intx.IsApproved() {
-		server.processApprovedTxs(ctx)
+	if intx.IsReady {
+		server.processReadyTxs(ctx)
 	}
 }
 
-// processApprovedTxs moves txs from pending into the processing channel in the proper order.
-func (server *Server) processApprovedTxs(ctx context.Context) {
+// processReadyTxs moves txs from pending into the processing channel in the proper order.
+func (server *Server) processReadyTxs(ctx context.Context) {
 	toRemove := 0
-	for _, txid := range server.approvedTxs {
+	for _, txid := range server.readyTxs {
 		intx, exists := server.pendingTxs[*txid]
 		if !exists {
 			toRemove++
-		} else if intx.IsPreprocessed && intx.IsApproved() {
+		} else if intx.IsPreprocessed && intx.IsReady {
 			server.processingTxs.Add(intx.Itx)
 			delete(server.pendingTxs, intx.Itx.Hash)
 			toRemove++
@@ -103,7 +103,7 @@ func (server *Server) processApprovedTxs(ctx context.Context) {
 
 	// Remove processed txids
 	if toRemove > 0 {
-		server.approvedTxs = append(server.approvedTxs[:toRemove-1], server.approvedTxs[toRemove:]...)
+		server.readyTxs = append(server.readyTxs[:toRemove-1], server.readyTxs[toRemove:]...)
 	}
 }
 
@@ -116,14 +116,12 @@ func (server *Server) MarkSafe(ctx context.Context, txid *chainhash.Hash) {
 		return
 	}
 
-	intx.IsSafe = true
-	if intx.IsApproved() {
-		if !intx.InApproved {
-			intx.InApproved = true
-			server.approvedTxs = append(server.approvedTxs, &intx.Itx.Hash)
-		}
-		server.processApprovedTxs(ctx)
+	intx.IsReady = true
+	if !intx.InReady {
+		intx.InReady = true
+		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
 	}
+	server.processReadyTxs(ctx)
 }
 
 func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
@@ -135,10 +133,11 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
 		return
 	}
 
-	intx.IsUnsafe = true
-	for i, readyID := range server.approvedTxs {
+	intx.IsReady = true
+	intx.Itx.RejectCode = protocol.RejectDoubleSpend
+	for i, readyID := range server.readyTxs {
 		if *readyID == *txid {
-			server.approvedTxs = append(server.approvedTxs[:i], server.approvedTxs[i+1:]...)
+			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
 			break
 		}
 	}
@@ -154,10 +153,10 @@ func (server *Server) CancelPendingTx(ctx context.Context, txid *chainhash.Hash)
 	}
 
 	delete(server.pendingTxs, *txid)
-	if intx.InApproved {
-		for i, readyID := range server.approvedTxs {
+	if intx.InReady {
+		for i, readyID := range server.readyTxs {
 			if *readyID == *txid {
-				server.approvedTxs = append(server.approvedTxs[:i], server.approvedTxs[i+1:]...)
+				server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
 				break
 			}
 		}
@@ -174,21 +173,19 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *chainhash.Hash) {
 		return
 	}
 
-	intx.IsConfirmed = true
-	if !intx.InApproved {
-		intx.InApproved = true
-		server.approvedTxs = append(server.approvedTxs, &intx.Itx.Hash)
+	intx.IsReady = true
+	if !intx.InReady {
+		intx.InReady = true
+		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
 	}
-	server.processApprovedTxs(ctx)
+	server.processReadyTxs(ctx)
 }
 
 type IncomingTxData struct {
 	Itx            *inspector.Transaction
-	IsPreprocessed bool
-	IsSafe         bool
-	IsUnsafe       bool
-	IsConfirmed    bool
-	InApproved     bool
+	IsPreprocessed bool // Preprocessing has completed
+	IsReady        bool // Is ready to be processed
+	InReady        bool // In ready list
 }
 
 func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx) (*IncomingTxData, error) {
@@ -199,10 +196,6 @@ func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx) (*IncomingTxData, er
 		return nil, err
 	}
 	return &result, nil
-}
-
-func (intx *IncomingTxData) IsApproved() bool {
-	return (intx.IsSafe && !intx.IsUnsafe) || intx.IsConfirmed
 }
 
 type IncomingTxChannel struct {

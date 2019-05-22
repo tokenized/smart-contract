@@ -84,14 +84,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Transfer request invalid")
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectMsgMalformed, false)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
 	}
 
-	// Check Oracle Signature
-	if !itx.SignaturesAreValid {
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectInvalidSignature, false)
+	// Check pre-processing reject code
+	if itx.RejectCode != 0 {
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
 	}
 
 	if msg.OfferExpiry.Nano() > v.Now.Nano() {
@@ -936,7 +936,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return errors.New("Could not assert as *protocol.Settlement")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Settlement response invalid")
 	}
 

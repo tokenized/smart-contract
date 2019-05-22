@@ -3,6 +3,7 @@ package inspector
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -45,13 +46,12 @@ var (
 // Transaction represents an ITX (Inspector Transaction) containing
 // information about a transaction that is useful to the protocol.
 type Transaction struct {
-	Hash               chainhash.Hash
-	MsgTx              *wire.MsgTx
-	MsgProto           protocol.OpReturnMessage
-	Inputs             []Input
-	Outputs            []Output
-	DataIsValid        bool
-	SignaturesAreValid bool
+	Hash       chainhash.Hash
+	MsgTx      *wire.MsgTx
+	MsgProto   protocol.OpReturnMessage
+	Inputs     []Input
+	Outputs    []Output
+	RejectCode uint8
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
@@ -65,11 +65,10 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 		if err == nil {
 			itx.MsgProto = msg
 			if err := msg.Validate(); err != nil {
-				itx.DataIsValid = false
+				itx.RejectCode = protocol.RejectMsgMalformed
 				logger.Warn(ctx, "Protocol message is invalid : %s", err)
 				return nil
 			}
-			itx.DataIsValid = true
 			return nil // Tokenized output found
 		}
 	}
@@ -85,11 +84,10 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 
 	if err := itx.MsgProto.Validate(); err != nil {
 		logger.Warn(ctx, "Protocol message is invalid : %s", err)
-		itx.DataIsValid = false
+		itx.RejectCode = protocol.RejectMsgMalformed
 		return nil
 	}
 
-	itx.DataIsValid = true
 	return nil
 }
 
@@ -333,6 +331,8 @@ func uniqueAddresses(s []btcutil.Address) []btcutil.Address {
 }
 
 func (itx *Transaction) Write(buf *bytes.Buffer) error {
+	buf.WriteByte(0) // Version
+
 	if err := itx.MsgTx.Serialize(buf); err != nil {
 		return err
 	}
@@ -343,21 +343,19 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 		}
 	}
 
-	if itx.DataIsValid {
-		buf.WriteByte(0xff)
-	} else {
-		buf.WriteByte(0)
-	}
-	if itx.SignaturesAreValid {
-		buf.WriteByte(0xff)
-	} else {
-		buf.WriteByte(0)
-	}
-
+	buf.WriteByte(itx.RejectCode)
 	return nil
 }
 
 func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTest bool) error {
+	version, err := buf.ReadByte() // Version
+	if err != nil {
+		return err
+	}
+	if version != 0 {
+		return fmt.Errorf("Unknown version : %d", version)
+	}
+
 	msg := wire.MsgTx{}
 	if err := msg.Deserialize(buf); err != nil {
 		return err
@@ -373,16 +371,10 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 		}
 	}
 
-	byte, err := buf.ReadByte()
+	itx.RejectCode, err = buf.ReadByte()
 	if err != nil {
 		return err
 	}
-	itx.DataIsValid = byte != 0
-	byte, err = buf.ReadByte()
-	if err != nil {
-		return err
-	}
-	itx.SignaturesAreValid = byte != 0
 
 	// Outputs
 	outputs := []Output{}

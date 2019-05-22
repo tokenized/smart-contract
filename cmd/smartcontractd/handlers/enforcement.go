@@ -38,9 +38,9 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Order request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -550,7 +550,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.New("Could not assert as *protocol.Freeze")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Freeze response invalid")
 	}
 
@@ -635,7 +635,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter, 
 		return errors.New("Could not assert as *protocol.Thaw")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Thaw response invalid")
 	}
 
@@ -726,7 +726,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return errors.New("Could not assert as *protocol.Confiscation")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Confiscation response invalid")
 	}
 
@@ -779,7 +779,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 		return errors.New("Could not assert as *protocol.Reconciliation")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Reconciliation response invalid")
 	}
 

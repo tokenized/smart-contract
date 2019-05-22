@@ -41,9 +41,9 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Contract offer request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	// Locate Contract
@@ -128,9 +128,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Contract amendment request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	// Locate Contract
@@ -329,7 +329,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Contract formation response invalid")
 	}
 
@@ -609,9 +609,9 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Contract address change request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	// Locate Contract

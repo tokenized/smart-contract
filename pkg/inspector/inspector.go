@@ -115,20 +115,16 @@ func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *w
 	}
 
 	return &Transaction{
-		Hash:               *hash,
-		MsgTx:              tx,
-		MsgProto:           msg,
-		DataIsValid:        true,
-		SignaturesAreValid: true,
+		Hash:     *hash,
+		MsgTx:    tx,
+		MsgProto: msg,
 	}, nil
 }
 
 func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
 	return &Transaction{
-		Hash:               tx.TxHash(),
-		MsgTx:              tx,
-		DataIsValid:        true,
-		SignaturesAreValid: true,
+		Hash:  tx.TxHash(),
+		MsgTx: tx,
 	}, nil
 }
 

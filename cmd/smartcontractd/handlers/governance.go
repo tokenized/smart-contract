@@ -45,9 +45,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Proposal request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	// Locate Contract
@@ -288,7 +288,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.New("Could not assert as *protocol.Vote")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Vote response invalid")
 	}
 
@@ -386,9 +386,9 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Ballot cast request invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
@@ -528,7 +528,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Ballot counted response invalid")
 	}
 
@@ -675,7 +675,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		return errors.New("Result reponse invalid")
 	}
 

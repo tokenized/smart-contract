@@ -47,9 +47,9 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 		return errors.New("Could not assert as *protocol.Message")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Message invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
 	// Check if message is addressed to contract.
@@ -108,7 +108,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 		return errors.New("Could not assert as *protocol.Rejection")
 	}
 
-	if !itx.DataIsValid {
+	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Rejection message invalid")
 		return nil
 	}
@@ -355,8 +355,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Check Oracle Signature
-	if !transferTx.SignaturesAreValid {
-		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, protocol.RejectInvalidSignature)
+	if transferTx.RejectCode != 0 {
+		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, transferTx.RejectCode)
 	}
 
 	// Add this contract's data to the settlement op return data

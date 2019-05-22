@@ -70,8 +70,6 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 		},
-		DataIsValid:        true,
-		SignaturesAreValid: true,
 	}
 
 	ignore := cmpopts.IgnoreUnexported(btcutil.AddressPubKeyHash{})
