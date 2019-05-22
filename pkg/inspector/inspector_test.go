@@ -70,7 +70,7 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 		},
-		DataIsValid: true,
+		DataIsValid:        true,
 		SignaturesAreValid: true,
 	}
 

@@ -9,10 +9,10 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	
-	"golang.org/x/crypto/ripemd160"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
+	"golang.org/x/crypto/ripemd160"
 )
 
 // Filters for transactions with tokenized.com op return scripts.

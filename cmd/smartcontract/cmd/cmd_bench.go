@@ -407,9 +407,9 @@ var cmdBench = &cobra.Command{
 
 func contractOpReturn() ([]byte, error) {
 	contract := protocol.ContractOffer{
-		ContractName:           "End to End Tokenized Bench Test Contract",
-		BodyOfAgreementType:    2,
-		ContractFee:            0,
+		ContractName:        "End to End Tokenized Bench Test Contract",
+		BodyOfAgreementType: 2,
+		ContractFee:         0,
 		Issuer: protocol.Entity{
 			Type: 'I',
 		},
