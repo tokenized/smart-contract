@@ -152,16 +152,30 @@ func simpleTransfersBenchmark(b *testing.B) {
 		}
 	}
 
-	timeout := b.N * 100
-	for len(responses) < b.N && timeout > 0 {
-		time.Sleep(10 * time.Millisecond)
-		timeout--
+	responsesProcessed := 0
+	for responsesProcessed < b.N {
+		response := getResponse()
+		if response == nil {
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		responsesProcessed++
+		// rType := responseType(response)
+		// if rType != "T2" {
+		// 	b.Fatalf("Invalid response type : %s", rType)
+		// }
+
+		if _, err := server.HandleTx(ctx, response); err != nil {
+			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+		}
+
+		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+		}
 	}
 
 	pprof.StopCPUProfile()
 	b.StopTimer()
-
-	checkResponses(b, "T2")
 
 	server.Stop(ctx)
 	wg.Wait()
@@ -300,16 +314,30 @@ func oracleTransfersBenchmark(b *testing.B) {
 		// checkResponse(b, "T2")
 	}
 
-	timeout := b.N * 100
-	for len(responses) < b.N && timeout > 0 {
-		time.Sleep(10 * time.Millisecond)
-		timeout--
+	responsesProcessed := 0
+	for responsesProcessed < b.N {
+		response := getResponse()
+		if response == nil {
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		responsesProcessed++
+		// rType := responseType(response)
+		// if rType != "T2" {
+		// 	b.Fatalf("Invalid response type : %s", rType)
+		// }
+
+		if _, err := server.HandleTx(ctx, response); err != nil {
+			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+		}
+
+		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+		}
 	}
 
 	pprof.StopCPUProfile()
 	b.StopTimer()
-
-	checkResponses(b, "T2")
 
 	server.Stop(ctx)
 	wg.Wait()
