@@ -13,7 +13,6 @@ BINARY=smartcontractd
 
 # tools
 BINARY_CONTRACT_CLI=smartcontract
-BINARY_SPVNODE=spvnode
 
 all: clean prepare deps test dist
 
@@ -25,32 +24,38 @@ deps:
 dist: dist-smartcontractd dist-tools
 
 dist-smartcontractd:
-	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/smartcontractd.go
+	$(GO_DIST) -o dist/$(BINARY) cmd/$(BINARY)/main.go
 
-dist-tools: dist-cli \
-	dist-spvnode
+dist-tools: dist-cli
 
 dist-cli:
-	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
-
-dist-spvnode:
-	$(GO_DIST) -o dist/$(BINARY_SPVNODE) cmd/$(BINARY_SPVNODE)/spvnode.go
+	$(GO_DIST) -o dist/$(BINARY_CONTRACT_CLI) cmd/$(BINARY_CONTRACT_CLI)/main.go
 
 prepare:
 	mkdir -p dist tmp
+
+prepare-win:
+	mkdir dist | echo dist exists
+	mkdir tmp | echo tmp exists
+
+# build a version suitable for running locally
+build-smartcontractd-win:
+	go build -o dist\$(BINARY) cmd\$(BINARY)\main.go
+
+build-win: prepare-win build-smartcontractd-win
 
 tools:
 	go get golang.org/x/tools/cmd/goimports
 	go get github.com/golang/lint/golint
 
 run:
-	go run cmd/$(BINARY)/smartcontractd.go
+	go run cmd/$(BINARY)/main.go
 
-run-cli:
-	go run cmd/$(BINARY_CONTRACT_CLI)/smartcontract.go
+run-race:
+	go run -race cmd/$(BINARY)/main.go
 
-run-spvnode:
-	go run cmd/$(BINARY_SPVNODE)/spvnode.go
+run-sync:
+	go run cmd/$(BINARY_CONTRACT_CLI)/main.go sync
 
 lint: golint vet goimports
 
@@ -65,6 +70,12 @@ goimports:
 
 test: prepare
 	go test ./...
+
+test-win: prepare-win
+	go test ./...
+
+bench: prepare
+	go test -bench . ./...
 
 clean:
 	rm -rf dist

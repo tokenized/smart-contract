@@ -9,6 +9,7 @@ type Storage interface {
 	ReadWriter
 	Remover
 	Searcher
+	Clearer
 }
 
 // ReadWriter interface combines the Reader and Writer interface.
@@ -35,4 +36,8 @@ type Remover interface {
 // Searcher interface is for retrieving multiple items.
 type Searcher interface {
 	Search(context.Context, map[string]string) ([][]byte, error)
+}
+
+type Clearer interface {
+	Clear(context.Context, map[string]string) error
 }

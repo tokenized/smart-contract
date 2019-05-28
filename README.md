@@ -28,6 +28,24 @@ Navigate to the root directory and run:
 
     make
 
+## Project Components
+
+#### COMMAND BINARIES
+
+- `cmd/smartcontract` - Command line interface
+- `cmd/smartcontractd` - Smart Contract node daemon
+
+#### PUBLIC KIT
+
+- `pkg/protocol` - Tokenized protocol message definitions.
+- `pkg/spvnode` - Connects to a trusted node as a peer via the public interface.
+- `pkg/rpcnode` - Connects to a trusted node via the RPC interface.
+- `platform/inspector` - Looks at transaction objects, converts them to a special transaction type (inspector.Transaction / itx) used throughout the app.
+- `pkg/txbuilder` - Generic BCH library for performing bitcoin related tasks, mainly around tx building.
+- `pkg/storage` - Storage engine, supporting S3 and local filesystem.
+- `pkg/txscript` - Bitcoin signature library.
+- `pkg/wire` - Bitcoin protocol message definitions.
+
 ## Configuration
 
 Configuration is supplied via environment variables. See the
