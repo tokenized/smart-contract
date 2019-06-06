@@ -4,7 +4,7 @@ An autonomous agent that operates on behalf of the issuer to recognize and enfor
 
 ### Usage Warning
 
-**This is an Alpha release, with more changes likely before the final version. Do not use this in production.**
+**This is a Beta release, with more changes likely before the final version. Do not use this in production.**
 
 ## Getting Started
 
