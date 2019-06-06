@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -303,12 +304,34 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
-	administrationBalance := asset.GetBalance(ctx, as, &ct.AdministrationPKH)
-	if ac.TokenQty < as.TokenQty && administrationBalance < as.TokenQty-ac.TokenQty {
-		node.LogWarn(ctx, "%s : Administration doesn't hold required amount for token quantity reduction : %d < %d",
-			v.TraceID, administrationBalance, as.TokenQty-ac.TokenQty)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	var h state.Holding
+	updateHoldings := false
+	if ac.TokenQty != as.TokenQty {
+		updateHoldings = true
+
+		// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
+		h, err = holdings.GetHolding(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ct.AdministrationPKH, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get admin holding")
+		}
+
+		txid := protocol.TxIdFromBytes(itx.Hash[:])
+
+		if ac.TokenQty < as.TokenQty {
+			if err := holdings.AddDebit(&h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
+				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
+				if err == holdings.ErrInsufficientHoldings {
+					return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
+				} else {
+					return errors.Wrap(err, "Failed to reduce holdings")
+				}
+			}
+		} else {
+			if err := holdings.AddDeposit(&h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
+				node.LogWarn(ctx, "%s : Failed to increase administration holdings : %s", v.TraceID, err)
+				return errors.Wrap(err, "Failed to increase holdings")
+			}
+		}
 	}
 
 	// Convert to btcutil.Address
@@ -329,7 +352,17 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &ac)
+	if err := node.RespondSuccess(ctx, w, itx, rk, &ac); err != nil {
+		return errors.Wrap(err, "Failed to respond")
+	}
+
+	if updateHoldings {
+		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+			return errors.Wrap(err, "Failed to save holdings")
+		}
+	}
+
+	return nil
 }
 
 // CreationResponse handles an outgoing Asset Creation and writes it to the state
@@ -425,6 +458,19 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return errors.Wrap(err, "Failed to create asset")
 		}
 		node.Log(ctx, "Created asset : %s", msg.AssetCode.String())
+
+		// Update administration balance
+		h, err := holdings.GetHolding(ctx, a.MasterDB, contractPKH, &msg.AssetCode,
+			&ct.AdministrationPKH, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get admin holding")
+		}
+		txid := protocol.TxIdFromBytes(itx.Hash[:])
+		holdings.AddDeposit(&h, txid, msg.TokenQty, msg.Timestamp)
+		holdings.FinalizeTx(&h, txid, msg.Timestamp)
+		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+			return errors.Wrap(err, "Failed to save holdings")
+		}
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -467,22 +513,33 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
 			node.Log(ctx, "Updating asset modification governance (%s) : %d", msg.AssetCode.String(), *ua.AssetModificationGovernance)
 		}
+
+		var h state.Holding
+		updateHoldings := false
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
 			node.Log(ctx, "Updating asset token quantity %d : %s", *ua.TokenQty, msg.AssetCode.String())
 
-			administrationBalance := asset.GetBalance(ctx, as, &ct.AdministrationPKH)
+			h, err = holdings.GetHolding(ctx, a.MasterDB, contractPKH, &msg.AssetCode,
+				&ct.AdministrationPKH, v.Now)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get admin holding")
+			}
+
+			txid := protocol.TxIdFromBytes(itx.Hash[:])
+
+			holdings.FinalizeTx(&h, txid, msg.Timestamp)
+			updateHoldings = true
+
 			if msg.TokenQty > as.TokenQty {
 				node.Log(ctx, "Increasing token quantity by %d to %d : %s", msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode.String())
-				// Increasing token quantity. Give tokens to administration.
-				administrationBalance += msg.TokenQty - as.TokenQty
 			} else {
 				node.Log(ctx, "Decreasing token quantity by %d to %d : %s", as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode.String())
-				// Decreasing token quantity. Take tokens from administration.
-				administrationBalance -= as.TokenQty - msg.TokenQty
 			}
-			ua.NewBalances = make(map[protocol.PublicKeyHash]uint64)
-			ua.NewBalances[ct.AdministrationPKH] = administrationBalance
+			if err != nil {
+				node.LogWarn(ctx, "Failed to update administration holding : %s", msg.AssetCode.String())
+				return err
+			}
 		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
@@ -504,6 +561,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			ua.TradeRestrictions = &msg.TradeRestrictions
 		}
 
+		if updateHoldings {
+			if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+				return errors.Wrap(err, "Failed to save holdings")
+			}
+		}
 		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to update asset : %s", msg.AssetCode.String())
 			return err

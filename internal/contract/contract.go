@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -277,12 +278,12 @@ func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
 // HasAnyBalance checks if the user has any balance of any token across the contract.
 func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash) bool {
 	for _, a := range ct.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		h, err := holdings.Fetch(ctx, dbConn, &ct.ID, &a, userPKH)
 		if err != nil {
 			continue
 		}
 
-		if asset.GetBalance(ctx, as, userPKH) > 0 {
+		if h.FinalizedBalance > 0 {
 			return true
 		}
 	}
@@ -314,7 +315,9 @@ func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMu
 }
 
 // GetVotingBalance returns the tokens held across all of the contract's assets.
-func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
+	userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
 		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
@@ -322,7 +325,12 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, us
 			continue
 		}
 
-		result += asset.GetVotingBalance(ctx, as, userPKH, applyMultiplier, now)
+		h, err := holdings.Fetch(ctx, dbConn, &ct.ID, &a, userPKH)
+		if err != nil {
+			continue
+		}
+
+		result += holdings.VotingBalance(as, &h, applyMultiplier, now)
 	}
 
 	return result

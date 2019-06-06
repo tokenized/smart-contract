@@ -1,7 +1,6 @@
 package asset
 
 import (
-	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -52,8 +51,4 @@ type UpdateAsset struct {
 	TokenQty                    *uint64             `json:"token_qty,omitempty"`
 	AssetPayload                *[]byte             `json:"asset_payload,omitempty"`
 	FreezePeriod                *protocol.Timestamp `json:"freeze_period,omitempty"`
-
-	NewBalances          map[protocol.PublicKeyHash]uint64              `json:"new_balances,omitempty"`
-	NewHoldingStatuses   map[protocol.PublicKeyHash]state.HoldingStatus `json:"new_holding_statuses,omitempty"`
-	ClearHoldingStatuses map[protocol.PublicKeyHash]protocol.TxId       `json:"clear_holding_statuses,omitempty"`
 }

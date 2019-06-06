@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -156,6 +157,10 @@ func (server *Server) Run(ctx context.Context) error {
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
+
+	if err := holdings.WriteCache(ctx, server.MasterDB); err != nil {
+		return err
+	}
 
 	return server.Tracer.Save(ctx, server.MasterDB)
 }

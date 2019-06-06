@@ -3,12 +3,10 @@ package tests
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 
-	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -103,20 +101,15 @@ func freezeOrder(t *testing.T) {
 
 	// Check balance status
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
-	}
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	if asset.CheckBalanceFrozen(ctx, as, userPKH, 101, v.Now) {
-		t.Fatalf("\t%s\tUser unfrozen balance too high", tests.Failed)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
-
-	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
-		t.Fatalf("\t%s\tUser unfrozen balance not high enough", tests.Failed)
+	balance := holdings.UnfrozenBalance(&h, v.Now)
+	if balance != 100 {
+		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 100)
 	}
 }
 
@@ -211,20 +204,16 @@ func freezeAuthorityOrder(t *testing.T) {
 	checkResponse(t, "E2")
 
 	// Check balance status
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
-	}
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	if asset.CheckBalanceFrozen(ctx, as, userPKH, 101, v.Now) {
-		t.Fatalf("\t%s\tUser unfrozen balance too high", tests.Failed)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
-
-	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 100, v.Now) {
-		t.Fatalf("\t%s\tUser unfrozen balance not high enough", tests.Failed)
+	balance := holdings.UnfrozenBalance(&h, v.Now)
+	if balance != 100 {
+		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 100)
 	}
 }
 
@@ -250,6 +239,10 @@ func thawOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up freeze : %v", tests.Failed, err)
 	}
+
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100006, issuerKey.Address.ScriptAddress())
 
@@ -302,17 +295,14 @@ func thawOrder(t *testing.T) {
 	checkResponse(t, "E3")
 
 	// Check balance status
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	if !asset.CheckBalanceFrozen(ctx, as, userPKH, 300, v.Now) {
-		t.Fatalf("\t%s\tUser balance not unfrozen", tests.Failed)
+	balance := holdings.UnfrozenBalance(&h, v.Now)
+	if balance != 300 {
+		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 300)
 	}
 }
 
@@ -391,22 +381,26 @@ func confiscateOrder(t *testing.T) {
 
 	// Check balance status
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
+	if issuerHolding.FinalizedBalance != testTokenQty+50 {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.FinalizedBalance, testTokenQty+50)
+	}
+	t.Logf("\t%s\tIssuer token balance verified : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty+50 {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty+50)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
-	t.Logf("\t%s\tIssuer token balance verified : %d", tests.Success, issuerBalance)
-
-	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != 200 {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 200)
+	if userHolding.FinalizedBalance != 200 {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userHolding.FinalizedBalance, 200)
 	}
-	t.Logf("\t%s\tUser token balance verified : %d", tests.Success, userBalance)
+	t.Logf("\t%s\tUser token balance verified : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func reconcileOrder(t *testing.T) {
@@ -506,22 +500,25 @@ func reconcileOrder(t *testing.T) {
 
 	// Check balance status
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
+	if issuerHolding.FinalizedBalance != testTokenQty {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerHolding.FinalizedBalance, testTokenQty)
+	}
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
-	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerBalance)
-
-	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != 75 {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, 75)
+	if userHolding.FinalizedBalance != 75 {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userHolding.FinalizedBalance, 75)
 	}
-	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userBalance)
+	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64) (*protocol.TxId, error) {
@@ -594,26 +591,26 @@ func mockUpFreeze(ctx context.Context, t *testing.T, pkh []byte, quantity uint64
 
 		transactions.AddTx(ctx, test.MasterDB, freezeItx)
 		responses = nil
-	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		return freezeTxId, err
-	}
-
-	for i, _ := range as.Holdings {
-		if bytes.Equal(as.Holdings[i].PKH.Bytes(), pkh) {
-			ts := protocol.CurrentTimestamp()
-			as.Holdings[i].HoldingStatuses = append(as.Holdings[i].HoldingStatuses, state.HoldingStatus{
-				Code:    'F',
-				Expires: protocol.NewTimestamp(ts.Nano() + 100000000000),
-				Balance: quantity,
-				TxId:    *freezeTxId,
-			})
-			return freezeTxId, asset.Save(ctx, test.MasterDB, contractPKH, as)
+		err = a.Trigger(ctx, "SEE", freezeItx)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return freezeTxId, errors.New("Holding not found for mock freeze")
+	return freezeTxId, nil
+
+	// contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	// pubkeyhash := protocol.PublicKeyHashFromBytes(pkh)
+	// v := ctx.Value(node.KeyValues).(*node.Values)
+	// h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, pubkeyhash, v.Now)
+	// if err != nil {
+	// 	t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	// }
+	//
+	// ts := protocol.CurrentTimestamp()
+	// err = holdings.AddFreeze(&h, freezeTxId, quantity, protocol.CurrentTimestamp(),
+	// 	protocol.NewTimestamp(ts.Nano()+100000000000))
+	// holdings.FinalizeTx(&h, freezeTxId, v.Now)
+	// return freezeTxId, holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
 }
