@@ -99,7 +99,7 @@ residing at `./conf/dev.env.example`:
 
 ### Dependencies
 
-The Smart Contract requires RPC access to a full bitcoin node, such as [Bitcoin SV](https://github.com/bitcoin-sv/bitcoin-sv). Once installed and syncronised with the BCH network, ensure that RPC is enabled by modifying the `bitcoin.conf` file.
+The Smart Contract requires RPC access to a full bitcoin node, such as [Bitcoin SV](https://github.com/bitcoin-sv/bitcoin-sv). Once installed and syncronised with the BSV network, ensure that RPC is enabled by modifying the `bitcoin.conf` file.
 
     # bitcoin.conf
     server=1
