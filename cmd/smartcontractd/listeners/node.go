@@ -84,6 +84,7 @@ func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *
 func (server *Server) Run(ctx context.Context) error {
 	// Set responder
 	server.Handler.SetResponder(server.respondTx)
+	server.Handler.SetReprocessor(server.reprocessTx)
 
 	// Register listeners
 	if server.SpyNode != nil {
@@ -221,6 +222,10 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	node.Log(ctx, "Saving pending response tx : %s", tx.TxHash().String())
 	server.pendingResponses = append(server.pendingResponses, tx)
 	return nil
+}
+
+func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
+	return server.processingTxs.Add(ProcessingTx{Itx: itx, Event: "REPROCESS"})
 }
 
 // Remove any pending that are conflicting with this tx.

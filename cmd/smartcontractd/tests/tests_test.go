@@ -80,6 +80,7 @@ func testMain(m *testing.M) int {
 	}
 
 	a.SetResponder(respondTx)
+	a.SetReprocessor(reprocessTx)
 
 	// =========================================================================
 	// Keys
@@ -117,6 +118,10 @@ func respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	responses = append(responses, tx)
 	responseLock.Unlock()
 	return nil
+}
+
+func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
+	return a.Trigger(ctx, "REPROCESS", itx)
 }
 
 func getResponse() *wire.MsgTx {

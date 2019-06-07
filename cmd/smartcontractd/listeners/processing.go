@@ -12,27 +12,27 @@ import (
 
 // ProcessTxs performs "core" processing on transactions.
 func (server *Server) ProcessTxs(ctx context.Context) error {
-	for itx := range server.processingTxs.Channel {
-		node.Log(ctx, "Processing tx : %s", itx.Hash)
+	for ptx := range server.processingTxs.Channel {
+		node.Log(ctx, "Processing tx : %s", ptx.Itx.Hash)
 		server.lock.Lock()
-		server.Tracer.AddTx(ctx, itx.MsgTx)
+		server.Tracer.AddTx(ctx, ptx.Itx.MsgTx)
 		server.lock.Unlock()
 
-		if !itx.IsTokenized() {
-			server.utxos.Add(itx.MsgTx, server.contractPKHs)
+		if !ptx.Itx.IsTokenized() {
+			server.utxos.Add(ptx.Itx.MsgTx, server.contractPKHs)
 			continue
 		}
 
-		if err := server.removeConflictingPending(ctx, itx); err != nil {
+		if err := server.removeConflictingPending(ctx, ptx.Itx); err != nil {
 			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
 			continue
 		}
 
 		// Save tx to cache so it can be used to process the response
-		for _, output := range itx.Outputs {
+		for _, output := range ptx.Itx.Outputs {
 			for _, pkh := range server.contractPKHs {
 				if bytes.Equal(output.Address.ScriptAddress(), pkh) {
-					if err := server.RpcNode.SaveTX(ctx, itx.MsgTx); err != nil {
+					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
 					break
@@ -40,20 +40,25 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
-		if err := server.Handler.Trigger(ctx, "SEE", itx); err != nil {
+		if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
 			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
 		}
 	}
 	return nil
 }
 
+type ProcessingTx struct {
+	Itx   *inspector.Transaction
+	Event string
+}
+
 type ProcessingTxChannel struct {
-	Channel chan *inspector.Transaction
+	Channel chan ProcessingTx
 	lock    sync.Mutex
 	open    bool
 }
 
-func (c *ProcessingTxChannel) Add(tx *inspector.Transaction) error {
+func (c *ProcessingTxChannel) Add(tx ProcessingTx) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -69,7 +74,7 @@ func (c *ProcessingTxChannel) Open(count int) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.Channel = make(chan *inspector.Transaction, count)
+	c.Channel = make(chan ProcessingTx, count)
 	c.open = true
 	return nil
 }
