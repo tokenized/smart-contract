@@ -421,7 +421,7 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
-	return node.txChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, ConfirmedHeight: -1})
+	return node.txChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true, ConfirmedHeight: -1})
 }
 
 func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
@@ -451,7 +451,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 			}
 
 			// Add to txs for block
-			if _, err = node.txs.Add(ctx, hash, tx.Trusted, tx.ConfirmedHeight); err != nil {
+			if _, err = node.txs.Add(ctx, hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
 				return err
 			}
 		}
@@ -484,7 +484,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 
 	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
 	//   processing the same tx twice at the same time.
-	if added, err := node.txs.Add(ctx, hash, tx.Trusted, -1); err != nil {
+	if added, err := node.txs.Add(ctx, hash, tx.Trusted, tx.Safe, -1); err != nil {
 		return errors.Wrap(err, "Failed to add to tx repo")
 	} else if !added {
 		return nil // Already seen
@@ -518,6 +518,10 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 			node.txs.MarkUnsafe(ctx, hash)
 			for _, listener := range node.listeners {
 				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateUnsafe, hash)
+			}
+		} else if tx.Safe {
+			for _, listener := range node.listeners {
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, hash)
 			}
 		}
 	} else {

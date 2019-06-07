@@ -72,11 +72,11 @@ type unconfirmedTx struct { // Tx ID hash is key of map containing this struct
 	trusted bool      // Verified by trusted node
 }
 
-func newUnconfirmedTx(trusted bool) *unconfirmedTx {
+func newUnconfirmedTx(trusted, safe bool) *unconfirmedTx {
 	result := unconfirmedTx{
 		time:    time.Now(),
 		unsafe:  false,
-		safe:    false,
+		safe:    safe,
 		trusted: trusted,
 	}
 	return &result

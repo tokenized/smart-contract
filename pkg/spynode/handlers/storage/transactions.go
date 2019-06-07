@@ -86,7 +86,7 @@ func (repo *TxRepository) Save(ctx context.Context) error {
 // Add a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns true if the txid was not already in the repo for the specified height, and was added
-func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted bool, height int) (bool, error) {
+func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted, safe bool, height int) (bool, error) {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
@@ -94,10 +94,13 @@ func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted 
 			if trusted {
 				tx.trusted = true
 			}
+			if safe {
+				tx.safe = true
+			}
 			return false, nil
 		}
 
-		repo.unconfirmed[txid] = newUnconfirmedTx(trusted)
+		repo.unconfirmed[txid] = newUnconfirmedTx(trusted, safe)
 		return true, nil
 	}
 
@@ -241,7 +244,7 @@ func (repo *TxRepository) FinalizeUnconfirmed(ctx context.Context, unconfirmed [
 		if tx, exists := repo.unconfirmed[hash]; exists {
 			newUnconfirmed[hash] = tx
 		} else {
-			newUnconfirmed[hash] = newUnconfirmedTx(true)
+			newUnconfirmed[hash] = newUnconfirmedTx(true, false)
 		}
 	}
 	repo.unconfirmed = newUnconfirmed
@@ -289,7 +292,7 @@ func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, 
 			if tx, exists := repo.unconfirmed[hash]; exists {
 				newUnconfirmed[hash] = tx
 			} else {
-				newUnconfirmed[hash] = newUnconfirmedTx(true)
+				newUnconfirmed[hash] = newUnconfirmedTx(true, false)
 			}
 		}
 		repo.unconfirmed = newUnconfirmed

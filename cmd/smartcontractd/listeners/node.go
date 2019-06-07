@@ -211,8 +211,7 @@ func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
 	return nil
 }
 
-// respondTx is an internal method used as a the responder
-// The method signatures are the same but we keep repeat for clarify
+// respondTx is an internal method used as the responder
 func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	if server.inSync {
 		return server.sendTx(ctx, tx)
