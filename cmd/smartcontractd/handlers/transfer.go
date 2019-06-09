@@ -95,7 +95,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
 	}
 
-	if msg.OfferExpiry.Nano() > v.Now.Nano() {
+	if msg.OfferExpiry.Nano() != 0 && v.Now.Nano() > msg.OfferExpiry.Nano() {
 		node.LogWarn(ctx, "Transfer expired : %s", msg.OfferExpiry.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
