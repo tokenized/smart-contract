@@ -28,8 +28,10 @@ const (
 // Handler is the interface for this Protocol Mux
 type Handler interface {
 	Respond(context.Context, wire.Message) error
+	Reprocess(context.Context, *inspector.Transaction) error
 	Trigger(context.Context, string, *inspector.Transaction) error
 	SetResponder(ResponderFunc)
+	SetReprocessor(ReprocessFunc)
 }
 
 // A Handler is a type that handles a protocol messages
@@ -38,8 +40,12 @@ type HandlerFunc func(ctx context.Context, itx *inspector.Transaction) error
 // A ResponderFunc will handle responses
 type ResponderFunc func(ctx context.Context, tx *wire.MsgTx) error
 
+// A ReprocessFunc will handle responses
+type ReprocessFunc func(ctx context.Context, itx *inspector.Transaction) error
+
 type ProtoMux struct {
 	Responder         ResponderFunc
+	Reprocessor       ReprocessFunc
 	SeeHandlers       map[string][]HandlerFunc
 	LostHandlers      map[string][]HandlerFunc
 	StoleHandlers     map[string][]HandlerFunc
@@ -148,6 +154,15 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 // SetResponder sets the function used for handling responses
 func (p *ProtoMux) SetResponder(responder ResponderFunc) {
 	p.Responder = responder
+}
+
+// SetReprocessor sets the function used for reprocessing
+func (p *ProtoMux) SetReprocessor(reprocessor ReprocessFunc) {
+	p.Reprocessor = reprocessor
+}
+
+func (p *ProtoMux) Reprocess(ctx context.Context, itx *inspector.Transaction) error {
+	return p.Reprocessor(ctx, itx)
 }
 
 // Respond handles a response via the responder

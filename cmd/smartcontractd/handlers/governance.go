@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -132,9 +133,15 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
 		}
 
-		// Sender does not have any balance of the asset
-		if msg.Initiator > 0 && asset.GetVotingBalance(ctx, as, senderPKH, ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			node.LogWarn(ctx, "Requestor is not a holder : %s", msg.AssetCode.String())
+		// Check sender balance
+		h, err := holdings.GetHolding(ctx, g.MasterDB, contractPKH, &msg.AssetCode, senderPKH, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get requestor holding")
+		}
+
+		if msg.Initiator > 0 && holdings.VotingBalance(as, &h,
+			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
+			node.LogWarn(ctx, "Requestor is not a holder : %s %s", msg.AssetCode.String(), senderPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
 		}
 
@@ -470,9 +477,15 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
 		}
 
-		quantity = asset.GetVotingBalance(ctx, as, holderPKH, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		h, err := holdings.GetHolding(ctx, g.MasterDB, contractPKH, &proposal.AssetCode, holderPKH, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get requestor holding")
+		}
+
+		quantity = holdings.VotingBalance(as, &h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	} else {
-		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, holderPKH, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, holderPKH,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	}
 
 	if quantity == 0 {

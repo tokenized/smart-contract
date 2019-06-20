@@ -24,6 +24,7 @@ type TXHandler struct {
 type TxData struct {
 	Msg             *wire.MsgTx
 	Trusted         bool
+	Safe            bool
 	ConfirmedHeight int
 	Relevant        bool
 }

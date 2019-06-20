@@ -66,23 +66,30 @@ type Asset struct {
 	TokenQty                    uint64             `json:"token_qty,omitempty"`
 	AssetPayload                []byte             `json:"asset_payload,omitempty"`
 	FreezePeriod                protocol.Timestamp `json:"freeze_period,omitempty"`
-
-	Holdings []Holding `json:"holdings,omitempty"`
 }
 
 type Holding struct {
-	PKH             protocol.PublicKeyHash `json:"address,omit_empty"`
-	Balance         uint64                 `json:"balance,omit_empty"`
-	HoldingStatuses []HoldingStatus        `json:"order_status,omitempty"`
-	CreatedAt       protocol.Timestamp     `json:"created_at,omit_empty"`
-	UpdatedAt       protocol.Timestamp     `json:"updated_at,omitempty"`
+	PKH protocol.PublicKeyHash `json:"pkh,omit_empty"`
+	// Balance after all pending changes have been finalized
+	PendingBalance uint64 `json:"pending_balance,omit_empty"`
+	// Balance without pending changes
+	FinalizedBalance uint64                           `json:"finalized_balance,omit_empty"`
+	HoldingStatuses  map[protocol.TxId]*HoldingStatus `json:"holding_statuses,omitempty"`
+	CreatedAt        protocol.Timestamp               `json:"created_at,omit_empty"`
+	UpdatedAt        protocol.Timestamp               `json:"updated_at,omitempty"`
 }
 
 type HoldingStatus struct {
-	Code    byte               `json:"code,omit_empty"`
-	Expires protocol.Timestamp `json:"expires,omitempty"`
-	Balance uint64             `json:"balance,omit_empty"`
-	TxId    protocol.TxId      `json:"tx_id,omit_empty"`
+	// Code F = Freeze, R = Pending Receive, S = Pending Send
+	Code byte `json:"code,omit_empty"`
+
+	Expires        protocol.Timestamp `json:"expires,omitempty"`
+	Amount         uint64             `json:"amount,omit_empty"`
+	TxId           protocol.TxId      `json:"tx_id,omit_empty"`
+	SettleQuantity uint64             `json:"settlement_quantity,omit_empty"`
+
+	// Balance has been posted to the chain and is not reversible without a reconcile.
+	Posted bool `json:"posted,omit_empty"`
 }
 
 type Vote struct {

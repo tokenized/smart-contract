@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -94,7 +95,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
 	}
 
-	if msg.OfferExpiry.Nano() > v.Now.Nano() {
+	if msg.OfferExpiry.Nano() != 0 && v.Now.Nano() > msg.OfferExpiry.Nano() {
 		node.LogWarn(ctx, "Transfer expired : %s", msg.OfferExpiry.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, protocol.RejectTransferExpired, false)
 	}
@@ -185,7 +186,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 	}
 
 	// Add this contract's data to the settlement op return data
-	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement, t.Headers)
+	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement, t.Headers, assetUpdates)
 	if err != nil {
 		reject, ok := err.(rejectError)
 		if ok {
@@ -193,6 +195,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, reject.code, false)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
+		}
+	}
+
+	for assetCode, hds := range assetUpdates {
+		for _, h := range hds {
+			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, &h); err != nil {
+				return errors.Wrap(err, "Failed to save holding")
+			}
 		}
 	}
 
@@ -501,7 +511,8 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.RootKey,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
-	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers node.BitcoinHeaders) error {
+	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers node.BitcoinHeaders,
+	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -596,7 +607,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		fromAdministration := uint64(0)
 		toNonAdministration := uint64(0)
 		toAdministration := uint64(0)
-		settlementQuantities := make([]*uint64, len(settleTx.Outputs))
+		txid := protocol.TxIdFromBytes(transferTx.Hash[:])
+		hds := make([]*state.Holding, len(settleTx.Outputs))
+		updatedHoldings := make(map[protocol.PublicKeyHash]state.Holding)
+		updates[assetTransfer.AssetCode] = updatedHoldings
 
 		// Process senders
 		// assetTransfer.AssetSenders []QuantityIndex {Index uint16, Quantity uint64}
@@ -607,9 +621,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
 			}
 
-			inputPKH := transferTx.Inputs[sender.Index].Address.ScriptAddress()
+			inputPKH := protocol.PublicKeyHashFromBytes(transferTx.Inputs[sender.Index].Address.ScriptAddress())
 
-			if bytes.Equal(inputPKH, ct.AdministrationPKH.Bytes()) {
+			if bytes.Equal(inputPKH.Bytes(), ct.AdministrationPKH.Bytes()) {
 				fromAdministration += sender.Quantity
 			} else {
 				fromNonAdministration += sender.Quantity
@@ -618,7 +632,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputPKH := range settleOutputPKHs {
-				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), inputPKH) {
+				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), inputPKH.Bytes()) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -630,25 +644,34 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 
 			// Check sender's available unfrozen balance
-			inputAddress := protocol.PublicKeyHashFromBytes(inputPKH)
-			if settlementQuantities[settleOutputIndex] == nil {
-				// Get sender's balance
-				senderBalance := asset.GetBalance(ctx, as, inputAddress)
-				settlementQuantities[settleOutputIndex] = &senderBalance
+			if hds[settleOutputIndex] != nil {
+				node.LogWarn(ctx, "Duplicate sender entry: contract=%s asset=%s party=%s",
+					contractPKH, assetTransfer.AssetCode.String(), inputPKH)
+				return rejectError{code: protocol.RejectMsgMalformed}
 			}
 
-			if *settlementQuantities[settleOutputIndex] < sender.Quantity {
-				node.LogWarn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
-					contractPKH, assetTransfer.AssetCode.String(), inputAddress)
-				return rejectError{code: protocol.RejectInsufficientQuantity}
+			h, err := holdings.GetHolding(ctx, masterDB, contractPKH, &assetTransfer.AssetCode, inputPKH, v.Now)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get holding")
 			}
+			hds[settleOutputIndex] = &h
+			updatedHoldings[*inputPKH] = h
 
-			if !asset.CheckBalanceFrozen(ctx, as, inputAddress, sender.Quantity, v.Now) {
-				node.LogWarn(ctx, "Frozen funds: asset=%s party=%s", assetTransfer.AssetCode.String(), inputAddress.String())
-				return rejectError{code: protocol.RejectHoldingsFrozen}
+			if err := holdings.AddDebit(&h, txid, sender.Quantity, v.Now); err != nil {
+				if err == holdings.ErrInsufficientHoldings {
+					node.LogWarn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
+						contractPKH, assetTransfer.AssetCode.String(), inputPKH.String())
+					return rejectError{code: protocol.RejectInsufficientQuantity}
+				}
+				if err == holdings.ErrHoldingsFrozen {
+					node.LogWarn(ctx, "Frozen funds: asset=%s party=%s",
+						assetTransfer.AssetCode.String(), inputPKH.String())
+					return rejectError{code: protocol.RejectHoldingsFrozen}
+				}
+				node.LogWarn(ctx, "Send failed : %s : contract=%s asset=%s party=%s",
+					err, contractPKH, assetTransfer.AssetCode.String(), inputPKH.String())
+				return rejectError{code: protocol.RejectMsgMalformed}
 			}
-
-			*settlementQuantities[settleOutputIndex] -= sender.Quantity
 
 			// Update total send balance
 			sendBalance += sender.Quantity
@@ -676,13 +699,24 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				toNonAdministration += receiver.Quantity
 			}
 
-			if settlementQuantities[settleOutputIndex] == nil {
-				// Get receiver's balance
-				receiverBalance := asset.GetBalance(ctx, as, &receiver.Address)
-				settlementQuantities[settleOutputIndex] = &receiverBalance
+			if hds[settleOutputIndex] != nil {
+				node.LogWarn(ctx, "Duplicate receiver entry: contract=%s asset=%s party=%s",
+					contractPKH, assetTransfer.AssetCode.String(), receiver.Address.String())
+				return rejectError{code: protocol.RejectMsgMalformed}
 			}
 
-			*settlementQuantities[settleOutputIndex] += receiver.Quantity
+			h, err := holdings.GetHolding(ctx, masterDB, contractPKH, &assetTransfer.AssetCode, &receiver.Address, v.Now)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get holding")
+			}
+			hds[settleOutputIndex] = &h
+			updatedHoldings[receiver.Address] = h
+
+			if err := holdings.AddDeposit(&h, txid, receiver.Quantity, v.Now); err != nil {
+				node.LogWarn(ctx, "Send failed : %s : contract=%s asset=%s party=%s",
+					err, contractPKH, assetTransfer.AssetCode.String(), receiver.Address.String())
+				return rejectError{code: protocol.RejectMsgMalformed}
+			}
 
 			// Update asset balance
 			if receiver.Quantity > sendBalance {
@@ -692,7 +726,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		if sendBalance != 0 {
-			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining", assetOffset, sendBalance)
+			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining",
+				assetOffset, sendBalance)
 		}
 
 		if !as.TransfersPermitted {
@@ -708,10 +743,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 		}
 
-		for index, quantity := range settlementQuantities {
-			if quantity != nil {
+		for index, holding := range hds {
+			if holding != nil {
 				assetSettlement.Settlements = append(assetSettlement.Settlements,
-					protocol.QuantityIndex{Index: uint16(index), Quantity: *quantity})
+					protocol.QuantityIndex{Index: uint16(index), Quantity: holding.PendingBalance})
 			}
 		}
 
@@ -940,6 +975,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return errors.New("Settlement response invalid")
 	}
 
+	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
 	ct, err := contract.Retrieve(ctx, t.MasterDB, contractPKH)
 	if err != nil {
@@ -950,10 +986,14 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
+	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
 	for _, assetSettlement := range msg.Assets {
 		if assetSettlement.AssetType == "CUR" && assetSettlement.AssetCode.IsZero() {
 			continue // Bitcoin transaction
 		}
+
+		hds := make(map[protocol.PublicKeyHash]state.Holding)
+		assetUpdates[assetSettlement.AssetCode] = hds
 
 		if assetSettlement.ContractIndex == 0xffff {
 			continue // No contract for this asset
@@ -967,11 +1007,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			continue // Asset not under this contract
 		}
 
-		// Create update record
-		ua := asset.UpdateAsset{
-			NewBalances: make(map[protocol.PublicKeyHash]uint64),
-		}
-
+		// Finalize settlements
 		for _, settlementQuantity := range assetSettlement.Settlements {
 			if int(settlementQuantity.Index) >= len(itx.Outputs) {
 				return fmt.Errorf("Settlement output index out of range %d/%d : %s",
@@ -979,13 +1015,28 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			}
 
 			pkh := protocol.PublicKeyHashFromBytes(itx.Outputs[settlementQuantity.Index].Address.ScriptAddress())
-			ua.NewBalances[*pkh] = settlementQuantity.Quantity
-		}
 
-		// Update database
-		err := asset.Update(ctx, t.MasterDB, contractPKH, &assetSettlement.AssetCode, &ua, msg.Timestamp)
-		if err != nil {
-			return err
+			h, err := holdings.GetHolding(ctx, t.MasterDB, contractPKH, &assetSettlement.AssetCode,
+				pkh, msg.Timestamp)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get holding")
+			}
+
+			err = holdings.FinalizeTx(&h, txid, msg.Timestamp)
+			if err != nil {
+				return fmt.Errorf("Failed settlement finalize for holding : %s %s : %s",
+					assetSettlement.AssetCode.String(), pkh.String(), err)
+			}
+
+			hds[*pkh] = h
+		}
+	}
+
+	for assetCode, hds := range assetUpdates {
+		for _, h := range hds {
+			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, &h); err != nil {
+				return errors.Wrap(err, "Failed to save holding")
+			}
 		}
 	}
 

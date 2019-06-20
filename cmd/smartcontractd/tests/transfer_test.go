@@ -10,7 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -177,6 +177,18 @@ func simpleTransfersBenchmark(b *testing.B) {
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
+	// Check balance
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	userPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if h.FinalizedBalance != 0 {
+		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
+	}
+
 	server.Stop(ctx)
 	wg.Wait()
 }
@@ -339,6 +351,18 @@ func oracleTransfersBenchmark(b *testing.B) {
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
+	// Check balance
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	userPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if h.FinalizedBalance != 0 {
+		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
+	}
+
 	server.Stop(ctx)
 	wg.Wait()
 }
@@ -450,26 +474,30 @@ func sendTokens(t *testing.T) {
 
 	// Check issuer and user balance
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
-	}
-
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty-transferAmount {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-transferAmount)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if issuerHolding.FinalizedBalance != testTokenQty-transferAmount {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerBalance)
+	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != transferAmount {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, transferAmount)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if userHolding.FinalizedBalance != transferAmount {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed,
+			userHolding.FinalizedBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userBalance)
+	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func multiExchange(t *testing.T) {
@@ -486,8 +514,8 @@ func multiExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	user1Holding := uint64(100)
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), user1Holding)
+	user1HoldingBalance := uint64(100)
+	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), user1HoldingBalance)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -500,8 +528,8 @@ func multiExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
 	}
-	user2Holding := uint64(200)
-	err = mockUpHolding2(ctx, user2Key.Address.ScriptAddress(), user2Holding)
+	user2HoldingBalance := uint64(200)
+	err = mockUpHolding2(ctx, user2Key.Address.ScriptAddress(), user2HoldingBalance)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
 	}
@@ -671,46 +699,53 @@ func multiExchange(t *testing.T) {
 
 	// Check issuer and user balance
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as1, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset 1 : %v", tests.Failed, err)
-	}
-
+	v := ctx.Value(node.KeyValues).(*node.Values)
 	user1PKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	user1Balance := asset.GetBalance(ctx, as1, user1PKH)
-	if user1Balance != user1Holding-transfer1Amount {
-		t.Fatalf("\t%s\tUser 1 token 1 balance incorrect : %d != %d", tests.Failed, user1Balance, user1Holding-transfer1Amount)
+	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user1PKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user1Holding.FinalizedBalance != user1HoldingBalance-transfer1Amount {
+		t.Fatalf("\t%s\tUser 1 token 1 balance incorrect : %d != %d", tests.Failed,
+			user1Holding.FinalizedBalance, user1HoldingBalance-transfer1Amount)
 	}
 
-	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Balance)
+	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2PKH := protocol.PublicKeyHashFromBytes(user2Key.Address.ScriptAddress())
-	user2Balance := asset.GetBalance(ctx, as1, user2PKH)
-	if user2Balance != transfer1Amount {
-		t.Fatalf("\t%s\tUser 2 token 1 balance incorrect : %d != %d", tests.Failed, user2Balance, transfer1Amount)
+	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user2PKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user2Holding.FinalizedBalance != transfer1Amount {
+		t.Fatalf("\t%s\tUser 2 token 1 balance incorrect : %d != %d", tests.Failed,
+			user2Holding.FinalizedBalance, transfer1Amount)
 	}
 
-	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Balance)
+	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
 	contract2PKH := protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress())
-	as2, err := asset.Retrieve(ctx, test.MasterDB, contract2PKH, &testAsset2Code)
+	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, contract2PKH, &testAsset2Code, user1PKH, v.Now)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset 2 : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
 
-	user1Balance = asset.GetBalance(ctx, as2, user1PKH)
-	if user1Balance != transfer2Amount {
-		t.Fatalf("\t%s\tUser 1 token 2 balance incorrect : %d != %d", tests.Failed, user1Balance, transfer2Amount)
+	if user1Holding.FinalizedBalance != transfer2Amount {
+		t.Fatalf("\t%s\tUser 1 token 2 balance incorrect : %d != %d", tests.Failed, user1Holding.FinalizedBalance, transfer2Amount)
 	}
 
-	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Balance)
+	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
-	user2Balance = asset.GetBalance(ctx, as2, user2PKH)
-	if user2Balance != user2Holding-transfer2Amount {
-		t.Fatalf("\t%s\tUser 2 token 2 balance incorrect : %d != %d", tests.Failed, user2Balance, user2Holding-transfer2Amount)
+	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, contract2PKH, &testAsset2Code, user2PKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user2Holding.FinalizedBalance != user2HoldingBalance-transfer2Amount {
+		t.Fatalf("\t%s\tUser 2 token 2 balance incorrect : %d != %d", tests.Failed,
+			user2Holding.FinalizedBalance, user2HoldingBalance-transfer2Amount)
 	}
 
-	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Balance)
+	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 }
 
 func oracleTransfer(t *testing.T) {
@@ -814,26 +849,30 @@ func oracleTransfer(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
-	}
-
+	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty-transferAmount {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-transferAmount)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if issuerHolding.FinalizedBalance != testTokenQty-transferAmount {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerBalance)
+	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != transferAmount {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, transferAmount)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if userHolding.FinalizedBalance != transferAmount {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed,
+			userHolding.FinalizedBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userBalance)
+	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func oracleTransferBad(t *testing.T) {
@@ -1062,26 +1101,30 @@ func permitted(t *testing.T) {
 
 	// Check issuer and user balance
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
-	}
-
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != testTokenQty-transferAmount {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, testTokenQty-transferAmount)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if issuerHolding.FinalizedBalance != testTokenQty-transferAmount {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerBalance)
+	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
-	userBalance := asset.GetBalance(ctx, as, userPKH)
-	if userBalance != transferAmount {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userBalance, transferAmount)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if userHolding.FinalizedBalance != transferAmount {
+		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed,
+			userHolding.FinalizedBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userBalance)
+	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func permittedBad(t *testing.T) {

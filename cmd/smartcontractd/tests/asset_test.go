@@ -8,6 +8,8 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -130,12 +132,16 @@ func createAsset(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
 
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != assetData.TokenQty {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, assetData.TokenQty)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
+	}
+	if h.PendingBalance != assetData.TokenQty {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance, assetData.TokenQty)
 	}
 
-	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerBalance)
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
 
 	if as.AssetType != assetData.AssetType {
 		t.Fatalf("\t%s\tAsset type incorrect : %s != %s", tests.Failed, as.AssetType, assetData.AssetType)
@@ -399,12 +405,16 @@ func assetAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified token quantity : %d", tests.Success, as.TokenQty)
 
 	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
-	issuerBalance := asset.GetBalance(ctx, as, issuerPKH)
-	if issuerBalance != 1200 {
-		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, issuerBalance, 1200)
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
+	}
+	if h.PendingBalance != 1200 {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance, 1200)
 	}
 
-	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerBalance)
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
 }
 
 func assetProposalAmendment(t *testing.T) {
@@ -569,15 +579,21 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 		return err
 	}
 
-	assetData.Holdings = make([]state.Holding, 0, 1)
-	assetData.Holdings = append(assetData.Holdings, state.Holding{
-		PKH:       *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		Balance:   quantity,
-		CreatedAt: assetData.CreatedAt,
-		UpdatedAt: assetData.UpdatedAt,
-	})
-
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	issuerHolding := state.Holding{
+		PKH:              *issuerPKH,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        assetData.CreatedAt,
+		UpdatedAt:        assetData.UpdatedAt,
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+	}
+	err = holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
+	if err != nil {
+		return err
+	}
+
 	err = asset.Save(ctx, test.MasterDB, contractPKH, &assetData)
 	if err != nil {
 		return err
@@ -633,13 +649,20 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 		return err
 	}
 
-	assetData.Holdings = make([]state.Holding, 0, 1)
-	assetData.Holdings = append(assetData.Holdings, state.Holding{
-		PKH:       *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		Balance:   quantity,
-		CreatedAt: assetData.CreatedAt,
-		UpdatedAt: assetData.UpdatedAt,
-	})
+	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	issuerHolding := state.Holding{
+		PKH:              *issuerPKH,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        assetData.CreatedAt,
+		UpdatedAt:        assetData.UpdatedAt,
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+	}
+	err = holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
+	if err != nil {
+		return err
+	}
 
 	contract2PKH := protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress())
 	err = asset.Save(ctx, test.MasterDB, contract2PKH, &assetData)
@@ -659,34 +682,28 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 
 func mockUpHolding(ctx context.Context, pkh []byte, quantity uint64) error {
 	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
-	if err != nil {
-		return err
+	pubkeyhash := protocol.PublicKeyHashFromBytes(pkh)
+	h := state.Holding{
+		PKH:              *pubkeyhash,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        protocol.CurrentTimestamp(),
+		UpdatedAt:        protocol.CurrentTimestamp(),
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-
-	as.Holdings = append(as.Holdings, state.Holding{
-		PKH:       *protocol.PublicKeyHashFromBytes(pkh),
-		Balance:   quantity,
-		CreatedAt: protocol.CurrentTimestamp(),
-		UpdatedAt: protocol.CurrentTimestamp(),
-	})
-
-	return asset.Save(ctx, test.MasterDB, contractPKH, as)
+	return holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
 }
 
 func mockUpHolding2(ctx context.Context, pkh []byte, quantity uint64) error {
 	contract2PKH := protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress())
-	as, err := asset.Retrieve(ctx, test.MasterDB, contract2PKH, &testAsset2Code)
-	if err != nil {
-		return err
+	pubkeyhash := protocol.PublicKeyHashFromBytes(pkh)
+	h := state.Holding{
+		PKH:              *pubkeyhash,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        protocol.CurrentTimestamp(),
+		UpdatedAt:        protocol.CurrentTimestamp(),
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-
-	as.Holdings = append(as.Holdings, state.Holding{
-		PKH:       *protocol.PublicKeyHashFromBytes(pkh),
-		Balance:   quantity,
-		CreatedAt: protocol.CurrentTimestamp(),
-		UpdatedAt: protocol.CurrentTimestamp(),
-	})
-
-	return asset.Save(ctx, test.MasterDB, contract2PKH, as)
+	return holdings.Save(ctx, test.MasterDB, contract2PKH, &testAsset2Code, &h)
 }

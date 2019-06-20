@@ -37,7 +37,7 @@ func (vf *VoteFinalizer) IsReady(ctx context.Context) bool {
 // Run executes the job.
 func (vf *VoteFinalizer) Run(ctx context.Context) {
 	node.Log(ctx, "Finalizing vote : %s", vf.voteTx.Hash.String())
-	vf.handler.Trigger(ctx, "REPROCESS", vf.voteTx)
+	vf.handler.Reprocess(ctx, vf.voteTx)
 	vf.finished = true
 }
 

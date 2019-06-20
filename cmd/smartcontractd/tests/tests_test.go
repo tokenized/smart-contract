@@ -10,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/platform/wallet"
@@ -79,6 +80,7 @@ func testMain(m *testing.M) int {
 	}
 
 	a.SetResponder(respondTx)
+	a.SetReprocessor(reprocessTx)
 
 	// =========================================================================
 	// Keys
@@ -116,6 +118,10 @@ func respondTx(ctx context.Context, tx *wire.MsgTx) error {
 	responses = append(responses, tx)
 	responseLock.Unlock()
 	return nil
+}
+
+func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
+	return a.Trigger(ctx, "REPROCESS", itx)
 }
 
 func getResponse() *wire.MsgTx {
@@ -231,5 +237,6 @@ func resetTest(ctx context.Context) error {
 	responseLock.Unlock()
 	asset.Reset(ctx)
 	contract.Reset(ctx)
+	holdings.Reset(ctx)
 	return test.Reset(ctx)
 }

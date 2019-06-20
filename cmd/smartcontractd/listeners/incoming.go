@@ -93,7 +93,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 		if !exists {
 			toRemove++
 		} else if intx.IsPreprocessed && intx.IsReady {
-			server.processingTxs.Add(intx.Itx)
+			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
 			delete(server.pendingTxs, intx.Itx.Hash)
 			toRemove++
 		} else {

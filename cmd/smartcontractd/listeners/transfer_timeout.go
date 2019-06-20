@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
@@ -36,7 +37,8 @@ func (tt *TransferTimeout) IsReady(ctx context.Context) bool {
 
 // Run executes the job.
 func (tt *TransferTimeout) Run(ctx context.Context) {
-	tt.handler.Trigger(ctx, protomux.REPROCESS, tt.transferTx)
+	node.Log(ctx, "Timing out transfer : %s", tt.transferTx.Hash.String())
+	tt.handler.Reprocess(ctx, tt.transferTx)
 	tt.finished = true
 }
 
