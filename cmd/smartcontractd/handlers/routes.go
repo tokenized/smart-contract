@@ -14,8 +14,16 @@ import (
 )
 
 // API returns a handler for a set of routes for protocol actions.
-func API(ctx context.Context, masterWallet wallet.WalletInterface, config *node.Config, masterDB *db.DB,
-	tracer *listeners.Tracer, sch *scheduler.Scheduler, headers node.BitcoinHeaders, utxos *utxos.UTXOs) (protomux.Handler, error) {
+func API(
+	ctx context.Context,
+	masterWallet wallet.WalletInterface,
+	config *node.Config,
+	masterDB *db.DB,
+	tracer *listeners.Tracer,
+	sch *scheduler.Scheduler,
+	headers node.BitcoinHeaders,
+	utxos *utxos.UTXOs,
+) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
 

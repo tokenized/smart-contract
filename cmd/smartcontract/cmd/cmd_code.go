@@ -1,34 +1,31 @@
 package cmd
 
 import (
-	"encoding/base64"
-	"encoding/json"
+	"crypto/sha256"
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 var cmdCode = &cobra.Command{
 	Use:   "code",
 	Short: "Run random code",
 	RunE: func(c *cobra.Command, args []string) error {
-		jsonText := "{ \"name\" : \"KYC Oracle\", \"public_key\" : \"AtoGHJyVGRyHTxu+0qCikrIe97D1O+Oa5RRCOKA43TJF\" }"
 
-		oracle := protocol.Oracle{}
-		if err := json.Unmarshal([]byte(jsonText), &oracle); err != nil {
-			fmt.Printf("Failed to unmarshal json : %s\n", err)
-			return nil
-		}
+		hash := sha256.Sum256([]byte("secret"))
+		key := make([]byte, 0)
+		key = append(key, hash[:16]...)
+		fmt.Printf("%x = SHA256(\"secret\")\n", hash)
 
-		fmt.Printf("Oracle %+v\n", oracle)
+		hash = sha256.Sum256(hash[:])
+		key = append(key, hash[:16]...)
+		fmt.Printf("CHC[1] = %x\n", hash)
 
-		data, err := oracle.Serialize()
-		if err != nil {
-			fmt.Printf("Failed to serialize oracle : %s\n", err)
-			return nil
-		}
-		fmt.Printf("Data : %s\n", base64.StdEncoding.EncodeToString(data))
+		hash = sha256.Sum256(hash[:])
+		key = append(key, hash[:16]...)
+		fmt.Printf("CHC[2] = %x\n", hash)
+
+		fmt.Printf("Cipher Key = %x\n", key)
 		return nil
 	},
 }

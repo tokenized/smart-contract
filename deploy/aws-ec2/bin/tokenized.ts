@@ -137,8 +137,7 @@ class TokenizedEC2Stack extends cdk.Stack {
             nodeStorageBucket = new s3.Bucket(this, "NodeStorageBucket")
         } else if (props.appConfig.NODE_STORAGE_BUCKET.toLowerCase() == "standalone") {
             this.addError("NODE_STORAGE_BUCKET=standalone means that any data will get lost when the EC2 server is terminated. This is probably not what you want to happen..");
-        }
-        else {
+        } else {
             this.addWarning(`The specified NODE_STORAGE_BUCKET (${ props.appConfig.NODE_STORAGE_BUCKET}) is defined externally to this stack. Make sure appropriate permissions are set so we can write to it, or weird things might happen.`);
 
             nodeStorageBucket = s3.Bucket.import(this, "NodeStorageBucket", {
@@ -346,18 +345,18 @@ interface AppConfig {
     OPERATOR_NAME: string
     VERSION: string
 
-    FEE_ADDRESS: string
-    FEE_VALUE: number
-
-    NODE_ADDRESS: string
-    NODE_USER_AGENT: string
+    START_HASH: string
 
     RPC_HOST: string
     RPC_USERNAME: string
     RPC_PASSWORD: string
 
     PRIV_KEY: string
+    FEE_ADDRESS: string
+    BITCOIN_CHAIN: string
 
+    NODE_ADDRESS: string
+    NODE_USER_AGENT: string
     NODE_STORAGE_ROOT?: string
     NODE_STORAGE_BUCKET?: string
     NODE_STORAGE_REGION?: string
@@ -385,16 +384,17 @@ const app = new cdk.App();
 new TokenizedEC2Stack(app, 'TokenizedEC2', {
     appConfig: {
         // TODO: Configure this appropriately for your environment
-        // OPERATOR_NAME: "Standalone",
-        // VERSION: "0.1",
+        // OPERATOR_NAME: "Tokenized EC2",
+        // VERSION: "0.1.0",
+        // PRIV_KEY: "yourprivatekey",
         // FEE_ADDRESS: "yourfeeaddress",
-        // FEE_VALUE: 2000,
-        // NODE_ADDRESS: "1.2.3.4:8333",
-        // NODE_USER_AGENT: "",
-        // RPC_HOST: "1.2.3.4:8332",
+        // BITCOIN_CHAIN: "mainnet",
+        // START_HASH: "000000000000000005f24ad5d65547ad5b05cf61bb30279a47c0aa6c51f4f63e",
+        // NODE_ADDRESS: "127.0.0.1:8333",
+        // NODE_USER_AGENT: "Tokenized",
+        // RPC_HOST: "127.0.0.1:8332",
         // RPC_USERNAME: "youruser",
         // RPC_PASSWORD: "yoursecretpassword",
-        // PRIV_KEY: "yourwif",
     },
     ec2NATInstanceClass: ec2.InstanceClass.T3,
     ec2NATInstanceSize: ec2.InstanceSize.Micro,

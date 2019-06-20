@@ -57,7 +57,7 @@ func (err rejectError) Error() string {
 }
 
 // TransferRequest handles an incoming Transfer request.
-func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferRequest")
 	defer span.End()
 
@@ -242,7 +242,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter, 
 }
 
 // TransferTimeout is called when a multi-contract transfer times out because the other contracts are not responding.
-func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferTimeout")
 	defer span.End()
 
@@ -289,7 +289,7 @@ func firstContractOutputIndex(assetTransfers []protocol.AssetTransfer, itx *insp
 
 // buildSettlementTx builds the tx for a settlement action.
 func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config, transferTx *inspector.Transaction,
-	transfer *protocol.Transfer, settlementRequest *protocol.SettlementRequest, contractBalance uint64, rk *wallet.RootKey) (*txbuilder.Tx, error) {
+	transfer *protocol.Transfer, settlementRequest *protocol.SettlementRequest, contractBalance uint64, rk *wallet.Key) (*txbuilder.Tx, error) {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
 	defer span.End()
 
@@ -509,7 +509,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 }
 
 // addSettlementData appends data to a pending settlement action.
-func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.RootKey,
+func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.Tx, settlement *protocol.Settlement, headers node.BitcoinHeaders,
 	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding) error {
@@ -833,7 +833,7 @@ func findBoomerangIndex(transferTx *inspector.Transaction, transfer *protocol.Tr
 }
 
 // sendToNextSettlementContract sends settlement data to the next contract involved so it can add its data.
-func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.RootKey,
+func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.Key,
 	itx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.Tx, settlement *protocol.Settlement, settlementRequest *protocol.SettlementRequest,
 	tracer *listeners.Tracer) error {
@@ -962,7 +962,7 @@ func settlementIsComplete(ctx context.Context, transfer *protocol.Transfer, sett
 
 // SettlementResponse handles an outgoing Settlement action and writes it to the state
 func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.SettlementResponse")
 	defer span.End()
 
@@ -1047,7 +1047,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 //   any bitcoin involved. This can only be done by the first contract, because they hold the
 //   bitcoin to be distributed.
 func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Config, w *node.ResponseWriter,
-	transferTx *inspector.Transaction, transfer *protocol.Transfer, rk *wallet.RootKey, code uint8, removeBoomerang bool) error {
+	transferTx *inspector.Transaction, transfer *protocol.Transfer, rk *wallet.Key, code uint8, removeBoomerang bool) error {
 
 	// Determine UTXOs to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)

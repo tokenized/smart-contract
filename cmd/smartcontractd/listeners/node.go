@@ -2,6 +2,7 @@ package listeners
 
 import (
 	"context"
+	"crypto/sha256"
 	"sync"
 
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -15,8 +16,11 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"golang.org/x/crypto/ripemd160"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 )
 
@@ -33,6 +37,7 @@ type Server struct {
 	lock             sync.Mutex
 	Handler          protomux.Handler
 	contractPKHs     [][]byte // Used to determine which txs will be needed again
+	walletLock       sync.RWMutex
 	pendingResponses []*wire.MsgTx
 	revertedTxs      []*chainhash.Hash
 	blockHeight      int // track current block height for confirm messages
@@ -49,9 +54,18 @@ type Server struct {
 	AlternateResponder protomux.ResponderFunc
 }
 
-func NewServer(wallet wallet.WalletInterface, handler protomux.Handler, config *node.Config, masterDB *db.DB,
-	rpcNode inspector.NodeInterface, spyNode *spynode.Node, headers node.BitcoinHeaders, sch *scheduler.Scheduler,
-	tracer *Tracer, utxos *utxos.UTXOs) *Server {
+func NewServer(
+	wallet wallet.WalletInterface,
+	handler protomux.Handler,
+	config *node.Config,
+	masterDB *db.DB,
+	rpcNode inspector.NodeInterface,
+	spyNode *spynode.Node,
+	headers node.BitcoinHeaders,
+	sch *scheduler.Scheduler,
+	tracer *Tracer,
+	utxos *utxos.UTXOs,
+) *Server {
 	result := Server{
 		wallet:           wallet,
 		Config:           config,
@@ -139,7 +153,7 @@ func (server *Server) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, contractPKHs, server.Headers); err != nil {
+			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, server.Headers); err != nil {
 				node.LogError(ctx, "Pre-process failed : %s", err)
 			}
 			node.LogVerbose(ctx, "Pre-process thread finished")
@@ -160,6 +174,10 @@ func (server *Server) Run(ctx context.Context) error {
 	wg.Wait()
 
 	if err := holdings.WriteCache(ctx, server.MasterDB); err != nil {
+		return err
+	}
+
+	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
 		return err
 	}
 
@@ -264,4 +282,30 @@ func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) 
 
 func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {
 	return server.Handler.Trigger(ctx, "REPROCESS", itx)
+}
+
+// AddContractKey adds a new contract key to those being monitored.
+func (server *Server) AddContractKey(ctx context.Context, k *btcec.PrivateKey) error {
+	server.walletLock.Lock()
+	defer server.walletLock.Unlock()
+
+	pubkey := k.PubKey()
+	hash160 := ripemd160.New()
+	hash256 := sha256.Sum256(pubkey.SerializeCompressed())
+	hash160.Write(hash256[:])
+	address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &server.Config.ChainParams)
+	if err != nil {
+		return err
+	}
+	newKey := wallet.Key{
+		Address:    address,
+		PrivateKey: k,
+		PublicKey:  pubkey,
+	}
+	server.wallet.Add(&newKey)
+	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+		return err
+	}
+	server.contractPKHs = append(server.contractPKHs, address.ScriptAddress())
+	return nil
 }

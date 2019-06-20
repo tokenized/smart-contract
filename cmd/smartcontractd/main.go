@@ -1,37 +1,25 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"os/signal"
-	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/platform/config"
-	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
-	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 )
 
 var (
@@ -42,30 +30,30 @@ var (
 
 // Smart Contract Daemon
 //
+
 func main() {
-	ctx := context.Background()
+	// ctx := context.Background()
 
 	// -------------------------------------------------------------------------
 	// Logging
 
-	os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
-	logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Printf("Failed to open log file : %v\n", err)
-		return
-	}
-	defer logFile.Close()
+	// os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
+	// logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
+	// logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// if err != nil {
+	// 	fmt.Printf("Failed to open log file : %v\n", err)
+	// 	return
+	// }
+	// defer logFile.Close()
 
-	ctx = node.ContextWithDevelopmentLogger(ctx, io.MultiWriter(os.Stdout, logFile))
+	// ctx = node.ContextWithDevelopmentLogger(ctx, io.MultiWriter(os.Stdout, logFile))
+
+	ctx := bootstrap.NewContextWithDevelopmentLogger()
 
 	// -------------------------------------------------------------------------
 	// Config
 
-	cfg, err := config.Environment()
-	if err != nil {
-		logger.Fatal(ctx, "Parsing Config : %s", err)
-	}
+	cfg := bootstrap.NewConfigFromEnv(ctx)
 
 	// -------------------------------------------------------------------------
 	// App Starting
@@ -75,34 +63,12 @@ func main() {
 
 	logger.Info(ctx, "Build %v (%v on %v)", buildVersion, buildUser, buildDate)
 
-	// Mask sensitive values
-	cfgSafe := config.SafeConfig(*cfg)
-	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
-	if err != nil {
-		logger.Fatal(ctx, "Marshalling Config to JSON : %s", err)
-	}
-	logger.Info(ctx, "Config : %v", string(cfgJSON))
-
 	// -------------------------------------------------------------------------
 	// Node Config
+
 	logger.Info(ctx, "Configuring for %s network", cfg.Bitcoin.Network)
 
-	appConfig := &node.Config{
-		ContractProviderID: cfg.Contract.OperatorName,
-		Version:            cfg.Contract.Version,
-		FeeRate:            cfg.Contract.FeeRate,
-		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
-		RequestTimeout:     cfg.Contract.RequestTimeout,
-		PreprocessThreads:  cfg.Contract.PreprocessThreads,
-		IsTest:             cfg.Contract.IsTest,
-	}
-
-	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)
-	if err != nil {
-		logger.Fatal(ctx, "Invalid fee address : %s", err)
-	}
-	appConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeAddress.ScriptAddress())
+	appConfig := bootstrap.NewNodeConfig(ctx, cfg)
 
 	// -------------------------------------------------------------------------
 	// SPY Node
@@ -145,7 +111,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Wallet
 
-	masterWallet := wallet.New()
+	masterWallet := bootstrap.NewWallet()
 	if err := masterWallet.Register(cfg.Contract.PrivateKey, &appConfig.ChainParams); err != nil {
 		panic(err)
 	}
@@ -155,10 +121,10 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Tx Filter
 
-	rootKeys := masterWallet.ListAll()
-	pubKeys := make([]*btcec.PublicKey, 0, len(rootKeys))
-	for _, rootKey := range rootKeys {
-		pubKeys = append(pubKeys, rootKey.PublicKey)
+	walletKeys := masterWallet.ListAll()
+	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.PublicKey)
 	}
 	tracer := listeners.NewTracer()
 	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)
@@ -169,34 +135,43 @@ func main() {
 
 	logger.Info(ctx, "Started : Initialize Database")
 
-	masterDB, err := db.New(&db.StorageConfig{
-		Region:    cfg.Storage.Region,
-		AccessKey: cfg.Storage.AccessKey,
-		Secret:    cfg.Storage.Secret,
-		Bucket:    cfg.Storage.Bucket,
-		Root:      cfg.Storage.Root,
-	})
-	if err != nil {
-		logger.Fatal(ctx, "Register DB : %s", err)
-	}
+	masterDB := bootstrap.NewMasterDB(ctx, cfg)
+
 	defer masterDB.Close()
 
 	// -------------------------------------------------------------------------
 	// Register Hooks
 	sch := scheduler.Scheduler{}
-	utxos, err := utxos.Load(ctx, masterDB)
-	if err != nil {
-		logger.Fatal(ctx, "Load UTXOs : %s", err)
-	}
 
-	appHandlers, apiErr := handlers.API(ctx, masterWallet, appConfig, masterDB, tracer,
-		&sch, spyNode, utxos)
-	if err != nil {
+	utxos := bootstrap.LoadUTXOsFromDB(ctx, masterDB)
+
+	appHandlers, apiErr := handlers.API(
+		ctx,
+		masterWallet,
+		appConfig,
+		masterDB,
+		tracer,
+		&sch,
+		spyNode,
+		utxos,
+	)
+
+	if apiErr != nil {
 		logger.Fatal(ctx, "Generate API : %s", apiErr)
 	}
 
-	node := listeners.NewServer(masterWallet, appHandlers, appConfig, masterDB, rpcNode, spyNode,
-		spyNode, &sch, tracer, utxos)
+	node := listeners.NewServer(
+		masterWallet,
+		appHandlers,
+		appConfig,
+		masterDB,
+		rpcNode,
+		spyNode,
+		spyNode,
+		&sch,
+		tracer,
+		utxos,
+	)
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

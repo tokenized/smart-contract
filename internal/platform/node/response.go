@@ -48,7 +48,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 //   receivers based on the transfer request data. We will need to analyze the transfer request
 //   data to determine which inputs were to have funded sending bitcoins, and return the bitcoins
 //   to them.
-func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey, code uint8) error {
+func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, code uint8) error {
 	rejectionCode := protocol.GetRejectionCode(code)
 	if rejectionCode == nil {
 		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
@@ -65,7 +65,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	// Contract address
-	contractAddress := rk.Address
+	contractAddress := wk.Address
 
 	// Find spendable UTXOs
 	var utxos []inspector.UTXO
@@ -142,7 +142,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+	err = rejectTx.Sign([]*btcec.PrivateKey{wk.PrivateKey})
 	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
@@ -156,7 +156,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 }
 
 // RespondSuccess broadcasts a successful message
-func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey, msg protocol.OpReturnMessage) error {
+func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, msg protocol.OpReturnMessage) error {
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
@@ -169,7 +169,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	if len(w.Inputs) > 0 {
 		utxos = w.Inputs
 	} else {
-		utxos, err = itx.UTXOs().ForAddress(rk.Address)
+		utxos, err = itx.UTXOs().ForAddress(wk.Address)
 		if err != nil {
 			Error(ctx, w, err)
 			return ErrNoResponse
@@ -199,11 +199,11 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+	err = respondTx.Sign([]*btcec.PrivateKey{wk.PrivateKey})
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
-			return RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
+			return RespondReject(ctx, w, itx, wk, protocol.RejectInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse

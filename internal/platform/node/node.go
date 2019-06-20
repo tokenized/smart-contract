@@ -36,8 +36,7 @@ type BitcoinHeaders interface {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-// type Handler func(ctx context.Context, mux protomux.Handler, itx *inspector.Transaction, rk *wallet.RootKey) error
-type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error
+type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
@@ -91,10 +90,10 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys := a.wallet.ListAll()
+		walletKeys := a.wallet.ListAll()
 		handled := false
-		for _, rootKey := range rootKeys {
-			if !itx.IsRelevant(rootKey.Address) {
+		for _, walletKey := range walletKeys {
+			if !itx.IsRelevant(walletKey.Address) {
 				continue
 			}
 
@@ -107,11 +106,11 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %s", rootKey.Address.ScriptAddress(), itx.Hash)
+			Log(ctx, "Trace Data : Contract %x Tx %s", walletKey.Address.ScriptAddress(), itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true
-			if err := handler(ctx, w, itx, rootKey); err != nil {
+			if err := handler(ctx, w, itx, walletKey); err != nil {
 				return err
 			}
 		}
@@ -154,10 +153,10 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 		}
 
 		// For each address controlled by this wallet
-		rootKeys := a.wallet.ListAll()
+		walletKeys := a.wallet.ListAll()
 		handled := false
-		for _, rootKey := range rootKeys {
-			if !itx.IsRelevant(rootKey.Address) {
+		for _, walletKey := range walletKeys {
+			if !itx.IsRelevant(walletKey.Address) {
 				continue
 			}
 
@@ -170,11 +169,11 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %s", rootKey.Address.ScriptAddress(), itx.Hash)
+			Log(ctx, "Trace Data : Contract %x Tx %s", walletKey.Address.ScriptAddress(), itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true
-			if err := handler(ctx, w, itx, rootKey); err != nil {
+			if err := handler(ctx, w, itx, walletKey); err != nil {
 				return err
 			}
 		}

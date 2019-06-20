@@ -29,7 +29,7 @@ type Contract struct {
 }
 
 // OfferRequest handles an incoming Contract Offer and prepares a Formation response
-func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Offer")
 	defer span.End()
 
@@ -116,7 +116,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
-func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Amendment")
 	defer span.End()
 
@@ -319,7 +319,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 }
 
 // FormationResponse handles an outgoing Contract Formation and writes it to the state
-func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Formation")
 	defer span.End()
 
@@ -599,7 +599,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 }
 
 // AddressChange handles an incoming Contract Address Change.
-func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.AddressChange")
 	defer span.End()
 

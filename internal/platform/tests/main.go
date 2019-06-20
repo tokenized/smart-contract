@@ -36,12 +36,12 @@ type Test struct {
 	Headers      *mockHeaders
 	RPCNode      *mockRpcNode
 	NodeConfig   node.Config
-	MasterKey    *wallet.RootKey
-	ContractKey  *wallet.RootKey
-	FeeKey       *wallet.RootKey
-	Master2Key   *wallet.RootKey
-	Contract2Key *wallet.RootKey
-	Fee2Key      *wallet.RootKey
+	MasterKey    *wallet.Key
+	ContractKey  *wallet.Key
+	FeeKey       *wallet.Key
+	Master2Key   *wallet.Key
+	Contract2Key *wallet.Key
+	Fee2Key      *wallet.Key
 	UTXOs        *utxos.UTXOs
 	Wallet       *wallet.Wallet
 	MasterDB     *db.DB
@@ -219,13 +219,13 @@ func NewContext() context.Context {
 }
 
 // GenerateKey does something
-func GenerateKey(chainParams chaincfg.Params) (*wallet.RootKey, error) {
+func GenerateKey(chainParams chaincfg.Params) (*wallet.Key, error) {
 	key, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")
 	}
 
-	result := wallet.RootKey{
+	result := wallet.Key{
 		PrivateKey: key,
 		PublicKey:  key.PubKey(),
 	}

@@ -18,6 +18,9 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		server.Tracer.AddTx(ctx, ptx.Itx.MsgTx)
 		server.lock.Unlock()
 
+		server.walletLock.RLock()
+		defer server.walletLock.RUnlock()
+
 		if !ptx.Itx.IsTokenized() {
 			server.utxos.Add(ptx.Itx.MsgTx, server.contractPKHs)
 			continue

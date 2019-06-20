@@ -1,7 +1,6 @@
 package listeners
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -43,7 +42,7 @@ func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
 }
 
 // ProcessIncomingTxs performs preprocessing on transactions coming into the smart contract.
-func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB, contractPKHs []*protocol.PublicKeyHash,
+func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 	headers node.BitcoinHeaders) error {
 
 	for intx := range server.incomingTxs.Channel {
@@ -59,7 +58,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB, c
 
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *protocol.Transfer:
-			if err := validateOracles(ctx, masterDB, contractPKHs, intx.Itx, msg, headers); err != nil {
+			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {
 				intx.Itx.RejectCode = protocol.RejectInvalidSignature
 				node.LogWarn(ctx, "Invalid oracle signature : %s", err)
 			}
@@ -239,12 +238,8 @@ func (c *IncomingTxChannel) Close() error {
 }
 
 // validateOracles verifies all oracle signatures related to this tx.
-func validateOracles(ctx context.Context, masterDB *db.DB, contractPKHs []*protocol.PublicKeyHash,
-	itx *inspector.Transaction, transfer *protocol.Transfer, headers node.BitcoinHeaders) error {
-
-	cts := make([]*state.Contract, len(contractPKHs))
-	var ct *state.Contract
-	var err error
+func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transaction,
+	transfer *protocol.Transfer, headers node.BitcoinHeaders) error {
 
 	for _, assetTransfer := range transfer.Assets {
 		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
@@ -260,22 +255,12 @@ func validateOracles(ctx context.Context, masterDB *db.DB, contractPKHs []*proto
 			continue // Invalid contract index
 		}
 
-		ct = nil
-		for i, pkh := range contractPKHs {
-			if bytes.Equal(contractOutputPKH.Bytes(), pkh.Bytes()) {
-				ct = cts[i]
-				if ct == nil {
-					ct, err = contract.Retrieve(ctx, masterDB, contractOutputPKH)
-					if err != nil {
-						return err
-					}
-					cts[i] = ct
-				}
-			}
-		}
-
-		if ct == nil {
+		ct, err := contract.Retrieve(ctx, masterDB, contractOutputPKH)
+		if err == contract.ErrNotFound {
 			continue // Not associated with one of our contracts
+		}
+		if err != nil {
+			return err
 		}
 
 		// Process receivers

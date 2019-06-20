@@ -34,7 +34,7 @@ type Governance struct {
 }
 
 // ProposalRequest handles an incoming proposal request and prepares a Vote response
-func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ProposalRequest")
 	defer span.End()
 
@@ -286,7 +286,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 }
 
 // VoteResponse handles an incoming Vote response
-func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.VoteResponse")
 	defer span.End()
 
@@ -381,7 +381,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 }
 
 // BallotCastRequest handles an incoming BallotCast request and prepares a BallotCounted response
-func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.BallotCastRequest")
 	defer span.End()
 
@@ -531,7 +531,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 }
 
 // BallotCountedResponse handles an outgoing BallotCounted action and writes it to the state
-func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.BallotCountedResponse")
 	defer span.End()
 
@@ -592,7 +592,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 }
 
 // FinalizeVote is called when a vote expires and sends the result response.
-func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.FinalizeVote")
 	defer span.End()
 
@@ -677,7 +677,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 }
 
 // ResultResponse handles an outgoing Result action and writes it to the state
-func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ResultResponse")
 	defer span.End()
 

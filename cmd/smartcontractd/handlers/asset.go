@@ -30,7 +30,7 @@ type Asset struct {
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
-func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -154,7 +154,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 }
 
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
-func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -366,7 +366,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 }
 
 // CreationResponse handles an outgoing Asset Creation and writes it to the state
-func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 

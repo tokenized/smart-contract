@@ -39,7 +39,7 @@ type Message struct {
 }
 
 // ProcessMessage handles an incoming Message OP_RETURN.
-func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessMessage")
 	defer span.End()
 
@@ -100,7 +100,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 }
 
 // ProcessRejection handles an incoming Rejection OP_RETURN.
-func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessRejection")
 	defer span.End()
 
@@ -165,7 +165,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 }
 
 // ProcessRevert handles a tx that has been reverted either through a reorg or zero conf double spend.
-func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.ProcessRevert")
 	defer span.End()
 
@@ -260,7 +260,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 
 // processSettlementRequest handles an incoming Message SettlementRequest payload.
 func (m *Message) processSettlementRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, settlementRequest *protocol.SettlementRequest, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, settlementRequest *protocol.SettlementRequest, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processSettlementRequest")
 	defer span.End()
 
@@ -436,7 +436,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 // processSigRequest handles an incoming Message SignatureRequest payload.
 func (m *Message) processSigRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, sigRequest *protocol.SignatureRequest, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, sigRequest *protocol.SignatureRequest, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processSigRequest")
 	defer span.End()
 
@@ -467,7 +467,7 @@ func (m *Message) processSigRequest(ctx context.Context, w *node.ResponseWriter,
 // processSigRequestSettlement handles an incoming Message SignatureRequest payload containing a
 //   Settlement tx.
 func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey, sigRequest *protocol.SignatureRequest,
+	itx *inspector.Transaction, rk *wallet.Key, sigRequest *protocol.SignatureRequest,
 	settleWireTx *wire.MsgTx, settlement *protocol.Settlement) error {
 	// Get transfer tx
 	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash,
@@ -573,7 +573,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 // sendToPreviousSettlementContract sends the completed settlement tx to the previous contract involved so it can sign it.
 func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, w *node.ResponseWriter,
-	rk *wallet.RootKey, itx *inspector.Transaction, settleTx *txbuilder.Tx) error {
+	rk *wallet.Key, itx *inspector.Transaction, settleTx *txbuilder.Tx) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.sendToPreviousSettlementContract")
 	defer span.End()
 
@@ -640,7 +640,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 }
 
 // verifySettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
-func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB, rk *wallet.RootKey,
+func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer, settleTx *wire.MsgTx,
 	settlement *protocol.Settlement, headers node.BitcoinHeaders) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.verifySettlement")
@@ -894,7 +894,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 //   it can send the refund/reject to everyone.
 func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.ResponseWriter,
 	messageTx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
-	rk *wallet.RootKey, code uint8) error {
+	rk *wallet.Key, code uint8) error {
 
 	// Determine if first contract
 	first := firstContractOutputIndex(transfer.Assets, transferTx)
@@ -995,7 +995,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 //   transferred.
 func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *scheduler.Scheduler, config *node.Config,
 	w *node.ResponseWriter, rejectionTx *inspector.Transaction, rejection *protocol.Rejection,
-	transferTx *inspector.Transaction, transferMsg *protocol.Transfer, rk *wallet.RootKey) error {
+	transferTx *inspector.Transaction, transferMsg *protocol.Transfer, rk *wallet.Key) error {
 
 	// Remove pending transfer
 	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())

@@ -29,7 +29,7 @@ type Enforcement struct {
 }
 
 // OrderRequest handles an incoming Order request and prepares a Confiscation response
-func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Order")
 	defer span.End()
 
@@ -115,7 +115,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 
 // OrderFreezeRequest is a helper of Order
 func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderFreezeRequest")
 	defer span.End()
@@ -240,7 +240,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 // OrderThawRequest is a helper of Order
 func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderThawRequest")
 	defer span.End()
@@ -350,7 +350,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 }
 
 // OrderConfiscateRequest is a helper of Order
-func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.RootKey) error {
+func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderConfiscateRequest")
 	defer span.End()
 
@@ -509,7 +509,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 // OrderReconciliationRequest is a helper of Order
 func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderReconciliationRequest")
 	defer span.End()
@@ -656,7 +656,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 // FreezeResponse handles an outgoing Freeze action and writes it to the state
 func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Freeze")
 	defer span.End()
@@ -763,7 +763,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 
 // ThawResponse handles an outgoing Thaw action and writes it to the state
 func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Thaw")
 	defer span.End()
@@ -880,7 +880,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 
 // ConfiscationResponse handles an outgoing Confiscation action and writes it to the state
 func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Confiscation")
 	defer span.End()
@@ -975,7 +975,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 
 // ReconciliationResponse handles an outgoing Reconciliation action and writes it to the state
 func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, rk *wallet.RootKey) error {
+	itx *inspector.Transaction, rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Reconciliation")
 	defer span.End()

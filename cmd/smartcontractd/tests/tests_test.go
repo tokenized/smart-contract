@@ -26,11 +26,11 @@ var test *tests.Test
 var responses []*wire.MsgTx
 var responseLock sync.Mutex
 
-var userKey *wallet.RootKey
-var user2Key *wallet.RootKey
-var issuerKey *wallet.RootKey
-var oracleKey *wallet.RootKey
-var authorityKey *wallet.RootKey
+var userKey *wallet.Key
+var user2Key *wallet.Key
+var issuerKey *wallet.Key
+var oracleKey *wallet.Key
+var authorityKey *wallet.Key
 
 var testTokenQty uint64
 var testToken2Qty uint64
