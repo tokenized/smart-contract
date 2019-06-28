@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -27,9 +26,8 @@ func NewContextWithDevelopmentLogger() context.Context {
 	if err != nil {
 		logger.Fatal(ctx, "Failed to open log file : %v\n", err)
 	}
-	defer logFile.Close()
 
-	ctx = node.ContextWithDevelopmentLogger(ctx, io.MultiWriter(os.Stdout, logFile))
+	ctx = node.ContextWithDevelopmentLogger(ctx, logFile)
 
 	return ctx
 }
