@@ -44,7 +44,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		}
 
 		if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
-			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
+			node.LogError(ctx, "Failed to handle tx : %s", err)
 		}
 	}
 	return nil
