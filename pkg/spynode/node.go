@@ -771,7 +771,7 @@ func (node *Node) check(ctx context.Context) error {
 		}
 
 		if node.queueOutgoing(headerRequest) {
-			logger.Debug(ctx, "Requesting headers after : %s", headerRequest.getheaders.BlockLocatorHashes[0])
+			logger.Debug(ctx, "Requesting headers after : %s", headerRequest.BlockLocatorHashes[0])
 			node.state.MarkHeadersRequested()
 		}
 	}
