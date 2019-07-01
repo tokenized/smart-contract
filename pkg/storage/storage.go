@@ -10,6 +10,7 @@ type Storage interface {
 	Remover
 	Searcher
 	Clearer
+	List
 }
 
 // ReadWriter interface combines the Reader and Writer interface.
@@ -40,4 +41,8 @@ type Searcher interface {
 
 type Clearer interface {
 	Clear(context.Context, map[string]string) error
+}
+
+type List interface {
+	List(context.Context, string) ([]string, error)
 }

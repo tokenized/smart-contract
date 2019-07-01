@@ -29,6 +29,7 @@ func Execute() {
 	scCmd.AddCommand(cmdBench)
 	scCmd.AddCommand(cmdDoubleSpend)
 	scCmd.AddCommand(cmdParse)
+	scCmd.AddCommand(cmdState)
 	scCmd.Execute()
 }
 

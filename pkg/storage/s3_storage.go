@@ -193,6 +193,10 @@ func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
 	return nil
 }
 
+func (s S3Storage) List(ctx context.Context, path string) ([]string, error) {
+	return s.findKeys(ctx, path)
+}
+
 func (s S3Storage) findKeys(ctx context.Context,
 	path string) ([]string, error) {
 

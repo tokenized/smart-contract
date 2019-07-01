@@ -159,6 +159,35 @@ func (f *FilesystemStorage) Clear(ctx context.Context, query map[string]string) 
 	return nil
 }
 
+func (f *FilesystemStorage) List(ctx context.Context, path string) ([]string, error) {
+
+	dir := f.buildPath(path)
+
+	if err := f.ensureExists(dir, nil); err != nil {
+		return nil, err
+	}
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := make([]string, len(files), len(files))
+
+	for i, info := range files {
+		var filePath string
+		if len(path) > 0 {
+			filePath = strings.Join([]string{path, info.Name()}, "/")
+		} else {
+			filePath = info.Name()
+		}
+
+		keys[i] = filePath
+	}
+
+	return keys, nil
+}
+
 func (f *FilesystemStorage) buildPath(key string) string {
 	parts := []string{
 		f.Config.Root,
