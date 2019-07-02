@@ -55,7 +55,11 @@ func parseMessage(c *cobra.Command, rawtx string, isTest bool) error {
 		return nil
 	}
 
-	fmt.Printf("type=%v : %+v\n", m.Type(), m)
+	fmt.Printf("type : %v\n\n", m.Type())
+
+	if err := dumpJSON(m); err != nil {
+		return err
+	}
 
 	return nil
 }

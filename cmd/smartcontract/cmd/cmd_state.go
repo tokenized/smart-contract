@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/btcsuite/btcutil"
@@ -111,17 +110,6 @@ func loadContract(ctx context.Context,
 
 	// fmt.Printf("# Contract\n")
 	// fmt.Printf("```\n%#+v\n```\n", contract)
-
-	return nil
-}
-
-func dumpJSON(o interface{}) error {
-	js, err := json.MarshalIndent(o, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("```\n%s\n```\n\n", js)
 
 	return nil
 }

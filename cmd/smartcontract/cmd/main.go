@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -30,6 +32,7 @@ func Execute() {
 	scCmd.AddCommand(cmdDoubleSpend)
 	scCmd.AddCommand(cmdParse)
 	scCmd.AddCommand(cmdState)
+	scCmd.AddCommand(cmdJSON)
 	scCmd.Execute()
 }
 
@@ -50,4 +53,38 @@ func network(c *cobra.Command) string {
 		fmt.Printf("WARNING!! No Bitcoin network specified. Set environment value BITCOIN_CHAIN=testnet\n")
 	}
 	return network
+}
+
+// networkParams returns the network parameters based on the environment
+// variable.
+func networkParams() *chaincfg.Params {
+	network := network(nil)
+
+	if len(network) == 0 {
+		return nil
+	}
+
+	var params *chaincfg.Params
+
+	if network == "testnet" {
+		params = &chaincfg.TestNet3Params
+	} else if network == "mainnet" {
+		params = &chaincfg.MainNetParams
+	} else {
+		fmt.Printf("Unknown network : %s\n", network)
+		return nil
+	}
+
+	return params
+}
+
+func dumpJSON(o interface{}) error {
+	js, err := json.MarshalIndent(o, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("```\n%s\n```\n\n", js)
+
+	return nil
 }
