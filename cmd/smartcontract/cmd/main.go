@@ -78,6 +78,7 @@ func networkParams() *chaincfg.Params {
 	return params
 }
 
+// dumpJSON pretty prints a JSON representation of a struct.
 func dumpJSON(o interface{}) error {
 	js, err := json.MarshalIndent(o, "", "    ")
 	if err != nil {
