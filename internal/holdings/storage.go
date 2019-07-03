@@ -93,6 +93,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	}
 
 	asset[*pkh] = result
+
+	// write the cache to storage.
+	WriteCache(ctx, dbConn)
+
 	return result, nil
 }
 
