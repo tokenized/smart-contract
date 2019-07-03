@@ -50,7 +50,7 @@ func List(ctx context.Context,
 		storageSubKey,
 		assetCode.String())
 
-	return dbConn.Keys(ctx, path)
+	return dbConn.List(ctx, path)
 }
 
 // Fetch a single holding from storage
