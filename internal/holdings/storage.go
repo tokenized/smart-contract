@@ -39,6 +39,20 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 	return nil
 }
 
+func List(ctx context.Context,
+	dbConn *db.DB,
+	contractPKH *protocol.PublicKeyHash,
+	assetCode *protocol.AssetCode) ([]string, error) {
+
+	path := fmt.Sprintf("%s/%s/%s/%s",
+		storageKey,
+		contractPKH.String(),
+		storageSubKey,
+		assetCode.String())
+
+	return dbConn.Keys(ctx, path)
+}
+
 // Fetch a single holding from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
 	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) (state.Holding, error) {

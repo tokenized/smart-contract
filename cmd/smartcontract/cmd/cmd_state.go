@@ -2,14 +2,18 @@ package cmd
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -30,7 +34,6 @@ var cmdState = &cobra.Command{
 
 		params := config.NewChainParams(cfg.Bitcoin.Network)
 
-		// 1JWUgphZHD9HXfWXkDNwiCpNUv7zkuZvUC
 		pkh, err := btcutil.DecodeAddress(args[0], &params)
 		if err != nil {
 			return err
@@ -38,14 +41,15 @@ var cmdState = &cobra.Command{
 
 		masterDB := bootstrap.NewMasterDB(ctx, cfg)
 
-		return loadContract(ctx, c, masterDB, pkh)
+		return loadContract(ctx, c, masterDB, pkh, &params)
 	},
 }
 
 func loadContract(ctx context.Context,
 	cmd *cobra.Command,
 	db *db.DB,
-	address btcutil.Address) error {
+	address btcutil.Address,
+	params *chaincfg.Params) error {
 
 	pkh := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
 
@@ -54,7 +58,7 @@ func loadContract(ctx context.Context,
 		return err
 	}
 
-	fmt.Printf("# Contract %x\n\n", c.ID.Bytes())
+	fmt.Printf("# Contract %s\n\n", address)
 
 	if err := dumpJSON(c); err != nil {
 		return err
@@ -83,33 +87,58 @@ func loadContract(ctx context.Context,
 		if err := dumpJSON(payload); err != nil {
 			return err
 		}
+
+		fmt.Printf("### Holdings\n\n")
+
+		// get the PKH's inside the holders/asset_code directory
+		keys, err := holdings.List(ctx, db, pkh, &assetCode)
+		if err != nil {
+			return nil
+		}
+
+		for _, key := range keys {
+			// split the key into parts.
+			parts := strings.Split(key, "/")
+
+			// the last part of the key is the PKH of the owner, in hex format.
+			owner := parts[len(parts)-1]
+
+			// Convert the hex representation to an Address, which is used
+			// for display purposes.
+			address, err := addressFromHex(owner, params)
+			if err != nil {
+				return err
+			}
+
+			// create the PKH from the bytes
+			ownerPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
+
+			// we can get the holding for this owner now
+			h, err := holdings.Fetch(ctx, db, pkh, &assetCode, ownerPKH)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("#### %s\n\n", address)
+
+			if err := dumpJSON(h); err != nil {
+				return err
+			}
+		}
+
 	}
-
-	{
-		b := c.ID.Bytes()
-		fmt.Printf("len = %v : %v\n", len(b), b)
-	}
-
-	contractRoot := fmt.Sprintf("%s", c.ID.Bytes())
-
-	keys, err := db.List(ctx, contractRoot)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("keys = %+v\n", keys)
-
-	// holdings := []state.Holding{}
-
-	// h, err := holdings.Fetch(ctx, db, contract.ID, assetCode)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// fmt.Printf("h = %+v\n", h)
-
-	// fmt.Printf("# Contract\n")
-	// fmt.Printf("```\n%#+v\n```\n", contract)
 
 	return nil
+}
+
+// addressFromHex returns a decoded Address from a the hex representation of
+// a PKH.
+func addressFromHex(s string, params *chaincfg.Params) (btcutil.Address, error) {
+
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return btcutil.NewAddressPubKeyHash(b, params)
 }
