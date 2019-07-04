@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -119,9 +120,9 @@ func loadContract(ctx context.Context,
 				return err
 			}
 
-			fmt.Printf("#### %s\n\n", address)
+			fmt.Printf("#### Holding for %s\n\n", address)
 
-			if err := dumpJSON(h); err != nil {
+			if err := dumpHoldingJSON(h); err != nil {
 				return err
 			}
 		}
@@ -141,4 +142,33 @@ func addressFromHex(s string, params *chaincfg.Params) (btcutil.Address, error) 
 	}
 
 	return btcutil.NewAddressPubKeyHash(b, params)
+}
+
+// dumpHoldingJSON dumps a Holding to JSON.
+//
+// As the json package requires map keys to be strings, this special function
+// handles key converstion.
+func dumpHoldingJSON(h state.Holding) error {
+	holdingStatuses := h.HoldingStatuses
+	h.HoldingStatuses = nil
+
+	if err := dumpJSON(h); err != nil {
+		return err
+	}
+
+	if len(holdingStatuses) == 0 {
+		return nil
+	}
+
+	// deal with key conversion.
+	statuses := map[string]state.HoldingStatus{}
+
+	for _, s := range holdingStatuses {
+		k := fmt.Sprintf("%x", s.TxId.Bytes())
+		statuses[k] = *s
+	}
+
+	fmt.Printf("#### Holding Statuses\n\n")
+
+	return dumpJSON(statuses)
 }
