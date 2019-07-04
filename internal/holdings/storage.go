@@ -36,6 +36,11 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 	}
 
 	asset[h.PKH] = *h
+
+	if err := WriteCache(ctx, dbConn); err != nil {
+		return errors.Wrap(err, "holdings.Save")
+	}
+
 	return nil
 }
 
