@@ -308,16 +308,17 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
+
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
 			untrusted.BroadcastTx(ctx, tx)
 		}
 	}
-	node.untrustedLock.Unlock()
 	return nil
 }
 
-// BroadcastTx broadcasts a tx to the network.
+// BroadcastTxUntrustedOnly broadcasts a tx to the network.
 func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	logger.Info(ctx, "Broadcasting tx : %s", tx.TxHash())
@@ -328,13 +329,14 @@ func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) 
 
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
+
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
 			logger.Info(ctx, "(%s) Broadcasting tx : %s", untrusted.address, tx.TxHash())
 			untrusted.BroadcastTx(ctx, tx)
 		}
 	}
-	node.untrustedLock.Unlock()
 	return nil
 }
 

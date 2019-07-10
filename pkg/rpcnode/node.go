@@ -226,8 +226,7 @@ func (r *RPCNode) ListUnspent(ctx context.Context, address btcutil.Address) ([]b
 }
 
 // SendRawTransaction broadcasts a raw transaction
-func (r *RPCNode) SendRawTransaction(ctx context.Context,
-	tx *wire.MsgTx) error {
+func (r *RPCNode) SendRawTransaction(ctx context.Context, tx *wire.MsgTx) error {
 
 	nx, err := r.txToBtcdTX(tx)
 	if err != nil {
