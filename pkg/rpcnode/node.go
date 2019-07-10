@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	SubSystem = "RPCNode" // For logger
+	// SubSystem is used by the logger package
+	SubSystem = "RPCNode"
 )
 
 type RPCNode struct {
@@ -251,8 +252,7 @@ func (r *RPCNode) SaveTX(ctx context.Context, msg *wire.MsgTx) error {
 }
 
 // SendTX sends a tx to the remote server to be broadcast to the P2P network.
-func (r *RPCNode) SendTX(ctx context.Context,
-	tx *wire.MsgTx) (*chainhash.Hash, error) {
+func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, error) {
 
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "SendTX")
