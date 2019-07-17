@@ -12,11 +12,11 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -308,6 +308,9 @@ func (server *Server) AddContractKey(ctx context.Context, k *btcec.PrivateKey) e
 		PrivateKey: k,
 		PublicKey:  pubkey,
 	}
+
+	contractPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
+	node.Log(ctx, "Adding key : %s", contractPKH.String())
 	server.wallet.Add(&newKey)
 	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
 		return err
@@ -344,6 +347,7 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k *btcec.Pr
 		return nil
 	}
 
+	node.Log(ctx, "Removing key : %s", contractPKH.String())
 	server.wallet.Remove(&newKey)
 	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
 		return err
