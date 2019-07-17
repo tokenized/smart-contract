@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -19,7 +19,7 @@ func API(
 	masterWallet wallet.WalletInterface,
 	config *node.Config,
 	masterDB *db.DB,
-	tracer *listeners.Tracer,
+	tracer *filters.Tracer,
 	sch *scheduler.Scheduler,
 	headers node.BitcoinHeaders,
 	utxos *utxos.UTXOs,

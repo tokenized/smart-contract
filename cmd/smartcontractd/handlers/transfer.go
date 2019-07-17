@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -33,7 +34,7 @@ type Transfer struct {
 	MasterDB  *db.DB
 	Config    *node.Config
 	Headers   node.BitcoinHeaders
-	Tracer    *listeners.Tracer
+	Tracer    *filters.Tracer
 	Scheduler *scheduler.Scheduler
 }
 
@@ -836,7 +837,7 @@ func findBoomerangIndex(transferTx *inspector.Transaction, transfer *protocol.Tr
 func sendToNextSettlementContract(ctx context.Context, w *node.ResponseWriter, rk *wallet.Key,
 	itx *inspector.Transaction, transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.Tx, settlement *protocol.Settlement, settlementRequest *protocol.SettlementRequest,
-	tracer *listeners.Tracer) error {
+	tracer *filters.Tracer) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.sendToNextSettlementContract")
 	defer span.End()
 

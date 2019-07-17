@@ -1,10 +1,13 @@
 package listeners
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"sync"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -16,12 +19,12 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
-	"golang.org/x/crypto/ripemd160"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ripemd160"
 )
 
 type Server struct {
@@ -32,12 +35,13 @@ type Server struct {
 	SpyNode          *spynode.Node
 	Headers          node.BitcoinHeaders
 	Scheduler        *scheduler.Scheduler
-	Tracer           *Tracer
+	Tracer           *filters.Tracer
 	utxos            *utxos.UTXOs
 	lock             sync.Mutex
 	Handler          protomux.Handler
 	contractPKHs     [][]byte // Used to determine which txs will be needed again
 	walletLock       sync.RWMutex
+	txFilter         *filters.TxFilter
 	pendingResponses []*wire.MsgTx
 	revertedTxs      []*chainhash.Hash
 	blockHeight      int // track current block height for confirm messages
@@ -63,8 +67,9 @@ func NewServer(
 	spyNode *spynode.Node,
 	headers node.BitcoinHeaders,
 	sch *scheduler.Scheduler,
-	tracer *Tracer,
+	tracer *filters.Tracer,
 	utxos *utxos.UTXOs,
+	txFilter *filters.TxFilter,
 ) *Server {
 	result := Server{
 		wallet:           wallet,
@@ -77,6 +82,7 @@ func NewServer(
 		Tracer:           tracer,
 		Handler:          handler,
 		utxos:            utxos,
+		txFilter:         txFilter,
 		pendingTxs:       make(map[chainhash.Hash]*IncomingTxData),
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
@@ -307,5 +313,50 @@ func (server *Server) AddContractKey(ctx context.Context, k *btcec.PrivateKey) e
 		return err
 	}
 	server.contractPKHs = append(server.contractPKHs, address.ScriptAddress())
+
+	server.txFilter.AddPubKey(ctx, pubkey)
+	return nil
+}
+
+// RemoveContractKeyIfUnused removes a contract key from those being monitored if it hasn't been used yet.
+func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k *btcec.PrivateKey) error {
+	server.walletLock.Lock()
+	defer server.walletLock.Unlock()
+
+	pubkey := k.PubKey()
+	hash160 := ripemd160.New()
+	hash256 := sha256.Sum256(pubkey.SerializeCompressed())
+	hash160.Write(hash256[:])
+	address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &server.Config.ChainParams)
+	if err != nil {
+		return err
+	}
+	newKey := wallet.Key{
+		Address:    address,
+		PrivateKey: k,
+		PublicKey:  pubkey,
+	}
+
+	// Check if contract exists
+	contractPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
+	_, err = contract.Retrieve(ctx, server.MasterDB, contractPKH)
+	if err != contract.ErrNotFound {
+		return nil
+	}
+
+	server.wallet.Remove(&newKey)
+	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+		return err
+	}
+
+	pkh := address.ScriptAddress()
+	for i, cpkh := range server.contractPKHs {
+		if bytes.Equal(pkh, cpkh) {
+			server.contractPKHs = append(server.contractPKHs[:i], server.contractPKHs[i+1:]...)
+			break
+		}
+	}
+
+	server.txFilter.RemovePubKey(ctx, pubkey)
 	return nil
 }

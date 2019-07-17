@@ -25,6 +25,7 @@ type WalletInterface interface {
 	ListPKH([][]byte) ([]*Key, error)
 	ListAll() []*Key
 	Add(*Key) error
+	Remove(*Key) error
 	Load(context.Context, *db.DB, *chaincfg.Params) error
 	Save(context.Context, *db.DB) error
 }
@@ -45,6 +46,13 @@ func (w Wallet) Add(key *Key) error {
 	defer w.lock.Unlock()
 
 	return w.KeyStore.Add(key)
+}
+
+func (w Wallet) Remove(key *Key) error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	return w.KeyStore.Remove(key)
 }
 
 // Register a private key with the wallet

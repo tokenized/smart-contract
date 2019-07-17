@@ -40,6 +40,14 @@ func (k KeyStore) Add(key *Key) error {
 	return nil
 }
 
+func (k KeyStore) Remove(key *Key) error {
+	k.Keys[key.Address.EncodeAddress()] = key
+	var pkh [20]byte
+	copy(pkh[:], key.Address.ScriptAddress())
+	k.KeysByPKH[pkh] = key
+	return nil
+}
+
 func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey, chainParams *chaincfg.Params) error {
 	addr, _ := btcutil.DecodeAddress(pkh, chainParams)
 

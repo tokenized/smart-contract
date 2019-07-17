@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -112,11 +114,17 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 	test.NodeConfig.PreprocessThreads = 4
 
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
+	walletKeys := test.Wallet.ListAll()
+	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.PublicKey)
+	}
+	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -283,11 +291,17 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	test.NodeConfig.PreprocessThreads = 4
 
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
+	walletKeys := test.Wallet.ListAll()
+	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.PublicKey)
+	}
+	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()

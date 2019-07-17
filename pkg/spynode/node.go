@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -15,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 

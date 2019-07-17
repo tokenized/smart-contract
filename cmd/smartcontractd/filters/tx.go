@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"sync"
 
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -20,11 +20,12 @@ type TxFilter struct {
 	chainParams *chaincfg.Params
 	pubkeys     [][]byte
 	pkhs        [][]byte
-	tracer      *listeners.Tracer
+	tracer      *Tracer
 	isTest      bool
+	lock        sync.RWMutex
 }
 
-func NewTxFilter(chainParams *chaincfg.Params, contractPubKeys []*btcec.PublicKey, tracer *listeners.Tracer, isTest bool) *TxFilter {
+func NewTxFilter(chainParams *chaincfg.Params, contractPubKeys []*btcec.PublicKey, tracer *Tracer, isTest bool) *TxFilter {
 	result := TxFilter{
 		chainParams: chainParams,
 		tracer:      tracer,
@@ -48,7 +49,52 @@ func NewTxFilter(chainParams *chaincfg.Params, contractPubKeys []*btcec.PublicKe
 	return &result
 }
 
+func (filter *TxFilter) AddPubKey(ctx context.Context, contractPubKey *btcec.PublicKey) {
+	pubkeyData := contractPubKey.SerializeCompressed()
+
+	// Hash public key
+	hash160 := ripemd160.New()
+	hash256 := sha256.Sum256(pubkeyData)
+	hash160.Write(hash256[:])
+
+	filter.lock.Lock()
+	defer filter.lock.Unlock()
+
+	filter.pubkeys = append(filter.pubkeys, pubkeyData)
+	filter.pkhs = append(filter.pkhs, hash160.Sum(nil))
+}
+
+func (filter *TxFilter) RemovePubKey(ctx context.Context, contractPubKey *btcec.PublicKey) {
+	filter.lock.Lock()
+	defer filter.lock.Unlock()
+
+	pubkeyData := contractPubKey.SerializeCompressed()
+
+	for i, pubkey := range filter.pubkeys {
+		if bytes.Equal(pubkey, pubkeyData) {
+			filter.pubkeys = append(filter.pubkeys[:i], filter.pubkeys[i+1:]...)
+			break
+		}
+	}
+
+	// Hash public key
+	hash160 := ripemd160.New()
+	hash256 := sha256.Sum256(pubkeyData)
+	hash160.Write(hash256[:])
+	contactPKH := hash160.Sum(nil)
+
+	for i, pkh := range filter.pkhs {
+		if bytes.Equal(contactPKH, pkh) {
+			filter.pkhs = append(filter.pkhs[:i], filter.pkhs[i+1:]...)
+			break
+		}
+	}
+}
+
 func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
+	filter.lock.RLock()
+	defer filter.lock.RUnlock()
+
 	if filter.tracer.Contains(ctx, tx) {
 		logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 			"Matches Tracer : %s", tx.TxHash().String())

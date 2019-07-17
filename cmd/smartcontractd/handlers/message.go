@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -33,7 +34,7 @@ type Message struct {
 	MasterDB  *db.DB
 	Config    *node.Config
 	Headers   node.BitcoinHeaders
-	Tracer    *listeners.Tracer
+	Tracer    *filters.Tracer
 	Scheduler *scheduler.Scheduler
 	UTXOs     *utxos.UTXOs
 }

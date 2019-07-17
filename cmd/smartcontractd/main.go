@@ -126,7 +126,7 @@ func main() {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.PublicKey)
 	}
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
 	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
@@ -171,6 +171,7 @@ func main() {
 		&sch,
 		tracer,
 		utxos,
+		txFilter,
 	)
 
 	// -------------------------------------------------------------------------

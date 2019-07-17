@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -61,7 +61,7 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// API
 
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
 
 	var err error
 	a, err = handlers.API(
