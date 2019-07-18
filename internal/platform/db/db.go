@@ -138,6 +138,15 @@ func (db *DB) Search(ctx context.Context, keyStart string) ([][]byte, error) {
 	return db.storage.Search(ctx, query)
 }
 
+// List returns the keys under a given path.
+func (db *DB) List(ctx context.Context, key string) ([]string, error) {
+	if db.storage == nil {
+		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
+	}
+
+	return db.storage.List(ctx, key)
+}
+
 func (db *DB) Clear(ctx context.Context, keyStart string) error {
 	query := map[string]string{
 		"path": keyStart,

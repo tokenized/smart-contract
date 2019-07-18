@@ -36,7 +36,26 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 	}
 
 	asset[h.PKH] = *h
+
+	if err := WriteCache(ctx, dbConn); err != nil {
+		return errors.Wrap(err, "holdings.Save")
+	}
+
 	return nil
+}
+
+func List(ctx context.Context,
+	dbConn *db.DB,
+	contractPKH *protocol.PublicKeyHash,
+	assetCode *protocol.AssetCode) ([]string, error) {
+
+	path := fmt.Sprintf("%s/%s/%s/%s",
+		storageKey,
+		contractPKH.String(),
+		storageSubKey,
+		assetCode.String())
+
+	return dbConn.List(ctx, path)
 }
 
 // Fetch a single holding from storage
@@ -79,6 +98,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	}
 
 	asset[*pkh] = result
+
+	// write the cache to storage.
+	WriteCache(ctx, dbConn)
+
 	return result, nil
 }
 

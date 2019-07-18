@@ -73,6 +73,14 @@ func buildAction(c *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// validate the message
+	if err := opReturn.Validate(); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		fmt.Printf("Message : %+v\n", opReturn)
+
+		return nil
+	}
+
 	script, err := protocol.Serialize(opReturn, true)
 	if err != nil {
 		fmt.Printf("Failed to serialize %s op return : %s\n", actionType, err)
