@@ -37,9 +37,14 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 
 	asset[h.PKH] = *h
 
-	if err := WriteCache(ctx, dbConn); err != nil {
-		return errors.Wrap(err, "holdings.Save")
-	}
+	//
+	// This code and comment should be removed soon -SG
+	// See https://github.com/tokenized/smart-contract/pull/20
+	//
+	// if err := WriteCache(ctx, dbConn); err != nil {
+	// 	return errors.Wrap(err, "holdings.Save")
+	// }
+	//
 
 	return nil
 }
@@ -99,8 +104,12 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 
 	asset[*pkh] = result
 
-	// write the cache to storage.
-	WriteCache(ctx, dbConn)
+	//
+	// This code and comment should be removed soon -SG
+	// See https://github.com/tokenized/smart-contract/pull/20
+	//
+	// WriteCache(ctx, dbConn)
+	//
 
 	return result, nil
 }
