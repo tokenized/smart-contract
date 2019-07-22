@@ -1,4 +1,4 @@
-package txbuilder
+package bitcoin
 
 import (
 	"bytes"

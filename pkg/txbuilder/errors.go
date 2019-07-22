@@ -3,10 +3,10 @@ package txbuilder
 import "fmt"
 
 const (
-	ErrorCodeInsufficientValue = 1
-	ErrorCodeWrongPrivateKey   = 2
-	ErrorCodeMissingPrivateKey = 3
-	ErrorCodeNotP2PKHScript    = 4
+	ErrorCodeInsufficientValue   = 1
+	ErrorCodeWrongPrivateKey     = 2
+	ErrorCodeMissingPrivateKey   = 3
+	ErrorCodeWrongScriptTemplate = 4
 )
 
 func IsErrorCode(err error, code int) bool {
@@ -37,6 +37,8 @@ func errorCodeString(code int) string {
 		return "Wrong Private Key"
 	case ErrorCodeMissingPrivateKey:
 		return "Missing Private Key"
+	case ErrorCodeWrongScriptTemplate:
+		return "Wrong Script Template"
 	default:
 		return "Unknown Error Code"
 	}

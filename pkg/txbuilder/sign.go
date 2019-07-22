@@ -2,27 +2,15 @@ package txbuilder
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 
-	"github.com/tokenized/smart-contract/pkg/txscript"
-
-	"github.com/btcsuite/btcd/btcec"
-	"golang.org/x/crypto/ripemd160"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
-func PubKeyHashFromPrivateKey(key *btcec.PrivateKey) []byte {
-	hash256 := sha256.New()
-	hash160 := ripemd160.New()
-
-	hash256.Write(key.PubKey().SerializeCompressed())
-	hash160.Write(hash256.Sum(nil))
-	return hash160.Sum(nil)
-}
-
 // InputIsSigned returns true if the input at the specified index already has a signature script.
-func (tx *Tx) InputIsSigned(index int) bool {
+func (tx *TxBuilder) InputIsSigned(index int) bool {
 	if index >= len(tx.MsgTx.TxIn) {
 		return false
 	}
@@ -31,7 +19,7 @@ func (tx *Tx) InputIsSigned(index int) bool {
 }
 
 // AllInputsAreSigned returns true if all inputs have a signature script.
-func (tx *Tx) AllInputsAreSigned() bool {
+func (tx *TxBuilder) AllInputsAreSigned() bool {
 	for _, input := range tx.MsgTx.TxIn {
 		if len(input.SignatureScript) == 0 {
 			return false
@@ -40,35 +28,48 @@ func (tx *Tx) AllInputsAreSigned() bool {
 	return true
 }
 
-// SignInput sets the signature script on the specified input.
-// This should only be used when you aren't signing for all inputs and the fee is overestimated, so it needs no adjustement.
-func (tx *Tx) SignInput(index int, key *btcec.PrivateKey) error {
+// SignPKHInput sets the signature script on the specified PKH input.
+// This should only be used when you aren't signing for all inputs and the fee is overestimated, so
+//   it needs no adjustement.
+func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCache) error {
 	if index >= len(tx.Inputs) {
 		return errors.New("Input index out of range")
 	}
 
-	pkh, err := PubKeyHashFromP2PKH(tx.Inputs[index].PkScript)
+	address, err := bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript)
 	if err != nil {
 		return err
 	}
 
-	if !bytes.Equal(pkh, PubKeyHashFromPrivateKey(key)) {
-		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", pkh))
+	pkhAddress, ok := address.(*bitcoin.AddressPKH)
+	if !ok {
+		return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
 	}
 
-	tx.MsgTx.TxIn[index].SignatureScript, err = txscript.SignatureScript(tx.MsgTx, index,
-		tx.Inputs[index].PkScript, txscript.SigHashAll+SigHashForkID, key, true,
-		int64(tx.Inputs[index].Value))
+	if !bytes.Equal(pkhAddress.PKH(), key.PublicKeyHash()) {
+		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", pkhAddress.PKH()))
+	}
+
+	tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(key, tx.MsgTx, index,
+		tx.Inputs[index].LockScript, tx.Inputs[index].Value, SigHashAll+SigHashForkID, hashCache)
+
 	return err
 }
 
 // Sign estimates and updates the fee, signs all inputs, and corrects the fee if necessary.
 //   keys is a slice of all keys required to sign all inputs. They do not have to be in any order.
-func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
+// TODO Upgrade to sign more than just P2PKH inputs.
+func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	// Update fee to estimated amount
 	estimatedFee := int64(float32(tx.EstimatedSize()) * tx.FeeRate)
 	inputValue := tx.InputValue()
 	outputValue := tx.OutputValue(true)
+	shc := SigHashCache{}
+	pkhs := make([][]byte, 0, len(keys))
+
+	for _, key := range keys {
+		pkhs = append(pkhs, key.PublicKeyHash())
+	}
 
 	if inputValue < outputValue+uint64(estimatedFee) {
 		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue,
@@ -85,25 +86,39 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	}
 
 	attempt := 3 // Max of 3 fee adjustment attempts
-	var lastError error
 	for {
 		// Sign all inputs
-		for index, _ := range tx.Inputs {
-			signed := false
-			for _, key := range keys {
-				lastError = tx.SignInput(index, key)
-				if IsErrorCode(lastError, ErrorCodeWrongPrivateKey) {
-					continue
-				}
-				if lastError != nil {
-					return lastError
-				}
-				signed = true
-				break
+		for index, input := range tx.Inputs {
+			address, err := bitcoin.AddressFromLockingScript(input.LockScript)
+			if err != nil {
+				return err
 			}
 
-			if !signed {
-				return newError(ErrorCodeMissingPrivateKey, lastError.Error())
+			switch a := address.(type) {
+			case *bitcoin.AddressPKH:
+				signed := false
+				for i, pkh := range pkhs {
+					if !bytes.Equal(pkh, a.PKH()) {
+						continue
+					}
+
+					tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(keys[i], tx.MsgTx,
+						index, tx.Inputs[index].LockScript, tx.Inputs[index].Value,
+						SigHashAll+SigHashForkID, &shc)
+
+					if err != nil {
+						return err
+					}
+					signed = true
+					break
+				}
+
+				if !signed {
+					return newError(ErrorCodeMissingPrivateKey, "")
+				}
+
+			default:
+				return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
 			}
 		}
 
@@ -135,4 +150,51 @@ func (tx *Tx) Sign(keys []*btcec.PrivateKey) error {
 	}
 
 	return nil
+}
+
+func PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
+	lockScript []byte, value uint64, hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
+	// <Signature> <PublicKey>
+	sig, err := InputSignature(key, tx, index, lockScript, value, hashType, hashCache)
+	if err != nil {
+		return nil, err
+	}
+
+	pubkey := key.PublicKey()
+
+	result := make([]byte, 0, len(sig)+len(pubkey)+2)
+	result = append(result, bitcoin.PushDataScript(uint64(len(sig)))...)
+	result = append(result, sig...)
+	result = append(result, bitcoin.PushDataScript(uint64(len(pubkey)))...)
+	result = append(result, pubkey...)
+	return result, nil
+}
+
+func SHUnlockingScript(script []byte) ([]byte, error) {
+	// <RedeemScript>
+	return nil, errors.New("SH Unlocking Script Not Implemented") // TODO Implement SH unlocking script
+}
+
+func MultiPKHUnlockingScript(keys [][]byte) ([]byte, error) {
+	return nil, errors.New("MultiPKH Unlocking Script Not Implemented") // TODO Implement MultiPKH unlocking script
+}
+
+func RPHUnlockingScript(k []byte) ([]byte, error) {
+	// <PublicKey> <Signature(containing r)>
+	// k is 256 bit number used to calculate sig with r
+	return nil, errors.New("RPH Unlocking Script Not Implemented") // TODO Implement RPH unlocking script
+}
+
+// InputSignature returns the serialized ECDSA signature for the input index of the specified
+//   transaction, with hashType appended to it.
+func InputSignature(key bitcoin.Key, tx *wire.MsgTx, index int, lockScript []byte,
+	value uint64, hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
+
+	hash := signatureHash(tx, index, lockScript, value, hashType, hashCache)
+	sig, err := key.Sign(hash)
+	if err != nil {
+		return nil, fmt.Errorf("cannot sign tx input: %s", err)
+	}
+
+	return append(sig, byte(hashType)), nil
 }

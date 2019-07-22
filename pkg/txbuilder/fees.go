@@ -39,13 +39,13 @@ const (
 // The fee should be estimated before signing, then after signing the fee should be checked.
 // If the fee is too low after signing, then the fee should be adjusted and the tx re-signed.
 
-func (tx *Tx) Fee() uint64 {
+func (tx *TxBuilder) Fee() uint64 {
 	return tx.InputValue() - tx.OutputValue(true)
 }
 
 // EstimatedSize returns the estimated size in bytes of the tx after signatures are added.
 // It assumes all inputs are P2PKH.
-func (tx *Tx) EstimatedSize() int {
+func (tx *TxBuilder) EstimatedSize() int {
 	result := BaseTxSize + wire.VarIntSerializeSize(uint64(len(tx.MsgTx.TxIn))) +
 		wire.VarIntSerializeSize(uint64(len(tx.MsgTx.TxOut)))
 
@@ -64,12 +64,12 @@ func (tx *Tx) EstimatedSize() int {
 	return result
 }
 
-func (tx *Tx) EstimatedFee() uint64 {
+func (tx *TxBuilder) EstimatedFee() uint64 {
 	return uint64(float32(tx.EstimatedSize()) * tx.FeeRate)
 }
 
 // InputValue returns the sum of the values of the inputs.
-func (tx *Tx) InputValue() uint64 {
+func (tx *TxBuilder) InputValue() uint64 {
 	inputValue := uint64(0)
 	for _, input := range tx.Inputs {
 		inputValue += input.Value
@@ -78,7 +78,7 @@ func (tx *Tx) InputValue() uint64 {
 }
 
 // OutputValue returns the sum of the values of the outputs.
-func (tx *Tx) OutputValue(includeChange bool) uint64 {
+func (tx *TxBuilder) OutputValue(includeChange bool) uint64 {
 	outputValue := uint64(0)
 	for i, output := range tx.MsgTx.TxOut {
 		if includeChange || !tx.Outputs[i].IsChange {
@@ -89,7 +89,7 @@ func (tx *Tx) OutputValue(includeChange bool) uint64 {
 }
 
 // changeSum returns the sum of the values of the outputs.
-func (tx *Tx) changeSum() uint64 {
+func (tx *TxBuilder) changeSum() uint64 {
 	changeValue := uint64(0)
 	for i, output := range tx.MsgTx.TxOut {
 		if tx.Outputs[i].IsChange {
@@ -100,7 +100,7 @@ func (tx *Tx) changeSum() uint64 {
 }
 
 // adjustFee
-func (tx *Tx) adjustFee(amount int64) (bool, error) {
+func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 	if amount == int64(0) {
 		return true, nil
 	}
@@ -145,7 +145,7 @@ func (tx *Tx) adjustFee(amount int64) (bool, error) {
 		if changeOutputIndex == 0xffffffff {
 			// Add a change output if it would be more than the dust limit
 			if uint64(-amount) > tx.DustLimit {
-				tx.AddP2PKHOutput(tx.ChangePKH, uint64(-amount), true)
+				tx.AddPaymentOutput(tx.ChangeAddress, uint64(-amount), true)
 				tx.Outputs[len(tx.Outputs)-1].addedForFee = true
 			} else {
 				done = true
