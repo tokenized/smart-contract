@@ -41,6 +41,12 @@ func DecodeKeyString(s string) (Key, wire.BitcoinNet, error) {
 		return nil, MainNet, err
 	}
 
+	return DecodeKeyBytes(b)
+}
+
+// DecodeKeyBytes decodes a binary bitcoin key (with leading type). It returns the key, the network,
+//   and an error if there was an issue.
+func DecodeKeyBytes(b []byte) (Key, wire.BitcoinNet, error) {
 	var network wire.BitcoinNet
 	switch b[0] {
 	case typePrivKey:
