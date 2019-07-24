@@ -6,10 +6,9 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 const (
@@ -21,59 +20,47 @@ var (
 )
 
 type KeyStore struct {
-	Keys      map[string]*Key
-	KeysByPKH map[[20]byte]*Key
+	Keys map[[20]byte]*Key
 }
 
 func NewKeyStore() *KeyStore {
 	return &KeyStore{
-		Keys:      make(map[string]*Key),
-		KeysByPKH: make(map[[20]byte]*Key),
+		Keys: make(map[[20]byte]*Key),
 	}
 }
 
 func (k KeyStore) Add(key *Key) error {
-	k.Keys[key.Address.EncodeAddress()] = key
 	var pkh [20]byte
-	copy(pkh[:], key.Address.ScriptAddress())
-	k.KeysByPKH[pkh] = key
+	addressPKH, ok := key.Address.(*bitcoin.AddressPKH)
+	if !ok {
+		return errors.New("Key address not PKH")
+	}
+	copy(pkh[:], addressPKH.PKH())
+	k.Keys[pkh] = key
 	return nil
 }
 
 func (k KeyStore) Remove(key *Key) error {
-	k.Keys[key.Address.EncodeAddress()] = key
+	addressPKH, ok := key.Address.(*bitcoin.AddressPKH)
+	if !ok {
+		return errors.New("Key address not PKH")
+	}
+
 	var pkh [20]byte
-	copy(pkh[:], key.Address.ScriptAddress())
-	k.KeysByPKH[pkh] = key
+	copy(pkh[:], addressPKH.PKH())
+	delete(k.Keys, pkh)
 	return nil
 }
 
-func (k KeyStore) Put(pkh string, privKey *btcec.PrivateKey, pubKey *btcec.PublicKey, chainParams *chaincfg.Params) error {
-	addr, _ := btcutil.DecodeAddress(pkh, chainParams)
-
-	k.Keys[pkh] = &Key{
-		Address:    addr,
-		PrivateKey: privKey,
-		PublicKey:  pubKey,
-	}
-
-	return nil
-}
-
-func (k KeyStore) Get(address string) (*Key, error) {
-	key, ok := k.Keys[address]
-
+// Get returns the key corresponding to the specified address.
+func (k KeyStore) Get(address bitcoin.Address) (*Key, error) {
+	addressPKH, ok := address.(*bitcoin.AddressPKH)
 	if !ok {
-		return nil, ErrKeyNotFound
+		return nil, errors.New("Wrong address type")
 	}
-
-	return key, nil
-}
-
-func (k KeyStore) GetPKH(pkh []byte) (*Key, error) {
 	var spkh [20]byte
-	copy(spkh[:], pkh)
-	key, ok := k.KeysByPKH[spkh]
+	copy(spkh[:], addressPKH.PKH())
+	key, ok := k.Keys[spkh]
 
 	if !ok {
 		return nil, ErrKeyNotFound
@@ -82,17 +69,8 @@ func (k KeyStore) GetPKH(pkh []byte) (*Key, error) {
 	return key, nil
 }
 
-// Returns pub key hashes in raw byte format
-func (k KeyStore) GetRawPubKeyHashes() ([][]byte, error) {
-	result := make([][]byte, 0, len(k.Keys))
-	for _, walletKey := range k.Keys {
-		result = append(result, walletKey.Address.ScriptAddress())
-	}
-	return result, nil
-}
-
-func (k KeyStore) GetAddresses() []btcutil.Address {
-	result := make([]btcutil.Address, 0, len(k.Keys))
+func (k KeyStore) GetAddresses() []bitcoin.Address {
+	result := make([]bitcoin.Address, 0, len(k.Keys))
 	for _, key := range k.Keys {
 		result = append(result, key.Address)
 	}
@@ -107,9 +85,8 @@ func (k KeyStore) GetAll() []*Key {
 	return result
 }
 
-func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, params *chaincfg.Params) error {
-	k.Keys = make(map[string]*Key)
-	k.KeysByPKH = make(map[[20]byte]*Key)
+func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
+	k.Keys = make(map[[20]byte]*Key)
 
 	data, err := masterDB.Fetch(ctx, walletKey)
 	if err != nil {
@@ -129,19 +106,18 @@ func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, params *chaincfg.P
 	var spkh [20]byte
 	for i := uint32(0); i < count; i++ {
 		var newKey Key
-		if err := newKey.Read(buf, params); err != nil {
+		if err := newKey.Read(buf, net); err != nil {
 			return err
 		}
 
-		copy(spkh[:], newKey.Address.ScriptAddress())
-		k.KeysByPKH[spkh] = &newKey
-		k.Keys[newKey.Address.EncodeAddress()] = &newKey
+		copy(spkh[:], bitcoin.Hash160(newKey.Key.PublicKey().Bytes()))
+		k.Keys[spkh] = &newKey
 	}
 
 	return nil
 }
 
-func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB) error {
+func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
 	var buf bytes.Buffer
 
 	count := uint32(len(k.Keys))
@@ -150,7 +126,7 @@ func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB) error {
 	}
 
 	for _, key := range k.Keys {
-		if err := key.Write(&buf); err != nil {
+		if err := key.Write(&buf, net); err != nil {
 			return err
 		}
 	}

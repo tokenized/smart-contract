@@ -1,9 +1,7 @@
 package listeners
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"sync"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
@@ -13,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
@@ -20,32 +19,29 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ripemd160"
 )
 
 type Server struct {
-	wallet           wallet.WalletInterface
-	Config           *node.Config
-	MasterDB         *db.DB
-	RpcNode          inspector.NodeInterface
-	SpyNode          *spynode.Node
-	Headers          node.BitcoinHeaders
-	Scheduler        *scheduler.Scheduler
-	Tracer           *filters.Tracer
-	utxos            *utxos.UTXOs
-	lock             sync.Mutex
-	Handler          protomux.Handler
-	contractPKHs     [][]byte // Used to determine which txs will be needed again
-	walletLock       sync.RWMutex
-	txFilter         *filters.TxFilter
-	pendingResponses []*wire.MsgTx
-	revertedTxs      []*chainhash.Hash
-	blockHeight      int // track current block height for confirm messages
-	inSync           bool
+	wallet            wallet.WalletInterface
+	Config            *node.Config
+	MasterDB          *db.DB
+	RpcNode           inspector.NodeInterface
+	SpyNode           *spynode.Node
+	Headers           node.BitcoinHeaders
+	Scheduler         *scheduler.Scheduler
+	Tracer            *filters.Tracer
+	utxos             *utxos.UTXOs
+	lock              sync.Mutex
+	Handler           protomux.Handler
+	contractAddresses []bitcoin.Address // Used to determine which txs will be needed again
+	walletLock        sync.RWMutex
+	txFilter          *filters.TxFilter
+	pendingResponses  []*wire.MsgTx
+	revertedTxs       []*chainhash.Hash
+	blockHeight       int // track current block height for confirm messages
+	inSync            bool
 
 	pendingTxs  map[chainhash.Hash]*IncomingTxData
 	readyTxs    []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
@@ -93,9 +89,13 @@ func NewServer(
 	result.processingTxs.Open(100)
 
 	keys := wallet.ListAll()
-	result.contractPKHs = make([][]byte, 0, len(keys))
+	result.contractAddresses = make([]bitcoin.Address, 0, len(keys))
 	for _, key := range keys {
-		result.contractPKHs = append(result.contractPKHs, key.Address.ScriptAddress())
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
+		if err != nil {
+			return nil
+		}
+		result.contractAddresses = append(result.contractAddresses, address)
 	}
 
 	return &result
@@ -147,12 +147,6 @@ func (server *Server) Run(ctx context.Context) error {
 		node.LogVerbose(ctx, "Scheduler finished")
 	}()
 
-	rks := server.wallet.ListAll()
-	contractPKHs := make([]*protocol.PublicKeyHash, 0, len(rks))
-	for _, cpkh := range server.contractPKHs {
-		pkh := protocol.PublicKeyHashFromBytes(cpkh)
-		contractPKHs = append(contractPKHs, pkh)
-	}
 	for i := 0; i < server.Config.PreprocessThreads; i++ {
 		node.Log(ctx, "Starting pre-process thread %d", i)
 		// Start preprocess thread
@@ -183,7 +177,7 @@ func (server *Server) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
 	}
 
@@ -276,13 +270,13 @@ func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) 
 	defer server.lock.Unlock()
 
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
+	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
+	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "LOST", itx)
 }
 
@@ -291,57 +285,47 @@ func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transactio
 }
 
 // AddContractKey adds a new contract key to those being monitored.
-func (server *Server) AddContractKey(ctx context.Context, k *btcec.PrivateKey) error {
+func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	pubkey := k.PubKey()
-	hash160 := ripemd160.New()
-	hash256 := sha256.Sum256(pubkey.SerializeCompressed())
-	hash160.Write(hash256[:])
-	address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &server.Config.ChainParams)
+	address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
 	if err != nil {
 		return err
 	}
 	newKey := wallet.Key{
-		Address:    address,
-		PrivateKey: k,
-		PublicKey:  pubkey,
+		Address: address,
+		Key:     k,
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
-	node.Log(ctx, "Adding key : %s", contractPKH.String())
+	node.Log(ctx, "Adding key : %x", bitcoin.Hash160(k.PublicKey().Bytes()))
 	server.wallet.Add(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
 	}
-	server.contractPKHs = append(server.contractPKHs, address.ScriptAddress())
+	server.contractAddresses = append(server.contractAddresses, address)
 
-	server.txFilter.AddPubKey(ctx, pubkey)
+	server.txFilter.AddPubKey(ctx, k.PublicKey().Bytes())
 	return nil
 }
 
 // RemoveContractKeyIfUnused removes a contract key from those being monitored if it hasn't been used yet.
-func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k *btcec.PrivateKey) error {
+func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.Key) error {
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	pubkey := k.PubKey()
-	hash160 := ripemd160.New()
-	hash256 := sha256.Sum256(pubkey.SerializeCompressed())
-	hash160.Write(hash256[:])
-	address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &server.Config.ChainParams)
+	pkh := bitcoin.Hash160(k.PublicKey().Bytes())
+	address, err := bitcoin.NewAddressPKH(pkh)
 	if err != nil {
 		return err
 	}
 	newKey := wallet.Key{
-		Address:    address,
-		PrivateKey: k,
-		PublicKey:  pubkey,
+		Address: address,
+		Key:     k,
 	}
 
 	// Check if contract exists
-	contractPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(pkh)
 	_, err = contract.Retrieve(ctx, server.MasterDB, contractPKH)
 	if err != contract.ErrNotFound {
 		return nil
@@ -349,18 +333,17 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k *btcec.Pr
 
 	node.Log(ctx, "Removing key : %s", contractPKH.String())
 	server.wallet.Remove(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
 	}
 
-	pkh := address.ScriptAddress()
-	for i, cpkh := range server.contractPKHs {
-		if bytes.Equal(pkh, cpkh) {
-			server.contractPKHs = append(server.contractPKHs[:i], server.contractPKHs[i+1:]...)
+	for i, caddress := range server.contractAddresses {
+		if address.Equal(caddress) {
+			server.contractAddresses = append(server.contractAddresses[:i], server.contractAddresses[i+1:]...)
 			break
 		}
 	}
 
-	server.txFilter.RemovePubKey(ctx, pubkey)
+	server.txFilter.RemovePubKey(ctx, k.PublicKey().Bytes())
 	return nil
 }

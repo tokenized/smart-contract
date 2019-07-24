@@ -17,8 +17,8 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 )
 
@@ -112,19 +112,19 @@ func main() {
 	// Wallet
 
 	masterWallet := bootstrap.NewWallet()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey, &appConfig.ChainParams); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, wire.BitcoinNet(appConfig.ChainParams.Net)); err != nil {
 		panic(err)
 	}
 
-	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String())
+	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String(wire.BitcoinNet(appConfig.ChainParams.Net)))
 
 	// -------------------------------------------------------------------------
 	// Tx Filter
 
 	walletKeys := masterWallet.ListAll()
-	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	pubKeys := make([][]byte, 0, len(walletKeys))
 	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.PublicKey)
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
 	tracer := filters.NewTracer()
 	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)

@@ -46,7 +46,7 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
 	}
 
-	if !bytes.Equal(pkhAddress.PKH(), key.PublicKeyHash()) {
+	if !bytes.Equal(pkhAddress.PKH(), bitcoin.Hash160(key.PublicKey().Bytes())) {
 		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", pkhAddress.PKH()))
 	}
 
@@ -68,7 +68,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	pkhs := make([][]byte, 0, len(keys))
 
 	for _, key := range keys {
-		pkhs = append(pkhs, key.PublicKeyHash())
+		pkhs = append(pkhs, bitcoin.Hash160(key.PublicKey().Bytes()))
 	}
 
 	if inputValue < outputValue+uint64(estimatedFee) {
@@ -160,7 +160,7 @@ func PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
 		return nil, err
 	}
 
-	pubkey := key.PublicKey()
+	pubkey := key.PublicKey().Bytes()
 
 	result := make([]byte, 0, len(sig)+len(pubkey)+2)
 	result = append(result, bitcoin.PushDataScript(uint64(len(sig)))...)

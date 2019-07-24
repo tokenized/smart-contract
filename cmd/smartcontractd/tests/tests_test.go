@@ -85,27 +85,27 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// Keys
 
-	userKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	userKey, err = tests.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
 
-	user2Key, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	user2Key, err = tests.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
 
-	issuerKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	issuerKey, err = tests.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
 
-	oracleKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	oracleKey, err = tests.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
 
-	authorityKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	authorityKey, err = tests.GenerateKey()
 	if err != nil {
 		panic(err)
 	}

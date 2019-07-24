@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,12 +11,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
-	"github.com/kelseyhightower/envconfig"
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
@@ -25,12 +20,17 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/kelseyhightower/envconfig"
+	"github.com/pkg/errors"
 )
 
 type Client struct {
 	Wallet             Wallet
 	Config             Config
-	ContractPKH        []byte
+	ContractAddress    bitcoin.Address
 	spyNode            *spynode.Node
 	spyNodeStopChannel chan error
 	blocksAdded        int
@@ -98,19 +98,22 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 
 	// -------------------------------------------------------------------------
 	// Wallet
-	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), &client.Config.ChainParams)
+	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), wire.BitcoinNet(client.Config.ChainParams.Net))
 	if err != nil {
 		return nil, err
 	}
 
 	// -------------------------------------------------------------------------
 	// Contract
-	address, err := btcutil.DecodeAddress(client.Config.Contract, &client.Config.ChainParams)
+	var decodedNet wire.BitcoinNet
+	client.ContractAddress, decodedNet, err = bitcoin.DecodeAddressString(client.Config.Contract)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
-	logger.Info(ctx, "Contract address : %s", address)
-	client.ContractPKH = address.ScriptAddress()
+	if !bitcoin.DecodeNetMatches(decodedNet, wire.BitcoinNet(client.Config.ChainParams.Net)) {
+		return nil, errors.Wrap(err, "Contract address encoded for wrong network")
+	}
+	logger.Info(ctx, "Contract address : %s", client.Config.Contract)
 
 	return &client, nil
 }
@@ -217,18 +220,18 @@ func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) 
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
-		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
 
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+		if client.Wallet.Address.Equal(outputAddress) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToWallet : %s", tx.TxHash().String())
 			return true
 		}
 
-		if bytes.Equal(client.ContractPKH, pkh) {
+		if client.ContractAddress.Equal(outputAddress) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true
@@ -236,12 +239,12 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	}
 
 	for _, input := range tx.TxIn {
-		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
 
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+		if client.Wallet.Address.Equal(address) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentFromWallet : %s", tx.TxHash().String())
 			return true
@@ -319,12 +322,12 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 
 func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
-		pkh, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
 
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+		if client.Wallet.Address.Equal(address) {
 			if reverse {
 				spentValue, spent := client.Wallet.Unspend(&input.PreviousOutPoint, tx.TxHash())
 				if spent {
@@ -340,12 +343,12 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool)
 	}
 
 	for index, output := range tx.TxOut {
-		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
 
-		if bytes.Equal(client.Wallet.PublicKeyHash, pkh) {
+		if client.Wallet.Address.Equal(address) {
 			if reverse {
 				if client.Wallet.RemoveUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
 					logger.Info(ctx, "Reverted receipt of %.08f : %d of %s",

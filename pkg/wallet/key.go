@@ -2,49 +2,63 @@ package wallet
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"encoding/binary"
+	"errors"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
-	"golang.org/x/crypto/ripemd160"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Key struct {
-	Address    btcutil.Address
-	PrivateKey *btcec.PrivateKey
-	PublicKey  *btcec.PublicKey
+	Address bitcoin.Address
+	Key     bitcoin.Key
 }
 
-func NewKey(key *btcec.PrivateKey, params *chaincfg.Params) *Key {
+func NewKey(key bitcoin.Key) *Key {
 	result := Key{
-		PrivateKey: key,
-		PublicKey:  key.PubKey(),
+		Key: key,
 	}
 
-	hash160 := ripemd160.New()
-	hash256 := sha256.Sum256(result.PublicKey.SerializeCompressed())
-	hash160.Write(hash256[:])
-	result.Address, _ = btcutil.NewAddressPubKeyHash(hash160.Sum(nil), params)
+	s256, ok := key.(*bitcoin.KeyS256)
+	if !ok {
+		return nil
+	}
+	result.Address, _ = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
 	return &result
 }
 
-func (rk *Key) Read(buf *bytes.Buffer, params *chaincfg.Params) error {
-	data := make([]byte, btcec.PrivKeyBytesLen)
+func (rk *Key) Read(buf *bytes.Buffer, net wire.BitcoinNet) error {
+	var length uint8
+	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+		return err
+	}
+
+	data := make([]byte, length)
 	if _, err := buf.Read(data); err != nil {
 		return err
 	}
-	rk.PrivateKey, rk.PublicKey = btcec.PrivKeyFromBytes(btcec.S256(), data)
 
-	hash160 := ripemd160.New()
-	hash256 := sha256.Sum256(rk.PublicKey.SerializeCompressed())
-	hash160.Write(hash256[:])
+	var decodedNet wire.BitcoinNet
 	var err error
-	rk.Address, err = btcutil.NewAddressPubKeyHash(hash160.Sum(nil), params)
+	rk.Key, decodedNet, err = bitcoin.DecodeKeyBytes(data)
+	if err != nil {
+		return err
+	}
+	if !bitcoin.DecodeNetMatches(decodedNet, net) {
+		return errors.New("Key encoded with wrong network")
+	}
+
+	s256, ok := rk.Key.(*bitcoin.KeyS256)
+	if !ok {
+		return errors.New("Key is not S256")
+	}
+	rk.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
 	return err
 }
 
-func (rk *Key) Write(buf *bytes.Buffer) error {
-	_, err := buf.Write(rk.PrivateKey.Serialize())
+func (rk *Key) Write(buf *bytes.Buffer, net wire.BitcoinNet) error {
+	b := rk.Key.Bytes(net)
+	binary.Write(buf, binary.LittleEndian, uint8(len(b)))
+	_, err := buf.Write(b)
 	return err
 }

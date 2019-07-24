@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -22,17 +22,17 @@ type UTXO struct {
 }
 
 // Add adds/spends UTXOs based on the tx.
-func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
+func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.Address) {
 	txHash := tx.TxHash()
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
-		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
 
-		for _, pkh := range pkhs {
-			if bytes.Equal(hash, pkh) {
+		for _, address := range addresses {
+			if address.Equal(outputAddress) {
 				found := false
 
 				// Ensure not to duplicate
@@ -68,15 +68,15 @@ func (us *UTXOs) Add(tx *wire.MsgTx, pkhs [][]byte) {
 }
 
 // Remove removes UTXOs in the tx from the set.
-func (us *UTXOs) Remove(tx *wire.MsgTx, pkhs [][]byte) {
+func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.Address) {
 	for index, output := range tx.TxOut {
-		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
 
-		for _, pkh := range pkhs {
-			if bytes.Equal(hash, pkh) {
+		for _, address := range addresses {
+			if address.Equal(outputAddress) {
 				txHash := tx.TxHash()
 				// Ensure not to duplicate
 				for i, existing := range us.list {
@@ -91,13 +91,13 @@ func (us *UTXOs) Remove(tx *wire.MsgTx, pkhs [][]byte) {
 }
 
 // Get returns UTXOs (FIFO) totaling at least the specified amount.
-func (us *UTXOs) Get(amount uint64, pkh []byte) ([]*UTXO, error) {
+func (us *UTXOs) Get(amount uint64, address bitcoin.Address) ([]*UTXO, error) {
 	resultAmount := uint64(0)
 	result := make([]*UTXO, 0, 5)
 	for _, existing := range us.list {
 		if bytes.Equal(existing.SpentBy[:], zeroTxId[:]) {
-			hash, err := txbuilder.PubKeyHashFromP2PKH(existing.Output.PkScript)
-			if err != nil || !bytes.Equal(hash, pkh) {
+			outputAddress, err := bitcoin.AddressFromLockingScript(existing.Output.PkScript)
+			if err != nil || !address.Equal(outputAddress) {
 				continue
 			}
 			result = append(result, existing)

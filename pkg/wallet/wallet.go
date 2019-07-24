@@ -9,25 +9,22 @@ package wallet
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type WalletInterface interface {
-	Get(string) (*Key, error)
-	GetPKH([]byte) (*Key, error)
-	List([]string) ([]*Key, error)
-	ListPKH([][]byte) ([]*Key, error)
+	Get(bitcoin.Address) (*Key, error)
+	List([]bitcoin.Address) ([]*Key, error)
 	ListAll() []*Key
 	Add(*Key) error
 	Remove(*Key) error
-	Load(context.Context, *db.DB, *chaincfg.Params) error
-	Save(context.Context, *db.DB) error
+	Load(context.Context, *db.DB, wire.BitcoinNet) error
+	Save(context.Context, *db.DB, wire.BitcoinNet) error
 }
 
 type Wallet struct {
@@ -56,41 +53,30 @@ func (w Wallet) Remove(key *Key) error {
 }
 
 // Register a private key with the wallet
-func (w Wallet) Register(secret string, chainParams *chaincfg.Params) error {
+func (w Wallet) Register(wif string, net wire.BitcoinNet) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	if len(secret) == 0 {
+	if len(wif) == 0 {
 		return errors.New("Create wallet failed: missing secret")
 	}
 
 	// load the WIF if we have one
-	wif, err := btcutil.DecodeWIF(secret)
+	key, decodedNet, err := bitcoin.DecodeKeyString(wif)
 	if err != nil {
 		return err
 	}
-	if !wif.IsForNet(chainParams) {
+	if !bitcoin.DecodeNetMatches(decodedNet, net) {
 		return errors.New("WIF for wrong net")
 	}
 
-	// Private / Public Keys
-	priv := wif.PrivKey
-	pub := priv.PubKey()
-
-	// Public Address (PKH)
-	h := hex.EncodeToString(pub.SerializeCompressed())
-	pubhash, err := btcutil.DecodeAddress(h, chainParams)
-	if err != nil {
-		return err
-	}
-	pubaddr := pubhash.EncodeAddress()
-
 	// Put in key store
-	w.KeyStore.Put(pubaddr, priv, pub, chainParams)
+	newKey := NewKey(key)
+	w.KeyStore.Add(newKey)
 	return nil
 }
 
-func (w Wallet) List(addrs []string) ([]*Key, error) {
+func (w Wallet) List(addrs []bitcoin.Address) ([]*Key, error) {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
@@ -111,57 +97,29 @@ func (w Wallet) List(addrs []string) ([]*Key, error) {
 	return rks, nil
 }
 
-func (w Wallet) ListPKH(pkhs [][]byte) ([]*Key, error) {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-
-	var rks []*Key
-
-	for _, pkh := range pkhs {
-		rk, err := w.GetPKH(pkh)
-		if err != nil {
-			if err == ErrKeyNotFound {
-				continue
-			}
-			return nil, err
-		}
-
-		rks = append(rks, rk)
-	}
-
-	return rks, nil
-}
-
 func (w Wallet) ListAll() []*Key {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 	return w.KeyStore.GetAll()
 }
 
-func (w Wallet) Get(addr string) (*Key, error) {
+func (w Wallet) Get(address bitcoin.Address) (*Key, error) {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
-	return w.KeyStore.Get(addr)
+	return w.KeyStore.Get(address)
 }
 
-func (w Wallet) GetPKH(pkh []byte) (*Key, error) {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-
-	return w.KeyStore.GetPKH(pkh)
-}
-
-func (w Wallet) Load(ctx context.Context, masterDB *db.DB, params *chaincfg.Params) error {
+func (w Wallet) Load(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	return w.KeyStore.Load(ctx, masterDB, params)
+	return w.KeyStore.Load(ctx, masterDB, net)
 }
 
-func (w Wallet) Save(ctx context.Context, masterDB *db.DB) error {
+func (w Wallet) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
-	return w.KeyStore.Save(ctx, masterDB)
+	return w.KeyStore.Save(ctx, masterDB, net)
 }

@@ -15,8 +15,8 @@ func TestTxBuilder(t *testing.T) {
 		t.Errorf("Failed to create private key : %s", err)
 	}
 
-	pkh := key.PublicKeyHash()
-	address, err := bitcoin.AddressPKHFromBytes(pkh)
+	pkh := bitcoin.Hash160(key.PublicKey().Bytes())
+	address, err := bitcoin.NewAddressPKH(pkh)
 	if err != nil {
 		t.Errorf("Failed to create pkh address : %s", err)
 	}
@@ -26,8 +26,8 @@ func TestTxBuilder(t *testing.T) {
 		t.Errorf("Failed to create private key 2 : %s", err)
 	}
 
-	pkh2 := key2.PublicKeyHash()
-	address2, err := bitcoin.AddressPKHFromBytes(pkh2)
+	pkh2 := bitcoin.Hash160(key2.PublicKey().Bytes())
+	address2, err := bitcoin.NewAddressPKH(pkh2)
 	if err != nil {
 		t.Errorf("Failed to create pkh address 2 : %s", err)
 	}

@@ -60,7 +60,7 @@ func TestPKH(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			address, err := AddressPKHFromBytes(pkh)
+			address, err := NewAddressPKH(pkh)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -164,7 +164,7 @@ func TestSH(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			address, err := AddressSHFromBytes(sh)
+			address, err := NewAddressSH(sh)
 			if err != nil {
 				t.Fatal(err)
 			}

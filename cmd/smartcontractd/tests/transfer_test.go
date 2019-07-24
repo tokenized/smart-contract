@@ -1,24 +1,22 @@
 package tests
 
 import (
-	"bytes"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -68,7 +66,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	requests := make([]*wire.MsgTx, 0, b.N)
 	hashes := make([]*chainhash.Hash, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address.ScriptAddress())
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
 
 		// Create Transfer message
 		transferAmount := uint64(1)
@@ -83,7 +81,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 				Quantity: transferAmount})
 
 		transferData.Assets = append(transferData.Assets, assetTransferData)
@@ -97,7 +95,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 		// Data output
 		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -116,9 +114,9 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 	tracer := filters.NewTracer()
 	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	pubKeys := make([][]byte, 0, len(walletKeys))
 	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.PublicKey)
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
 	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
@@ -186,8 +184,8 @@ func simpleTransfersBenchmark(b *testing.B) {
 	b.StopTimer()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	userPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
@@ -223,7 +221,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	requests := make([]*wire.MsgTx, 0, b.N)
 	hashes := make([]*chainhash.Hash, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address.ScriptAddress())
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
 
 		// Create Transfer message
 		transferAmount := uint64(1)
@@ -238,27 +236,27 @@ func oracleTransfersBenchmark(b *testing.B) {
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
-		contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 		blockHeight := test.Headers.LastHeight(ctx) - 5
 		blockHash, err := test.Headers.Hash(ctx, blockHeight)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-			protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount, blockHash)
+			protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount, blockHash)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 		}
-		oracleSig, err := oracleKey.PrivateKey.Sign(oracleSigHash)
+		oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 		}
 		receiver := protocol.AssetReceiver{
-			Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+			Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 			Quantity:              transferAmount,
 			OracleSigAlgorithm:    1,
-			OracleConfirmationSig: oracleSig.Serialize(),
+			OracleConfirmationSig: oracleSig,
 			OracleSigBlockHeight:  uint32(blockHeight),
 		}
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
@@ -274,7 +272,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 		// Data output
 		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -293,9 +291,9 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	tracer := filters.NewTracer()
 	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	pubKeys := make([][]byte, 0, len(walletKeys))
 	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.PublicKey)
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
 	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
@@ -366,8 +364,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 	b.StopTimer()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	userPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
@@ -396,7 +394,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -411,7 +409,7 @@ func sendTokens(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 			Quantity: transferAmount})
 
 	transferData.Assets = append(transferData.Assets, assetTransferData)
@@ -425,7 +423,7 @@ func sendTokens(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -487,8 +485,8 @@ func sendTokens(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
@@ -501,7 +499,7 @@ func sendTokens(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -529,7 +527,7 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 	user1HoldingBalance := uint64(100)
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), user1HoldingBalance)
+	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -543,13 +541,13 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
 	}
 	user2HoldingBalance := uint64(200)
-	err = mockUpHolding2(ctx, user2Key.Address.ScriptAddress(), user2HoldingBalance)
+	err = mockUpHolding2(ctx, user2Key.Address, user2HoldingBalance)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
 	}
 
-	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address.ScriptAddress())
-	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address.ScriptAddress())
+	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
+	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
 
 	// Create Transfer message
 	transferData := protocol.Transfer{}
@@ -565,7 +563,7 @@ func multiExchange(t *testing.T) {
 	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
 		protocol.QuantityIndex{Index: 0, Quantity: transfer1Amount})
 	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(user2Key.Address.ScriptAddress()),
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(user2Key.Key.PublicKey().Bytes())),
 			Quantity: transfer1Amount})
 
 	transferData.Assets = append(transferData.Assets, assetTransfer1Data)
@@ -581,7 +579,7 @@ func multiExchange(t *testing.T) {
 	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
 		protocol.QuantityIndex{Index: 1, Quantity: transfer2Amount})
 	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 			Quantity: transfer2Amount})
 
 	transferData.Assets = append(transferData.Assets, assetTransfer2Data)
@@ -598,11 +596,11 @@ func multiExchange(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 	// To contract1
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
 	// To contract2
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, txbuilder.P2PKHScriptForPKH(test.Contract2Key.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, test.Contract2Key.Address.LockingScript()))
 	// To contract1 boomerang
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -712,9 +710,9 @@ func multiExchange(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	user1PKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	user1PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user1PKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -726,7 +724,7 @@ func multiExchange(t *testing.T) {
 
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
-	user2PKH := protocol.PublicKeyHashFromBytes(user2Key.Address.ScriptAddress())
+	user2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(user2Key.Key.PublicKey().Bytes()))
 	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user2PKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -738,7 +736,7 @@ func multiExchange(t *testing.T) {
 
 	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
-	contract2PKH := protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress())
+	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
 	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, contract2PKH, &testAsset2Code, user1PKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -781,7 +779,7 @@ func oracleTransfer(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100016, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100016, issuerKey.Address)
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -795,27 +793,27 @@ func oracleTransfer(t *testing.T) {
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	blockHeight := test.Headers.LastHeight(ctx) - 5
 	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-		protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount, blockHash)
+		protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount, blockHash)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.PrivateKey.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
 	receiver := protocol.AssetReceiver{
-		Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
-		OracleConfirmationSig: oracleSig.Serialize(),
+		OracleConfirmationSig: oracleSig,
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
@@ -831,7 +829,7 @@ func oracleTransfer(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -864,7 +862,7 @@ func oracleTransfer(t *testing.T) {
 
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -876,7 +874,7 @@ func oracleTransfer(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -908,8 +906,8 @@ func oracleTransferBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100016, issuerKey.Address.ScriptAddress())
-	bitcoinFundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100017, userKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100016, issuerKey.Address)
+	bitcoinFundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100017, userKey.Address)
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -924,27 +922,27 @@ func oracleTransferBad(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	blockHeight := test.Headers.LastHeight(ctx) - 4
 	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-		protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()), transferAmount+1, blockHash)
+		protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount+1, blockHash)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.PrivateKey.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
 	receiver := protocol.AssetReceiver{
-		Address:               *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
-		OracleConfirmationSig: oracleSig.Serialize(),
+		OracleConfirmationSig: oracleSig,
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
@@ -960,7 +958,7 @@ func oracleTransferBad(t *testing.T) {
 	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders, protocol.QuantityIndex{Index: 1, Quantity: bitcoinTransferAmount})
 
 	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers, protocol.AssetReceiver{
-		Address:  *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
+		Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
 		Quantity: bitcoinTransferAmount,
 	})
 
@@ -978,7 +976,7 @@ func oracleTransferBad(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&bitcoinInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1020,11 +1018,11 @@ func oracleTransferBad(t *testing.T) {
 	// Find refund output
 	found := false
 	for _, output := range response.TxOut {
-		hash, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
-		if bytes.Equal(hash, userKey.Address.ScriptAddress()) && output.Value >= int64(bitcoinTransferAmount) {
+		if address.Equal(userKey.Address) && output.Value >= int64(bitcoinTransferAmount) {
 			found = true
 			break
 		}
@@ -1053,7 +1051,7 @@ func permitted(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -1068,7 +1066,7 @@ func permitted(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 			Quantity: transferAmount})
 
 	transferData.Assets = append(transferData.Assets, assetTransferData)
@@ -1082,7 +1080,7 @@ func permitted(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1114,8 +1112,8 @@ func permitted(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
-	issuerPKH := protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
@@ -1128,7 +1126,7 @@ func permitted(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress())
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -1157,13 +1155,13 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 	user2Holding := uint64(100)
-	err = mockUpHolding(ctx, user2Key.Address.ScriptAddress(), user2Holding)
+	err = mockUpHolding(ctx, user2Key.Address, user2Holding)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address.ScriptAddress())
-	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 256, user2Key.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
+	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 256, user2Key.Address)
 
 	// Create Transfer message
 	transferAmount := uint64(250)
@@ -1180,7 +1178,7 @@ func permittedBad(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		protocol.QuantityIndex{Index: 1, Quantity: user2Holding})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(userKey.Address.ScriptAddress()),
+		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
 			Quantity: transferAmount + user2Holding})
 
 	transferData.Assets = append(transferData.Assets, assetTransferData)
@@ -1196,7 +1194,7 @@ func permittedBad(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transfer2InputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)

@@ -24,11 +24,8 @@ type Key interface {
 	// Bytes returns type followed by the key data.
 	Bytes(network wire.BitcoinNet) []byte
 
-	// PublicKey returns the serialized (compresses) public key data.
-	PublicKey() []byte
-
-	// PublicKeyHash returns the Hashs160 of the serialized public key.
-	PublicKeyHash() []byte
+	// PublicKey returns the public key.
+	PublicKey() PublicKey
 
 	// Sign creates a signature from a hash.
 	Sign([]byte) ([]byte, error)
@@ -107,14 +104,9 @@ func (k *KeyS256) Number() []byte {
 	return k.key.Serialize()
 }
 
-// PublicKey returns the serialized (compresses) public key data.
-func (k *KeyS256) PublicKey() []byte {
-	return k.key.PubKey().SerializeCompressed()
-}
-
-// PublicKeyHash returns the Hashs160 of the serialized public key.
-func (k *KeyS256) PublicKeyHash() []byte {
-	return Hash160(k.PublicKey())
+// PublicKey returns the public key.
+func (k *KeyS256) PublicKey() PublicKey {
+	return publicKeyS256FromBTCEC(k.key.PubKey())
 }
 
 // Sign returns the serialized signature of the hash for the private key.

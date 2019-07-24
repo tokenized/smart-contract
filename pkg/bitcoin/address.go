@@ -36,12 +36,11 @@ type Address interface {
 	// Bytes returns the type followed by the address data.
 	Bytes(network wire.BitcoinNet) []byte
 
-	// ScriptAddress returns raw address data without type.
-	// TODO Remove when protocol fully upgraded for address types.
-	ScriptAddress() []byte
-
 	// LockingScript returns the bitcoin output(locking) script for paying to the address.
 	LockingScript() []byte
+
+	// Equal returns true if the address parameter has the same value.
+	Equal(Address) bool
 }
 
 // DecodeAddressString decodes a base58 text bitcoin address. It returns the address, the network,
@@ -60,10 +59,10 @@ func DecodeAddressString(address string) (Address, wire.BitcoinNet, error) {
 func DecodeAddressBytes(b []byte) (Address, wire.BitcoinNet, error) {
 	switch b[0] {
 	case typePKH:
-		a, err := AddressPKHFromBytes(b[1:])
+		a, err := NewAddressPKH(b[1:])
 		return a, MainNet, err
 	case typeSH:
-		a, err := AddressSHFromBytes(b[1:])
+		a, err := NewAddressSH(b[1:])
 		return a, MainNet, err
 	case typeMultiPKH:
 		b = b[1:] // remove type
@@ -82,16 +81,16 @@ func DecodeAddressBytes(b []byte) (Address, wire.BitcoinNet, error) {
 			pkhs = append(pkhs, b[:hashLength])
 			b = b[hashLength:]
 		}
-		a, err := AddressMultiPKHFromBytes(required, pkhs)
+		a, err := NewAddressMultiPKH(required, pkhs)
 		return a, MainNet, err
 	case typeRPH:
-		a, err := AddressRPHFromBytes(b[1:])
+		a, err := NewAddressRPH(b[1:])
 		return a, MainNet, err
 	case typeTestPKH:
-		a, err := AddressPKHFromBytes(b[1:])
+		a, err := NewAddressPKH(b[1:])
 		return a, TestNet, err
 	case typeTestSH:
-		a, err := AddressSHFromBytes(b[1:])
+		a, err := NewAddressSH(b[1:])
 		return a, TestNet, err
 	case typeTestMultiPKH:
 		b = b[1:] // remove type
@@ -110,14 +109,27 @@ func DecodeAddressBytes(b []byte) (Address, wire.BitcoinNet, error) {
 			pkhs = append(pkhs, b[:hashLength])
 			b = b[hashLength:]
 		}
-		a, err := AddressMultiPKHFromBytes(required, pkhs)
+		a, err := NewAddressMultiPKH(required, pkhs)
 		return a, TestNet, err
 	case typeTestRPH:
-		a, err := AddressRPHFromBytes(b[1:])
+		a, err := NewAddressRPH(b[1:])
 		return a, TestNet, err
 	}
 
 	return nil, MainNet, ErrBadType
+}
+
+// DecodeNetMatches returns true if the decoded network id matches the specified network id.
+// All test network ids decode as TestNet.
+func DecodeNetMatches(decoded wire.BitcoinNet, desired wire.BitcoinNet) bool {
+	switch decoded {
+	case MainNet:
+		return desired == MainNet
+	case TestNet:
+		return desired != MainNet
+	}
+
+	return false
 }
 
 /****************************************** PKH ***************************************************/
@@ -125,8 +137,8 @@ type AddressPKH struct {
 	pkh []byte
 }
 
-// AddressPKHFromBytes creates an address from a public key hash.
-func AddressPKHFromBytes(pkh []byte) (*AddressPKH, error) {
+// NewAddressPKH creates an address from a public key hash.
+func NewAddressPKH(pkh []byte) (*AddressPKH, error) {
 	if len(pkh) != hashLength {
 		return nil, ErrBadHashLength
 	}
@@ -154,8 +166,15 @@ func (a *AddressPKH) Bytes(network wire.BitcoinNet) []byte {
 	return append([]byte{addressType}, a.pkh...)
 }
 
-func (a *AddressPKH) ScriptAddress() []byte {
-	return a.pkh
+func (a *AddressPKH) Equal(other Address) bool {
+	if other == nil {
+		return false
+	}
+	otherPKH, ok := other.(*AddressPKH)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(a.pkh, otherPKH.pkh)
 }
 
 /******************************************* SH ***************************************************/
@@ -163,8 +182,8 @@ type AddressSH struct {
 	sh []byte
 }
 
-// AddressSHFromBytes creates an address from a script hash.
-func AddressSHFromBytes(sh []byte) (*AddressSH, error) {
+// NewAddressSH creates an address from a script hash.
+func NewAddressSH(sh []byte) (*AddressSH, error) {
 	if len(sh) != hashLength {
 		return nil, ErrBadHashLength
 	}
@@ -192,8 +211,15 @@ func (a *AddressSH) Bytes(network wire.BitcoinNet) []byte {
 	return append([]byte{addressType}, a.sh...)
 }
 
-func (a *AddressSH) ScriptAddress() []byte {
-	return nil //errors.New("SH addresses don't have script addresses")
+func (a *AddressSH) Equal(other Address) bool {
+	if other == nil {
+		return false
+	}
+	otherSH, ok := other.(*AddressSH)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(a.sh, otherSH.sh)
 }
 
 /**************************************** MultiPKH ************************************************/
@@ -202,8 +228,8 @@ type AddressMultiPKH struct {
 	required uint16
 }
 
-// AddressMultiPKHFromBytes creates an address from a required signature count and some public key hashes.
-func AddressMultiPKHFromBytes(required uint16, pkhs [][]byte) (*AddressMultiPKH, error) {
+// NewAddressMultiPKH creates an address from a required signature count and some public key hashes.
+func NewAddressMultiPKH(required uint16, pkhs [][]byte) (*AddressMultiPKH, error) {
 	for _, pkh := range pkhs {
 		if len(pkh) != hashLength {
 			return nil, ErrBadHashLength
@@ -251,8 +277,25 @@ func (a *AddressMultiPKH) Bytes(network wire.BitcoinNet) []byte {
 	return b
 }
 
-func (a *AddressMultiPKH) ScriptAddress() []byte {
-	return nil //errors.New("MultiPKH addresses don't have script addresses")
+func (a *AddressMultiPKH) Equal(other Address) bool {
+	if other == nil {
+		return false
+	}
+	otherMultiPKH, ok := other.(*AddressMultiPKH)
+	if !ok {
+		return false
+	}
+
+	if len(a.pkhs) != len(otherMultiPKH.pkhs) {
+		return false
+	}
+
+	for i, pkh := range a.pkhs {
+		if !bytes.Equal(pkh, otherMultiPKH.pkhs[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 /***************************************** RPH ************************************************/
@@ -260,8 +303,8 @@ type AddressRPH struct {
 	rph []byte
 }
 
-// AddressRPHFromBytes creates an address from an R puzzle hash.
-func AddressRPHFromBytes(rph []byte) (*AddressRPH, error) {
+// NewAddressRPH creates an address from an R puzzle hash.
+func NewAddressRPH(rph []byte) (*AddressRPH, error) {
 	if len(rph) != hashLength {
 		return nil, ErrBadHashLength
 	}
@@ -289,8 +332,15 @@ func (a *AddressRPH) Bytes(network wire.BitcoinNet) []byte {
 	return append([]byte{addressType}, a.rph...)
 }
 
-func (a *AddressRPH) ScriptAddress() []byte {
-	return nil //errors.New("R Puzzle addresses don't have script addresses")
+func (a *AddressRPH) Equal(other Address) bool {
+	if other == nil {
+		return false
+	}
+	otherRPH, ok := other.(*AddressRPH)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(a.rph, otherRPH.rph)
 }
 
 func encodeAddress(b []byte) string {

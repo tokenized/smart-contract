@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -23,9 +24,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -61,7 +60,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter, it
 			return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
 		}
 
-		if bytes.Equal(rk.Address.ScriptAddress(), itx.Outputs[outputIndex].Address.ScriptAddress()) {
+		if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
 			found = true
 			break
 		}
@@ -122,7 +121,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 			return fmt.Errorf("Reject message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
 		}
 
-		if bytes.Equal(rk.Address.ScriptAddress(), itx.Outputs[outputIndex].Address.ScriptAddress()) {
+		if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
 			found = true
 			break
 		}
@@ -197,21 +196,29 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 		MessagePayload: data,
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	// Create tx
-	tx := txbuilder.NewTx(contractPKH.Bytes(), m.Config.DustLimit, m.Config.FeeRate)
+	tx := txbuilder.NewTxBuilder(rk.Address, m.Config.DustLimit, m.Config.FeeRate)
 
 	// Add outputs to administration/operator
-	tx.AddP2PKHDustOutput(ct.AdministrationPKH.Bytes(), false)
+	adminAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
+	if err != nil {
+		return errors.Wrap(err, "Failed to create admin address")
+	}
+	tx.AddDustOutput(adminAddress, false)
 	outputAmount := uint64(m.Config.DustLimit)
 	if !ct.OperatorPKH.IsZero() {
 		// Add operator
-		tx.AddP2PKHDustOutput(ct.OperatorPKH.Bytes(), false)
+		operatorAddress, err := bitcoin.NewAddressPKH(ct.OperatorPKH.Bytes())
+		if err != nil {
+			return errors.Wrap(err, "Failed to create operator address")
+		}
+		tx.AddDustOutput(operatorAddress, false)
 		message.AddressIndexes = append(message.AddressIndexes, uint16(1))
 		outputAmount += uint64(m.Config.DustLimit)
 	}
@@ -227,7 +234,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedInputSize)
 
 	for {
-		utxos, err := m.UTXOs.Get(amount, rk.Address.ScriptAddress())
+		utxos, err := m.UTXOs.Get(amount, rk.Address)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get UTXOs")
 		}
@@ -238,14 +245,14 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 			}
 		}
 
-		err = tx.Sign([]*btcec.PrivateKey{rk.PrivateKey})
+		err = tx.Sign([]bitcoin.Key{rk.Key})
 		if err == nil {
 			break
 		}
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			// Get more utxos
 			amount = uint64(float32(amount) * 1.25)
-			utxos, err = m.UTXOs.Get(amount, rk.Address.ScriptAddress())
+			utxos, err = m.UTXOs.Get(amount, rk.Address)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get UTXOs")
 			}
@@ -308,7 +315,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	if int(transfer.Assets[firstContractIndex].ContractIndex) >= len(transferTx.Outputs) {
-		node.LogWarn(ctx, "Transfer contract index out of range : %s", rk.Address.String())
+		node.LogWarn(ctx, "Transfer contract index out of range : %s", rk.Address.String(wire.BitcoinNet(m.Config.ChainParams.Net)))
 		return errors.New("Transfer contract index out of range")
 	}
 
@@ -333,7 +340,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return err
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -391,8 +398,9 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	if settlementIsComplete(ctx, transfer, settlement) {
 		// Sign this contracts input of the settle tx.
 		signed := false
+		var sigHashCache txbuilder.SigHashCache
 		for i, _ := range settleTx.Inputs {
-			err = settleTx.SignInput(i, rk.PrivateKey)
+			err = settleTx.SignInput(i, rk.Key, &sigHashCache)
 			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 				continue
 			}
@@ -483,7 +491,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Transfer invalid for transfer tx")
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -519,8 +527,8 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	}
 
 	// Convert settle tx to a txbuilder tx
-	var settleTx *txbuilder.Tx
-	settleTx, err = txbuilder.NewTxFromWire(rk.Address.ScriptAddress(), m.Config.DustLimit, m.Config.FeeRate,
+	var settleTx *txbuilder.TxBuilder
+	settleTx, err = txbuilder.NewTxBuilderFromWire(rk.Address, m.Config.DustLimit, m.Config.FeeRate,
 		settleWireTx, []*wire.MsgTx{transferTx.MsgTx})
 	if err != nil {
 		return errors.Wrap(err, "Failed to compose settle tx")
@@ -528,8 +536,9 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	// Sign this contracts input of the settle tx.
 	signed := false
+	var hashCache txbuilder.SigHashCache
 	for i, _ := range settleTx.Inputs {
-		err = settleTx.SignInput(i, rk.PrivateKey)
+		err = settleTx.SignInput(i, rk.Key, &hashCache)
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 			continue
 		}
@@ -548,7 +557,11 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	//   have signed it yet since it was incomplete.
 	if settleTx.AllInputsAreSigned() {
 		// Remove pending transfer
-		contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		addressPKH, ok := rk.Address.(*bitcoin.AddressPKH)
+		if !ok {
+			return errors.New("Wallet key not PKH")
+		}
+		contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
 		if err := transfer.Remove(ctx, m.MasterDB, contractPKH, protocol.TxIdFromBytes(transferTx.Hash[:])); err != nil {
 			return errors.Wrap(err, "Failed to save pending transfer")
 		}
@@ -574,7 +587,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 // sendToPreviousSettlementContract sends the completed settlement tx to the previous contract involved so it can sign it.
 func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, w *node.ResponseWriter,
-	rk *wallet.Key, itx *inspector.Transaction, settleTx *txbuilder.Tx) error {
+	rk *wallet.Key, itx *inspector.Transaction, settleTx *txbuilder.TxBuilder) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.sendToPreviousSettlementContract")
 	defer span.End()
 
@@ -591,19 +604,14 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 		return errors.New("Could not find input that needs signature")
 	}
 
-	pkh, err := settleTx.InputPKH(inputIndex)
-	if err != nil {
-		return err
-	}
-
-	address, err := btcutil.NewAddressPubKeyHash(pkh, &config.ChainParams)
+	address, err := settleTx.InputAddress(inputIndex)
 	if err != nil {
 		return err
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	node.Log(ctx, "Sending settlement SignatureRequest to %x", address.ScriptAddress())
+	node.Log(ctx, "Sending settlement SignatureRequest to %s", address.String(wire.BitcoinNet(config.ChainParams.Net)))
 
 	// Add output to previous contract.
 	// Mark as change so it gets everything except the tx fee.
@@ -651,55 +659,70 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 	// Generate public key hashes for all the outputs
 	settleOutputPKHs := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
+	settleOutputAddresses := make([]bitcoin.Address, 0, len(settleTx.TxOut))
 	settleOpReturnFound := false
 	for i, output := range settleTx.TxOut {
-		pkh, err := txbuilder.PubKeyHashFromP2PKH(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
 		if err == nil {
-			settleOutputPKHs = append(settleOutputPKHs, protocol.PublicKeyHashFromBytes(pkh))
-		} else {
-			settleOutputPKHs = append(settleOutputPKHs, nil)
-			if txbuilder.IsOpReturnScript(output.PkScript) {
-				code, err := protocol.Code(output.PkScript, config.IsTest)
-				if err != nil {
-					return fmt.Errorf("Unknown OP_RETURN script : output %d", i)
-				}
-				if code == protocol.CodeSettlement && !settleOpReturnFound {
-					settleOpReturnFound = true
-					continue
-				}
-				if code == protocol.CodeMessage {
-					payload, err := protocol.Deserialize(output.PkScript, config.IsTest)
-					if err != nil {
-						return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
-					}
-					message, ok := payload.(*protocol.Message)
-					if !ok {
-						return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
-					}
-					if message.MessageType != protocol.CodeOutputMetadata {
-						return fmt.Errorf("Invalid Tokenized OP_RETURN non-metadata message script : output %d", i)
-					}
-					continue
-				}
-				return fmt.Errorf("Unexpected Tokenized OP_RETURN script : output %d", i)
+			settleOutputAddresses = append(settleOutputAddresses, address)
+			addressPKH, ok := address.(*bitcoin.AddressPKH)
+			if ok {
+				settleOutputPKHs = append(settleOutputPKHs, protocol.PublicKeyHashFromBytes(addressPKH.PKH()))
+				continue
 			}
+		} else {
+			settleOutputAddresses = append(settleOutputAddresses, nil)
 		}
+
+		settleOutputPKHs = append(settleOutputPKHs, nil)
+		code, err := protocol.Code(output.PkScript, config.IsTest)
+		if err != nil {
+			continue
+		}
+		if code == protocol.CodeSettlement && !settleOpReturnFound {
+			settleOpReturnFound = true
+			continue
+		}
+		if code == protocol.CodeMessage {
+			payload, err := protocol.Deserialize(output.PkScript, config.IsTest)
+			if err != nil {
+				return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
+			}
+			message, ok := payload.(*protocol.Message)
+			if !ok {
+				return fmt.Errorf("Invalid Tokenized OP_RETURN message script : output %d", i)
+			}
+			if message.MessageType != protocol.CodeOutputMetadata {
+				return fmt.Errorf("Invalid Tokenized OP_RETURN non-metadata message script : output %d", i)
+			}
+			continue
+		}
+		return fmt.Errorf("Unexpected Tokenized OP_RETURN script : output %d", i)
 	}
 
 	// Generate public key hashes for all the inputs
 	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
-		hash, err := txbuilder.PubKeyHashFromP2PKHSigScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
 			continue
 		}
+		addressPKH, ok := address.(*bitcoin.AddressPKH)
+		if !ok {
+			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
+			continue
+		}
 
-		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(hash))
+		settleInputAddresses = append(settleInputAddresses, *protocol.PublicKeyHashFromBytes(addressPKH.PKH()))
 	}
 
 	txid := protocol.TxIdFromBytes(transferTx.Hash[:])
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	addressPKH, ok := rk.Address.(*bitcoin.AddressPKH)
+	if !ok {
+		return errors.New("Contract address not PKH")
+	}
+	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
 	ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -714,8 +737,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
 			}
 
-			contractOutputPKH := settleOutputPKHs[assetTransfer.ContractIndex]
-			if contractOutputPKH != nil && !bytes.Equal(contractOutputPKH.Bytes(), contractPKH.Bytes()) {
+			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
+			if contractOutputAddress != nil && !contractOutputAddress.Equal(rk.Address) {
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
@@ -761,12 +784,17 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
 			}
 
-			inputPKH := protocol.PublicKeyHashFromBytes(transferTx.Inputs[sender.Index].Address.ScriptAddress())
+			inputAddressPKH, ok := transferTx.Inputs[sender.Index].Address.(*bitcoin.AddressPKH)
+			if !ok {
+				return fmt.Errorf("Sender input not PKH : %s",
+					transferTx.Inputs[sender.Index].Address.String(wire.BitcoinNet(config.ChainParams.Net)))
+			}
+			inputPKH := protocol.PublicKeyHashFromBytes(inputAddressPKH.PKH())
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
-			for i, outputPKH := range settleOutputPKHs {
-				if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), inputPKH.Bytes()) {
+			for i, outputAddress := range settleOutputAddresses {
+				if outputAddress != nil && outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -872,8 +900,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	// Verify contract fee
 	if ct.ContractFee > 0 {
 		found := false
-		for i, outputPKH := range settleOutputPKHs {
-			if outputPKH != nil && bytes.Equal(outputPKH.Bytes(), config.FeePKH.Bytes()) {
+		for i, outputAddress := range settleOutputAddresses {
+			if outputAddress != nil && outputAddress.Equal(config.FeeAddress) {
 				if uint64(settleTx.TxOut[i].Value) < ct.ContractFee {
 					return fmt.Errorf("Contract fee too low")
 				}
@@ -903,7 +931,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 		return errors.New("First contract output index not found")
 	}
 
-	if !bytes.Equal(transferTx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
 		// This is not the first contract. Send reject to only the first contract.
 		w.AddRejectValue(ctx, transferTx.Outputs[first].Address, 0)
 		return node.RespondReject(ctx, w, messageTx, rk, code)
@@ -921,7 +949,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 		return errors.New("Boomerang output index not found")
 	}
 
-	if bytes.Equal(transferTx.Outputs[boomerangIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+	if transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
 		found := false
 		for i, utxo := range utxos {
 			if utxo.Index == boomerangIndex {
@@ -977,14 +1005,14 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 	}
 
 	if refundBalance > balance {
-		contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 		ct, err := contract.Retrieve(ctx, m.MasterDB, contractPKH)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
-		administrationAddress, err := btcutil.NewAddressPubKeyHash(ct.AdministrationPKH.Bytes(), &m.Config.ChainParams)
+		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
 		w.ClearRejectOutputValues(administrationAddress)
 	}
 
@@ -999,7 +1027,11 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 	transferTx *inspector.Transaction, transferMsg *protocol.Transfer, rk *wallet.Key) error {
 
 	// Remove pending transfer
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	addressPKH, ok := rk.Address.(*bitcoin.AddressPKH)
+	if !ok {
+		return errors.New("Contract address not PKH")
+	}
+	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
 	if err := transfer.Remove(ctx, masterDB, contractPKH, protocol.TxIdFromBytes(transferTx.Hash[:])); err != nil {
 		return errors.Wrap(err, "Failed to save pending transfer")
 	}
@@ -1021,7 +1053,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 	}
 
 	// Determine if this contract is the first contract an needs to send a refund.
-	if !bytes.Equal(transferTx.Outputs[first].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
 		return nil
 	}
 
@@ -1037,7 +1069,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		return errors.New("Boomerang output index not found")
 	}
 
-	if bytes.Equal(transferTx.Outputs[boomerangIndex].Address.ScriptAddress(), rk.Address.ScriptAddress()) {
+	if transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
 		found := false
 		for i, utxo := range utxos {
 			if utxo.Index == boomerangIndex {
@@ -1093,20 +1125,23 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 	}
 
 	if refundBalance > balance {
-		contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 		ct, err := contract.Retrieve(ctx, masterDB, contractPKH)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone.
-		administrationAddress, err := btcutil.NewAddressPubKeyHash(ct.AdministrationPKH.Bytes(), &config.ChainParams)
+		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
+		if err != nil {
+			return errors.Wrap(err, "Failed to create administration address")
+		}
 		w.ClearRejectOutputValues(administrationAddress)
 	}
 
 	// Set rejection address from previous rejection
 	if int(rejection.RejectAddressIndex) < len(rejectionTx.Outputs) {
-		w.RejectPKH = protocol.PublicKeyHashFromBytes(rejectionTx.Outputs[rejection.RejectAddressIndex].Address.ScriptAddress())
+		w.RejectAddress = rejectionTx.Outputs[rejection.RejectAddressIndex].Address
 	}
 
 	return node.RespondReject(ctx, w, transferTx, rk, rejection.RejectionCode)

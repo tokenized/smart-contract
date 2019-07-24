@@ -26,7 +26,7 @@ type TxBuilder struct {
 }
 
 // NewTx returns a new TxBuilder with the specified change PKH
-// changePKH (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
+// changePKH (Public Key Hash) is a 20 byte slice.
 func NewTxBuilder(changeAddress bitcoin.Address, dustLimit uint64, feeRate float32) *TxBuilder {
 	tx := wire.MsgTx{Version: DefaultVersion, LockTime: 0}
 	result := TxBuilder{

@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
@@ -94,11 +94,11 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		tx := txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit, theClient.Config.FeeRate)
 
 		// Add output to contract
 		contractOutputIndex := uint32(0)
-		err = tx.AddP2PKHDustOutput(theClient.ContractPKH, false)
+		err = tx.AddDustOutput(theClient.ContractAddress, false)
 		if err != nil {
 			fmt.Printf("Failed to add contract output : %s\n", err)
 			return nil
@@ -112,7 +112,8 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Determine funding required for contract to be able to post response tx.
-		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0, theClient.Config.DustLimit, theClient.Config.ContractFee, true)
+		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0,
+			theClient.Config.DustLimit, theClient.Config.ContractFee, true)
 		if err != nil {
 			fmt.Printf("Failed to estimate funding : %s\n", err)
 			return nil
@@ -150,7 +151,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		err = tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key})
+		err = tx.Sign([]bitcoin.Key{theClient.Wallet.Key})
 		if err != nil {
 			fmt.Printf("Failed to sign tx : %s\n", err)
 			return nil

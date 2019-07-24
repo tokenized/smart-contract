@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -44,12 +45,12 @@ func holderProposal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 150)
+	err = mockUpHolding(ctx, userKey.Address, 150)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -78,10 +79,10 @@ func holderProposal(t *testing.T) {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
@@ -118,7 +119,7 @@ func holderProposal(t *testing.T) {
 	checkResponse(t, "G2")
 
 	// Verify vote
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
@@ -158,7 +159,7 @@ func sendBallot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	err = mockUpHolding(ctx, userKey.Address, 250)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -167,7 +168,7 @@ func sendBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up proposal : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100010, userKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100010, userKey.Address)
 
 	ballotData := protocol.BallotCast{
 		VoteTxId: testVoteTxId,
@@ -183,7 +184,7 @@ func sendBallot(t *testing.T) {
 	ballotTx.TxIn = append(ballotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&ballotInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&ballotData, test.NodeConfig.IsTest)
@@ -215,16 +216,16 @@ func sendBallot(t *testing.T) {
 	checkResponse(t, "G4")
 
 	// Verify ballot counted
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
 	}
 
-	if !bytes.Equal(vt.Ballots[0].PKH.Bytes(), userKey.Address.ScriptAddress()) {
-		t.Fatalf("\t%s\tFailed to verify ballot pkh : %x != %x", tests.Failed, vt.Ballots[0].PKH.Bytes(), userKey.Address.ScriptAddress())
+	if !bytes.Equal(vt.Ballots[0].PKH.Bytes(), bitcoin.Hash160(userKey.Key.PublicKey().Bytes())) {
+		t.Fatalf("\t%s\tFailed to verify ballot pkh : %x != %x", tests.Failed, vt.Ballots[0].PKH.Bytes(), bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 	}
-	t.Logf("\t%s\tVerified ballot pkh : %x", tests.Success, userKey.Address.ScriptAddress())
+	t.Logf("\t%s\tVerified ballot pkh : %x", tests.Success, bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
 
 	if vt.Ballots[0].Quantity != 250 {
 		t.Fatalf("\t%s\tFailed to verify ballot quantity : %d != %d", tests.Failed, vt.Ballots[0].Quantity, 250)
@@ -247,7 +248,7 @@ func voteResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	err = mockUpHolding(ctx, userKey.Address, 250)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -268,7 +269,7 @@ func voteResult(t *testing.T) {
 	checkResponse(t, "G5")
 
 	// Verify result
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
@@ -314,7 +315,7 @@ func voteResultRelative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	err = mockUpHolding(ctx, userKey.Address, 250)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -323,7 +324,7 @@ func voteResultRelative(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
 
-	err = mockUpBallot(ctx, userKey.Address.ScriptAddress(), 250, "A")
+	err = mockUpBallot(ctx, userKey.Address, 250, "A")
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up ballot : %v", tests.Failed, err)
 	}
@@ -340,7 +341,7 @@ func voteResultRelative(t *testing.T) {
 	checkResponse(t, "G5")
 
 	// Verify result
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
@@ -386,7 +387,7 @@ func voteResultAbsolute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
-	err = mockUpHolding(ctx, userKey.Address.ScriptAddress(), 250)
+	err = mockUpHolding(ctx, userKey.Address, 250)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
@@ -395,7 +396,7 @@ func voteResultAbsolute(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
 
-	err = mockUpBallot(ctx, userKey.Address.ScriptAddress(), 250, "A")
+	err = mockUpBallot(ctx, userKey.Address, 250, "A")
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up ballot : %v", tests.Failed, err)
 	}
@@ -412,7 +413,7 @@ func voteResultAbsolute(t *testing.T) {
 	checkResponse(t, "G5")
 
 	// Verify result
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
@@ -443,15 +444,19 @@ func voteResultAbsolute(t *testing.T) {
 	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
 }
 
-func mockUpBallot(ctx context.Context, pkh []byte, quantity uint64, v string) error {
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+func mockUpBallot(ctx context.Context, address bitcoin.Address, quantity uint64, v string) error {
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		return err
 	}
 
+	addressPKH, ok := address.(*bitcoin.AddressPKH)
+	if !ok {
+		return errors.New("Address not PKH")
+	}
 	vt.Ballots = append(vt.Ballots, &state.Ballot{
-		PKH:       *protocol.PublicKeyHashFromBytes(pkh),
+		PKH:       *protocol.PublicKeyHashFromBytes(addressPKH.PKH()),
 		Vote:      v,
 		Quantity:  quantity,
 		Timestamp: protocol.CurrentTimestamp(),
@@ -461,7 +466,7 @@ func mockUpBallot(ctx context.Context, pkh []byte, quantity uint64, v string) er
 }
 
 func mockUpVote(ctx context.Context, voteSystem uint8) error {
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -484,10 +489,10 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(3000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
@@ -509,7 +514,7 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	test.RPCNode.SaveTX(ctx, proposalTx)
 	transactions.AddTx(ctx, test.MasterDB, proposalItx)
 
-	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 1000014, test.ContractKey.Address.ScriptAddress())
+	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 1000014, test.ContractKey.Address)
 
 	voteActionData := protocol.Vote{
 		Timestamp: protocol.CurrentTimestamp(),
@@ -524,7 +529,7 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 	voteTx.TxIn = append(voteTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&voteInputHash, 1), make([]byte, 130)))
 
 	// To contract
-	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err = protocol.Serialize(&voteActionData, test.NodeConfig.IsTest)
@@ -556,7 +561,7 @@ func mockUpVote(ctx context.Context, voteSystem uint8) error {
 }
 
 func mockUpProposal(ctx context.Context) error {
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
@@ -585,10 +590,10 @@ func mockUpProposal(ctx context.Context) error {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
@@ -627,7 +632,7 @@ func mockUpProposal(ctx context.Context) error {
 		Expires:      protocol.NewTimestamp(now.Nano() + 500000000),
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	return vote.Save(ctx, test.MasterDB, contractPKH, &voteData)
 }
 
@@ -652,7 +657,7 @@ func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint8, amen
 
 	voteData.ProposedAmendments = append(voteData.ProposedAmendments, *amendment)
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	return vote.Save(ctx, test.MasterDB, contractPKH, &voteData)
 }
 
@@ -675,12 +680,12 @@ func mockUpContractAmendmentVote(ctx context.Context, initiator, system uint8, a
 
 	voteData.ProposedAmendments = append(voteData.ProposedAmendments, *amendment)
 
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	return vote.Save(ctx, test.MasterDB, contractPKH, &voteData)
 }
 
 func mockUpVoteResultTx(ctx context.Context, result string) error {
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
 		return err
@@ -690,7 +695,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	vt.Result = result
 
 	// Set result Id
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100011, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100011, issuerKey.Address)
 
 	// Build result transaction
 	resultTx := wire.NewMsgTx(2)
@@ -702,7 +707,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&resultInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	resultData := protocol.Result{

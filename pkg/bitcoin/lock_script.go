@@ -34,7 +34,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 			}
 			script = script[1:]
 
-			return AddressPKHFromBytes(pkh)
+			return NewAddressPKH(pkh)
 
 		case OP_3: // RPH
 			if len(script) != 33 {
@@ -105,7 +105,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 			}
 			script = script[1:]
 
-			return AddressRPHFromBytes(rph)
+			return NewAddressRPH(rph)
 
 		}
 	case OP_HASH160: // P2SH
@@ -127,7 +127,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 		}
 		script = script[1:]
 
-		return AddressSHFromBytes(sh)
+		return NewAddressSH(sh)
 
 	case OP_FALSE: // MultiPKH
 		// 35 = 1 min number push + 4 op codes outside of pkh if statements + 30 per pkh
@@ -224,7 +224,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 		}
 		script = script[1:]
 
-		return AddressMultiPKHFromBytes(uint16(required), pkhs)
+		return NewAddressMultiPKH(uint16(required), pkhs)
 
 	}
 

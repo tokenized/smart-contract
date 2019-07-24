@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -60,7 +60,12 @@ var cmdBench = &cobra.Command{
 		}
 		receiverPKH = receiver.ScriptAddress()
 
-		assetCode = protocol.AssetCodeFromContract(theClient.ContractPKH, 0)
+		addressPKH, ok := theClient.ContractAddress.(*bitcoin.AddressPKH)
+		if !ok {
+			logger.Warn(ctx, "Contract address not PKH : %s", err)
+			return nil
+		}
+		assetCode = protocol.AssetCodeFromContract(addressPKH.PKH(), 0)
 		fundingAmount := uint64(2000)
 		utxoAmount := uint64(fundingAmount + 500)
 		requiredBalance := utxoAmount * 2             // Create contract and asset
@@ -91,7 +96,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Create UTXOs ============================================================================
-		tx := txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
 		UTXOs := theClient.Wallet.UnspentOutputs()
@@ -118,7 +123,7 @@ var cmdBench = &cobra.Command{
 
 		utxoCount := count + 2
 		for i := 0; i < utxoCount; i++ {
-			if err := tx.AddP2PKHOutput(theClient.Wallet.PublicKeyHash, utxoAmount, false); err != nil {
+			if err := tx.AddPaymentOutput(theClient.Wallet.Address, utxoAmount, false); err != nil {
 				logger.Warn(ctx, "Failed to add utxo output : %s", err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
@@ -127,7 +132,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key}); err != nil {
+		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign utxo tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -138,7 +143,7 @@ var cmdBench = &cobra.Command{
 		utxoIndex := uint32(0)
 
 		// Create contract =========================================================================
-		tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
 		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
@@ -151,7 +156,7 @@ var cmdBench = &cobra.Command{
 		}
 		utxoIndex++
 
-		if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
+		if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
 			logger.Warn(ctx, "Failed to add contract output : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -173,7 +178,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key}); err != nil {
+		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign contract offer tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -183,7 +188,7 @@ var cmdBench = &cobra.Command{
 		contractTx := tx
 
 		// Create asset ============================================================================
-		tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
 		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
@@ -196,7 +201,7 @@ var cmdBench = &cobra.Command{
 		}
 		utxoIndex++
 
-		if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
+		if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
 			logger.Warn(ctx, "Failed to add contract output : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -218,7 +223,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key}); err != nil {
+		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign asset offer tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -228,10 +233,10 @@ var cmdBench = &cobra.Command{
 		assetTx := tx
 
 		// Create transfer txs =====================================================================
-		transferTxs := make([]*txbuilder.Tx, 0, count)
+		transferTxs := make([]*txbuilder.TxBuilder, 0, count)
 
 		for i := 0; i < count; i++ {
-			tx = txbuilder.NewTx(theClient.Wallet.PublicKeyHash, theClient.Config.DustLimit,
+			tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 				theClient.Config.FeeRate)
 
 			if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
@@ -244,7 +249,7 @@ var cmdBench = &cobra.Command{
 			}
 			utxoIndex++
 
-			if err := tx.AddP2PKHOutput(theClient.ContractPKH, fundingAmount, false); err != nil {
+			if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
 				logger.Warn(ctx, "Failed to add contract output to transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
@@ -266,7 +271,7 @@ var cmdBench = &cobra.Command{
 			}
 
 			// Sign tx
-			if err := tx.Sign([]*btcec.PrivateKey{theClient.Wallet.Key}); err != nil {
+			if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 				logger.Warn(ctx, "Failed to sign transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()

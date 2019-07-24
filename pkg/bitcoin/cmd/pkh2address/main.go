@@ -31,7 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	b, err := bitcoin.AddressPKHFromBytes(pkh)
+	b, err := bitcoin.NewAddressPKH(pkh)
 	if err != nil {
 		panic(err)
 	}

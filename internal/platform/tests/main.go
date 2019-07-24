@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"crypto/sha256"
 	"math/rand"
 	"os"
 	"runtime/debug"
@@ -13,16 +12,13 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ripemd160"
 )
 
 // Success and failure markers.
@@ -78,19 +74,23 @@ func New(logToStdOut bool) *Test {
 		IsTest:             true,
 	}
 
-	feeKey, err := GenerateKey(nodeConfig.ChainParams)
+	feeKey, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate fee key : %v", err)
 		return nil
 	}
 
-	fee2Key, err := GenerateKey(nodeConfig.ChainParams)
+	fee2Key, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate fee 2 key : %v", err)
 		return nil
 	}
 
-	nodeConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeKey.Address.ScriptAddress())
+	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()))
+	if err != nil {
+		node.LogError(ctx, "main : Failed to create fee 2 address : %v", err)
+		return nil
+	}
 
 	rpcNode := newMockRpcNode(&nodeConfig.ChainParams)
 
@@ -116,13 +116,13 @@ func New(logToStdOut bool) *Test {
 		return nil
 	}
 
-	masterKey, err := GenerateKey(nodeConfig.ChainParams)
+	masterKey, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate master key : %v", err)
 		return nil
 	}
 
-	contractKey, err := GenerateKey(nodeConfig.ChainParams)
+	contractKey, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate contract key : %v", err)
 		return nil
@@ -134,13 +134,13 @@ func New(logToStdOut bool) *Test {
 		return nil
 	}
 
-	master2Key, err := GenerateKey(nodeConfig.ChainParams)
+	master2Key, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate master 2 key : %v", err)
 		return nil
 	}
 
-	contract2Key, err := GenerateKey(nodeConfig.ChainParams)
+	contract2Key, err := GenerateKey()
 	if err != nil {
 		node.LogError(ctx, "main : Failed to generate contract 2 key : %v", err)
 		return nil
@@ -218,22 +218,18 @@ func NewContext() context.Context {
 	return context.WithValue(context.Background(), node.KeyValues, &values)
 }
 
-// GenerateKey does something
-func GenerateKey(chainParams chaincfg.Params) (*wallet.Key, error) {
-	key, err := btcec.NewPrivateKey(btcec.S256())
+// GenerateKey generates a new wallet key.
+func GenerateKey() (*wallet.Key, error) {
+	key, err := bitcoin.GenerateKeyS256()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")
 	}
 
 	result := wallet.Key{
-		PrivateKey: key,
-		PublicKey:  key.PubKey(),
+		Key: key,
 	}
 
-	hash256 := sha256.Sum256(result.PublicKey.SerializeCompressed())
-	hash160 := ripemd160.New()
-	hash160.Write(hash256[:])
-	result.Address, err = btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &chainParams)
+	result.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()))
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create key address")
 	}
