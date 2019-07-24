@@ -373,7 +373,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
 		settlement, m.Headers, assetUpdates)
 	if err != nil {
@@ -388,7 +388,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	for assetCode, hds := range assetUpdates {
 		for _, h := range hds {
-			if err := holdings.Save(ctx, m.MasterDB, contractPKH, &assetCode, &h); err != nil {
+			if err := holdings.Save(ctx, m.MasterDB, contractPKH, &assetCode, h); err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
 		}

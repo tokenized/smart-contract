@@ -196,7 +196,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Add this contract's data to the settlement op return data
-	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding)
 	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement,
 		t.Headers, assetUpdates)
 	if err != nil {
@@ -209,14 +209,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	for assetCode, hds := range assetUpdates {
-		for _, h := range hds {
-			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, &h); err != nil {
-				return errors.Wrap(err, "Failed to save holding")
-			}
-		}
-	}
-
 	// Check if settlement data is complete. No other contracts involved
 	if settlementIsComplete(ctx, msg, &settlement) {
 		node.Log(ctx, "Single contract settlement complete")
@@ -225,7 +217,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
 				protocol.RejectInsufficientValue, false)
 		}
-		return node.Respond(ctx, w, settleTx.MsgTx)
+
+		err := node.Respond(ctx, w, settleTx.MsgTx)
+		if err == nil {
+			if err := t.saveHoldings(ctx, assetUpdates, contractPKH); err != nil {
+				return err
+			}
+		}
+		return err
 	}
 
 	// Save tx
@@ -252,7 +251,42 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to schedule transfer timeout")
 	}
 
+	if err := t.saveHoldings(ctx, assetUpdates, contractPKH); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (t *Transfer) saveHoldings(ctx context.Context,
+	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding,
+	contractPKH *protocol.PublicKeyHash) error {
+
+	for assetCode, hds := range updates {
+		for _, h := range hds {
+			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, h); err != nil {
+				return errors.Wrap(err, "Failed to save holding")
+			}
+		}
+	}
+
+	return nil
+}
+
+func (t *Transfer) revertHoldings(ctx context.Context,
+	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding,
+	contractPKH *protocol.PublicKeyHash,
+	txid *protocol.TxId) error {
+
+	for _, hds := range updates {
+		for _, h := range hds {
+			if err := holdings.RevertStatus(h, txid); err != nil {
+				return errors.Wrap(err, "Failed to revert holding status")
+			}
+		}
+	}
+
+	return t.saveHoldings(ctx, updates, contractPKH)
 }
 
 // TransferTimeout is called when a multi-contract transfer times out because the other contracts are not responding.
@@ -559,7 +593,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *protocol.Transfer,
 	settleTx *txbuilder.TxBuilder, settlement *protocol.Settlement, headers node.BitcoinHeaders,
-	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding) error {
+	updates map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -656,7 +690,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		toAdministration := uint64(0)
 		txid := protocol.TxIdFromBytes(transferTx.Hash[:])
 		hds := make([]*state.Holding, len(settleTx.Outputs))
-		updatedHoldings := make(map[protocol.PublicKeyHash]state.Holding)
+		updatedHoldings := make(map[protocol.PublicKeyHash]*state.Holding)
 		updates[assetTransfer.AssetCode] = updatedHoldings
 
 		// Process senders
@@ -706,7 +740,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				return errors.Wrap(err, "Failed to get holding")
 			}
 			hds[settleOutputIndex] = &h
-			updatedHoldings[*inputPKH] = h
+			updatedHoldings[*inputPKH] = &h
 
 			if err := holdings.AddDebit(&h, txid, sender.Quantity, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
@@ -762,7 +796,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				return errors.Wrap(err, "Failed to get holding")
 			}
 			hds[settleOutputIndex] = &h
-			updatedHoldings[receiver.Address] = h
+			updatedHoldings[receiver.Address] = &h
 
 			if err := holdings.AddDeposit(&h, txid, receiver.Quantity, v.Now); err != nil {
 				node.LogWarn(ctx, "Send failed : %s : contract=%s asset=%s party=%s",

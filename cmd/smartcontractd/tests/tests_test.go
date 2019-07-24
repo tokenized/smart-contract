@@ -148,7 +148,7 @@ func responseType(tx *wire.MsgTx) string {
 }
 
 // checkResponse fails the test if the respons is not of the specified type
-func checkResponse(t testing.TB, responseCode string) {
+func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	ctx := test.Context
 
 	responseLock.Lock()
@@ -203,6 +203,7 @@ func checkResponse(t testing.TB, responseCode string) {
 	responseLock.Unlock()
 
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
+	return response
 }
 
 // checkResponses fails the test if all responses are not of the specified type
