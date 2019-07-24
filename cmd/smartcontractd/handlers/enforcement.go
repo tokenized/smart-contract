@@ -284,7 +284,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Freeze Tx
 	hash, err := chainhash.NewHash(msg.FreezeTxId.Bytes())
-	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, &e.Config.ChainParams, e.Config.IsTest)
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, e.Config.ChainParams, e.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId.String(), err)
 	}
@@ -835,7 +835,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 
 	// Get Freeze Tx
 	hash, _ := chainhash.NewHash(msg.FreezeTxId.Bytes())
-	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, &e.Config.ChainParams, e.Config.IsTest)
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, e.Config.ChainParams, e.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId.String(), err)
 	}

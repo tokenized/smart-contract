@@ -53,7 +53,7 @@ var cmdBench = &cobra.Command{
 			return nil
 		}
 
-		receiver, err := btcutil.DecodeAddress(args[1], &theClient.Config.ChainParams)
+		receiver, err := btcutil.DecodeAddress(args[1], theClient.Config.ChainParams)
 		if err != nil {
 			logger.Warn(ctx, "Invalid address : %s", err)
 			return nil

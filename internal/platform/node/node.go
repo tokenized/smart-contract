@@ -55,7 +55,7 @@ type Config struct {
 	Version            string
 	FeeAddress         bitcoin.Address
 	DustLimit          uint64
-	ChainParams        chaincfg.Params
+	ChainParams        *chaincfg.Params
 	FeeRate            float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 	PreprocessThreads  int

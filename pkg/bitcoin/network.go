@@ -26,6 +26,20 @@ var (
 	StressTestNetParams chaincfg.Params
 )
 
+func NewChainParams(network string) *chaincfg.Params {
+	switch network {
+	default:
+	case "mainnet":
+		return &MainNetParams
+	case "testnet":
+		return &TestNetParams
+	case "stn":
+		return &StressTestNetParams
+	}
+
+	return nil
+}
+
 func init() {
 	// setup the MainNet params
 	MainNetParams = chaincfg.MainNetParams

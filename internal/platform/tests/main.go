@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/utxos"
@@ -68,7 +67,7 @@ func New(logToStdOut bool) *Test {
 		ContractProviderID: "TokenizedTest",
 		Version:            "TestVersion",
 		DustLimit:          256,
-		ChainParams:        config.NewChainParams("mainnet"),
+		ChainParams:        bitcoin.NewChainParams("mainnet"),
 		FeeRate:            1.0,
 		RequestTimeout:     1000000000000,
 		IsTest:             true,
@@ -92,7 +91,7 @@ func New(logToStdOut bool) *Test {
 		return nil
 	}
 
-	rpcNode := newMockRpcNode(&nodeConfig.ChainParams)
+	rpcNode := newMockRpcNode(nodeConfig.ChainParams)
 
 	// ============================================================
 	// Database

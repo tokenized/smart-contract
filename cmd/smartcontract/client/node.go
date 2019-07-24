@@ -11,7 +11,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode"
@@ -44,7 +43,7 @@ type Client struct {
 }
 
 type Config struct {
-	ChainParams chaincfg.Params
+	ChainParams *chaincfg.Params
 	Key         string  `envconfig:"CLIENT_WALLET_KEY"`
 	FeeRate     float32 `default:"1.1" envconfig:"CLIENT_FEE_RATE"`
 	DustLimit   uint64  `default:"546" envconfig:"CLIENT_DUST_LIMIT"`
@@ -94,7 +93,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 		return nil, err
 	}
 
-	client.Config.ChainParams = config.NewChainParams(network)
+	client.Config.ChainParams = bitcoin.NewChainParams(network)
 
 	// -------------------------------------------------------------------------
 	// Wallet
@@ -121,7 +120,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 func (client *Client) setupSpyNode(ctx context.Context) error {
 	spyStorage := storage.NewFilesystemStorage(storage.NewConfig("", "", "", "standalone", os.Getenv("CLIENT_PATH")))
 
-	spyConfig, err := data.NewConfig(&client.Config.ChainParams, client.Config.SpyNode.Address,
+	spyConfig, err := data.NewConfig(client.Config.ChainParams, client.Config.SpyNode.Address,
 		client.Config.SpyNode.UserAgent, client.Config.SpyNode.StartHash,
 		client.Config.SpyNode.UntrustedClients, client.Config.SpyNode.SafeTxDelay)
 	if err != nil {

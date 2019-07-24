@@ -74,7 +74,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 		Version:            cfg.Contract.Version,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
+		ChainParams:        bitcoin.NewChainParams(cfg.Bitcoin.Network),
 		RequestTimeout:     cfg.Contract.RequestTimeout,
 		PreprocessThreads:  cfg.Contract.PreprocessThreads,
 		IsTest:             cfg.Contract.IsTest,

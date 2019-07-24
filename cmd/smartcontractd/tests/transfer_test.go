@@ -118,7 +118,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
@@ -295,7 +295,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(&test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,

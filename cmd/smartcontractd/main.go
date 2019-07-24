@@ -85,7 +85,7 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(&appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
+	spyConfig, err := data.NewConfig(appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
 		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
@@ -100,7 +100,7 @@ func main() {
 		Host:        cfg.RpcNode.Host,
 		Username:    cfg.RpcNode.Username,
 		Password:    cfg.RpcNode.Password,
-		ChainParams: &appConfig.ChainParams,
+		ChainParams: appConfig.ChainParams,
 	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)

@@ -145,9 +145,9 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter, 
 	var problemTx *inspector.Transaction
 	var err error
 	if hash != nil {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, &m.Config.ChainParams, m.Config.IsTest)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, m.Config.ChainParams, m.Config.IsTest)
 	} else {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, &m.Config.ChainParams, m.Config.IsTest)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, m.Config.ChainParams, m.Config.IsTest)
 	}
 	if err != nil {
 		return nil
@@ -290,7 +290,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	var transferTx *inspector.Transaction
-	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, &m.Config.ChainParams,
+	transferTx, err = transactions.GetTx(ctx, m.MasterDB, transferTxId, m.Config.ChainParams,
 		m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Transfer tx not found")
@@ -480,7 +480,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	settleWireTx *wire.MsgTx, settlement *protocol.Settlement) error {
 	// Get transfer tx
 	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash,
-		&m.Config.ChainParams, m.Config.IsTest)
+		m.Config.ChainParams, m.Config.IsTest)
 	if err != nil {
 		return errors.New("Failed to get transfer tx")
 	}
