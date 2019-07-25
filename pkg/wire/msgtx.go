@@ -226,6 +226,12 @@ type TxOut struct {
 	PkScript []byte
 }
 
+// Serialize encodes to into the bitcoin protocol encoding for a transaction
+// output (TxOut) to w.
+func (t *TxOut) Serialize(w io.Writer, pver uint32, version int32) error {
+	return writeTxOut(w, pver, version, t)
+}
+
 // SerializeSize returns the number of bytes it would take to serialize the
 // the transaction output.
 func (t *TxOut) SerializeSize() int {
@@ -241,20 +247,6 @@ func NewTxOut(value int64, pkScript []byte) *TxOut {
 		Value:    value,
 		PkScript: pkScript,
 	}
-}
-
-// WriteTxOut encodes to into the bitcoin protocol encoding for a transaction
-// output (TxOut) to w.
-//
-// NOTE: This function is exported in order to allow txscript to compute the
-// new sighashes for witness transactions (BIP0143).
-func WriteTxOut(w io.Writer, pver uint32, version int32, to *TxOut) error {
-	err := binary.Write(w, endian, uint64(to.Value))
-	if err != nil {
-		return err
-	}
-
-	return WriteVarBytes(w, pver, to.PkScript)
 }
 
 // MsgTx implements the Message interface and represents a bitcoin tx message.

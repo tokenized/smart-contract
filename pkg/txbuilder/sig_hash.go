@@ -92,7 +92,7 @@ func (shc *SigHashCache) HashOutputs(tx *wire.MsgTx) []byte {
 
 	var b bytes.Buffer
 	for _, out := range tx.TxOut {
-		wire.WriteTxOut(&b, 0, 0, out)
+		out.Serialize(&b, 0, 0)
 	}
 
 	shc.hashOutputs = bitcoin.DoubleSha256(b.Bytes())
@@ -172,7 +172,7 @@ func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
 		buf.Write(hashCache.HashOutputs(tx))
 	} else if hashType&sigHashMask == SigHashSingle && index < len(tx.TxOut) {
 		var b bytes.Buffer
-		wire.WriteTxOut(&b, 0, 0, tx.TxOut[index])
+		tx.TxOut[index].Serialize(&b, 0, 0)
 		buf.Write(bitcoin.DoubleSha256(b.Bytes()))
 	} else {
 		buf.Write(zeroHash[:])
