@@ -1,11 +1,8 @@
 package inspector
 
 import (
-	"bytes"
-
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcutil"
 )
 
 type Balance struct {
@@ -13,7 +10,7 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address btcutil.Address) Balance {
+func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address bitcoin.Address) Balance {
 
 	return Balance{
 		Qty:    0,
@@ -73,15 +70,15 @@ func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address b
 	*/
 }
 
-func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []btcutil.Address {
+func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []bitcoin.Address {
 
-	addresses := []btcutil.Address{}
+	addresses := []bitcoin.Address{}
 
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
 		addresses = append(addresses, itx.Inputs[0].Address)
 
-		if len(itx.Inputs) > 1 && !bytes.Equal(itx.Inputs[1].Address.ScriptAddress(), itx.Inputs[0].Address.ScriptAddress()) {
+		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
 			addresses = append(addresses, itx.Inputs[1].Address)
 		}
 
@@ -109,10 +106,16 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
-		addresses = append(addresses, itx.Inputs[0].Address.ScriptAddress())
+		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+		if ok {
+			addresses = append(addresses, addressPKH.PKH())
+		}
 
-		if len(itx.Inputs) > 1 && !bytes.Equal(itx.Inputs[1].Address.ScriptAddress(), itx.Inputs[0].Address.ScriptAddress()) {
-			addresses = append(addresses, itx.Inputs[1].Address.ScriptAddress())
+		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
+			addressPKH, ok := itx.Inputs[1].Address.(*bitcoin.AddressPKH)
+			if ok {
+				addresses = append(addresses, addressPKH.PKH())
+			}
 		}
 
 		return addresses
@@ -121,21 +124,27 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	// Some specific actions have the contract address as an input
 	isOutgoing, ok := outgoingMessageTypes[m.Type()]
 	if ok && isOutgoing {
-		addresses = append(addresses, itx.Inputs[0].Address.ScriptAddress())
+		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+		if ok {
+			addresses = append(addresses, addressPKH.PKH())
+		}
 		return addresses
 	}
 
 	// Default behavior is contract as first output
-	addresses = append(addresses, itx.Outputs[0].Address.ScriptAddress())
+	addressPKH, ok := itx.Outputs[0].Address.(*bitcoin.AddressPKH)
+	if ok {
+		addresses = append(addresses, addressPKH.PKH())
+	}
 
 	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
 
 	return addresses
 }
 
-func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress btcutil.Address) []btcutil.Address {
+func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress bitcoin.Address) []bitcoin.Address {
 
-	addresses := []btcutil.Address{}
+	addresses := []bitcoin.Address{}
 
 	// input messages have contract address at output[0], and the input
 	// address at input[0].
@@ -153,8 +162,7 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		addresses = append(addresses, itx.Inputs[0].Address)
 
 		// is there an operator address?
-		if len(itx.Inputs) > 1 && itx.Inputs[1].Address.String() != itx.Inputs[0].Address.String() {
-
+		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
 			addresses = append(addresses, itx.Inputs[1].Address)
 		}
 
@@ -207,7 +215,7 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		addresses = append(addresses, itx.Outputs[0].Address)
 		addresses = append(addresses, itx.Outputs[1].Address)
 	} else {
-		if itx.Outputs[0].Address.String() == contractAddress.String() {
+		if itx.Outputs[0].Address.Equal(contractAddress) {
 			// change to contract, so receiver is 2nd output
 			addresses = append(addresses, itx.Outputs[1].Address)
 		} else {

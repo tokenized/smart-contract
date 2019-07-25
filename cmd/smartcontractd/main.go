@@ -17,8 +17,8 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
+	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 )
 
@@ -85,7 +85,7 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(&appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
+	spyConfig, err := data.NewConfig(appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
 		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
@@ -100,7 +100,7 @@ func main() {
 		Host:        cfg.RpcNode.Host,
 		Username:    cfg.RpcNode.Username,
 		Password:    cfg.RpcNode.Password,
-		ChainParams: &appConfig.ChainParams,
+		ChainParams: appConfig.ChainParams,
 	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)
@@ -112,21 +112,21 @@ func main() {
 	// Wallet
 
 	masterWallet := bootstrap.NewWallet()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey, &appConfig.ChainParams); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, wire.BitcoinNet(appConfig.ChainParams.Net)); err != nil {
 		panic(err)
 	}
 
-	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String())
+	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String(wire.BitcoinNet(appConfig.ChainParams.Net)))
 
 	// -------------------------------------------------------------------------
 	// Tx Filter
 
 	walletKeys := masterWallet.ListAll()
-	pubKeys := make([]*btcec.PublicKey, 0, len(walletKeys))
+	pubKeys := make([][]byte, 0, len(walletKeys))
 	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.PublicKey)
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
 	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
@@ -171,6 +171,7 @@ func main() {
 		&sch,
 		tracer,
 		utxos,
+		txFilter,
 	)
 
 	// -------------------------------------------------------------------------

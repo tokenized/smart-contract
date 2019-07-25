@@ -1,15 +1,12 @@
 package node
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcutil"
 )
 
 type ResponseWriter struct {
@@ -17,20 +14,20 @@ type ResponseWriter struct {
 	Outputs       []Output
 	RejectInputs  []inspector.UTXO
 	RejectOutputs []Output
-	RejectPKH     *protocol.PublicKeyHash
+	RejectAddress bitcoin.Address
 	Config        *Config
 	Mux           protomux.Handler
 }
 
 // AddChangeOutput is a helper to add a change output
-func (w *ResponseWriter) AddChangeOutput(ctx context.Context, addr btcutil.Address) error {
+func (w *ResponseWriter) AddChangeOutput(ctx context.Context, addr bitcoin.Address) error {
 	out := outputValue(ctx, w.Config, addr, 0, true)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
 }
 
 // AddOutput is a helper to add a payment output
-func (w *ResponseWriter) AddOutput(ctx context.Context, addr btcutil.Address, value uint64) error {
+func (w *ResponseWriter) AddOutput(ctx context.Context, addr bitcoin.Address, value uint64) error {
 	out := outputValue(ctx, w.Config, addr, value, false)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
@@ -71,10 +68,10 @@ func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []inspector.U
 // AddRejectValue is a helper to add a refund amount to an address. This is used for multi-party
 //   value transfers when different users input different amounts of bitcoin and need that refunded
 //   if the request is rejected.
-func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr btcutil.Address, value uint64) error {
+func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.Address, value uint64) error {
 	// Look for existing output to this address.
 	for i, output := range w.RejectOutputs {
-		if bytes.Equal(output.Address.ScriptAddress(), addr.ScriptAddress()) {
+		if output.Address.Equal(addr) {
 			w.RejectOutputs[i].Value += value
 			return nil
 		}
@@ -91,7 +88,7 @@ func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr btcutil.Addres
 
 // ClearRejectOutputValues zeroizes the values of the reject outputs so they become only
 //   notification outputs.
-func (w *ResponseWriter) ClearRejectOutputValues(changeAddr btcutil.Address) {
+func (w *ResponseWriter) ClearRejectOutputValues(changeAddr bitcoin.Address) {
 	for i, _ := range w.RejectOutputs {
 		w.RejectOutputs[i].Change = false
 		w.RejectOutputs[i].Value = 0
@@ -105,13 +102,13 @@ func (w *ResponseWriter) Respond(ctx context.Context, tx *wire.MsgTx) error {
 
 // Output is an output address for a response
 type Output struct {
-	Address btcutil.Address
+	Address bitcoin.Address
 	Value   uint64
 	Change  bool
 }
 
 // outputValue returns a payment output ensuring the value is always above the dust limit
-func outputValue(ctx context.Context, config *Config, addr btcutil.Address, value uint64, change bool) *Output {
+func outputValue(ctx context.Context, config *Config, addr bitcoin.Address, value uint64, change bool) *Output {
 	if value < config.DustLimit {
 		value = config.DustLimit
 	}
@@ -128,9 +125,8 @@ func outputValue(ctx context.Context, config *Config, addr btcutil.Address, valu
 // outputFee prepares a special fee output based on node configuration
 func outputFee(ctx context.Context, config *Config, value uint64) *Output {
 	if value > 0 {
-		feeAddr, _ := btcutil.NewAddressPubKeyHash(config.FeePKH.Bytes(), &config.ChainParams)
 		return &Output{
-			Address: feeAddr,
+			Address: config.FeeAddress,
 			Value:   value,
 		}
 	}

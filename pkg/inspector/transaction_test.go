@@ -4,66 +4,66 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 func TestAddressesUnique(t *testing.T) {
 	testArr := []struct {
 		name string
-		in   []btcutil.Address
-		want []btcutil.Address
+		in   []bitcoin.Address
+		want []bitcoin.Address
 	}{
 		{
 			name: "one",
-			in: []btcutil.Address{
+			in: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
-			want: []btcutil.Address{
+			want: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
 		},
 		{
 			name: "two unique",
-			in: []btcutil.Address{
+			in: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []btcutil.Address{
+			want: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
 		},
 		{
 			name: "two duplicate",
-			in: []btcutil.Address{
+			in: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
-			want: []btcutil.Address{
+			want: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
 		},
 		{
 			name: "2 x 2 duplicate",
-			in: []btcutil.Address{
+			in: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []btcutil.Address{
+			want: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
 		},
 		{
 			name: "2 duplicates, 1 unique",
-			in: []btcutil.Address{
+			in: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []btcutil.Address{
+			want: []bitcoin.Address{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},

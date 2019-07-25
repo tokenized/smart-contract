@@ -5,44 +5,45 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tokenized/smart-contract/pkg/txscript"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 const (
 	SubSystem = "TxBuilder" // For logger
+
+	// DefaultVersion is the default TX version to use by the Buidler.
+	DefaultVersion = int32(1)
 )
 
-const SigHashForkID txscript.SigHashType = 0x40
-
-type Tx struct {
-	MsgTx     *wire.MsgTx
-	Inputs    []*Input  // Additional Input Data
-	Outputs   []*Output // Additional Output Data
-	ChangePKH []byte    // The public key hash to pay extra bitcoins to if an output wasn't already specified.
-	DustLimit uint64    // Smallest amount of bitcoin
-	FeeRate   float32   // The target fee rate in sat/byte
+type TxBuilder struct {
+	MsgTx         *wire.MsgTx
+	Inputs        []*InputSupplement  // Input Data that is not in wire.MsgTx
+	Outputs       []*OutputSupplement // Output Data that is not in wire.MsgTx
+	ChangeAddress bitcoin.Address     // The address to pay extra bitcoins to if a change output isn't specified
+	DustLimit     uint64              // Smallest amount of bitcoin for a valid spendable output
+	FeeRate       float32             // The target fee rate in sat/byte
 }
 
-// NewTx returns a new Tx with the specified change PKH
-// changePKH (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
-func NewTx(changePKH []byte, dustLimit uint64, feeRate float32) *Tx {
-	tx := wire.MsgTx{Version: wire.TxVersion, LockTime: 0}
-	result := Tx{
-		MsgTx:     &tx,
-		ChangePKH: changePKH,
-		DustLimit: dustLimit,
-		FeeRate:   feeRate,
+// NewTx returns a new TxBuilder with the specified change PKH
+// changePKH (Public Key Hash) is a 20 byte slice.
+func NewTxBuilder(changeAddress bitcoin.Address, dustLimit uint64, feeRate float32) *TxBuilder {
+	tx := wire.MsgTx{Version: DefaultVersion, LockTime: 0}
+	result := TxBuilder{
+		MsgTx:         &tx,
+		ChangeAddress: changeAddress,
+		DustLimit:     dustLimit,
+		FeeRate:       feeRate,
 	}
 	return &result
 }
 
-func NewTxFromWire(changePKH []byte, dustLimit uint64, feeRate float32, tx *wire.MsgTx, inputs []*wire.MsgTx) (*Tx, error) {
-	result := Tx{
-		MsgTx:     tx,
-		ChangePKH: changePKH,
-		DustLimit: dustLimit,
-		FeeRate:   feeRate,
+func NewTxBuilderFromWire(changeAddress bitcoin.Address, dustLimit uint64, feeRate float32, tx *wire.MsgTx, inputs []*wire.MsgTx) (*TxBuilder, error) {
+	result := TxBuilder{
+		MsgTx:         tx,
+		ChangeAddress: changeAddress,
+		DustLimit:     dustLimit,
+		FeeRate:       feeRate,
 	}
 
 	// Setup inputs
@@ -53,9 +54,9 @@ func NewTxFromWire(changePKH []byte, dustLimit uint64, feeRate float32, tx *wire
 			if bytes.Equal(txHash[:], input.PreviousOutPoint.Hash[:]) &&
 				int(input.PreviousOutPoint.Index) < len(inputTx.TxOut) {
 				// Add input
-				newInput := Input{
-					PkScript: inputTx.TxOut[input.PreviousOutPoint.Index].PkScript,
-					Value:    uint64(inputTx.TxOut[input.PreviousOutPoint.Index].Value),
+				newInput := InputSupplement{
+					LockScript: inputTx.TxOut[input.PreviousOutPoint.Index].PkScript,
+					Value:      uint64(inputTx.TxOut[input.PreviousOutPoint.Index].Value),
 				}
 				result.Inputs = append(result.Inputs, &newInput)
 				found = true
@@ -68,10 +69,8 @@ func NewTxFromWire(changePKH []byte, dustLimit uint64, feeRate float32, tx *wire
 
 	// Setup outputs
 	for _, output := range result.MsgTx.TxOut {
-		pkh, err := PubKeyHashFromP2PKH(output.PkScript)
-		isChange := err == nil && bytes.Equal(pkh, result.ChangePKH)
-		newOutput := Output{
-			IsChange: isChange,
+		newOutput := OutputSupplement{
+			IsChange: bytes.Equal(output.PkScript, result.ChangeAddress.LockingScript()),
 			IsDust:   false,
 		}
 		result.Outputs = append(result.Outputs, &newOutput)
@@ -80,17 +79,24 @@ func NewTxFromWire(changePKH []byte, dustLimit uint64, feeRate float32, tx *wire
 	return &result, nil
 }
 
-// AddInput Adds an input to Tx.
-//   outpoint references to the output being spent.
-//   outputScript is the script from the output being spent.
-//   value is the value from the output being spent.
-func (tx *Tx) AddInput(outpoint wire.OutPoint, outputScript []byte, value uint64) error {
-	if !IsP2PKHScript(outputScript) {
-		return NotP2PKHScriptError
+// AddInput Adds an input to TxBuilder.
+//   outpoint reference the output being spent.
+//   lockScript is the script from the output being spent.
+//   value is the number of satoshis from the output being spent.
+func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value uint64) error {
+	address, err := bitcoin.AddressFromLockingScript(lockScript)
+	if err != nil {
+		return err
 	}
-	input := Input{
-		PkScript: outputScript,
-		Value:    value,
+
+	_, ok := address.(*bitcoin.AddressPKH)
+	if !ok {
+		return newError(ErrorCodeWrongScriptTemplate, "")
+	}
+
+	input := InputSupplement{
+		LockScript: lockScript,
+		Value:      value,
 	}
 	tx.Inputs = append(tx.Inputs, &input)
 
@@ -102,48 +108,29 @@ func (tx *Tx) AddInput(outpoint wire.OutPoint, outputScript []byte, value uint64
 	return nil
 }
 
-// AddP2PKHOutput adds an output to Tx with the specified value and a P2PKH script paying the
+// AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the
 //   specified address.
-// pkh (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
-func (tx *Tx) AddP2PKHOutput(pkh []byte, value uint64, isChange bool) error {
-	output := Output{
-		IsChange: isChange,
-		IsDust:   false,
-	}
-	tx.Outputs = append(tx.Outputs, &output)
-
-	txout := wire.TxOut{
-		Value:    int64(value),
-		PkScript: P2PKHScriptForPKH(pkh),
-	}
-	tx.MsgTx.AddTxOut(&txout)
-	return nil
+// isChange marks the output to receive remaining bitcoin.
+func (tx *TxBuilder) AddPaymentOutput(address bitcoin.Address, value uint64, isChange bool) error {
+	return tx.AddOutput(address.LockingScript(), value, isChange, false)
 }
 
-// AddP2PKHDustOutput adds an output to Tx with the dust limit amount and a P2PKH script paying the
+// AddP2PKHDustOutput adds an output to TxBuilder with the dust limit amount and a script paying the
 //   specified address.
-// These dust outputs are meant as "notifiers" so that a address will see this transaction and
+// isChange marks the output to receive remaining bitcoin.
+// These dust outputs are meant as "notifiers" so that an address will see this transaction and
 //   process the data in it. If value is later added to this output, the value replaces the dust
 //   limit amount rather than adding to it.
-// pkh (Public Key Hash) is a 20 byte slice. i.e. btcutil.Address.ScriptAddress()
-func (tx *Tx) AddP2PKHDustOutput(pkh []byte, isChange bool) error {
-	output := Output{
-		IsChange: isChange,
-		IsDust:   true,
-	}
-	tx.Outputs = append(tx.Outputs, &output)
-
-	txout := wire.TxOut{
-		Value:    int64(tx.DustLimit),
-		PkScript: P2PKHScriptForPKH(pkh),
-	}
-	tx.MsgTx.AddTxOut(&txout)
-	return nil
+func (tx *TxBuilder) AddDustOutput(address bitcoin.Address, isChange bool) error {
+	return tx.AddOutput(address.LockingScript(), tx.DustLimit, isChange, true)
 }
 
-// AddOutput adds an output to Tx with the specified script and value.
-func (tx *Tx) AddOutput(script []byte, value uint64, isChange bool, isDust bool) error {
-	output := Output{
+// AddOutput adds an output to TxBuilder with the specified script and value.
+// isChange marks the output to receive remaining bitcoin.
+// isDust marks the output as a dust amount which will be replaced by any non-dust amount if an
+//    amount is added later.
+func (tx *TxBuilder) AddOutput(lockScript []byte, value uint64, isChange bool, isDust bool) error {
+	output := OutputSupplement{
 		IsChange: isChange,
 		IsDust:   isDust,
 	}
@@ -151,13 +138,14 @@ func (tx *Tx) AddOutput(script []byte, value uint64, isChange bool, isDust bool)
 
 	txout := wire.TxOut{
 		Value:    int64(value),
-		PkScript: script,
+		PkScript: lockScript,
 	}
 	tx.MsgTx.AddTxOut(&txout)
 	return nil
 }
 
-func (tx *Tx) AddValueToOutput(index uint32, value uint64) error {
+// AddValueToOutput adds more bitcoin to an existing output.
+func (tx *TxBuilder) AddValueToOutput(index uint32, value uint64) error {
 	if int(index) >= len(tx.MsgTx.TxOut) {
 		return errors.New("Output index out of range")
 	}
@@ -171,39 +159,52 @@ func (tx *Tx) AddValueToOutput(index uint32, value uint64) error {
 	return nil
 }
 
-// UpdateOutput updates the script of an output.
-func (tx *Tx) UpdateOutput(index uint32, script []byte) error {
+// UpdateOutput updates the locking script of an output.
+func (tx *TxBuilder) UpdateOutput(index uint32, lockScript []byte) error {
 	if int(index) >= len(tx.MsgTx.TxOut) {
 		return errors.New("Output index out of range")
 	}
 
-	tx.MsgTx.TxOut[index].PkScript = script
+	tx.MsgTx.TxOut[index].PkScript = lockScript
 	return nil
 }
 
-type Input struct {
-	PkScript []byte
-	Value    uint64
+// InputSupplement contains data required to sign an input that is not already in the wire.MsgTx.
+type InputSupplement struct {
+	LockScript []byte
+	Value      uint64
 }
 
-type Output struct {
+// OutputSupplement contains data that
+type OutputSupplement struct {
 	IsChange    bool
 	IsDust      bool
 	addedForFee bool
 }
 
-// InputAddress returns the address that is paying to the input
-func (tx *Tx) InputPKH(index int) ([]byte, error) {
+// InputAddress returns the address that is paying to the input.
+func (tx *TxBuilder) InputAddress(index int) (bitcoin.Address, error) {
 	if index >= len(tx.Inputs) {
 		return nil, errors.New("Input index out of range")
 	}
-	return PubKeyHashFromP2PKH(tx.Inputs[index].PkScript)
+	return bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript)
 }
 
 // OutputAddress returns the address that the output is paying to.
-func (tx *Tx) OutputPKH(index int) ([]byte, error) {
+func (tx *TxBuilder) OutputAddress(index int) (bitcoin.Address, error) {
 	if index >= len(tx.MsgTx.TxOut) {
 		return nil, errors.New("Output index out of range")
 	}
-	return PubKeyHashFromP2PKH(tx.MsgTx.TxOut[index].PkScript)
+	return bitcoin.AddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
+}
+
+// Serialize returns the byte payload of the transaction.
+func (tx *TxBuilder) Serialize() ([]byte, error) {
+	var buf bytes.Buffer
+
+	if err := tx.MsgTx.Serialize(&buf); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }

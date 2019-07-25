@@ -7,14 +7,14 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func NewContextWithDevelopmentLogger() context.Context {
@@ -74,17 +74,20 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 		Version:            cfg.Contract.Version,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        config.NewChainParams(cfg.Bitcoin.Network),
+		ChainParams:        bitcoin.NewChainParams(cfg.Bitcoin.Network),
 		RequestTimeout:     cfg.Contract.RequestTimeout,
 		PreprocessThreads:  cfg.Contract.PreprocessThreads,
 		IsTest:             cfg.Contract.IsTest,
 	}
 
-	feeAddress, err := btcutil.DecodeAddress(cfg.Contract.FeeAddress, &appConfig.ChainParams)
+	feeAddress, decodedNet, err := bitcoin.DecodeAddressString(cfg.Contract.FeeAddress)
 	if err != nil {
 		logger.Fatal(ctx, "Invalid fee address : %s", err)
 	}
-	appConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeAddress.ScriptAddress())
+	if !bitcoin.DecodeNetMatches(decodedNet, wire.BitcoinNet(appConfig.ChainParams.Net)) {
+		logger.Fatal(ctx, "Wrong fee address encoding network")
+	}
+	appConfig.FeeAddress = feeAddress
 
 	return appConfig
 }

@@ -12,14 +12,15 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -48,7 +49,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -75,8 +76,13 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Verify administration is sender of tx.
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.AdministrationPKH.Bytes()) {
-		node.LogWarn(ctx, "Only administration can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
+	addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+	if !ok || !bytes.Equal(addressPKH.PKH(), ct.AdministrationPKH.Bytes()) {
+		if ok {
+			node.LogWarn(ctx, "Only administration can create assets: %x", addressPKH.PKH())
+		} else {
+			node.LogWarn(ctx, "Only administration can create assets")
+		}
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotAdministration)
 	}
 
@@ -132,8 +138,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.AssetCode = *assetCode
 	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
+	// Convert to bitcoin.Address
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -172,7 +178,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Asset
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -183,7 +189,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
-	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	requestorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+	if !ok {
+		node.LogVerbose(ctx, "Requestor is not PKH : %s", msg.AssetCode.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
+	}
+	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH.PKH())
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		node.LogVerbose(ctx, "Requestor is not operator : %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
@@ -220,7 +231,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams, a.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.ChainParams, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -334,8 +345,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
+	// Convert to bitcoin.Address
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -382,9 +393,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Locate Asset
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		return fmt.Errorf("Asset Creation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
+	if !itx.Inputs[0].Address.Equal(rk.Address) {
+		return fmt.Errorf("Asset Creation not from contract : %s",
+			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
@@ -402,7 +414,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, &a.Config.ChainParams, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.ChainParams, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
@@ -419,7 +431,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams, a.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.ChainParams, a.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve vote result tx")
 			}

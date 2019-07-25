@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -15,9 +15,9 @@ import (
 )
 
 // Generate a fake funding tx so inspector can build off of it.
-func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, pkh []byte) *wire.MsgTx {
+func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address bitcoin.Address) *wire.MsgTx {
 	result := wire.NewMsgTx(2)
-	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), txbuilder.P2PKHScriptForPKH(pkh)))
+	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), address.LockingScript()))
 	node.SaveTX(ctx, result)
 	return result
 }

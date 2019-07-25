@@ -1,7 +1,6 @@
 package listeners
 
 import (
-	"bytes"
 	"context"
 	"sync"
 
@@ -22,7 +21,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		defer server.walletLock.RUnlock()
 
 		if !ptx.Itx.IsTokenized() {
-			server.utxos.Add(ptx.Itx.MsgTx, server.contractPKHs)
+			server.utxos.Add(ptx.Itx.MsgTx, server.contractAddresses)
 			continue
 		}
 
@@ -33,8 +32,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		// Save tx to cache so it can be used to process the response
 		for _, output := range ptx.Itx.Outputs {
-			for _, pkh := range server.contractPKHs {
-				if bytes.Equal(output.Address.ScriptAddress(), pkh) {
+			for _, address := range server.contractAddresses {
+				if address.Equal(output.Address) {
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}

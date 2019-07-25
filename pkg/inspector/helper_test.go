@@ -7,9 +7,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -59,8 +58,8 @@ func newHash(hash string) chainhash.Hash {
 	return *h
 }
 
-func decodeAddress(address string) btcutil.Address {
-	a, err := btcutil.DecodeAddress(address, &chaincfg.MainNetParams)
+func decodeAddress(address string) bitcoin.Address {
+	a, _, err := bitcoin.DecodeAddressString(address)
 	if err != nil {
 		panic(err)
 	}

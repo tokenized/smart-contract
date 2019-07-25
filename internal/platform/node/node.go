@@ -6,9 +6,10 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"go.opencensus.io/trace"
 )
@@ -52,9 +53,9 @@ type App struct {
 type Config struct {
 	ContractProviderID string
 	Version            string
-	FeePKH             *protocol.PublicKeyHash
+	FeeAddress         bitcoin.Address
 	DustLimit          uint64
-	ChainParams        chaincfg.Params
+	ChainParams        *chaincfg.Params
 	FeeRate            float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 	PreprocessThreads  int
@@ -106,7 +107,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %s", walletKey.Address.ScriptAddress(), itx.Hash)
+			Log(ctx, "Trace Data : Contract %x Tx %s", bitcoin.Hash160(walletKey.Key.PublicKey().Bytes()), itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true
@@ -169,7 +170,7 @@ func (a *App) HandleDefault(verb string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %s", walletKey.Address.ScriptAddress(), itx.Hash)
+			Log(ctx, "Trace Data : Contract %x Tx %s", bitcoin.Hash160(walletKey.Key.PublicKey().Bytes()), itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true
