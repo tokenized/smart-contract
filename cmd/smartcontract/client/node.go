@@ -104,12 +104,11 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 
 	// -------------------------------------------------------------------------
 	// Contract
-	var decodedNet wire.BitcoinNet
-	client.ContractAddress, decodedNet, err = bitcoin.DecodeAddressString(client.Config.Contract)
+	client.ContractAddress, err = bitcoin.DecodeAddressString(client.Config.Contract)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
-	if !bitcoin.DecodeNetMatches(decodedNet, wire.BitcoinNet(client.Config.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), wire.BitcoinNet(client.Config.ChainParams.Net)) {
 		return nil, errors.Wrap(err, "Contract address encoded for wrong network")
 	}
 	logger.Info(ctx, "Contract address : %s", client.Config.Contract)
@@ -219,7 +218,7 @@ func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) 
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
-		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
 		if err != nil {
 			continue
 		}
@@ -238,7 +237,7 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	}
 
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript, bitcoin.IntNet)
 		if err != nil {
 			continue
 		}
@@ -321,7 +320,7 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 
 func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript, bitcoin.IntNet)
 		if err != nil {
 			continue
 		}
@@ -342,7 +341,7 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool)
 	}
 
 	for index, output := range tx.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
 		if err != nil {
 			continue
 		}

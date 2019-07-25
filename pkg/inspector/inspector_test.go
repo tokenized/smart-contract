@@ -31,8 +31,8 @@ func TestParseTX(t *testing.T) {
 
 	// the hash of the TX being parsed.
 	txHash := newHash("2c68cf3e1216acaa1e274dfd3b665b6a9d1d1d252e68d190f9fffc5f7e11fd27")
-	address, _, _ := bitcoin.DecodeAddressString("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
-	address2, _, _ := bitcoin.DecodeAddressString("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
+	address, _ := bitcoin.DecodeAddressString("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
+	address2, _ := bitcoin.DecodeAddressString("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
 
 	wantTX := &Transaction{
 		Hash:  txHash,

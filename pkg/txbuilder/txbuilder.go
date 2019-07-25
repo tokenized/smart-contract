@@ -84,16 +84,6 @@ func NewTxBuilderFromWire(changeAddress bitcoin.Address, dustLimit uint64, feeRa
 //   lockScript is the script from the output being spent.
 //   value is the number of satoshis from the output being spent.
 func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value uint64) error {
-	address, err := bitcoin.AddressFromLockingScript(lockScript)
-	if err != nil {
-		return err
-	}
-
-	_, ok := address.(*bitcoin.AddressPKH)
-	if !ok {
-		return newError(ErrorCodeWrongScriptTemplate, "")
-	}
-
 	input := InputSupplement{
 		LockScript: lockScript,
 		Value:      value,
@@ -183,19 +173,19 @@ type OutputSupplement struct {
 }
 
 // InputAddress returns the address that is paying to the input.
-func (tx *TxBuilder) InputAddress(index int) (bitcoin.Address, error) {
+func (tx *TxBuilder) InputAddress(index int, net wire.BitcoinNet) (bitcoin.Address, error) {
 	if index >= len(tx.Inputs) {
 		return nil, errors.New("Input index out of range")
 	}
-	return bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript)
+	return bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript, net)
 }
 
 // OutputAddress returns the address that the output is paying to.
-func (tx *TxBuilder) OutputAddress(index int) (bitcoin.Address, error) {
+func (tx *TxBuilder) OutputAddress(index int, net wire.BitcoinNet) (bitcoin.Address, error) {
 	if index >= len(tx.MsgTx.TxOut) {
 		return nil, errors.New("Output index out of range")
 	}
-	return bitcoin.AddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
+	return bitcoin.AddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript, net)
 }
 
 // Serialize returns the byte payload of the transaction.

@@ -117,7 +117,7 @@ func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net wire.BitcoinNe
 	return nil
 }
 
-func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
+func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB) error {
 	var buf bytes.Buffer
 
 	count := uint32(len(k.Keys))
@@ -126,7 +126,7 @@ func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNe
 	}
 
 	for _, key := range k.Keys {
-		if err := key.Write(&buf, net); err != nil {
+		if err := key.Write(&buf); err != nil {
 			return err
 		}
 	}

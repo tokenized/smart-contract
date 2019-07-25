@@ -78,7 +78,7 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 	// Check if relevant to contract
 	for _, output := range tx.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
 		if err != nil {
 			continue
 		}

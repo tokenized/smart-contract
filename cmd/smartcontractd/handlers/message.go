@@ -206,7 +206,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	tx := txbuilder.NewTxBuilder(rk.Address, m.Config.DustLimit, m.Config.FeeRate)
 
 	// Add outputs to administration/operator
-	adminAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
+	adminAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to create admin address")
 	}
@@ -214,7 +215,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	outputAmount := uint64(m.Config.DustLimit)
 	if !ct.OperatorPKH.IsZero() {
 		// Add operator
-		operatorAddress, err := bitcoin.NewAddressPKH(ct.OperatorPKH.Bytes())
+		operatorAddress, err := bitcoin.NewAddressPKH(ct.OperatorPKH.Bytes(),
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		if err != nil {
 			return errors.Wrap(err, "Failed to create operator address")
 		}
@@ -315,7 +317,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	if int(transfer.Assets[firstContractIndex].ContractIndex) >= len(transferTx.Outputs) {
-		node.LogWarn(ctx, "Transfer contract index out of range : %s", rk.Address.String(wire.BitcoinNet(m.Config.ChainParams.Net)))
+		node.LogWarn(ctx, "Transfer contract index out of range : %s", rk.Address.String())
 		return errors.New("Transfer contract index out of range")
 	}
 
@@ -604,14 +606,14 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 		return errors.New("Could not find input that needs signature")
 	}
 
-	address, err := settleTx.InputAddress(inputIndex)
+	address, err := settleTx.InputAddress(inputIndex, wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	node.Log(ctx, "Sending settlement SignatureRequest to %s", address.String(wire.BitcoinNet(config.ChainParams.Net)))
+	node.Log(ctx, "Sending settlement SignatureRequest to %s", address.String())
 
 	// Add output to previous contract.
 	// Mark as change so it gets everything except the tx fee.
@@ -662,7 +664,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	settleOutputAddresses := make([]bitcoin.Address, 0, len(settleTx.TxOut))
 	settleOpReturnFound := false
 	for i, output := range settleTx.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
 		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, address)
 			addressPKH, ok := address.(*bitcoin.AddressPKH)
@@ -703,7 +705,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	// Generate public key hashes for all the inputs
 	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
-		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript, bitcoin.IntNet)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
 			continue
@@ -787,7 +789,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			inputAddressPKH, ok := transferTx.Inputs[sender.Index].Address.(*bitcoin.AddressPKH)
 			if !ok {
 				return fmt.Errorf("Sender input not PKH : %s",
-					transferTx.Inputs[sender.Index].Address.String(wire.BitcoinNet(config.ChainParams.Net)))
+					transferTx.Inputs[sender.Index].Address.String())
 			}
 			inputPKH := protocol.PublicKeyHashFromBytes(inputAddressPKH.PKH())
 
@@ -1012,7 +1014,8 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
-		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
+		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes(),
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		w.ClearRejectOutputValues(administrationAddress)
 	}
 
@@ -1132,7 +1135,8 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone.
-		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes())
+		administrationAddress, err := bitcoin.NewAddressPKH(ct.AdministrationPKH.Bytes(),
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		if err != nil {
 			return errors.Wrap(err, "Failed to create administration address")
 		}

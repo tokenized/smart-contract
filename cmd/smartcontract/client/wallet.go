@@ -123,15 +123,14 @@ func (wallet *Wallet) RemoveUTXO(txId chainhash.Hash, index uint32, script []byt
 
 func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.BitcoinNet) error {
 	// Private Key
-	var decodedNet wire.BitcoinNet
 	var err error
-	wallet.Key, decodedNet, err = bitcoin.DecodeKeyString(wifKey)
-	if !bitcoin.DecodeNetMatches(decodedNet, net) {
+	wallet.Key, err = bitcoin.DecodeKeyString(wifKey)
+	if !bitcoin.DecodeNetMatches(wallet.Key.Network(), net) {
 		return errors.New("Incorrect network encoding")
 	}
 
 	// Pub Key Hash Address
-	wallet.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
+	wallet.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()), net)
 	if err != nil {
 		return err
 	}
@@ -162,7 +161,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 	logger.Info(ctx, "Loaded wallet with %d outputs, %d unspent, and balance of %.08f",
 		len(wallet.outputs), unspentCount, BitcoinsFromSatoshis(wallet.Balance()))
 
-	logger.Info(ctx, "Wallet address : %s", wallet.Address.String(net))
+	logger.Info(ctx, "Wallet address : %s", wallet.Address.String())
 	return nil
 }
 

@@ -85,27 +85,27 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// Keys
 
-	userKey, err = tests.GenerateKey()
+	userKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	user2Key, err = tests.GenerateKey()
+	user2Key, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	issuerKey, err = tests.GenerateKey()
+	issuerKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	oracleKey, err = tests.GenerateKey()
+	oracleKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	authorityKey, err = tests.GenerateKey()
+	authorityKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}

@@ -91,7 +91,8 @@ func NewServer(
 	keys := wallet.ListAll()
 	result.contractAddresses = make([]bitcoin.Address, 0, len(keys))
 	for _, key := range keys {
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
+			wire.BitcoinNet(config.ChainParams.Net))
 		if err != nil {
 			return nil
 		}
@@ -289,7 +290,7 @@ func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
+	address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()), k.Network())
 	if err != nil {
 		return err
 	}
@@ -315,7 +316,7 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 	defer server.walletLock.Unlock()
 
 	pkh := bitcoin.Hash160(k.PublicKey().Bytes())
-	address, err := bitcoin.NewAddressPKH(pkh)
+	address, err := bitcoin.NewAddressPKH(pkh, k.Network())
 	if err != nil {
 		return err
 	}

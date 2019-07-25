@@ -139,7 +139,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -346,7 +346,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -396,7 +396,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Asset Creation not from contract : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)

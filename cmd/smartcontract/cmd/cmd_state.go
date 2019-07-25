@@ -6,18 +6,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
-	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 )
 
 var cmdState = &cobra.Command{
@@ -33,16 +34,16 @@ var cmdState = &cobra.Command{
 
 		cfg := bootstrap.NewConfigFromEnv(ctx)
 
-		params := config.NewChainParams(cfg.Bitcoin.Network)
+		params := bitcoin.NewChainParams(cfg.Bitcoin.Network)
 
-		pkh, err := btcutil.DecodeAddress(args[0], &params)
+		pkh, err := btcutil.DecodeAddress(args[0], params)
 		if err != nil {
 			return err
 		}
 
 		masterDB := bootstrap.NewMasterDB(ctx, cfg)
 
-		return loadContract(ctx, c, masterDB, pkh, &params)
+		return loadContract(ctx, c, masterDB, pkh, params)
 	},
 }
 

@@ -14,27 +14,27 @@ func TestKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	key, err := KeyS256FromBytes(data)
+	key, err := KeyS256FromBytes(data, TestNet)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	wif := "92KuV1Mtf9jTttTrw1yawobsa9uCZGbfpambH8H1Y7KfdDxxc4d"
 
-	if key.String(TestNet) != wif {
-		t.Errorf("WIF encode: got %x, want %x", key.String(TestNet), wif)
+	if key.String() != wif {
+		t.Errorf("WIF encode: got %x, want %x", key.String(), wif)
 	}
 
-	reverseKey, net, err := DecodeKeyString(wif)
+	reverseKey, err := DecodeKeyString(wif)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if net != TestNet {
+	if reverseKey.Network() != TestNet {
 		t.Errorf("Wrong WIF network decoded")
 	}
 
-	if !bytes.Equal(reverseKey.Bytes(TestNet), key.Bytes(TestNet)) {
+	if !bytes.Equal(reverseKey.Bytes(), key.Bytes()) {
 		t.Errorf("WIF decode: got %x, want %x", reverseKey, key)
 	}
 

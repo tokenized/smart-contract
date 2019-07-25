@@ -36,7 +36,7 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return errors.New("Input index out of range")
 	}
 
-	address, err := bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript)
+	address, err := bitcoin.AddressFromLockingScript(tx.Inputs[index].LockScript, bitcoin.IntNet)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	for {
 		// Sign all inputs
 		for index, input := range tx.Inputs {
-			address, err := bitcoin.AddressFromLockingScript(input.LockScript)
+			address, err := bitcoin.AddressFromLockingScript(input.LockScript, bitcoin.IntNet)
 			if err != nil {
 				return err
 			}

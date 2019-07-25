@@ -37,12 +37,8 @@ func (u UTXO) ID() string {
 	return fmt.Sprintf("%v:%v", u.Hash, u.Index)
 }
 
-func (u UTXO) PublicAddress() (bitcoin.Address, error) {
-	return bitcoin.AddressFromLockingScript(u.PkScript)
-}
-
-func (u UTXO) Address() (bitcoin.Address, error) {
-	return bitcoin.AddressFromLockingScript(u.PkScript)
+func (u UTXO) Address(net wire.BitcoinNet) (bitcoin.Address, error) {
+	return bitcoin.AddressFromLockingScript(u.PkScript, net)
 }
 
 // UTXOs is a wrapper for a []UTXO.
@@ -64,7 +60,7 @@ func (u UTXOs) ForAddress(address bitcoin.Address) (UTXOs, error) {
 	filtered := UTXOs{}
 
 	for _, utxo := range u {
-		utxoAddress, err := utxo.Address()
+		utxoAddress, err := utxo.Address(bitcoin.IntNet)
 		if err != nil {
 			continue
 		}
@@ -102,7 +98,7 @@ func (in *Input) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (in *Input) Read(buf *bytes.Buffer) error {
+func (in *Input) Read(buf *bytes.Buffer, net wire.BitcoinNet) error {
 	msg := wire.MsgTx{}
 	if err := msg.Deserialize(buf); err != nil {
 		return err
@@ -123,7 +119,7 @@ func (in *Input) Read(buf *bytes.Buffer) error {
 
 	// Calculate address
 	var err error
-	in.Address, err = in.UTXO.PublicAddress()
+	in.Address, err = in.UTXO.Address(net)
 	if err != nil {
 		return err
 	}

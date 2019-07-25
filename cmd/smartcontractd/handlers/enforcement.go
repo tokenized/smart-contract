@@ -65,13 +65,13 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter, 
 	operatorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Requestor is not PKH : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	senderPKH := protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
 	if !contract.IsOperator(ctx, ct, senderPKH) {
 		node.LogWarn(ctx, "Requestor PKH is not administration or operator : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 
@@ -142,8 +142,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	operatorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
-		node.LogWarn(ctx, "Requestor is not PKH : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		node.LogWarn(ctx, "Requestor is not PKH : %s", itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	requestorPKH := protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
@@ -217,7 +216,8 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 				node.Log(ctx, "Freeze order request : %s %s", msg.AssetCode.String(),
 					target.Address.String())
 
-				targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes())
+				targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes(),
+					wire.BitcoinNet(w.Config.ChainParams.Net))
 				if err != nil {
 					return errors.Wrap(err, "Failed to convert target PKH to address")
 				}
@@ -233,7 +233,8 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -273,7 +274,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	operatorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Requestor is not PKH : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	requestorPKH := protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
@@ -359,7 +360,8 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -393,7 +395,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	operatorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Requestor is not PKH : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	requestorPKH := protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
@@ -434,7 +436,8 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// n+3  - Contract Fee (change)
 
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
-	depositAddr, err := bitcoin.NewAddressPKH(msg.DepositAddress.Bytes())
+	depositAddr, err := bitcoin.NewAddressPKH(msg.DepositAddress.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert deposit PKH to address")
 	}
@@ -483,7 +486,8 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 		node.Log(ctx, "Confiscation order request : %s %s", msg.AssetCode.String(), target.Address.String())
 
-		targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes())
+		targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes(),
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		if err != nil {
 			node.LogWarn(ctx, "Invalid target address: %s %s", msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
@@ -512,7 +516,8 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	w.AddOutput(ctx, depositAddr, 0)
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.New("Failed to convert contract pkh to address")
 	}
@@ -559,7 +564,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	operatorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Requestor is not PKH : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	requestorPKH := protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
@@ -638,7 +643,8 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 		node.Log(ctx, "Reconciliation order request : %s %s", msg.AssetCode.String(), target.Address.String())
 
-		targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes())
+		targetAddr, err := bitcoin.NewAddressPKH(target.Address.Bytes(),
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		if err != nil {
 			node.LogWarn(ctx, "Invalid target address : %s %s", msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
@@ -666,7 +672,8 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract address")
 	}
@@ -707,7 +714,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Freeze not from contract : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
@@ -821,7 +828,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Thaw not from contract : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
@@ -947,7 +954,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Confiscation not from contract : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)
@@ -1051,7 +1058,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Reconciliation not from contract : %s",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, contractPKH)

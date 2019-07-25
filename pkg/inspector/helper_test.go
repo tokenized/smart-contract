@@ -59,7 +59,7 @@ func newHash(hash string) chainhash.Hash {
 }
 
 func decodeAddress(address string) bitcoin.Address {
-	a, _, err := bitcoin.DecodeAddressString(address)
+	a, err := bitcoin.DecodeAddressString(address)
 	if err != nil {
 		panic(err)
 	}

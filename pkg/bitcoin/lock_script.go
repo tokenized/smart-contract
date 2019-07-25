@@ -1,7 +1,9 @@
 package bitcoin
 
+import "github.com/tokenized/smart-contract/pkg/wire"
+
 // AddressFromLockingScript returns the address associated with the specified locking script.
-func AddressFromLockingScript(lockingScript []byte) (Address, error) {
+func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Address, error) {
 	script := lockingScript
 	switch script[0] {
 	case OP_DUP: // PKH or RPH
@@ -34,7 +36,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 			}
 			script = script[1:]
 
-			return NewAddressPKH(pkh)
+			return NewAddressPKH(pkh, net)
 
 		case OP_3: // RPH
 			if len(script) != 33 {
@@ -105,7 +107,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 			}
 			script = script[1:]
 
-			return NewAddressRPH(rph)
+			return NewAddressRPH(rph, net)
 
 		}
 	case OP_HASH160: // P2SH
@@ -127,7 +129,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 		}
 		script = script[1:]
 
-		return NewAddressSH(sh)
+		return NewAddressSH(sh, net)
 
 	case OP_FALSE: // MultiPKH
 		// 35 = 1 min number push + 4 op codes outside of pkh if statements + 30 per pkh
@@ -224,7 +226,7 @@ func AddressFromLockingScript(lockingScript []byte) (Address, error) {
 		}
 		script = script[1:]
 
-		return NewAddressMultiPKH(uint16(required), pkhs)
+		return NewAddressMultiPKH(uint16(required), pkhs, net)
 
 	}
 

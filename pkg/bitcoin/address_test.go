@@ -60,22 +60,22 @@ func TestPKH(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			address, err := NewAddressPKH(pkh)
+			address, err := NewAddressPKH(pkh, tt.net)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			addressText := address.String(tt.net)
+			addressText := address.String()
 			if addressText != tt.want {
 				t.Fatalf("PKH Address text invalid\ngot:%s\nwant:%s", addressText, tt.want)
 			}
 
-			a, net, err := DecodeAddressString(addressText)
+			a, err := DecodeAddressString(addressText)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if net != tt.net {
+			if a.Network() != tt.net {
 				t.Fatal("PKH decoded wrong net")
 			}
 
@@ -95,7 +95,7 @@ func TestPKH(t *testing.T) {
 				t.Fatalf("Invalid PKH locking script generated : %x", script)
 			}
 
-			scriptAddress, err := AddressFromLockingScript(script)
+			scriptAddress, err := AddressFromLockingScript(script, tt.net)
 			if err != nil {
 				t.Fatalf("Failed to parse PKH locking script : %s", err.Error())
 			}
@@ -164,22 +164,22 @@ func TestSH(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			address, err := NewAddressSH(sh)
+			address, err := NewAddressSH(sh, tt.net)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			addressText := address.String(tt.net)
+			addressText := address.String()
 			if addressText != tt.want {
 				t.Fatalf("SH Address text invalid\ngot:%s\nwant:%s", addressText, tt.want)
 			}
 
-			a, net, err := DecodeAddressString(addressText)
+			a, err := DecodeAddressString(addressText)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if net != tt.net {
+			if a.Network() != tt.net {
 				t.Fatal("PKH decoded wrong net")
 			}
 
@@ -199,7 +199,7 @@ func TestSH(t *testing.T) {
 				t.Fatalf("Invalid SH locking script generated : %x", script)
 			}
 
-			scriptAddress, err := AddressFromLockingScript(script)
+			scriptAddress, err := AddressFromLockingScript(script, tt.net)
 			if err != nil {
 				t.Fatalf("Failed to parse SH locking script : %s", err.Error())
 			}

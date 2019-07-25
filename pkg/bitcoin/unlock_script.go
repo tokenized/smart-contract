@@ -3,10 +3,12 @@ package bitcoin
 import (
 	"bytes"
 	"errors"
+
+	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // AddressFromUnlockingScript returns the address associated with the specified unlocking script.
-func AddressFromUnlockingScript(unlockingScript []byte) (Address, error) {
+func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Address, error) {
 	if len(unlockingScript) < 2 {
 		return nil, ErrUnknownScriptTemplate
 	}
@@ -44,7 +46,7 @@ func AddressFromUnlockingScript(unlockingScript []byte) (Address, error) {
 	if isSignature(firstPush) && isPublicKey(secondPush) {
 		// PKH
 		// <Signature> <PublicKey>
-		return NewAddressPKH(Hash160(secondPush))
+		return NewAddressPKH(Hash160(secondPush), net)
 	}
 
 	if isPublicKey(firstPush) && isSignature(secondPush) {
@@ -54,7 +56,7 @@ func AddressFromUnlockingScript(unlockingScript []byte) (Address, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NewAddressPKH(Hash160(rValue))
+		return NewAddressPKH(Hash160(rValue), net)
 	}
 
 	// TODO MultiPKH

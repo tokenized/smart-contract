@@ -25,21 +25,21 @@ var cmdGen = &cobra.Command{
 		}
 		params := bitcoin.NewChainParams(network)
 
-		key, err := bitcoin.GenerateKeyS256()
+		key, err := bitcoin.GenerateKeyS256(wire.BitcoinNet(params.Net))
 		if err != nil {
 			fmt.Printf("Failed to generate key : %s\n", err)
 			return nil
 		}
 
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()))
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), wire.BitcoinNet(params.Net))
 		if err != nil {
 			fmt.Printf("Failed to generate address : %s\n", err)
 			return nil
 		}
 
-		fmt.Printf("WIF : %s\n", key.String(wire.BitcoinNet(params.Net)))
+		fmt.Printf("WIF : %s\n", key.String())
 		fmt.Printf("PubKey : %s\n", base64.StdEncoding.EncodeToString(key.PublicKey().Bytes()))
-		fmt.Printf("Addr : %s\n", address.String(wire.BitcoinNet(params.Net)))
+		fmt.Printf("Addr : %s\n", address.String())
 		return nil
 	},
 }

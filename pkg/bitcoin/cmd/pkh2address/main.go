@@ -31,10 +31,10 @@ func main() {
 		panic(err)
 	}
 
-	b, err := bitcoin.NewAddressPKH(pkh)
+	b, err := bitcoin.NewAddressPKH(pkh, bitcoin.MainNet)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("%s\n", b.String(bitcoin.MainNet))
+	fmt.Printf("%s\n", b.String())
 }

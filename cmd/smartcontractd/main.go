@@ -116,7 +116,7 @@ func main() {
 		panic(err)
 	}
 
-	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String(wire.BitcoinNet(appConfig.ChainParams.Net)))
+	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String())
 
 	// -------------------------------------------------------------------------
 	// Tx Filter

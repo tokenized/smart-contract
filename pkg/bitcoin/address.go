@@ -16,25 +16,38 @@ var (
 )
 
 const (
-	typePKH      = 0x00 // Public Key Hash
-	typeSH       = 0x05 // Script Hash
-	typeMultiPKH = 0x10 // Experimental value. Not standard
-	typeRPH      = 0x20 // Experimental value. Not standard
+	typeMainPKH      = 0x00 // Public Key Hash
+	typeMainSH       = 0x05 // Script Hash
+	typeMainMultiPKH = 0x10 // Multi-PKH - Experimental value. Not standard
+	typeMainRPH      = 0x20 // RPH - Experimental value. Not standard
 
 	typeTestPKH      = 0x6f // Testnet Public Key Hash
 	typeTestSH       = 0xc4 // Testnet Script Hash
-	typeTestMultiPKH = 0xd0 // Experimental value. Not standard
-	typeTestRPH      = 0xe0 // Experimental value. Not standard
+	typeTestMultiPKH = 0xd0 // Multi-PKH - Experimental value. Not standard
+	typeTestRPH      = 0xe0 // RPH - Experimental value. Not standard
+
+	typeIntPKH      = 0x30 // Public Key Hash
+	typeIntSH       = 0x31 // Script Hash
+	typeIntMultiPKH = 0x32 // Multi-PKH
+	typeIntRPH      = 0x33 // RPH
 
 	hashLength = 20 // Length of public key, script, and R hashes
 )
 
 type Address interface {
 	// String returns the type and address data followed by a checksum encoded with Base58.
-	String(network wire.BitcoinNet) string
+	// Panics if called for address that was created with IntNet.
+	String() string
 
-	// Bytes returns the type followed by the address data.
-	Bytes(network wire.BitcoinNet) []byte
+	// Network returns the network id for the address.
+	Network() wire.BitcoinNet
+
+	// SetNetwork changes the network of the address.
+	// This should only be used to change from IntNet to the correct network.
+	SetNetwork(net wire.BitcoinNet)
+
+	// Bytes returns the non-network specific type followed by the address data.
+	Bytes() []byte
 
 	// LockingScript returns the bitcoin output(locking) script for paying to the address.
 	LockingScript() []byte
@@ -43,80 +56,99 @@ type Address interface {
 	Equal(Address) bool
 }
 
-// DecodeAddressString decodes a base58 text bitcoin address. It returns the address, the network,
-//   and an error if there was an issue.
-func DecodeAddressString(address string) (Address, wire.BitcoinNet, error) {
+// DecodeAddressString decodes a base58 text bitcoin address. It returns the address, and an error
+//   if there was an issue.
+func DecodeAddressString(address string) (Address, error) {
 	b, err := decodeAddress(address)
 	if err != nil {
-		return nil, MainNet, err
+		return nil, err
 	}
 
-	return DecodeAddressBytes(b)
-}
-
-// DecodeAddressBytes decodes a binary bitcoin address. It returns the address, the network, and an
-//   error if there was an issue.
-func DecodeAddressBytes(b []byte) (Address, wire.BitcoinNet, error) {
 	switch b[0] {
-	case typePKH:
-		a, err := NewAddressPKH(b[1:])
-		return a, MainNet, err
-	case typeSH:
-		a, err := NewAddressSH(b[1:])
-		return a, MainNet, err
-	case typeMultiPKH:
+	case typeMainPKH:
+		return NewAddressPKH(b[1:], MainNet)
+	case typeMainSH:
+		return NewAddressSH(b[1:], MainNet)
+	case typeMainMultiPKH:
 		b = b[1:] // remove type
 		// Parse required count
 		buf := bytes.NewBuffer(b[:2])
 		var required uint16
 		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, MainNet, err
+			return nil, err
 		}
 		b = b[2:] // remove required
 		pkhs := make([][]byte, 0, len(b)/hashLength)
 		for len(b) >= 0 {
 			if len(b) < hashLength {
-				return nil, MainNet, ErrBadHashLength
+				return nil, ErrBadHashLength
 			}
 			pkhs = append(pkhs, b[:hashLength])
 			b = b[hashLength:]
 		}
-		a, err := NewAddressMultiPKH(required, pkhs)
-		return a, MainNet, err
-	case typeRPH:
-		a, err := NewAddressRPH(b[1:])
-		return a, MainNet, err
+		return NewAddressMultiPKH(required, pkhs, MainNet)
+	case typeMainRPH:
+		return NewAddressRPH(b[1:], MainNet)
 	case typeTestPKH:
-		a, err := NewAddressPKH(b[1:])
-		return a, TestNet, err
+		return NewAddressPKH(b[1:], TestNet)
 	case typeTestSH:
-		a, err := NewAddressSH(b[1:])
-		return a, TestNet, err
+		return NewAddressSH(b[1:], TestNet)
 	case typeTestMultiPKH:
 		b = b[1:] // remove type
 		// Parse required count
 		buf := bytes.NewBuffer(b[:2])
 		var required uint16
 		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, TestNet, err
+			return nil, err
 		}
 		b = b[2:] // remove required
 		pkhs := make([][]byte, 0, len(b)/hashLength)
 		for len(b) >= 0 {
 			if len(b) < hashLength {
-				return nil, TestNet, ErrBadHashLength
+				return nil, ErrBadHashLength
 			}
 			pkhs = append(pkhs, b[:hashLength])
 			b = b[hashLength:]
 		}
-		a, err := NewAddressMultiPKH(required, pkhs)
-		return a, TestNet, err
+		return NewAddressMultiPKH(required, pkhs, TestNet)
 	case typeTestRPH:
-		a, err := NewAddressRPH(b[1:])
-		return a, TestNet, err
+		return NewAddressRPH(b[1:], TestNet)
 	}
 
-	return nil, MainNet, ErrBadType
+	return nil, ErrBadType
+}
+
+// DecodeAddressBytes decodes a binary bitcoin address. It returns the address, and an error if
+//   there was an issue.
+func DecodeAddressBytes(b []byte, net wire.BitcoinNet) (Address, error) {
+	switch b[0] {
+	case typeIntPKH:
+		return NewAddressPKH(b[1:], net)
+	case typeIntSH:
+		return NewAddressSH(b[1:], net)
+	case typeIntMultiPKH:
+		b = b[1:] // remove type
+		// Parse required count
+		buf := bytes.NewBuffer(b[:2])
+		var required uint16
+		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+			return nil, err
+		}
+		b = b[2:] // remove required
+		pkhs := make([][]byte, 0, len(b)/hashLength)
+		for len(b) >= 0 {
+			if len(b) < hashLength {
+				return nil, ErrBadHashLength
+			}
+			pkhs = append(pkhs, b[:hashLength])
+			b = b[hashLength:]
+		}
+		return NewAddressMultiPKH(required, pkhs, net)
+	case typeIntRPH:
+		return NewAddressRPH(b[1:], net)
+	}
+
+	return nil, ErrBadType
 }
 
 // DecodeNetMatches returns true if the decoded network id matches the specified network id.
@@ -135,35 +167,51 @@ func DecodeNetMatches(decoded wire.BitcoinNet, desired wire.BitcoinNet) bool {
 /****************************************** PKH ***************************************************/
 type AddressPKH struct {
 	pkh []byte
+	net wire.BitcoinNet
 }
 
 // NewAddressPKH creates an address from a public key hash.
-func NewAddressPKH(pkh []byte) (*AddressPKH, error) {
+func NewAddressPKH(pkh []byte, net wire.BitcoinNet) (*AddressPKH, error) {
 	if len(pkh) != hashLength {
 		return nil, ErrBadHashLength
 	}
-	return &AddressPKH{pkh: pkh}, nil
+	return &AddressPKH{pkh: pkh, net: net}, nil
 }
 
 func (a *AddressPKH) PKH() []byte {
 	return a.pkh
 }
 
-func (a *AddressPKH) String(network wire.BitcoinNet) string {
-	return encodeAddress(a.Bytes(network))
-}
-
-func (a *AddressPKH) Bytes(network wire.BitcoinNet) []byte {
+// String returns the type and address data followed by a checksum encoded with Base58.
+// Panics if called for address that was created with IntNet.
+func (a *AddressPKH) String() string {
 	var addressType byte
 
 	// Add address type byte in front
-	switch network {
+	switch a.net {
 	case MainNet:
-		addressType = typePKH
+		addressType = typeMainPKH
+	case IntNet:
+		panic("Internal address type")
 	default:
 		addressType = typeTestPKH
 	}
-	return append([]byte{addressType}, a.pkh...)
+	return encodeAddress(append([]byte{addressType}, a.pkh...))
+}
+
+// Network returns the network id for the address.
+func (a *AddressPKH) Network() wire.BitcoinNet {
+	return a.net
+}
+
+// SetNetwork changes the network of the address.
+// This should only be used to change from IntNet to the correct network.
+func (a *AddressPKH) SetNetwork(net wire.BitcoinNet) {
+	a.net = net
+}
+
+func (a *AddressPKH) Bytes() []byte {
+	return append([]byte{typeIntPKH}, a.pkh...)
 }
 
 func (a *AddressPKH) Equal(other Address) bool {
@@ -179,36 +227,52 @@ func (a *AddressPKH) Equal(other Address) bool {
 
 /******************************************* SH ***************************************************/
 type AddressSH struct {
-	sh []byte
+	sh  []byte
+	net wire.BitcoinNet
 }
 
 // NewAddressSH creates an address from a script hash.
-func NewAddressSH(sh []byte) (*AddressSH, error) {
+func NewAddressSH(sh []byte, net wire.BitcoinNet) (*AddressSH, error) {
 	if len(sh) != hashLength {
 		return nil, ErrBadHashLength
 	}
-	return &AddressSH{sh: sh}, nil
+	return &AddressSH{sh: sh, net: net}, nil
 }
 
 func (a *AddressSH) SH() []byte {
 	return a.sh
 }
 
-func (a *AddressSH) String(network wire.BitcoinNet) string {
-	return encodeAddress(a.Bytes(network))
-}
-
-func (a *AddressSH) Bytes(network wire.BitcoinNet) []byte {
+// String returns the type and address data followed by a checksum encoded with Base58.
+// Panics if called for address that was created with IntNet.
+func (a *AddressSH) String() string {
 	var addressType byte
 
 	// Add address type byte in front
-	switch network {
+	switch a.net {
 	case MainNet:
-		addressType = typeSH
+		addressType = typeMainSH
+	case IntNet:
+		panic("Internal address type")
 	default:
 		addressType = typeTestSH
 	}
-	return append([]byte{addressType}, a.sh...)
+	return encodeAddress(append([]byte{addressType}, a.sh...))
+}
+
+// Network returns the network id for the address.
+func (a *AddressSH) Network() wire.BitcoinNet {
+	return a.net
+}
+
+// SetNetwork changes the network of the address.
+// This should only be used to change from IntNet to the correct network.
+func (a *AddressSH) SetNetwork(net wire.BitcoinNet) {
+	a.net = net
+}
+
+func (a *AddressSH) Bytes() []byte {
+	return append([]byte{typeIntSH}, a.sh...)
 }
 
 func (a *AddressSH) Equal(other Address) bool {
@@ -226,16 +290,17 @@ func (a *AddressSH) Equal(other Address) bool {
 type AddressMultiPKH struct {
 	pkhs     [][]byte
 	required uint16
+	net      wire.BitcoinNet
 }
 
 // NewAddressMultiPKH creates an address from a required signature count and some public key hashes.
-func NewAddressMultiPKH(required uint16, pkhs [][]byte) (*AddressMultiPKH, error) {
+func NewAddressMultiPKH(required uint16, pkhs [][]byte, net wire.BitcoinNet) (*AddressMultiPKH, error) {
 	for _, pkh := range pkhs {
 		if len(pkh) != hashLength {
 			return nil, ErrBadHashLength
 		}
 	}
-	return &AddressMultiPKH{pkhs: pkhs, required: required}, nil
+	return &AddressMultiPKH{pkhs: pkhs, required: required, net: net}, nil
 }
 
 func (a *AddressMultiPKH) PKHs() []byte {
@@ -246,23 +311,52 @@ func (a *AddressMultiPKH) PKHs() []byte {
 	return b
 }
 
-func (a *AddressMultiPKH) String(network wire.BitcoinNet) string {
-	return encodeAddress(a.Bytes(network))
-}
-
-func (a *AddressMultiPKH) Bytes(network wire.BitcoinNet) []byte {
+// String returns the type and address data followed by a checksum encoded with Base58.
+// Panics if called for address that was created with IntNet.
+func (a *AddressMultiPKH) String() string {
 	b := make([]byte, 0, 3+(len(a.pkhs)*hashLength))
 
 	var addressType byte
 
 	// Add address type byte in front
-	switch network {
+	switch a.net {
 	case MainNet:
-		addressType = typeMultiPKH
+		addressType = typeMainMultiPKH
+	case IntNet:
+		panic("Internal address type")
 	default:
 		addressType = typeTestMultiPKH
 	}
 	b = append(b, byte(addressType))
+
+	// Append required count
+	var numBuf bytes.Buffer
+	binary.Write(&numBuf, binary.LittleEndian, a.required)
+	b = append(b, numBuf.Bytes()...)
+
+	// Append all pkhs
+	for _, pkh := range a.pkhs {
+		b = append(b, pkh...)
+	}
+
+	return encodeAddress(b)
+}
+
+// Network returns the network id for the address.
+func (a *AddressMultiPKH) Network() wire.BitcoinNet {
+	return a.net
+}
+
+// SetNetwork changes the network of the address.
+// This should only be used to change from IntNet to the correct network.
+func (a *AddressMultiPKH) SetNetwork(net wire.BitcoinNet) {
+	a.net = net
+}
+
+func (a *AddressMultiPKH) Bytes() []byte {
+	b := make([]byte, 0, 3+(len(a.pkhs)*hashLength))
+
+	b = append(b, byte(typeIntMultiPKH))
 
 	// Append required count
 	var numBuf bytes.Buffer
@@ -301,35 +395,51 @@ func (a *AddressMultiPKH) Equal(other Address) bool {
 /***************************************** RPH ************************************************/
 type AddressRPH struct {
 	rph []byte
+	net wire.BitcoinNet
 }
 
 // NewAddressRPH creates an address from an R puzzle hash.
-func NewAddressRPH(rph []byte) (*AddressRPH, error) {
+func NewAddressRPH(rph []byte, net wire.BitcoinNet) (*AddressRPH, error) {
 	if len(rph) != hashLength {
 		return nil, ErrBadHashLength
 	}
-	return &AddressRPH{rph: rph}, nil
+	return &AddressRPH{rph: rph, net: net}, nil
 }
 
 func (a *AddressRPH) RPH() []byte {
 	return a.rph
 }
 
-func (a *AddressRPH) String(network wire.BitcoinNet) string {
-	return encodeAddress(a.Bytes(network))
-}
-
-func (a *AddressRPH) Bytes(network wire.BitcoinNet) []byte {
+// String returns the type and address data followed by a checksum encoded with Base58.
+// Panics if called for address that was created with IntNet.
+func (a *AddressRPH) String() string {
 	var addressType byte
 
 	// Add address type byte in front
-	switch network {
+	switch a.net {
 	case MainNet:
-		addressType = typeRPH
+		addressType = typeMainRPH
+	case IntNet:
+		panic("Internal address type")
 	default:
 		addressType = typeTestRPH
 	}
-	return append([]byte{addressType}, a.rph...)
+	return encodeAddress(append([]byte{addressType}, a.rph...))
+}
+
+// Network returns the network id for the address.
+func (a *AddressRPH) Network() wire.BitcoinNet {
+	return a.net
+}
+
+// SetNetwork changes the network of the address.
+// This should only be used to change from IntNet to the correct network.
+func (a *AddressRPH) SetNetwork(net wire.BitcoinNet) {
+	a.net = net
+}
+
+func (a *AddressRPH) Bytes() []byte {
+	return append([]byte{typeMainRPH}, a.rph...)
 }
 
 func (a *AddressRPH) Equal(other Address) bool {

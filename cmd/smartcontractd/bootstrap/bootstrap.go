@@ -80,11 +80,11 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 		IsTest:             cfg.Contract.IsTest,
 	}
 
-	feeAddress, decodedNet, err := bitcoin.DecodeAddressString(cfg.Contract.FeeAddress)
+	feeAddress, err := bitcoin.DecodeAddressString(cfg.Contract.FeeAddress)
 	if err != nil {
 		logger.Fatal(ctx, "Invalid fee address : %s", err)
 	}
-	if !bitcoin.DecodeNetMatches(decodedNet, wire.BitcoinNet(appConfig.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(feeAddress.Network(), wire.BitcoinNet(appConfig.ChainParams.Net)) {
 		logger.Fatal(ctx, "Wrong fee address encoding network")
 	}
 	appConfig.FeeAddress = feeAddress

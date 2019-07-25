@@ -96,7 +96,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	cf.Timestamp = v.Now
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	requestorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
-		node.LogVerbose(ctx, "Requestor is not PKH : %s", itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		node.LogVerbose(ctx, "Requestor is not PKH : %s", itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
 	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH.PKH())
@@ -292,7 +292,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -352,7 +353,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Contract formation not from contract : %s", itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		return fmt.Errorf("Contract formation not from contract : %s",
+			itx.Inputs[0].Address.String())
 	}
 
 	contractName := msg.ContractName

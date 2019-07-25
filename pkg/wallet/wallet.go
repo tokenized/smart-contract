@@ -62,12 +62,9 @@ func (w Wallet) Register(wif string, net wire.BitcoinNet) error {
 	}
 
 	// load the WIF if we have one
-	key, decodedNet, err := bitcoin.DecodeKeyString(wif)
+	key, err := bitcoin.DecodeKeyString(wif)
 	if err != nil {
 		return err
-	}
-	if !bitcoin.DecodeNetMatches(decodedNet, net) {
-		return errors.New("WIF for wrong net")
 	}
 
 	// Put in key store
@@ -121,5 +118,5 @@ func (w Wallet) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) 
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
-	return w.KeyStore.Save(ctx, masterDB, net)
+	return w.KeyStore.Save(ctx, masterDB)
 }

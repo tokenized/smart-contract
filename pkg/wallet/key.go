@@ -23,7 +23,7 @@ func NewKey(key bitcoin.Key) *Key {
 	if !ok {
 		return nil
 	}
-	result.Address, _ = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
+	result.Address, _ = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()), key.Network())
 	return &result
 }
 
@@ -38,26 +38,22 @@ func (rk *Key) Read(buf *bytes.Buffer, net wire.BitcoinNet) error {
 		return err
 	}
 
-	var decodedNet wire.BitcoinNet
 	var err error
-	rk.Key, decodedNet, err = bitcoin.DecodeKeyBytes(data)
+	rk.Key, err = bitcoin.DecodeKeyBytes(data, net)
 	if err != nil {
 		return err
-	}
-	if !bitcoin.DecodeNetMatches(decodedNet, net) {
-		return errors.New("Key encoded with wrong network")
 	}
 
 	s256, ok := rk.Key.(*bitcoin.KeyS256)
 	if !ok {
 		return errors.New("Key is not S256")
 	}
-	rk.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
+	rk.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()), net)
 	return err
 }
 
-func (rk *Key) Write(buf *bytes.Buffer, net wire.BitcoinNet) error {
-	b := rk.Key.Bytes(net)
+func (rk *Key) Write(buf *bytes.Buffer) error {
+	b := rk.Key.Bytes()
 	binary.Write(buf, binary.LittleEndian, uint8(len(b)))
 	_, err := buf.Write(b)
 	return err

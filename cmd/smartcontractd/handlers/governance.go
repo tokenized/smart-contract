@@ -262,7 +262,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	vote := protocol.Vote{Timestamp: v.Now}
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -474,7 +475,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	holderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
-		node.LogWarn(ctx, "Holder not PKH : %s", itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		node.LogWarn(ctx, "Holder not PKH : %s", itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
@@ -520,7 +521,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	ballotCounted.Timestamp = v.Now
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -559,7 +561,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Ballot counted not from contract : %x",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+			itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
@@ -588,7 +590,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 
 	holderAddressPKH, ok := castTx.Inputs[0].Address.(*bitcoin.AddressPKH)
 	if !ok {
-		node.LogWarn(ctx, "Holder not PKH : %s", itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		node.LogWarn(ctx, "Holder not PKH : %s", itx.Inputs[0].Address.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
@@ -670,7 +672,8 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
+		wire.BitcoinNet(w.Config.ChainParams.Net))
 	if err != nil {
 		return err
 	}
@@ -711,8 +714,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Vote result not from contract : %x",
-			itx.Inputs[0].Address.String(wire.BitcoinNet(w.Config.ChainParams.Net)))
+		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.String())
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
