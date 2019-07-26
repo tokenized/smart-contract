@@ -114,7 +114,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	outputs := make([]Output, 0, len(itx.MsgTx.TxOut))
 
 	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, n, wire.BitcoinNet(node.GetChainParams().Net))
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, n)
 
 		if err != nil {
 			return err
@@ -131,7 +131,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	return nil
 }
 
-func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int, net wire.BitcoinNet) (*Output, error) {
+func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
 	// Zero value output
@@ -139,7 +139,7 @@ func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int, net wire.BitcoinNe
 		return nil, nil
 	}
 
-	address, err := bitcoin.AddressFromLockingScript(txout.PkScript, net)
+	address, err := bitcoin.ScriptTemplateFromLockingScript(txout.PkScript)
 	if err != nil {
 		if err == bitcoin.ErrUnknownScriptTemplate {
 			return nil, nil // Skip non-payto scripts
@@ -172,7 +172,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 			return err
 		}
 
-		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index, wire.BitcoinNet(node.GetChainParams().Net))
+		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index)
 		if err != nil {
 			return err
 		}
@@ -184,10 +184,10 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 	return nil
 }
 
-func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32, net wire.BitcoinNet) (*Input, error) {
+func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32) (*Input, error) {
 	utxo := NewUTXOFromHashWire(hash, tx, n)
 
-	address, err := utxo.Address(net)
+	address, err := utxo.Address()
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (itx *Transaction) UTXOs() UTXOs {
 	return utxos
 }
 
-func (itx *Transaction) IsRelevant(contractAddress bitcoin.Address) bool {
+func (itx *Transaction) IsRelevant(contractAddress bitcoin.ScriptTemplate) bool {
 	for _, input := range itx.Inputs {
 		if input.Address.Equal(contractAddress) {
 			return true
@@ -268,7 +268,7 @@ func (itx *Transaction) IsRelevant(contractAddress bitcoin.Address) bool {
 }
 
 // ContractAddresses returns the contract address, which may include more than one
-func (itx *Transaction) ContractAddresses() []bitcoin.Address {
+func (itx *Transaction) ContractAddresses() []bitcoin.ScriptTemplate {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
@@ -278,9 +278,9 @@ func (itx *Transaction) ContractPKHs() [][]byte {
 }
 
 // Addresses returns all the PKH addresses involved in the transaction
-func (itx *Transaction) Addresses() []bitcoin.Address {
+func (itx *Transaction) Addresses() []bitcoin.ScriptTemplate {
 	l := len(itx.Inputs) + len(itx.Outputs)
-	addresses := make([]bitcoin.Address, l, l)
+	addresses := make([]bitcoin.ScriptTemplate, l, l)
 
 	for i, input := range itx.Inputs {
 		addresses[i] = input.Address
@@ -294,13 +294,13 @@ func (itx *Transaction) Addresses() []bitcoin.Address {
 }
 
 // AddressesUnique returns the unique PKH addresses involved in a transaction
-func (itx *Transaction) AddressesUnique() []bitcoin.Address {
+func (itx *Transaction) AddressesUnique() []bitcoin.ScriptTemplate {
 	return uniqueAddresses(itx.Addresses())
 }
 
 // uniqueAddresses is an isolated function used for testing
-func uniqueAddresses(s []bitcoin.Address) []bitcoin.Address {
-	u := []bitcoin.Address{}
+func uniqueAddresses(s []bitcoin.ScriptTemplate) []bitcoin.ScriptTemplate {
+	u := []bitcoin.ScriptTemplate{}
 
 	// Spin over every address and check if it is found
 	// in the list of unique addresses
@@ -316,7 +316,7 @@ func uniqueAddresses(s []bitcoin.Address) []bitcoin.Address {
 			// We have seen this address
 			if x.Equal(v) {
 				seen = true
-				continue
+				break
 			}
 		}
 
@@ -345,7 +345,7 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (itx *Transaction) Read(buf *bytes.Buffer, net wire.BitcoinNet, isTest bool) error {
+func (itx *Transaction) Read(buf *bytes.Buffer, isTest bool) error {
 	version, err := buf.ReadByte() // Version
 	if err != nil {
 		return err
@@ -364,7 +364,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, net wire.BitcoinNet, isTest bool
 	// Inputs
 	itx.Inputs = make([]Input, len(msg.TxIn))
 	for i, _ := range itx.Inputs {
-		if err := itx.Inputs[i].Read(buf, net); err != nil {
+		if err := itx.Inputs[i].Read(buf); err != nil {
 			return err
 		}
 	}
@@ -377,7 +377,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, net wire.BitcoinNet, isTest bool
 	// Outputs
 	outputs := []Output{}
 	for i := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, i, net)
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, i)
 
 		if err != nil {
 			return err

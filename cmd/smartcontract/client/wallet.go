@@ -18,7 +18,7 @@ import (
 
 type Wallet struct {
 	Key     bitcoin.Key
-	Address bitcoin.Address
+	Address bitcoin.ScriptTemplate
 	outputs []Output
 	path    string
 }
@@ -130,7 +130,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 	}
 
 	// Pub Key Hash Address
-	wallet.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()), net)
+	wallet.Address, err = bitcoin.NewScriptTemplatePKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 	logger.Info(ctx, "Loaded wallet with %d outputs, %d unspent, and balance of %.08f",
 		len(wallet.outputs), unspentCount, BitcoinsFromSatoshis(wallet.Balance()))
 
-	logger.Info(ctx, "Wallet address : %s", wallet.Address.String())
+	logger.Info(ctx, "Wallet address : %x", wallet.Address.Bytes())
 	return nil
 }
 

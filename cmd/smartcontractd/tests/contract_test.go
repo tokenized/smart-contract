@@ -175,11 +175,7 @@ func createContract(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Verify data
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract not PKH", tests.Failed)
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
@@ -279,11 +275,7 @@ func contractAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract name
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract not PKH", tests.Failed)
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
@@ -371,11 +363,7 @@ func contractProposalAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract type
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract not PKH", tests.Failed)
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"runtime/debug"
@@ -76,20 +77,20 @@ func New(logToStdOut bool) *Test {
 
 	feeKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate fee key : %v", err)
+		fmt.Printf("main : Failed to generate fee key : %v\n", err)
 		return nil
 	}
 
 	fee2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate fee 2 key : %v", err)
+		fmt.Printf("main : Failed to generate fee 2 key : %v\n", err)
 		return nil
 	}
 
 	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()),
 		wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to create fee 2 address : %v", err)
+		fmt.Printf("main : Failed to create fee 2 address : %v\n", err)
 		return nil
 	}
 
@@ -104,7 +105,7 @@ func New(logToStdOut bool) *Test {
 		Root:   path,
 	})
 	if err != nil {
-		node.LogError(ctx, "main : Failed to create DB : %v", err)
+		fmt.Printf("main : Failed to create DB : %v\n", err)
 		return nil
 	}
 
@@ -113,42 +114,42 @@ func New(logToStdOut bool) *Test {
 
 	testUTXOs, err := utxos.Load(ctx, masterDB)
 	if err != nil {
-		node.LogError(ctx, "main : Failed to load UTXOs : %v", err)
+		fmt.Printf("main : Failed to load UTXOs : %v\n", err)
 		return nil
 	}
 
 	masterKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate master key : %v", err)
+		fmt.Printf("main : Failed to generate master key : %v\n", err)
 		return nil
 	}
 
 	contractKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate contract key : %v", err)
+		fmt.Printf("main : Failed to generate contract key : %v\n", err)
 		return nil
 	}
 
 	testWallet := wallet.New()
 	if err := testWallet.Add(contractKey); err != nil {
-		node.LogError(ctx, "main : Failed to add contract key to wallet : %v", err)
+		fmt.Printf("main : Failed to add contract key to wallet : %v\n", err)
 		return nil
 	}
 
 	master2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate master 2 key : %v", err)
+		fmt.Printf("main : Failed to generate master 2 key : %v\n", err)
 		return nil
 	}
 
 	contract2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate contract 2 key : %v", err)
+		fmt.Printf("main : Failed to generate contract 2 key : %v\n", err)
 		return nil
 	}
 
 	if err := testWallet.Add(contract2Key); err != nil {
-		node.LogError(ctx, "main : Failed to add contract 2 key to wallet : %v", err)
+		fmt.Printf("main : Failed to add contract 2 key to wallet : %v\n", err)
 		return nil
 	}
 
@@ -159,7 +160,7 @@ func New(logToStdOut bool) *Test {
 
 	go func() {
 		if err := testScheduler.Run(ctx); err != nil {
-			node.LogError(ctx, "Scheduler failed : %s", err)
+			fmt.Printf("Scheduler failed : %s\n", err)
 		}
 		node.Log(ctx, "Scheduler finished")
 	}()

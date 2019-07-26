@@ -83,11 +83,13 @@ func (a *ScriptTemplatePKH) Equal(other ScriptTemplate) bool {
 	if other == nil {
 		return false
 	}
-	otherPKH, ok := other.(*ScriptTemplatePKH)
-	if !ok {
-		return false
+	switch o := other.(type) {
+	case *ScriptTemplatePKH:
+		return bytes.Equal(a.pkh, o.pkh)
+	case *AddressPKH:
+		return bytes.Equal(a.pkh, o.pkh)
 	}
-	return bytes.Equal(a.pkh, otherPKH.pkh)
+	return false
 }
 
 /******************************************* SH ***************************************************/
@@ -115,11 +117,13 @@ func (a *ScriptTemplateSH) Equal(other ScriptTemplate) bool {
 	if other == nil {
 		return false
 	}
-	otherSH, ok := other.(*ScriptTemplateSH)
-	if !ok {
-		return false
+	switch o := other.(type) {
+	case *ScriptTemplateSH:
+		return bytes.Equal(a.sh, o.sh)
+	case *AddressSH:
+		return bytes.Equal(a.sh, o.sh)
 	}
-	return bytes.Equal(a.sh, otherSH.sh)
+	return false
 }
 
 /**************************************** MultiPKH ************************************************/
@@ -168,21 +172,33 @@ func (a *ScriptTemplateMultiPKH) Equal(other ScriptTemplate) bool {
 	if other == nil {
 		return false
 	}
-	otherMultiPKH, ok := other.(*ScriptTemplateMultiPKH)
-	if !ok {
-		return false
-	}
 
-	if len(a.pkhs) != len(otherMultiPKH.pkhs) {
-		return false
-	}
-
-	for i, pkh := range a.pkhs {
-		if !bytes.Equal(pkh, otherMultiPKH.pkhs[i]) {
+	switch o := other.(type) {
+	case *ScriptTemplateMultiPKH:
+		if len(a.pkhs) != len(o.pkhs) {
 			return false
 		}
+
+		for i, pkh := range a.pkhs {
+			if !bytes.Equal(pkh, o.pkhs[i]) {
+				return false
+			}
+		}
+		return true
+	case *AddressMultiPKH:
+		if len(a.pkhs) != len(o.pkhs) {
+			return false
+		}
+
+		for i, pkh := range a.pkhs {
+			if !bytes.Equal(pkh, o.pkhs[i]) {
+				return false
+			}
+		}
+		return true
 	}
-	return true
+
+	return false
 }
 
 /***************************************** RPH ************************************************/
@@ -210,9 +226,11 @@ func (a *ScriptTemplateRPH) Equal(other ScriptTemplate) bool {
 	if other == nil {
 		return false
 	}
-	otherRPH, ok := other.(*ScriptTemplateRPH)
-	if !ok {
-		return false
+	switch o := other.(type) {
+	case *ScriptTemplateRPH:
+		return bytes.Equal(a.rph, o.rph)
+	case *AddressRPH:
+		return bytes.Equal(a.rph, o.rph)
 	}
-	return bytes.Equal(a.rph, otherRPH.rph)
+	return false
 }

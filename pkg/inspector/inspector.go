@@ -10,7 +10,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
@@ -47,7 +46,6 @@ type NodeInterface interface {
 	SaveTX(context.Context, *wire.MsgTx) error
 	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
 	GetTXs(context.Context, []*chainhash.Hash) ([]*wire.MsgTx, error)
-	GetChainParams() *chaincfg.Params
 }
 
 // NewTransaction builds an ITX from a raw transaction.

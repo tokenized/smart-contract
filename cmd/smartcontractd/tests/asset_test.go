@@ -126,16 +126,8 @@ func createAsset(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check issuer balance
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract address not PKH", tests.Failed)
-	}
-	contractPKH = protocol.PublicKeyHashFromBytes(addressPKH.PKH())
-	addressPKH, ok = issuerKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tIssuer address not PKH", tests.Failed)
-	}
-	issuerPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH = protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
@@ -311,11 +303,7 @@ func assetIndex(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check issuer balance
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract address not PKH", tests.Failed)
-	}
-	contractPKH = protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH = protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	as, err = asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset 2 : %v", tests.Failed, err)
@@ -405,11 +393,7 @@ func assetAmendment(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check balance status
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract address not PKH", tests.Failed)
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
@@ -421,11 +405,7 @@ func assetAmendment(t *testing.T) {
 
 	t.Logf("\t%s\tVerified token quantity : %d", tests.Success, as.TokenQty)
 
-	addressPKH, ok = issuerKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tIssuer address not PKH", tests.Failed)
-	}
-	issuerPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
 	if err != nil {
@@ -526,11 +506,7 @@ func assetProposalAmendment(t *testing.T) {
 	// Check the response
 	checkResponse(t, "A2")
 
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		t.Fatalf("\t%s\tContract address not PKH", tests.Failed)
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	as, err := asset.Retrieve(ctx, test.MasterDB, contractPKH, &testAssetCode)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
@@ -567,13 +543,8 @@ var sampleAssetPayload2 = protocol.ShareCommon{
 func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
 	payload protocol.AssetPayload, permitted, issuer, holder bool) error {
 
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract address not PKH")
-	}
-
 	var assetData = state.Asset{
-		ID:                         *protocol.AssetCodeFromContract(addressPKH.PKH(), 0),
+		ID:                         *protocol.AssetCodeFromContract(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()), 0),
 		AssetType:                  payload.Type(),
 		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
@@ -609,16 +580,8 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 		return err
 	}
 
-	addressPKH, ok = test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract address not PKH")
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
-	addressPKH, ok = issuerKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Issuer address not PKH")
-	}
-	issuerPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	issuerHolding := state.Holding{
 		PKH:              *issuerPKH,
 		PendingBalance:   quantity,
@@ -650,13 +613,8 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
 	payload protocol.AssetPayload, permitted, issuer, holder bool) error {
 
-	addressPKH, ok := test.Contract2Key.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract 2 address not PKH")
-	}
-
 	var assetData = state.Asset{
-		ID:                         *protocol.AssetCodeFromContract(addressPKH.PKH(), 0),
+		ID:                         *protocol.AssetCodeFromContract(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()), 0),
 		AssetType:                  payload.Type(),
 		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
@@ -692,16 +650,8 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 		return err
 	}
 
-	addressPKH, ok = test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract address not PKH")
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
-	addressPKH, ok = issuerKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Issuer address not PKH")
-	}
-	issuerPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	issuerHolding := state.Holding{
 		PKH:              *issuerPKH,
 		PendingBalance:   quantity,
@@ -715,11 +665,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 		return err
 	}
 
-	addressPKH, ok = test.Contract2Key.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract address not PKH")
-	}
-	contract2PKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
 	err = asset.Save(ctx, test.MasterDB, contract2PKH, &assetData)
 	if err != nil {
 		return err
@@ -735,17 +681,17 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	return contract.Save(ctx, test.MasterDB, ct)
 }
 
-func mockUpHolding(ctx context.Context, address bitcoin.Address, quantity uint64) error {
-	addressPKH, ok := test.ContractKey.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract address not PKH")
-	}
-	contractPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
-	addressPKH, ok = address.(*bitcoin.AddressPKH)
-	if !ok {
+func mockUpHolding(ctx context.Context, address bitcoin.ScriptTemplate, quantity uint64) error {
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	var pubkeyhash *protocol.PublicKeyHash
+	switch a := address.(type) {
+	case *bitcoin.ScriptTemplatePKH:
+		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
+	case *bitcoin.AddressPKH:
+		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
+	default:
 		return errors.New("Address not PKH")
 	}
-	pubkeyhash := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
 	h := state.Holding{
 		PKH:              *pubkeyhash,
 		PendingBalance:   quantity,
@@ -757,17 +703,17 @@ func mockUpHolding(ctx context.Context, address bitcoin.Address, quantity uint64
 	return holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
 }
 
-func mockUpHolding2(ctx context.Context, address bitcoin.Address, quantity uint64) error {
-	addressPKH, ok := test.Contract2Key.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Contract 2 address not PKH")
-	}
-	contract2PKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
-	addressPKH, ok = address.(*bitcoin.AddressPKH)
-	if !ok {
+func mockUpHolding2(ctx context.Context, address bitcoin.ScriptTemplate, quantity uint64) error {
+	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
+	var pubkeyhash *protocol.PublicKeyHash
+	switch a := address.(type) {
+	case *bitcoin.ScriptTemplatePKH:
+		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
+	case *bitcoin.AddressPKH:
+		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
+	default:
 		return errors.New("Address not PKH")
 	}
-	pubkeyhash := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
 	h := state.Holding{
 		PKH:              *pubkeyhash,
 		PendingBalance:   quantity,

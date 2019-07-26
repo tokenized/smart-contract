@@ -58,13 +58,13 @@ func newHash(hash string) chainhash.Hash {
 	return *h
 }
 
-func decodeAddress(address string) bitcoin.Address {
-	a, err := bitcoin.DecodeAddressString(address)
+func decodeAddress(address string) bitcoin.ScriptTemplate {
+	a, err := bitcoin.DecodeAddress(address)
 	if err != nil {
 		panic(err)
 	}
 
-	return a
+	return bitcoin.ScriptTemplate(a)
 }
 
 func decodeTX(b []byte) wire.MsgTx {

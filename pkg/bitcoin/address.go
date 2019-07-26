@@ -29,7 +29,6 @@ const (
 
 type Address interface {
 	// String returns the type and address data followed by a checksum encoded with Base58.
-	// Panics if called for address that was created with IntNet.
 	String() string
 
 	// Network returns the network id for the address.
@@ -128,6 +127,19 @@ func NewAddressFromScriptTemplate(st ScriptTemplate, net wire.BitcoinNet) Addres
 	return nil
 }
 
+// PKH is a helper function that returns the PKH for a ScriptTemplate or Address. It returns false
+//   if there is no PKH.
+func PKH(st ScriptTemplate) ([]byte, bool) {
+	switch a := st.(type) {
+	case *ScriptTemplatePKH:
+		return a.PKH(), true
+	case *AddressPKH:
+		return a.PKH(), true
+	}
+
+	return nil, false
+}
+
 /****************************************** PKH ***************************************************/
 type AddressPKH struct {
 	*ScriptTemplatePKH
@@ -144,7 +156,6 @@ func NewAddressPKH(pkh []byte, net wire.BitcoinNet) (*AddressPKH, error) {
 }
 
 // String returns the type and address data followed by a checksum encoded with Base58.
-// Panics if called for address that was created with IntNet.
 func (a *AddressPKH) String() string {
 	var addressType byte
 
@@ -152,8 +163,6 @@ func (a *AddressPKH) String() string {
 	switch a.net {
 	case MainNet:
 		addressType = addressTypeMainPKH
-	case IntNet:
-		panic("Internal address type")
 	default:
 		addressType = addressTypeTestPKH
 	}
@@ -181,7 +190,6 @@ func NewAddressSH(sh []byte, net wire.BitcoinNet) (*AddressSH, error) {
 }
 
 // String returns the type and address data followed by a checksum encoded with Base58.
-// Panics if called for address that was created with IntNet.
 func (a *AddressSH) String() string {
 	var addressType byte
 
@@ -189,8 +197,6 @@ func (a *AddressSH) String() string {
 	switch a.net {
 	case MainNet:
 		addressType = addressTypeMainSH
-	case IntNet:
-		panic("Internal address type")
 	default:
 		addressType = addressTypeTestSH
 	}
@@ -218,7 +224,6 @@ func NewAddressMultiPKH(required uint16, pkhs [][]byte, net wire.BitcoinNet) (*A
 }
 
 // String returns the type and address data followed by a checksum encoded with Base58.
-// Panics if called for address that was created with IntNet.
 func (a *AddressMultiPKH) String() string {
 	b := make([]byte, 0, 3+(len(a.pkhs)*scriptHashLength))
 
@@ -228,8 +233,6 @@ func (a *AddressMultiPKH) String() string {
 	switch a.net {
 	case MainNet:
 		addressType = addressTypeMainMultiPKH
-	case IntNet:
-		panic("Internal address type")
 	default:
 		addressType = addressTypeTestMultiPKH
 	}
@@ -269,7 +272,6 @@ func NewAddressRPH(rph []byte, net wire.BitcoinNet) (*AddressRPH, error) {
 }
 
 // String returns the type and address data followed by a checksum encoded with Base58.
-// Panics if called for address that was created with IntNet.
 func (a *AddressRPH) String() string {
 	var addressType byte
 
@@ -277,8 +279,6 @@ func (a *AddressRPH) String() string {
 	switch a.net {
 	case MainNet:
 		addressType = addressTypeMainRPH
-	case IntNet:
-		panic("Internal address type")
 	default:
 		addressType = addressTypeTestRPH
 	}

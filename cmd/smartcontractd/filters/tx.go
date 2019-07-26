@@ -78,16 +78,16 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 	// Check if relevant to contract
 	for _, output := range tx.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
+		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
-		pkhAddress, ok := address.(*bitcoin.AddressPKH)
+		pkhAddress, ok := bitcoin.PKH(address)
 		if !ok {
 			continue
 		}
 		for _, pkh := range filter.pkhs {
-			if bytes.Equal(pkhAddress.PKH(), pkh) {
+			if bytes.Equal(pkhAddress, pkh) {
 				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 					"Matches PaymentToContract : %s", tx.TxHash().String())
 				return true

@@ -51,12 +51,12 @@ var cmdDoubleSpend = &cobra.Command{
 		}
 		receiverPKH = receiver.ScriptAddress()
 
-		addressPKH, ok := theClient.ContractAddress.(*bitcoin.AddressPKH)
+		addressPKH, ok := bitcoin.PKH(theClient.ContractAddress)
 		if !ok {
 			logger.Warn(ctx, "Contract address not PKH : %s", err)
 			return nil
 		}
-		assetCode = protocol.AssetCodeFromContract(addressPKH.PKH(), 0)
+		assetCode = protocol.AssetCodeFromContract(addressPKH, 0)
 		fundingAmount := uint64(2000)
 		utxoAmount := uint64(fundingAmount + 500)
 		requiredBalance := utxoAmount * 2             // Create contract and asset

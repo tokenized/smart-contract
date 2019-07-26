@@ -9,9 +9,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
@@ -34,7 +32,7 @@ func AddTx(ctx context.Context, masterDb *db.DB, itx *inspector.Transaction) err
 	return masterDb.Put(ctx, buildStoragePath(&itx.Hash), buf.Bytes())
 }
 
-func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams *chaincfg.Params, isTest bool) (*inspector.Transaction, error) {
+func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, isTest bool) (*inspector.Transaction, error) {
 	data, err := masterDb.Fetch(ctx, buildStoragePath(txid))
 	if err != nil {
 		if err == db.ErrNotFound {
@@ -46,7 +44,7 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, netParams
 
 	buf := bytes.NewBuffer(data)
 	result := inspector.Transaction{}
-	if err := result.Read(buf, wire.BitcoinNet(netParams.Net), isTest); err != nil {
+	if err := result.Read(buf, isTest); err != nil {
 		return nil, err
 	}
 

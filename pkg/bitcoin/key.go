@@ -22,15 +22,10 @@ const (
 
 type Key interface {
 	// String returns the type followed by the key data with a checksum, encoded with Base58.
-	// Panics if called for key that was created with IntNet.
 	String() string
 
 	// Network returns the network id for the address.
 	Network() wire.BitcoinNet
-
-	// SetNetwork changes the network of the key.
-	// This should only be used to change from IntNet to the correct network.
-	SetNetwork(net wire.BitcoinNet)
 
 	// Bytes returns non-network specific type followed by the key data.
 	Bytes() []byte
@@ -105,7 +100,6 @@ func KeyS256FromBytes(key []byte, net wire.BitcoinNet) (*KeyS256, error) {
 }
 
 // String returns the type followed by the key data with a checksum, encoded with Base58.
-// Panics if called for key that was created with IntNet.
 func (k *KeyS256) String() string {
 	var keyType byte
 
@@ -113,8 +107,6 @@ func (k *KeyS256) String() string {
 	switch k.net {
 	case MainNet:
 		keyType = typeMainPrivKey
-	case IntNet:
-		panic("Internal key type")
 	default:
 		keyType = typeTestPrivKey
 	}
@@ -127,12 +119,6 @@ func (k *KeyS256) String() string {
 // Network returns the network id for the key.
 func (k *KeyS256) Network() wire.BitcoinNet {
 	return k.net
-}
-
-// SetNetwork changes the network of the key.
-// This should only be used to change from IntNet to the correct network.
-func (k *KeyS256) SetNetwork(net wire.BitcoinNet) {
-	k.net = net
 }
 
 // Bytes returns type followed by the key data.

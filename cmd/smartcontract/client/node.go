@@ -104,7 +104,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 
 	// -------------------------------------------------------------------------
 	// Contract
-	client.ContractAddress, err = bitcoin.DecodeAddressString(client.Config.Contract)
+	client.ContractAddress, err = bitcoin.DecodeAddress(client.Config.Contract)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
@@ -218,7 +218,7 @@ func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) 
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
-		outputAddress, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
+		outputAddress, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
@@ -237,7 +237,7 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	}
 
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript, bitcoin.IntNet)
+		address, err := bitcoin.ScriptTemplateFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
@@ -320,7 +320,7 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 
 func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.AddressFromUnlockingScript(input.SignatureScript, bitcoin.IntNet)
+		address, err := bitcoin.ScriptTemplateFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
@@ -341,7 +341,7 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool)
 	}
 
 	for index, output := range tx.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript, bitcoin.IntNet)
+		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}

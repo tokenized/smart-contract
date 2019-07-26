@@ -80,7 +80,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 		IsTest:             cfg.Contract.IsTest,
 	}
 
-	feeAddress, err := bitcoin.DecodeAddressString(cfg.Contract.FeeAddress)
+	feeAddress, err := bitcoin.DecodeAddress(cfg.Contract.FeeAddress)
 	if err != nil {
 		logger.Fatal(ctx, "Invalid fee address : %s", err)
 	}

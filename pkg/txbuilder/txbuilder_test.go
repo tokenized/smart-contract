@@ -10,24 +10,24 @@ import (
 )
 
 func TestTxBuilder(t *testing.T) {
-	key, err := bitcoin.GenerateKeyS256(bitcoin.IntNet)
+	key, err := bitcoin.GenerateKeyS256(bitcoin.TestNet)
 	if err != nil {
 		t.Errorf("Failed to create private key : %s", err)
 	}
 
 	pkh := bitcoin.Hash160(key.PublicKey().Bytes())
-	address, err := bitcoin.NewAddressPKH(pkh, bitcoin.IntNet)
+	address, err := bitcoin.NewScriptTemplatePKH(pkh)
 	if err != nil {
 		t.Errorf("Failed to create pkh address : %s", err)
 	}
 
-	key2, err := bitcoin.GenerateKeyS256(bitcoin.IntNet)
+	key2, err := bitcoin.GenerateKeyS256(bitcoin.TestNet)
 	if err != nil {
 		t.Errorf("Failed to create private key 2 : %s", err)
 	}
 
 	pkh2 := bitcoin.Hash160(key2.PublicKey().Bytes())
-	address2, err := bitcoin.NewAddressPKH(pkh2, bitcoin.IntNet)
+	address2, err := bitcoin.NewScriptTemplatePKH(pkh2)
 	if err != nil {
 		t.Errorf("Failed to create pkh address 2 : %s", err)
 	}
@@ -105,7 +105,7 @@ func TestTxBuilderSample(t *testing.T) {
 	// Decode an address to use for "change".
 	// Middle return parameter is the network detected. This should be checked to ensure the address
 	//   was encoded for the currently specified network.
-	changeAddress, _ := bitcoin.DecodeAddressString("mq4htwkZSAG9isuVbEvcLaAiNL59p26W64")
+	changeAddress, _ := bitcoin.DecodeAddress("mq4htwkZSAG9isuVbEvcLaAiNL59p26W64")
 
 	// Create an instance of the TxBuilder using 512 as the dust limit and 1.1 sat/byte fee rate.
 	builder := NewTxBuilder(changeAddress, 512, 1.1)
@@ -115,11 +115,11 @@ func TestTxBuilderSample(t *testing.T) {
 	hash, _ := chainhash.NewHashFromStr("c762a29a4beb4821ad843590c3f11ffaed38b7eadc74557bdf36da3539921531")
 	index := uint32(0)
 	value := uint64(2000)
-	spendAddress, _ := bitcoin.DecodeAddressString("mupiWN44gq3NZmvZuMMyx8KbRwism69Gbw")
+	spendAddress, _ := bitcoin.DecodeAddress("mupiWN44gq3NZmvZuMMyx8KbRwism69Gbw")
 	_ = builder.AddInput(*wire.NewOutPoint(hash, index), spendAddress.LockingScript(), value)
 
 	// add an output to the recipient
-	paymentAddress, _ := bitcoin.DecodeAddressString("n1kBjpqmH82jgiRnEHLmFMNv77kvugBomm")
+	paymentAddress, _ := bitcoin.DecodeAddress("n1kBjpqmH82jgiRnEHLmFMNv77kvugBomm")
 	_ = builder.AddPaymentOutput(paymentAddress, 1000, false)
 
 	// sign the first and only input

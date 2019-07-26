@@ -13,7 +13,6 @@ const (
 	MainNet       wire.BitcoinNet = 0xe8f3e1e3
 	TestNet       wire.BitcoinNet = 0xf4f3e5f4
 	StressTestNet wire.BitcoinNet = 0xfbcec4f9
-	IntNet        wire.BitcoinNet = 0xffffffff // Internal use only. Panics if String is called.
 )
 
 var (

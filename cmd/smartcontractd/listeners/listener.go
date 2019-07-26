@@ -84,7 +84,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil
 		}
 
-		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.ChainParams, server.Config.IsTest)
+		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
@@ -109,7 +109,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	if server.inSync {
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
-			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.ChainParams, server.Config.IsTest)
+			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to get reverted tx : %s", err)
 			}
@@ -164,7 +164,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
 			}
-			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.ChainParams, server.Config.IsTest)
+			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve vote tx : %s", err)
 				return nil
@@ -196,7 +196,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
 			}
-			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.ChainParams, server.Config.IsTest)
+			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve transfer tx : %s", err)
 				return nil

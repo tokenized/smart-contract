@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -47,8 +48,9 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(false)
+	test = tests.New(true)
 	if test == nil {
+		fmt.Printf("Failed to create test environment\n")
 		return 1
 	}
 	defer test.TearDown()

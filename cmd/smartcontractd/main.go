@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
@@ -116,7 +117,9 @@ func main() {
 		panic(err)
 	}
 
-	logger.Info(ctx, "Contract address : %s", masterWallet.KeyStore.GetAddresses()[0].String())
+	contractAddress := bitcoin.NewAddressFromScriptTemplate(masterWallet.KeyStore.GetAddresses()[0],
+		wire.BitcoinNet(appConfig.ChainParams.Net))
+	logger.Info(ctx, "Contract address : %s", contractAddress.String())
 
 	// -------------------------------------------------------------------------
 	// Tx Filter

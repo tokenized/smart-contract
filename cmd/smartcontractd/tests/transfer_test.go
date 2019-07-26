@@ -1135,8 +1135,7 @@ func oracleTransferBad(t *testing.T) {
 	// Find refund output
 	found := false
 	for _, output := range response.TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript,
-			wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}

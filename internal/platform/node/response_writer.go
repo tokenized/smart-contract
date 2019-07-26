@@ -14,20 +14,20 @@ type ResponseWriter struct {
 	Outputs       []Output
 	RejectInputs  []inspector.UTXO
 	RejectOutputs []Output
-	RejectAddress bitcoin.Address
+	RejectAddress bitcoin.ScriptTemplate
 	Config        *Config
 	Mux           protomux.Handler
 }
 
 // AddChangeOutput is a helper to add a change output
-func (w *ResponseWriter) AddChangeOutput(ctx context.Context, addr bitcoin.Address) error {
+func (w *ResponseWriter) AddChangeOutput(ctx context.Context, addr bitcoin.ScriptTemplate) error {
 	out := outputValue(ctx, w.Config, addr, 0, true)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
 }
 
 // AddOutput is a helper to add a payment output
-func (w *ResponseWriter) AddOutput(ctx context.Context, addr bitcoin.Address, value uint64) error {
+func (w *ResponseWriter) AddOutput(ctx context.Context, addr bitcoin.ScriptTemplate, value uint64) error {
 	out := outputValue(ctx, w.Config, addr, value, false)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
@@ -68,7 +68,7 @@ func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []inspector.U
 // AddRejectValue is a helper to add a refund amount to an address. This is used for multi-party
 //   value transfers when different users input different amounts of bitcoin and need that refunded
 //   if the request is rejected.
-func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.Address, value uint64) error {
+func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.ScriptTemplate, value uint64) error {
 	// Look for existing output to this address.
 	for i, output := range w.RejectOutputs {
 		if output.Address.Equal(addr) {
@@ -88,7 +88,7 @@ func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.Addres
 
 // ClearRejectOutputValues zeroizes the values of the reject outputs so they become only
 //   notification outputs.
-func (w *ResponseWriter) ClearRejectOutputValues(changeAddr bitcoin.Address) {
+func (w *ResponseWriter) ClearRejectOutputValues(changeAddr bitcoin.ScriptTemplate) {
 	for i, _ := range w.RejectOutputs {
 		w.RejectOutputs[i].Change = false
 		w.RejectOutputs[i].Value = 0
@@ -102,13 +102,13 @@ func (w *ResponseWriter) Respond(ctx context.Context, tx *wire.MsgTx) error {
 
 // Output is an output address for a response
 type Output struct {
-	Address bitcoin.Address
+	Address bitcoin.ScriptTemplate
 	Value   uint64
 	Change  bool
 }
 
 // outputValue returns a payment output ensuring the value is always above the dust limit
-func outputValue(ctx context.Context, config *Config, addr bitcoin.Address, value uint64, change bool) *Output {
+func outputValue(ctx context.Context, config *Config, addr bitcoin.ScriptTemplate, value uint64, change bool) *Output {
 	if value < config.DustLimit {
 		value = config.DustLimit
 	}

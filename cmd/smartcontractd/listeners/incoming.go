@@ -250,11 +250,11 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 			continue
 		}
 
-		addressPKH, ok := itx.Outputs[assetTransfer.ContractIndex].Address.(*bitcoin.AddressPKH)
+		addressPKH, ok := bitcoin.PKH(itx.Outputs[assetTransfer.ContractIndex].Address)
 		if !ok {
 			continue
 		}
-		contractOutputPKH := protocol.PublicKeyHashFromBytes(addressPKH.PKH())
+		contractOutputPKH := protocol.PublicKeyHashFromBytes(addressPKH)
 		if contractOutputPKH == nil {
 			continue // Invalid contract index
 		}

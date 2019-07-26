@@ -10,7 +10,7 @@ import (
 )
 
 type Key struct {
-	Address bitcoin.Address
+	Address bitcoin.ScriptTemplate
 	Key     bitcoin.Key
 }
 
@@ -23,7 +23,7 @@ func NewKey(key bitcoin.Key) *Key {
 	if !ok {
 		return nil
 	}
-	result.Address, _ = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()), key.Network())
+	result.Address, _ = bitcoin.NewScriptTemplatePKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
 	return &result
 }
 
@@ -48,7 +48,7 @@ func (rk *Key) Read(buf *bytes.Buffer, net wire.BitcoinNet) error {
 	if !ok {
 		return errors.New("Key is not S256")
 	}
-	rk.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()), net)
+	rk.Address, err = bitcoin.NewScriptTemplatePKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
 	return err
 }
 

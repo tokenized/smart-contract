@@ -31,46 +31,38 @@ func NewKeyStore() *KeyStore {
 
 func (k KeyStore) Add(key *Key) error {
 	var pkh [20]byte
-	addressPKH, ok := key.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Key address not PKH")
-	}
-	copy(pkh[:], addressPKH.PKH())
+	copy(pkh[:], bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 	k.Keys[pkh] = key
 	return nil
 }
 
 func (k KeyStore) Remove(key *Key) error {
-	addressPKH, ok := key.Address.(*bitcoin.AddressPKH)
-	if !ok {
-		return errors.New("Key address not PKH")
-	}
-
 	var pkh [20]byte
-	copy(pkh[:], addressPKH.PKH())
+	copy(pkh[:], bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 	delete(k.Keys, pkh)
 	return nil
 }
 
 // Get returns the key corresponding to the specified address.
-func (k KeyStore) Get(address bitcoin.Address) (*Key, error) {
-	addressPKH, ok := address.(*bitcoin.AddressPKH)
-	if !ok {
-		return nil, errors.New("Wrong address type")
+func (k KeyStore) Get(address bitcoin.ScriptTemplate) (*Key, error) {
+	var pkh [20]byte
+	switch a := address.(type) {
+	case *bitcoin.ScriptTemplatePKH:
+		copy(pkh[:], a.PKH())
+	case *bitcoin.AddressPKH:
+		copy(pkh[:], a.PKH())
+	default:
+		return nil, errors.New("Address not PKH")
 	}
-	var spkh [20]byte
-	copy(spkh[:], addressPKH.PKH())
-	key, ok := k.Keys[spkh]
-
+	key, ok := k.Keys[pkh]
 	if !ok {
 		return nil, ErrKeyNotFound
 	}
-
 	return key, nil
 }
 
-func (k KeyStore) GetAddresses() []bitcoin.Address {
-	result := make([]bitcoin.Address, 0, len(k.Keys))
+func (k KeyStore) GetAddresses() []bitcoin.ScriptTemplate {
+	result := make([]bitcoin.ScriptTemplate, 0, len(k.Keys))
 	for _, key := range k.Keys {
 		result = append(result, key.Address)
 	}

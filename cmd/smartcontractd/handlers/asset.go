@@ -17,7 +17,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -76,10 +75,10 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Verify administration is sender of tx.
-	addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
-	if !ok || !bytes.Equal(addressPKH.PKH(), ct.AdministrationPKH.Bytes()) {
+	addressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
+	if !ok || !bytes.Equal(addressPKH, ct.AdministrationPKH.Bytes()) {
 		if ok {
-			node.LogWarn(ctx, "Only administration can create assets: %x", addressPKH.PKH())
+			node.LogWarn(ctx, "Only administration can create assets: %x", addressPKH)
 		} else {
 			node.LogWarn(ctx, "Only administration can create assets")
 		}
@@ -138,8 +137,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.AssetCode = *assetCode
 	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
-	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
+	// Convert to bitcoin.ScriptTemplate
+	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -189,12 +188,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
-	requestorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+	requestorAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
 	if !ok {
 		node.LogVerbose(ctx, "Requestor is not PKH : %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
-	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH.PKH())
+	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH)
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		node.LogVerbose(ctx, "Requestor is not operator : %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
@@ -231,7 +230,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.ChainParams, a.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -345,8 +344,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
+	// Convert to bitcoin.ScriptTemplate
+	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -395,8 +394,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	// Locate Asset
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Asset Creation not from contract : %s",
-			itx.Inputs[0].Address.String())
+		return fmt.Errorf("Asset Creation not from contract : %x",
+			itx.Inputs[0].Address.Bytes())
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
@@ -414,7 +413,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.ChainParams, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
@@ -431,7 +430,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.ChainParams, a.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve vote result tx")
 			}

@@ -16,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -95,8 +94,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	cf.ContractRevision = 0
 	cf.Timestamp = v.Now
 
-	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(), wire.BitcoinNet(w.Config.ChainParams.Net))
+	// Convert to bitcoin.ScriptTemplate
+	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -146,12 +145,12 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
-	requestorAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+	requestorAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
 	if !ok {
-		node.LogVerbose(ctx, "Requestor is not PKH : %s", itx.Inputs[0].Address.String())
+		node.LogVerbose(ctx, "Requestor is not PKH : %x", itx.Inputs[0].Address.Bytes())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
 	}
-	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH.PKH())
+	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH)
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		node.LogVerbose(ctx, "Requestor is not operator : %s", requestorPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
@@ -176,7 +175,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.ChainParams, c.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -249,18 +248,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
 		}
 
-		requestor1AddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+		requestor1AddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
 		if !ok {
 			node.LogVerbose(ctx, "Both operators required for operator change")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
 		}
-		requestor1PKH := protocol.PublicKeyHashFromBytes(requestor1AddressPKH.PKH())
-		requestor2AddressPKH, ok := itx.Inputs[1].Address.(*bitcoin.AddressPKH)
+		requestor1PKH := protocol.PublicKeyHashFromBytes(requestor1AddressPKH)
+		requestor2AddressPKH, ok := bitcoin.PKH(itx.Inputs[1].Address)
 		if !ok {
 			node.LogVerbose(ctx, "Both operators required for operator change")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
 		}
-		requestor2PKH := protocol.PublicKeyHashFromBytes(requestor2AddressPKH.PKH())
+		requestor2PKH := protocol.PublicKeyHashFromBytes(requestor2AddressPKH)
 		if requestor1PKH.Equal(*requestor2PKH) || !contract.IsOperator(ctx, ct, requestor1PKH) ||
 			!contract.IsOperator(ctx, ct, requestor2PKH) {
 			node.LogVerbose(ctx, "Both operators required for operator change")
@@ -291,9 +290,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Convert to bitcoin.Address
-	contractAddress, err := bitcoin.NewAddressPKH(contractPKH.Bytes(),
-		wire.BitcoinNet(w.Config.ChainParams.Net))
+	// Convert to bitcoin.ScriptTemplate
+	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -353,8 +351,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Contract formation not from contract : %s",
-			itx.Inputs[0].Address.String())
+		return fmt.Errorf("Contract formation not from contract : %x",
+			itx.Inputs[0].Address.Bytes())
 	}
 
 	contractName := msg.ContractName
@@ -368,7 +366,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.ChainParams, c.Config.IsTest)
+	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 	var vt *state.Vote
 	var amendment *protocol.ContractAmendment
 	if err == nil && request != nil {
@@ -382,7 +380,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.ChainParams, c.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
 			if err != nil {
 				return errors.New("Vote Result tx not found for amendment")
 			}
@@ -414,7 +412,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.ChainParams, c.Config.IsTest)
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
 		}
@@ -425,19 +423,19 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		adminAddressPKH, ok := offerTx.Inputs[0].Address.(*bitcoin.AddressPKH)
+		adminAddressPKH, ok := bitcoin.PKH(offerTx.Inputs[0].Address)
 		if !ok {
 			node.LogWarn(ctx, "Input 0 not PKH (%s)", contractName)
 			return fmt.Errorf("Input 0 not PKH (%s)", contractName)
 		}
-		nc.AdministrationPKH = *protocol.PublicKeyHashFromBytes(adminAddressPKH.PKH()) // First input of offer tx
+		nc.AdministrationPKH = *protocol.PublicKeyHashFromBytes(adminAddressPKH) // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			operatorAddressPKH, ok := offerTx.Inputs[1].Address.(*bitcoin.AddressPKH)
+			operatorAddressPKH, ok := bitcoin.PKH(offerTx.Inputs[1].Address)
 			if !ok {
 				node.LogWarn(ctx, "Input 1 not PKH (%s)", contractName)
 				return fmt.Errorf("Input 1 not PKH (%s)", contractName)
 			}
-			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH()) // Second input of offer tx
+			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(operatorAddressPKH) // Second input of offer tx
 		}
 
 		if err := contract.Create(ctx, c.MasterDB, contractPKH, &nc, v.Now); err != nil {
@@ -459,11 +457,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			adminAddressPKH, ok := request.Inputs[1].Address.(*bitcoin.AddressPKH)
+			adminAddressPKH, ok := bitcoin.PKH(request.Inputs[1].Address)
 			if !ok {
 				return errors.New("New administration not PKH")
 			}
-			uc.AdministrationPKH = protocol.PublicKeyHashFromBytes(adminAddressPKH.PKH())
+			uc.AdministrationPKH = protocol.PublicKeyHashFromBytes(adminAddressPKH)
 			node.Log(ctx, "Updating contract administration PKH : %s", uc.AdministrationPKH.String())
 		}
 
@@ -477,11 +475,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			operatorAddressPKH, ok := request.Inputs[index].Address.(*bitcoin.AddressPKH)
+			operatorAddressPKH, ok := bitcoin.PKH(request.Inputs[index].Address)
 			if !ok {
 				return errors.New("New operator not PKH")
 			}
-			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(operatorAddressPKH.PKH())
+			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(operatorAddressPKH)
 			node.Log(ctx, "Updating contract operator PKH : %s", uc.OperatorPKH.String())
 		}
 
@@ -658,12 +656,12 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Check that it is from the master PKH
-	masterAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.AddressPKH)
+	masterAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
 	if !ok {
 		return errors.New("Contract address change not from PKH")
 	}
-	if bytes.Equal(masterAddressPKH.PKH(), ct.MasterPKH.Bytes()) {
-		node.LogWarn(ctx, "Contract address change must be from master PKH : %x", masterAddressPKH.PKH())
+	if bytes.Equal(masterAddressPKH, ct.MasterPKH.Bytes()) {
+		node.LogWarn(ctx, "Contract address change must be from master PKH : %x", masterAddressPKH)
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
 	}
 
@@ -674,8 +672,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 		if output.Address.Equal(rk.Address) {
 			toCurrent = true
 		}
-		outputAddressPKH, ok := output.Address.(*bitcoin.AddressPKH)
-		if ok && bytes.Equal(outputAddressPKH.PKH(), msg.NewContractPKH.Bytes()) {
+		outputAddressPKH, ok := bitcoin.PKH(output.Address)
+		if ok && bytes.Equal(outputAddressPKH, msg.NewContractPKH.Bytes()) {
 			toNew = true
 		}
 	}

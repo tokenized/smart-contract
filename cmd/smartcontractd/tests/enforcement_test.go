@@ -480,16 +480,20 @@ func reconcileOrder(t *testing.T) {
 	// Check for bitcoin dispersion to user
 	found := false
 	for _, output := range responses[0].TxOut {
-		address, err := bitcoin.AddressFromLockingScript(output.PkScript,
-			wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
-		addressPKH, ok := address.(*bitcoin.AddressPKH)
-		if !ok {
+		var pkh []byte
+		switch a := address.(type) {
+		case *bitcoin.ScriptTemplatePKH:
+			pkh = a.PKH()
+		case *bitcoin.AddressPKH:
+			pkh = a.PKH()
+		default:
 			continue
 		}
-		if bytes.Equal(addressPKH.PKH(), userPKH.Bytes()) && output.Value == 75000 {
+		if bytes.Equal(pkh, userPKH.Bytes()) && output.Value == 75000 {
 			t.Logf("\t%s\tFound reconcile bitcoin dispersion", tests.Success)
 			found = true
 		}
@@ -525,7 +529,7 @@ func reconcileOrder(t *testing.T) {
 	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
-func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.Address, quantity uint64) (*protocol.TxId, error) {
+func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.ScriptTemplate, quantity uint64) (*protocol.TxId, error) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000013, issuerKey.Address)
 
 	orderData := protocol.Order{
@@ -535,13 +539,18 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.Address, qu
 		Message:          "Court order",
 	}
 
-	addressPKH, ok := address.(*bitcoin.AddressPKH)
-	if !ok {
+	var pkh []byte
+	switch a := address.(type) {
+	case *bitcoin.ScriptTemplatePKH:
+		pkh = a.PKH()
+	case *bitcoin.AddressPKH:
+		pkh = a.PKH()
+	default:
 		return nil, errors.New("Address not PKH")
 	}
 
 	orderData.TargetAddresses = append(orderData.TargetAddresses, protocol.TargetAddress{
-		Address:  *protocol.PublicKeyHashFromBytes(addressPKH.PKH()),
+		Address:  *protocol.PublicKeyHashFromBytes(pkh),
 		Quantity: quantity,
 	})
 
