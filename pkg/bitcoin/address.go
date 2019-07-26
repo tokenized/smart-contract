@@ -140,6 +140,45 @@ func PKH(st ScriptTemplate) ([]byte, bool) {
 	return nil, false
 }
 
+// SH is a helper function that returns the SH for a ScriptTemplate or Address. It returns false
+//   if there is no SH.
+func SH(st ScriptTemplate) ([]byte, bool) {
+	switch a := st.(type) {
+	case *ScriptTemplateSH:
+		return a.SH(), true
+	case *AddressSH:
+		return a.SH(), true
+	}
+
+	return nil, false
+}
+
+// PKHs is a helper function that returns the PKHs for a ScriptTemplate or Address. It returns false
+//   if there is no PKHs.
+func PKHs(st ScriptTemplate) ([]byte, bool) {
+	switch a := st.(type) {
+	case *ScriptTemplateMultiPKH:
+		return a.PKHs(), true
+	case *AddressMultiPKH:
+		return a.PKHs(), true
+	}
+
+	return nil, false
+}
+
+// RPH is a helper function that returns the RPH for a ScriptTemplate or Address. It returns false
+//   if there is no RPH.
+func RPH(st ScriptTemplate) ([]byte, bool) {
+	switch a := st.(type) {
+	case *ScriptTemplateRPH:
+		return a.RPH(), true
+	case *AddressRPH:
+		return a.RPH(), true
+	}
+
+	return nil, false
+}
+
 /****************************************** PKH ***************************************************/
 type AddressPKH struct {
 	*ScriptTemplatePKH
