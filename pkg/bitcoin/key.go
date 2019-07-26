@@ -3,6 +3,7 @@ package bitcoin
 import (
 	"crypto/elliptic"
 	"errors"
+	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -58,8 +59,16 @@ func DecodeKeyString(s string) (Key, error) {
 		return nil, ErrBadType
 	}
 
-	result, err := KeyS256FromBytes(b[1:], network)
-	return result, err
+	if len(b) == 34 {
+		if b[len(b)-1] != 0x01 {
+			return nil, fmt.Errorf("Key not for compressed public : %x", b[len(b)-1:])
+		}
+		return KeyS256FromBytes(b[1:33], network)
+	} else if len(b) == 33 {
+		return KeyS256FromBytes(b[1:], network)
+	}
+
+	return nil, fmt.Errorf("Key unknown format length %d", len(b))
 }
 
 // DecodeKeyBytes decodes a binary bitcoin key. It returns the key and an error if there was an
@@ -109,7 +118,10 @@ func (k *KeyS256) String() string {
 	default:
 		keyType = typeTestPrivKey
 	}
-	return encodeAddress(append([]byte{keyType}, k.key.Serialize()...))
+
+	b := append([]byte{keyType}, k.key.Serialize()...)
+	//b = append(b, 0x01) // compressed public key // Don't know if we want this or not.
+	return encodeAddress(b)
 }
 
 // Network returns the network id for the key.
