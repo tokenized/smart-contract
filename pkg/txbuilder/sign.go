@@ -88,7 +88,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	attempt := 3 // Max of 3 fee adjustment attempts
 	for {
 		shc.Clear()
-		
+
 		// Sign all inputs
 		for index, input := range tx.Inputs {
 			address, err := bitcoin.ScriptTemplateFromLockingScript(input.LockScript)
