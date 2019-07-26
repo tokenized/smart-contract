@@ -9,6 +9,16 @@ import (
 
 // AddressFromUnlockingScript returns the address associated with the specified unlocking script.
 func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Address, error) {
+	st, err := ScriptTemplateFromUnlockingScript(unlockingScript)
+	if err != nil {
+		return nil, err
+	}
+	return NewAddressFromScriptTemplate(st, net), nil
+}
+
+// ScriptTemplateFromUnlockingScript returns the address associated with the specified unlocking
+//   script.
+func ScriptTemplateFromUnlockingScript(unlockingScript []byte) (ScriptTemplate, error) {
 	if len(unlockingScript) < 2 {
 		return nil, ErrUnknownScriptTemplate
 	}
@@ -46,7 +56,7 @@ func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Ad
 	if isSignature(firstPush) && isPublicKey(secondPush) {
 		// PKH
 		// <Signature> <PublicKey>
-		return NewAddressPKH(Hash160(secondPush), net)
+		return NewScriptTemplatePKH(Hash160(secondPush))
 	}
 
 	if isPublicKey(firstPush) && isSignature(secondPush) {
@@ -56,7 +66,7 @@ func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Ad
 		if err != nil {
 			return nil, err
 		}
-		return NewAddressPKH(Hash160(rValue), net)
+		return NewScriptTemplatePKH(Hash160(rValue))
 	}
 
 	// TODO MultiPKH

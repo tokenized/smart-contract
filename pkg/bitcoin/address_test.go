@@ -70,7 +70,7 @@ func TestPKH(t *testing.T) {
 				t.Fatalf("PKH Address text invalid\ngot:%s\nwant:%s", addressText, tt.want)
 			}
 
-			a, err := DecodeAddressString(addressText)
+			a, err := DecodeAddress(addressText)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -107,6 +107,15 @@ func TestPKH(t *testing.T) {
 
 			if !bytes.Equal(spkh.PKH(), pkh) {
 				t.Fatalf("PKH parse script invalid\ngot:%x\nwant:%x", spkh.PKH(), pkh)
+			}
+
+			st, err := NewScriptTemplatePKH(pkh)
+			if err != nil {
+				t.Fatalf("Failed to create script template : %s", err.Error())
+			}
+
+			if !bytes.Equal(st.LockingScript(), script) {
+				t.Fatalf("Script template locking script doesn't match")
 			}
 		})
 	}
@@ -174,7 +183,7 @@ func TestSH(t *testing.T) {
 				t.Fatalf("SH Address text invalid\ngot:%s\nwant:%s", addressText, tt.want)
 			}
 
-			a, err := DecodeAddressString(addressText)
+			a, err := DecodeAddress(addressText)
 			if err != nil {
 				t.Fatal(err)
 			}

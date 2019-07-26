@@ -4,6 +4,16 @@ import "github.com/tokenized/smart-contract/pkg/wire"
 
 // AddressFromLockingScript returns the address associated with the specified locking script.
 func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Address, error) {
+	st, err := ScriptTemplateFromLockingScript(lockingScript)
+	if err != nil {
+		return nil, err
+	}
+	return NewAddressFromScriptTemplate(st, net), nil
+}
+
+// ScriptTemplateFromLockingScript returns the script template associated with the specified locking
+//   script.
+func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, error) {
 	script := lockingScript
 	switch script[0] {
 	case OP_DUP: // PKH or RPH
@@ -23,8 +33,8 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 			}
 			script = script[1:]
 
-			pkh := script[:hashLength]
-			script = script[hashLength:]
+			pkh := script[:scriptHashLength]
+			script = script[scriptHashLength:]
 
 			if script[0] != OP_EQUALVERIFY {
 				return nil, ErrUnknownScriptTemplate
@@ -36,7 +46,7 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 			}
 			script = script[1:]
 
-			return NewAddressPKH(pkh, net)
+			return NewScriptTemplatePKH(pkh)
 
 		case OP_3: // RPH
 			if len(script) != 33 {
@@ -89,8 +99,8 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 			}
 			script = script[1:]
 
-			rph := script[:hashLength]
-			script = script[hashLength:]
+			rph := script[:scriptHashLength]
+			script = script[scriptHashLength:]
 
 			if script[0] != OP_EQUALVERIFY {
 				return nil, ErrUnknownScriptTemplate
@@ -107,7 +117,7 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 			}
 			script = script[1:]
 
-			return NewAddressRPH(rph, net)
+			return NewScriptTemplateRPH(rph)
 
 		}
 	case OP_HASH160: // P2SH
@@ -121,15 +131,15 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 		}
 		script = script[1:]
 
-		sh := script[:hashLength]
-		script = script[hashLength:]
+		sh := script[:scriptHashLength]
+		script = script[scriptHashLength:]
 
 		if script[0] != OP_EQUAL {
 			return nil, ErrUnknownScriptTemplate
 		}
 		script = script[1:]
 
-		return NewAddressSH(sh, net)
+		return NewScriptTemplateSH(sh)
 
 	case OP_FALSE: // MultiPKH
 		// 35 = 1 min number push + 4 op codes outside of pkh if statements + 30 per pkh
@@ -163,8 +173,8 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 			}
 			script = script[1:]
 
-			pkhs = append(pkhs, script[:hashLength])
-			script = script[hashLength:]
+			pkhs = append(pkhs, script[:scriptHashLength])
+			script = script[scriptHashLength:]
 
 			if script[0] != OP_EQUALVERIFY {
 				return nil, ErrUnknownScriptTemplate
@@ -226,14 +236,14 @@ func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Addres
 		}
 		script = script[1:]
 
-		return NewAddressMultiPKH(uint16(required), pkhs, net)
+		return NewScriptTemplateMultiPKH(uint16(required), pkhs)
 
 	}
 
 	return nil, ErrUnknownScriptTemplate
 }
 
-func (a *AddressPKH) LockingScript() []byte {
+func (a *ScriptTemplatePKH) LockingScript() []byte {
 	result := make([]byte, 0, 25)
 
 	result = append(result, OP_DUP)
@@ -248,7 +258,7 @@ func (a *AddressPKH) LockingScript() []byte {
 	return result
 }
 
-func (a *AddressSH) LockingScript() []byte {
+func (a *ScriptTemplateSH) LockingScript() []byte {
 	result := make([]byte, 0, 23)
 
 	result = append(result, OP_HASH160)
@@ -261,7 +271,7 @@ func (a *AddressSH) LockingScript() []byte {
 	return result
 }
 
-func (a *AddressMultiPKH) LockingScript() []byte {
+func (a *ScriptTemplateMultiPKH) LockingScript() []byte {
 	// 14 = 10 max number push + 4 op codes outside of pkh if statements
 	// 30 = 10 op codes + 20 byte pkh per pkh
 	result := make([]byte, 0, 14+(len(a.pkhs)*30))
@@ -300,7 +310,7 @@ func (a *AddressMultiPKH) LockingScript() []byte {
 	return result
 }
 
-func (a *AddressRPH) LockingScript() []byte {
+func (a *ScriptTemplateRPH) LockingScript() []byte {
 	result := make([]byte, 0, 34)
 
 	result = append(result, OP_DUP)
