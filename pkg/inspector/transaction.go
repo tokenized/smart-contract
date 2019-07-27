@@ -139,7 +139,7 @@ func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int) (*Output, error) {
 		return nil, nil
 	}
 
-	address, err := bitcoin.ScriptTemplateFromLockingScript(txout.PkScript)
+	address, err := bitcoin.RawAddressFromLockingScript(txout.PkScript)
 	if err != nil {
 		if err == bitcoin.ErrUnknownScriptTemplate {
 			return nil, nil // Skip non-payto scripts
@@ -253,7 +253,7 @@ func (itx *Transaction) UTXOs() UTXOs {
 	return utxos
 }
 
-func (itx *Transaction) IsRelevant(contractAddress bitcoin.ScriptTemplate) bool {
+func (itx *Transaction) IsRelevant(contractAddress bitcoin.RawAddress) bool {
 	for _, input := range itx.Inputs {
 		if input.Address.Equal(contractAddress) {
 			return true
@@ -268,7 +268,7 @@ func (itx *Transaction) IsRelevant(contractAddress bitcoin.ScriptTemplate) bool 
 }
 
 // ContractAddresses returns the contract address, which may include more than one
-func (itx *Transaction) ContractAddresses() []bitcoin.ScriptTemplate {
+func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
@@ -278,9 +278,9 @@ func (itx *Transaction) ContractPKHs() [][]byte {
 }
 
 // Addresses returns all the PKH addresses involved in the transaction
-func (itx *Transaction) Addresses() []bitcoin.ScriptTemplate {
+func (itx *Transaction) Addresses() []bitcoin.RawAddress {
 	l := len(itx.Inputs) + len(itx.Outputs)
-	addresses := make([]bitcoin.ScriptTemplate, l, l)
+	addresses := make([]bitcoin.RawAddress, l, l)
 
 	for i, input := range itx.Inputs {
 		addresses[i] = input.Address
@@ -294,13 +294,13 @@ func (itx *Transaction) Addresses() []bitcoin.ScriptTemplate {
 }
 
 // AddressesUnique returns the unique PKH addresses involved in a transaction
-func (itx *Transaction) AddressesUnique() []bitcoin.ScriptTemplate {
+func (itx *Transaction) AddressesUnique() []bitcoin.RawAddress {
 	return uniqueAddresses(itx.Addresses())
 }
 
 // uniqueAddresses is an isolated function used for testing
-func uniqueAddresses(s []bitcoin.ScriptTemplate) []bitcoin.ScriptTemplate {
-	u := []bitcoin.ScriptTemplate{}
+func uniqueAddresses(s []bitcoin.RawAddress) []bitcoin.RawAddress {
+	u := []bitcoin.RawAddress{}
 
 	// Spin over every address and check if it is found
 	// in the list of unique addresses

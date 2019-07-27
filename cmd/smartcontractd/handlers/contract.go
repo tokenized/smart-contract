@@ -94,8 +94,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	cf.ContractRevision = 0
 	cf.Timestamp = v.Now
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -290,8 +290,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}

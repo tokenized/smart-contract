@@ -10,60 +10,60 @@ import (
 func TestAddressesUnique(t *testing.T) {
 	testArr := []struct {
 		name string
-		in   []bitcoin.ScriptTemplate
-		want []bitcoin.ScriptTemplate
+		in   []bitcoin.RawAddress
+		want []bitcoin.RawAddress
 	}{
 		{
 			name: "one",
-			in: []bitcoin.ScriptTemplate{
+			in: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
-			want: []bitcoin.ScriptTemplate{
+			want: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
 		},
 		{
 			name: "two unique",
-			in: []bitcoin.ScriptTemplate{
+			in: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []bitcoin.ScriptTemplate{
+			want: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
 		},
 		{
 			name: "two duplicate",
-			in: []bitcoin.ScriptTemplate{
+			in: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
-			want: []bitcoin.ScriptTemplate{
+			want: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 			},
 		},
 		{
 			name: "2 x 2 duplicate",
-			in: []bitcoin.ScriptTemplate{
+			in: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []bitcoin.ScriptTemplate{
+			want: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
 		},
 		{
 			name: "2 duplicates, 1 unique",
-			in: []bitcoin.ScriptTemplate{
+			in: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},
-			want: []bitcoin.ScriptTemplate{
+			want: []bitcoin.RawAddress{
 				decodeAddress("1ERCtpGiBANVTHQk9guT6KpHiYcopTrCYu"),
 				decodeAddress("1L8eJq8yAHsbByVvYVLbx4YEXZadRJHJWk"),
 			},

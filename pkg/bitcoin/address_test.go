@@ -109,7 +109,7 @@ func TestPKH(t *testing.T) {
 				t.Fatalf("PKH parse script invalid\ngot:%x\nwant:%x", spkh.PKH(), pkh)
 			}
 
-			st, err := NewScriptTemplatePKH(pkh)
+			st, err := NewRawAddressPKH(pkh)
 			if err != nil {
 				t.Fatalf("Failed to create script template : %s", err.Error())
 			}

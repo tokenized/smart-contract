@@ -18,8 +18,8 @@ import (
 )
 
 type WalletInterface interface {
-	Get(bitcoin.ScriptTemplate) (*Key, error)
-	List([]bitcoin.ScriptTemplate) ([]*Key, error)
+	Get(bitcoin.RawAddress) (*Key, error)
+	List([]bitcoin.RawAddress) ([]*Key, error)
 	ListAll() []*Key
 	Add(*Key) error
 	Remove(*Key) error
@@ -73,7 +73,7 @@ func (w Wallet) Register(wif string, net wire.BitcoinNet) error {
 	return nil
 }
 
-func (w Wallet) List(addrs []bitcoin.ScriptTemplate) ([]*Key, error) {
+func (w Wallet) List(addrs []bitcoin.RawAddress) ([]*Key, error) {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
@@ -100,7 +100,7 @@ func (w Wallet) ListAll() []*Key {
 	return w.KeyStore.GetAll()
 }
 
-func (w Wallet) Get(address bitcoin.ScriptTemplate) (*Key, error) {
+func (w Wallet) Get(address bitcoin.RawAddress) (*Key, error) {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 

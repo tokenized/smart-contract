@@ -36,12 +36,12 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return errors.New("Input index out of range")
 	}
 
-	address, err := bitcoin.ScriptTemplateFromLockingScript(tx.Inputs[index].LockScript)
+	address, err := bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockScript)
 	if err != nil {
 		return err
 	}
 
-	pkhAddress, ok := address.(*bitcoin.ScriptTemplatePKH)
+	pkhAddress, ok := address.(*bitcoin.RawAddressPKH)
 	if !ok {
 		return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
 	}
@@ -91,13 +91,13 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 
 		// Sign all inputs
 		for index, input := range tx.Inputs {
-			address, err := bitcoin.ScriptTemplateFromLockingScript(input.LockScript)
+			address, err := bitcoin.RawAddressFromLockingScript(input.LockScript)
 			if err != nil {
 				return err
 			}
 
 			switch a := address.(type) {
-			case *bitcoin.ScriptTemplatePKH:
+			case *bitcoin.RawAddressPKH:
 				signed := false
 				for i, pkh := range pkhs {
 					if !bytes.Equal(pkh, a.PKH()) {

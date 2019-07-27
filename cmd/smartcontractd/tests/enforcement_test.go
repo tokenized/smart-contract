@@ -480,13 +480,13 @@ func reconcileOrder(t *testing.T) {
 	// Check for bitcoin dispersion to user
 	found := false
 	for _, output := range responses[0].TxOut {
-		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
 		var pkh []byte
 		switch a := address.(type) {
-		case *bitcoin.ScriptTemplatePKH:
+		case *bitcoin.RawAddressPKH:
 			pkh = a.PKH()
 		case *bitcoin.AddressPKH:
 			pkh = a.PKH()
@@ -529,7 +529,7 @@ func reconcileOrder(t *testing.T) {
 	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
-func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.ScriptTemplate, quantity uint64) (*protocol.TxId, error) {
+func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress, quantity uint64) (*protocol.TxId, error) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000013, issuerKey.Address)
 
 	orderData := protocol.Order{
@@ -541,7 +541,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.ScriptTempl
 
 	var pkh []byte
 	switch a := address.(type) {
-	case *bitcoin.ScriptTemplatePKH:
+	case *bitcoin.RawAddressPKH:
 		pkh = a.PKH()
 	case *bitcoin.AddressPKH:
 		pkh = a.PKH()

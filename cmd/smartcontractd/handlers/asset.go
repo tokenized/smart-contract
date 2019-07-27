@@ -137,8 +137,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.AssetCode = *assetCode
 	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -344,8 +344,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}

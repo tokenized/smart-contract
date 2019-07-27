@@ -117,7 +117,7 @@ func main() {
 		panic(err)
 	}
 
-	contractAddress := bitcoin.NewAddressFromScriptTemplate(masterWallet.KeyStore.GetAddresses()[0],
+	contractAddress := bitcoin.NewAddressFromRawAddress(masterWallet.KeyStore.GetAddresses()[0],
 		wire.BitcoinNet(appConfig.ChainParams.Net))
 	logger.Info(ctx, "Contract address : %s", contractAddress.String())
 

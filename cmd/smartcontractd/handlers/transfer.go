@@ -410,7 +410,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 		}
 
-		var receiverAddress bitcoin.ScriptTemplate
+		var receiverAddress bitcoin.RawAddress
 		for _, assetReceiver := range assetTransfer.AssetReceivers {
 			assetBalance -= assetReceiver.Quantity
 
@@ -434,7 +434,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 				// Add output to receiver
 				addresses[assetReceiver.Address] = uint32(len(settleTx.MsgTx.TxOut))
 
-				receiverAddress, err = bitcoin.NewScriptTemplatePKH(assetReceiver.Address.Bytes())
+				receiverAddress, err = bitcoin.NewRawAddressPKH(assetReceiver.Address.Bytes())
 				if err != nil {
 					return nil, err
 				}
@@ -452,7 +452,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 
 	// Add other contract's fees
 	for _, fee := range settlementRequest.ContractFees {
-		feeAddress, err := bitcoin.NewScriptTemplatePKH(fee.Address.Bytes())
+		feeAddress, err := bitcoin.NewRawAddressPKH(fee.Address.Bytes())
 		if err != nil {
 			return nil, err
 		}
@@ -575,7 +575,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 
 		if !added {
 			// Add new output for exchange fee.
-			exchangeAddress, err := bitcoin.NewScriptTemplatePKH(transfer.ExchangeFeeAddress.Bytes())
+			exchangeAddress, err := bitcoin.NewRawAddressPKH(transfer.ExchangeFeeAddress.Bytes())
 			if err != nil {
 				return errors.Wrap(err, "Failed to create exchange address")
 			}
@@ -610,15 +610,15 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	// Generate public key hashes for all the outputs
-	transferOutputAddresses := make([]bitcoin.ScriptTemplate, 0, len(transferTx.Outputs))
+	transferOutputAddresses := make([]bitcoin.RawAddress, 0, len(transferTx.Outputs))
 	for _, output := range transferTx.Outputs {
 		transferOutputAddresses = append(transferOutputAddresses, output.Address)
 	}
 
 	// Generate public key hashes for all the inputs
-	settleInputAddresses := make([]bitcoin.ScriptTemplate, 0, len(settleTx.Inputs))
+	settleInputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.Inputs))
 	for _, input := range settleTx.Inputs {
-		address, err := bitcoin.ScriptTemplateFromLockingScript(input.LockScript)
+		address, err := bitcoin.RawAddressFromLockingScript(input.LockScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, nil)
 			continue
@@ -627,9 +627,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	// Generate public key hashes for all the outputs
-	settleOutputAddresses := make([]bitcoin.ScriptTemplate, 0, len(settleTx.MsgTx.TxOut))
+	settleOutputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.MsgTx.TxOut))
 	for _, output := range settleTx.MsgTx.TxOut {
-		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			settleOutputAddresses = append(settleOutputAddresses, nil)
 			continue
@@ -766,7 +766,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				receiverAddress, err := bitcoin.NewScriptTemplatePKH(receiver.Address.Bytes())
+				receiverAddress, err := bitcoin.NewRawAddressPKH(receiver.Address.Bytes())
 				if err == nil && outputAddress != nil && outputAddress.Equal(receiverAddress) {
 					settleOutputIndex = uint16(i)
 					break
@@ -889,7 +889,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 //   output to the contract that is not referenced/spent by the transfers. It is used to fund the
 //   offer and signature request messages required between multiple contracts to get a fully
 //   approved settlement tx.
-func findBoomerangIndex(transferTx *inspector.Transaction, transfer *protocol.Transfer, contractAddress bitcoin.ScriptTemplate) uint32 {
+func findBoomerangIndex(transferTx *inspector.Transaction, transfer *protocol.Transfer, contractAddress bitcoin.RawAddress) uint32 {
 	outputUsed := make([]bool, len(transferTx.Outputs))
 	for _, assetTransfer := range transfer.Assets {
 		if assetTransfer.ContractIndex == uint16(0xffff) ||
@@ -1224,7 +1224,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Co
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
-		administrationAddress, err := bitcoin.NewScriptTemplatePKH(ct.AdministrationPKH.Bytes())
+		administrationAddress, err := bitcoin.NewRawAddressPKH(ct.AdministrationPKH.Bytes())
 		if err != nil {
 			return errors.Wrap(err, "Failed to create admin address")
 		}

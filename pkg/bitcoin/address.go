@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrBadHashLength         = errors.New("Hash has invalid length")
+	ErrBadScriptHashLength   = errors.New("Script hash has invalid length")
 	ErrBadCheckSum           = errors.New("Address has bad checksum")
 	ErrBadType               = errors.New("Address type unknown")
 	ErrUnknownScriptTemplate = errors.New("Unknown script template")
@@ -34,7 +34,7 @@ type Address interface {
 	// Network returns the network id for the address.
 	Network() wire.BitcoinNet
 
-	ScriptTemplate
+	RawAddress
 }
 
 // DecodeAddress decodes a base58 text bitcoin address. It returns the address, and an error
@@ -62,7 +62,7 @@ func DecodeAddress(address string) (Address, error) {
 		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
 		for len(b) >= 0 {
 			if len(b) < scriptHashLength {
-				return nil, ErrBadHashLength
+				return nil, ErrBadScriptHashLength
 			}
 			pkhs = append(pkhs, b[:scriptHashLength])
 			b = b[scriptHashLength:]
@@ -86,7 +86,7 @@ func DecodeAddress(address string) (Address, error) {
 		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
 		for len(b) >= 0 {
 			if len(b) < scriptHashLength {
-				return nil, ErrBadHashLength
+				return nil, ErrBadScriptHashLength
 			}
 			pkhs = append(pkhs, b[:scriptHashLength])
 			b = b[scriptHashLength:]
@@ -112,26 +112,26 @@ func DecodeNetMatches(decoded wire.BitcoinNet, desired wire.BitcoinNet) bool {
 	return false
 }
 
-func NewAddressFromScriptTemplate(st ScriptTemplate, net wire.BitcoinNet) Address {
+func NewAddressFromRawAddress(st RawAddress, net wire.BitcoinNet) Address {
 	switch t := st.(type) {
-	case *ScriptTemplatePKH:
+	case *RawAddressPKH:
 		return &AddressPKH{t, net}
-	case *ScriptTemplateSH:
+	case *RawAddressSH:
 		return &AddressSH{t, net}
-	case *ScriptTemplateMultiPKH:
+	case *RawAddressMultiPKH:
 		return &AddressMultiPKH{t, net}
-	case *ScriptTemplateRPH:
+	case *RawAddressRPH:
 		return &AddressRPH{t, net}
 	}
 
 	return nil
 }
 
-// PKH is a helper function that returns the PKH for a ScriptTemplate or Address. It returns false
+// PKH is a helper function that returns the PKH for a RawAddress or Address. It returns false
 //   if there is no PKH.
-func PKH(st ScriptTemplate) ([]byte, bool) {
+func PKH(st RawAddress) ([]byte, bool) {
 	switch a := st.(type) {
-	case *ScriptTemplatePKH:
+	case *RawAddressPKH:
 		return a.PKH(), true
 	case *AddressPKH:
 		return a.PKH(), true
@@ -140,11 +140,11 @@ func PKH(st ScriptTemplate) ([]byte, bool) {
 	return nil, false
 }
 
-// SH is a helper function that returns the SH for a ScriptTemplate or Address. It returns false
+// SH is a helper function that returns the SH for a RawAddress or Address. It returns false
 //   if there is no SH.
-func SH(st ScriptTemplate) ([]byte, bool) {
+func SH(st RawAddress) ([]byte, bool) {
 	switch a := st.(type) {
-	case *ScriptTemplateSH:
+	case *RawAddressSH:
 		return a.SH(), true
 	case *AddressSH:
 		return a.SH(), true
@@ -153,11 +153,11 @@ func SH(st ScriptTemplate) ([]byte, bool) {
 	return nil, false
 }
 
-// PKHs is a helper function that returns the PKHs for a ScriptTemplate or Address. It returns false
+// PKHs is a helper function that returns the PKHs for a RawAddress or Address. It returns false
 //   if there is no PKHs.
-func PKHs(st ScriptTemplate) ([]byte, bool) {
+func PKHs(st RawAddress) ([]byte, bool) {
 	switch a := st.(type) {
-	case *ScriptTemplateMultiPKH:
+	case *RawAddressMultiPKH:
 		return a.PKHs(), true
 	case *AddressMultiPKH:
 		return a.PKHs(), true
@@ -166,11 +166,11 @@ func PKHs(st ScriptTemplate) ([]byte, bool) {
 	return nil, false
 }
 
-// RPH is a helper function that returns the RPH for a ScriptTemplate or Address. It returns false
+// RPH is a helper function that returns the RPH for a RawAddress or Address. It returns false
 //   if there is no RPH.
-func RPH(st ScriptTemplate) ([]byte, bool) {
+func RPH(st RawAddress) ([]byte, bool) {
 	switch a := st.(type) {
-	case *ScriptTemplateRPH:
+	case *RawAddressRPH:
 		return a.RPH(), true
 	case *AddressRPH:
 		return a.RPH(), true
@@ -181,13 +181,13 @@ func RPH(st ScriptTemplate) ([]byte, bool) {
 
 /****************************************** PKH ***************************************************/
 type AddressPKH struct {
-	*ScriptTemplatePKH
+	*RawAddressPKH
 	net wire.BitcoinNet
 }
 
 // NewAddressPKH creates an address from a public key hash.
 func NewAddressPKH(pkh []byte, net wire.BitcoinNet) (*AddressPKH, error) {
-	st, err := NewScriptTemplatePKH(pkh)
+	st, err := NewRawAddressPKH(pkh)
 	if err != nil {
 		return nil, err
 	}
@@ -215,13 +215,13 @@ func (a *AddressPKH) Network() wire.BitcoinNet {
 
 /******************************************* SH ***************************************************/
 type AddressSH struct {
-	*ScriptTemplateSH
+	*RawAddressSH
 	net wire.BitcoinNet
 }
 
 // NewAddressSH creates an address from a script hash.
 func NewAddressSH(sh []byte, net wire.BitcoinNet) (*AddressSH, error) {
-	st, err := NewScriptTemplateSH(sh)
+	st, err := NewRawAddressSH(sh)
 	if err != nil {
 		return nil, err
 	}
@@ -249,13 +249,13 @@ func (a *AddressSH) Network() wire.BitcoinNet {
 
 /**************************************** MultiPKH ************************************************/
 type AddressMultiPKH struct {
-	*ScriptTemplateMultiPKH
+	*RawAddressMultiPKH
 	net wire.BitcoinNet
 }
 
 // NewAddressMultiPKH creates an address from a required signature count and some public key hashes.
 func NewAddressMultiPKH(required uint16, pkhs [][]byte, net wire.BitcoinNet) (*AddressMultiPKH, error) {
-	st, err := NewScriptTemplateMultiPKH(required, pkhs)
+	st, err := NewRawAddressMultiPKH(required, pkhs)
 	if err != nil {
 		return nil, err
 	}
@@ -297,13 +297,13 @@ func (a *AddressMultiPKH) Network() wire.BitcoinNet {
 
 /***************************************** RPH ************************************************/
 type AddressRPH struct {
-	*ScriptTemplateRPH
+	*RawAddressRPH
 	net wire.BitcoinNet
 }
 
 // NewAddressRPH creates an address from an R puzzle hash.
 func NewAddressRPH(rph []byte, net wire.BitcoinNet) (*AddressRPH, error) {
-	st, err := NewScriptTemplateRPH(rph)
+	st, err := NewRawAddressRPH(rph)
 	if err != nil {
 		return nil, err
 	}

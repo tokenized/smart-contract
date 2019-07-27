@@ -85,7 +85,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	// Create reject tx. Change goes back to requestor.
 	var rejectTx *txbuilder.TxBuilder
 	if len(w.RejectOutputs) > 0 {
-		var changeAddress bitcoin.ScriptTemplate
+		var changeAddress bitcoin.RawAddress
 		for _, output := range w.RejectOutputs {
 			if output.Change {
 				changeAddress = output.Address

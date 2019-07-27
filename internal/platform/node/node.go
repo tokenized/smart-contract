@@ -53,7 +53,7 @@ type App struct {
 type Config struct {
 	ContractProviderID string
 	Version            string
-	FeeAddress         bitcoin.ScriptTemplate
+	FeeAddress         bitcoin.RawAddress
 	DustLimit          uint64
 	ChainParams        *chaincfg.Params
 	FeeRate            float32

@@ -444,7 +444,7 @@ func voteResultAbsolute(t *testing.T) {
 	t.Logf("\t%s\tVerified result : \"%s\"", tests.Success, vt.Result)
 }
 
-func mockUpBallot(ctx context.Context, address bitcoin.ScriptTemplate, quantity uint64, v string) error {
+func mockUpBallot(ctx context.Context, address bitcoin.RawAddress, quantity uint64, v string) error {
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	vt, err := vote.Fetch(ctx, test.MasterDB, contractPKH, &testVoteTxId)
 	if err != nil {
@@ -453,7 +453,7 @@ func mockUpBallot(ctx context.Context, address bitcoin.ScriptTemplate, quantity 
 
 	var pkh []byte
 	switch a := address.(type) {
-	case *bitcoin.ScriptTemplatePKH:
+	case *bitcoin.RawAddressPKH:
 		pkh = a.PKH()
 	case *bitcoin.AddressPKH:
 		pkh = a.PKH()

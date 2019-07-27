@@ -22,11 +22,11 @@ type UTXO struct {
 }
 
 // Add adds/spends UTXOs based on the tx.
-func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.ScriptTemplate) {
+func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 	txHash := tx.TxHash()
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
@@ -68,9 +68,9 @@ func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.ScriptTemplate) {
 }
 
 // Remove removes UTXOs in the tx from the set.
-func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.ScriptTemplate) {
+func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
@@ -91,12 +91,12 @@ func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.ScriptTemplate) {
 }
 
 // Get returns UTXOs (FIFO) totaling at least the specified amount.
-func (us *UTXOs) Get(amount uint64, address bitcoin.ScriptTemplate) ([]*UTXO, error) {
+func (us *UTXOs) Get(amount uint64, address bitcoin.RawAddress) ([]*UTXO, error) {
 	resultAmount := uint64(0)
 	result := make([]*UTXO, 0, 5)
 	for _, existing := range us.list {
 		if bytes.Equal(existing.SpentBy[:], zeroTxId[:]) {
-			outputAddress, err := bitcoin.ScriptTemplateFromLockingScript(existing.Output.PkScript)
+			outputAddress, err := bitcoin.RawAddressFromLockingScript(existing.Output.PkScript)
 			if err != nil || !address.Equal(outputAddress) {
 				continue
 			}

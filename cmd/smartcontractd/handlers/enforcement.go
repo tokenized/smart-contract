@@ -214,7 +214,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 				node.Log(ctx, "Freeze order request : %s %s", msg.AssetCode.String(),
 					target.Address.String())
 
-				targetAddr, err := bitcoin.NewScriptTemplatePKH(target.Address.Bytes())
+				targetAddr, err := bitcoin.NewRawAddressPKH(target.Address.Bytes())
 				if err != nil {
 					return errors.Wrap(err, "Failed to convert target PKH to address")
 				}
@@ -230,7 +230,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -355,7 +355,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract PKH to address")
 	}
@@ -429,7 +429,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// n+3  - Contract Fee (change)
 
 	// Validate deposit address, and increase balance by confiscation.DepositQty and increase DepositQty by previous balance
-	depositAddr, err := bitcoin.NewScriptTemplatePKH(msg.DepositAddress.Bytes())
+	depositAddr, err := bitcoin.NewRawAddressPKH(msg.DepositAddress.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert deposit PKH to address")
 	}
@@ -478,7 +478,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 		node.Log(ctx, "Confiscation order request : %s %s", msg.AssetCode.String(), target.Address.String())
 
-		targetAddr, err := bitcoin.NewScriptTemplatePKH(target.Address.Bytes())
+		targetAddr, err := bitcoin.NewRawAddressPKH(target.Address.Bytes())
 		if err != nil {
 			node.LogWarn(ctx, "Invalid target address: %s %s", msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
@@ -507,7 +507,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	w.AddOutput(ctx, depositAddr, 0)
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.New("Failed to convert contract pkh to address")
 	}
@@ -632,7 +632,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 		node.Log(ctx, "Reconciliation order request : %s %s", msg.AssetCode.String(), target.Address.String())
 
-		targetAddr, err := bitcoin.NewScriptTemplatePKH(target.Address.Bytes())
+		targetAddr, err := bitcoin.NewRawAddressPKH(target.Address.Bytes())
 		if err != nil {
 			node.LogWarn(ctx, "Invalid target address : %s %s", msg.AssetCode.String(), target.Address.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectUnauthorizedAddress)
@@ -660,7 +660,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	}
 
 	// Add contract output
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert contract address")
 	}

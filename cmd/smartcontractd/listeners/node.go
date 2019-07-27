@@ -35,7 +35,7 @@ type Server struct {
 	utxos             *utxos.UTXOs
 	lock              sync.Mutex
 	Handler           protomux.Handler
-	contractAddresses []bitcoin.ScriptTemplate // Used to determine which txs will be needed again
+	contractAddresses []bitcoin.RawAddress // Used to determine which txs will be needed again
 	walletLock        sync.RWMutex
 	txFilter          *filters.TxFilter
 	pendingResponses  []*wire.MsgTx
@@ -89,7 +89,7 @@ func NewServer(
 	result.processingTxs.Open(100)
 
 	keys := wallet.ListAll()
-	result.contractAddresses = make([]bitcoin.ScriptTemplate, 0, len(keys))
+	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
 	for _, key := range keys {
 		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
 			wire.BitcoinNet(config.ChainParams.Net))

@@ -206,7 +206,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	tx := txbuilder.NewTxBuilder(rk.Address, m.Config.DustLimit, m.Config.FeeRate)
 
 	// Add outputs to administration/operator
-	adminAddress, err := bitcoin.NewScriptTemplatePKH(ct.AdministrationPKH.Bytes())
+	adminAddress, err := bitcoin.NewRawAddressPKH(ct.AdministrationPKH.Bytes())
 	if err != nil {
 		return errors.Wrap(err, "Failed to create admin address")
 	}
@@ -214,7 +214,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter, itx
 	outputAmount := uint64(m.Config.DustLimit)
 	if !ct.OperatorPKH.IsZero() {
 		// Add operator
-		operatorAddress, err := bitcoin.NewScriptTemplatePKH(ct.OperatorPKH.Bytes())
+		operatorAddress, err := bitcoin.NewRawAddressPKH(ct.OperatorPKH.Bytes())
 		if err != nil {
 			return errors.Wrap(err, "Failed to create operator address")
 		}
@@ -654,10 +654,10 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 	// Generate public key hashes for all the outputs
 	settleOutputPKHs := make([]*protocol.PublicKeyHash, 0, len(settleTx.TxOut))
-	settleOutputAddresses := make([]bitcoin.ScriptTemplate, 0, len(settleTx.TxOut))
+	settleOutputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.TxOut))
 	settleOpReturnFound := false
 	for i, output := range settleTx.TxOut {
-		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, address)
 			addressPKH, ok := bitcoin.PKH(address)
@@ -698,7 +698,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	// Generate public key hashes for all the inputs
 	settleInputAddresses := make([]protocol.PublicKeyHash, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
-		address, err := bitcoin.ScriptTemplateFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, protocol.PublicKeyHash{})
 			continue
@@ -1003,7 +1003,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
-		administrationAddress, err := bitcoin.NewScriptTemplatePKH(ct.AdministrationPKH.Bytes())
+		administrationAddress, err := bitcoin.NewRawAddressPKH(ct.AdministrationPKH.Bytes())
 		w.ClearRejectOutputValues(administrationAddress)
 	}
 
@@ -1119,7 +1119,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone.
-		administrationAddress, err := bitcoin.NewScriptTemplatePKH(ct.AdministrationPKH.Bytes())
+		administrationAddress, err := bitcoin.NewRawAddressPKH(ct.AdministrationPKH.Bytes())
 		if err != nil {
 			return errors.Wrap(err, "Failed to create administration address")
 		}

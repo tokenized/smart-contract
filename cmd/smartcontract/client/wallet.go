@@ -18,7 +18,7 @@ import (
 
 type Wallet struct {
 	Key     bitcoin.Key
-	Address bitcoin.ScriptTemplate
+	Address bitcoin.RawAddress
 	outputs []Output
 	path    string
 }
@@ -130,7 +130,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 	}
 
 	// Pub Key Hash Address
-	wallet.Address, err = bitcoin.NewScriptTemplatePKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
+	wallet.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
 	if err != nil {
 		return err
 	}

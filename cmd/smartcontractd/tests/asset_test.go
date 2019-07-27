@@ -681,11 +681,11 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	return contract.Save(ctx, test.MasterDB, ct)
 }
 
-func mockUpHolding(ctx context.Context, address bitcoin.ScriptTemplate, quantity uint64) error {
+func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	var pubkeyhash *protocol.PublicKeyHash
 	switch a := address.(type) {
-	case *bitcoin.ScriptTemplatePKH:
+	case *bitcoin.RawAddressPKH:
 		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
 	case *bitcoin.AddressPKH:
 		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
@@ -703,11 +703,11 @@ func mockUpHolding(ctx context.Context, address bitcoin.ScriptTemplate, quantity
 	return holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
 }
 
-func mockUpHolding2(ctx context.Context, address bitcoin.ScriptTemplate, quantity uint64) error {
+func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
 	var pubkeyhash *protocol.PublicKeyHash
 	switch a := address.(type) {
-	case *bitcoin.ScriptTemplatePKH:
+	case *bitcoin.RawAddressPKH:
 		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())
 	case *bitcoin.AddressPKH:
 		pubkeyhash = protocol.PublicKeyHashFromBytes(a.PKH())

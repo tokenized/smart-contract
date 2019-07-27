@@ -80,7 +80,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 	}
 
-	senderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+	senderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Sender not PKH")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -260,8 +260,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	// Build Response
 	vote := protocol.Vote{Timestamp: v.Now}
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -471,7 +471,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// TODO Handle transfers during vote time to ensure they don't vote the same tokens more than once.
 
-	holderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+	holderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -518,8 +518,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	ballotCounted.Quantity = quantity
 	ballotCounted.Timestamp = v.Now
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -584,7 +584,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
 
-	holderAddressPKH, ok := castTx.Inputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+	holderAddressPKH, ok := castTx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 	if !ok {
 		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -667,8 +667,8 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to calculate vote results")
 	}
 
-	// Convert to bitcoin.ScriptTemplate
-	contractAddress, err := bitcoin.NewScriptTemplatePKH(contractPKH.Bytes())
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}

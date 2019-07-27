@@ -44,10 +44,10 @@ func (k KeyStore) Remove(key *Key) error {
 }
 
 // Get returns the key corresponding to the specified address.
-func (k KeyStore) Get(address bitcoin.ScriptTemplate) (*Key, error) {
+func (k KeyStore) Get(address bitcoin.RawAddress) (*Key, error) {
 	var pkh [20]byte
 	switch a := address.(type) {
-	case *bitcoin.ScriptTemplatePKH:
+	case *bitcoin.RawAddressPKH:
 		copy(pkh[:], a.PKH())
 	case *bitcoin.AddressPKH:
 		copy(pkh[:], a.PKH())
@@ -61,8 +61,8 @@ func (k KeyStore) Get(address bitcoin.ScriptTemplate) (*Key, error) {
 	return key, nil
 }
 
-func (k KeyStore) GetAddresses() []bitcoin.ScriptTemplate {
-	result := make([]bitcoin.ScriptTemplate, 0, len(k.Keys))
+func (k KeyStore) GetAddresses() []bitcoin.RawAddress {
+	result := make([]bitcoin.RawAddress, 0, len(k.Keys))
 	for _, key := range k.Keys {
 		result = append(result, key.Address)
 	}

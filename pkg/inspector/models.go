@@ -12,7 +12,7 @@ import (
 )
 
 type Input struct {
-	Address bitcoin.ScriptTemplate
+	Address bitcoin.RawAddress
 	Index   uint32
 	Value   int64
 	UTXO    UTXO
@@ -20,7 +20,7 @@ type Input struct {
 }
 
 type Output struct {
-	Address bitcoin.ScriptTemplate
+	Address bitcoin.RawAddress
 	Index   uint32
 	Value   int64
 	UTXO    UTXO
@@ -37,8 +37,8 @@ func (u UTXO) ID() string {
 	return fmt.Sprintf("%v:%v", u.Hash, u.Index)
 }
 
-func (u UTXO) Address() (bitcoin.ScriptTemplate, error) {
-	return bitcoin.ScriptTemplateFromLockingScript(u.PkScript)
+func (u UTXO) Address() (bitcoin.RawAddress, error) {
+	return bitcoin.RawAddressFromLockingScript(u.PkScript)
 }
 
 // UTXOs is a wrapper for a []UTXO.
@@ -56,7 +56,7 @@ func (u UTXOs) Value() int64 {
 }
 
 // ForAddress returns UTXOs that match the given Address.
-func (u UTXOs) ForAddress(address bitcoin.ScriptTemplate) (UTXOs, error) {
+func (u UTXOs) ForAddress(address bitcoin.RawAddress) (UTXOs, error) {
 	filtered := UTXOs{}
 
 	for _, utxo := range u {

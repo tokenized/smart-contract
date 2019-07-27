@@ -4,16 +4,16 @@ import "github.com/tokenized/smart-contract/pkg/wire"
 
 // AddressFromLockingScript returns the address associated with the specified locking script.
 func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Address, error) {
-	st, err := ScriptTemplateFromLockingScript(lockingScript)
+	st, err := RawAddressFromLockingScript(lockingScript)
 	if err != nil {
 		return nil, err
 	}
-	return NewAddressFromScriptTemplate(st, net), nil
+	return NewAddressFromRawAddress(st, net), nil
 }
 
-// ScriptTemplateFromLockingScript returns the script template associated with the specified locking
+// RawAddressFromLockingScript returns the script template associated with the specified locking
 //   script.
-func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, error) {
+func RawAddressFromLockingScript(lockingScript []byte) (RawAddress, error) {
 	script := lockingScript
 	switch script[0] {
 	case OP_DUP: // PKH or RPH
@@ -46,7 +46,7 @@ func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, erro
 			}
 			script = script[1:]
 
-			return NewScriptTemplatePKH(pkh)
+			return NewRawAddressPKH(pkh)
 
 		case OP_3: // RPH
 			if len(script) != 33 {
@@ -117,7 +117,7 @@ func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, erro
 			}
 			script = script[1:]
 
-			return NewScriptTemplateRPH(rph)
+			return NewRawAddressRPH(rph)
 
 		}
 	case OP_HASH160: // P2SH
@@ -139,7 +139,7 @@ func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, erro
 		}
 		script = script[1:]
 
-		return NewScriptTemplateSH(sh)
+		return NewRawAddressSH(sh)
 
 	case OP_FALSE: // MultiPKH
 		// 35 = 1 min number push + 4 op codes outside of pkh if statements + 30 per pkh
@@ -236,14 +236,14 @@ func ScriptTemplateFromLockingScript(lockingScript []byte) (ScriptTemplate, erro
 		}
 		script = script[1:]
 
-		return NewScriptTemplateMultiPKH(uint16(required), pkhs)
+		return NewRawAddressMultiPKH(uint16(required), pkhs)
 
 	}
 
 	return nil, ErrUnknownScriptTemplate
 }
 
-func (a *ScriptTemplatePKH) LockingScript() []byte {
+func (a *RawAddressPKH) LockingScript() []byte {
 	result := make([]byte, 0, 25)
 
 	result = append(result, OP_DUP)
@@ -258,7 +258,7 @@ func (a *ScriptTemplatePKH) LockingScript() []byte {
 	return result
 }
 
-func (a *ScriptTemplateSH) LockingScript() []byte {
+func (a *RawAddressSH) LockingScript() []byte {
 	result := make([]byte, 0, 23)
 
 	result = append(result, OP_HASH160)
@@ -271,7 +271,7 @@ func (a *ScriptTemplateSH) LockingScript() []byte {
 	return result
 }
 
-func (a *ScriptTemplateMultiPKH) LockingScript() []byte {
+func (a *RawAddressMultiPKH) LockingScript() []byte {
 	// 14 = 10 max number push + 4 op codes outside of pkh if statements
 	// 30 = 10 op codes + 20 byte pkh per pkh
 	result := make([]byte, 0, 14+(len(a.pkhs)*30))
@@ -310,7 +310,7 @@ func (a *ScriptTemplateMultiPKH) LockingScript() []byte {
 	return result
 }
 
-func (a *ScriptTemplateRPH) LockingScript() []byte {
+func (a *RawAddressRPH) LockingScript() []byte {
 	result := make([]byte, 0, 34)
 
 	result = append(result, OP_DUP)

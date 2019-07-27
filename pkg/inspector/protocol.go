@@ -10,7 +10,7 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address bitcoin.ScriptTemplate) Balance {
+func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address bitcoin.RawAddress) Balance {
 
 	return Balance{
 		Qty:    0,
@@ -70,9 +70,9 @@ func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address b
 	*/
 }
 
-func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []bitcoin.ScriptTemplate {
+func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []bitcoin.RawAddress {
 
-	addresses := []bitcoin.ScriptTemplate{}
+	addresses := []bitcoin.RawAddress{}
 
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
@@ -106,13 +106,13 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 
 	// Settlements may contain a second contract, although optional
 	if m.Type() == protocol.CodeSettlement {
-		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 		if ok {
 			addresses = append(addresses, addressPKH.PKH())
 		}
 
 		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
-			addressPKH, ok := itx.Inputs[1].Address.(*bitcoin.ScriptTemplatePKH)
+			addressPKH, ok := itx.Inputs[1].Address.(*bitcoin.RawAddressPKH)
 			if ok {
 				addresses = append(addresses, addressPKH.PKH())
 			}
@@ -124,7 +124,7 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	// Some specific actions have the contract address as an input
 	isOutgoing, ok := outgoingMessageTypes[m.Type()]
 	if ok && isOutgoing {
-		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 		if ok {
 			addresses = append(addresses, addressPKH.PKH())
 		}
@@ -132,7 +132,7 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	}
 
 	// Default behavior is contract as first output
-	addressPKH, ok := itx.Outputs[0].Address.(*bitcoin.ScriptTemplatePKH)
+	addressPKH, ok := itx.Outputs[0].Address.(*bitcoin.RawAddressPKH)
 	if ok {
 		addresses = append(addresses, addressPKH.PKH())
 	}
@@ -142,9 +142,9 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	return addresses
 }
 
-func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress bitcoin.ScriptTemplate) []bitcoin.ScriptTemplate {
+func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress bitcoin.RawAddress) []bitcoin.RawAddress {
 
-	addresses := []bitcoin.ScriptTemplate{}
+	addresses := []bitcoin.RawAddress{}
 
 	// input messages have contract address at output[0], and the input
 	// address at input[0].

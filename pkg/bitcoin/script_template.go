@@ -14,7 +14,11 @@ const (
 	scriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
 )
 
-type ScriptTemplate interface {
+// RawAddress represents a bitcoin address in raw format, with no check sum or encoding.
+// It represents a "script template" for common locking and unlocking scripts.
+// It enables parsing and creating of common locking and unlocking scripts as well as identifying
+//   participants involved in the scripts via public key hashes and other hashes.
+type RawAddress interface {
 	// Bytes returns the non-network specific type followed by the address data.
 	Bytes() []byte
 
@@ -22,17 +26,17 @@ type ScriptTemplate interface {
 	LockingScript() []byte
 
 	// Equal returns true if the address parameter has the same value.
-	Equal(ScriptTemplate) bool
+	Equal(RawAddress) bool
 }
 
-// DecodeScriptTemplate decodes a binary bitcoin script template. It returns the script
+// DecodeRawAddress decodes a binary bitcoin script template. It returns the script
 //   template, and an error if there was an issue.
-func DecodeScriptTemplate(b []byte) (ScriptTemplate, error) {
+func DecodeRawAddress(b []byte) (RawAddress, error) {
 	switch b[0] {
 	case scriptTypePKH:
-		return NewScriptTemplatePKH(b[1:])
+		return NewRawAddressPKH(b[1:])
 	case scriptTypeSH:
-		return NewScriptTemplateSH(b[1:])
+		return NewRawAddressSH(b[1:])
 	case scriptTypeMultiPKH:
 		b = b[1:] // remove type
 		// Parse required count
@@ -45,46 +49,46 @@ func DecodeScriptTemplate(b []byte) (ScriptTemplate, error) {
 		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
 		for len(b) >= 0 {
 			if len(b) < scriptHashLength {
-				return nil, ErrBadHashLength
+				return nil, ErrBadScriptHashLength
 			}
 			pkhs = append(pkhs, b[:scriptHashLength])
 			b = b[scriptHashLength:]
 		}
-		return NewScriptTemplateMultiPKH(required, pkhs)
+		return NewRawAddressMultiPKH(required, pkhs)
 	case scriptTypeRPH:
-		return NewScriptTemplateRPH(b[1:])
+		return NewRawAddressRPH(b[1:])
 	}
 
 	return nil, ErrBadType
 }
 
 /****************************************** PKH ***************************************************/
-type ScriptTemplatePKH struct {
+type RawAddressPKH struct {
 	pkh []byte
 }
 
-// NewScriptTemplatePKH creates an address from a public key hash.
-func NewScriptTemplatePKH(pkh []byte) (*ScriptTemplatePKH, error) {
+// NewRawAddressPKH creates an address from a public key hash.
+func NewRawAddressPKH(pkh []byte) (*RawAddressPKH, error) {
 	if len(pkh) != scriptHashLength {
-		return nil, ErrBadHashLength
+		return nil, ErrBadScriptHashLength
 	}
-	return &ScriptTemplatePKH{pkh: pkh}, nil
+	return &RawAddressPKH{pkh: pkh}, nil
 }
 
-func (a *ScriptTemplatePKH) PKH() []byte {
+func (a *RawAddressPKH) PKH() []byte {
 	return a.pkh
 }
 
-func (a *ScriptTemplatePKH) Bytes() []byte {
+func (a *RawAddressPKH) Bytes() []byte {
 	return append([]byte{scriptTypePKH}, a.pkh...)
 }
 
-func (a *ScriptTemplatePKH) Equal(other ScriptTemplate) bool {
+func (a *RawAddressPKH) Equal(other RawAddress) bool {
 	if other == nil {
 		return false
 	}
 	switch o := other.(type) {
-	case *ScriptTemplatePKH:
+	case *RawAddressPKH:
 		return bytes.Equal(a.pkh, o.pkh)
 	case *AddressPKH:
 		return bytes.Equal(a.pkh, o.pkh)
@@ -93,32 +97,32 @@ func (a *ScriptTemplatePKH) Equal(other ScriptTemplate) bool {
 }
 
 /******************************************* SH ***************************************************/
-type ScriptTemplateSH struct {
+type RawAddressSH struct {
 	sh []byte
 }
 
-// NewScriptTemplateSH creates an address from a script hash.
-func NewScriptTemplateSH(sh []byte) (*ScriptTemplateSH, error) {
+// NewRawAddressSH creates an address from a script hash.
+func NewRawAddressSH(sh []byte) (*RawAddressSH, error) {
 	if len(sh) != scriptHashLength {
-		return nil, ErrBadHashLength
+		return nil, ErrBadScriptHashLength
 	}
-	return &ScriptTemplateSH{sh: sh}, nil
+	return &RawAddressSH{sh: sh}, nil
 }
 
-func (a *ScriptTemplateSH) SH() []byte {
+func (a *RawAddressSH) SH() []byte {
 	return a.sh
 }
 
-func (a *ScriptTemplateSH) Bytes() []byte {
+func (a *RawAddressSH) Bytes() []byte {
 	return append([]byte{scriptTypeSH}, a.sh...)
 }
 
-func (a *ScriptTemplateSH) Equal(other ScriptTemplate) bool {
+func (a *RawAddressSH) Equal(other RawAddress) bool {
 	if other == nil {
 		return false
 	}
 	switch o := other.(type) {
-	case *ScriptTemplateSH:
+	case *RawAddressSH:
 		return bytes.Equal(a.sh, o.sh)
 	case *AddressSH:
 		return bytes.Equal(a.sh, o.sh)
@@ -127,22 +131,22 @@ func (a *ScriptTemplateSH) Equal(other ScriptTemplate) bool {
 }
 
 /**************************************** MultiPKH ************************************************/
-type ScriptTemplateMultiPKH struct {
+type RawAddressMultiPKH struct {
 	pkhs     [][]byte
 	required uint16
 }
 
-// NewScriptTemplateMultiPKH creates an address from a required signature count and some public key hashes.
-func NewScriptTemplateMultiPKH(required uint16, pkhs [][]byte) (*ScriptTemplateMultiPKH, error) {
+// NewRawAddressMultiPKH creates an address from a required signature count and some public key hashes.
+func NewRawAddressMultiPKH(required uint16, pkhs [][]byte) (*RawAddressMultiPKH, error) {
 	for _, pkh := range pkhs {
 		if len(pkh) != scriptHashLength {
-			return nil, ErrBadHashLength
+			return nil, ErrBadScriptHashLength
 		}
 	}
-	return &ScriptTemplateMultiPKH{pkhs: pkhs, required: required}, nil
+	return &RawAddressMultiPKH{pkhs: pkhs, required: required}, nil
 }
 
-func (a *ScriptTemplateMultiPKH) PKHs() []byte {
+func (a *RawAddressMultiPKH) PKHs() []byte {
 	b := make([]byte, 0, len(a.pkhs)*scriptHashLength)
 	for _, pkh := range a.pkhs {
 		b = append(b, pkh...)
@@ -150,7 +154,7 @@ func (a *ScriptTemplateMultiPKH) PKHs() []byte {
 	return b
 }
 
-func (a *ScriptTemplateMultiPKH) Bytes() []byte {
+func (a *RawAddressMultiPKH) Bytes() []byte {
 	b := make([]byte, 0, 3+(len(a.pkhs)*scriptHashLength))
 
 	b = append(b, byte(scriptTypeMultiPKH))
@@ -168,13 +172,13 @@ func (a *ScriptTemplateMultiPKH) Bytes() []byte {
 	return b
 }
 
-func (a *ScriptTemplateMultiPKH) Equal(other ScriptTemplate) bool {
+func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
 	if other == nil {
 		return false
 	}
 
 	switch o := other.(type) {
-	case *ScriptTemplateMultiPKH:
+	case *RawAddressMultiPKH:
 		if len(a.pkhs) != len(o.pkhs) {
 			return false
 		}
@@ -202,32 +206,32 @@ func (a *ScriptTemplateMultiPKH) Equal(other ScriptTemplate) bool {
 }
 
 /***************************************** RPH ************************************************/
-type ScriptTemplateRPH struct {
+type RawAddressRPH struct {
 	rph []byte
 }
 
-// NewScriptTemplateRPH creates an address from an R puzzle hash.
-func NewScriptTemplateRPH(rph []byte) (*ScriptTemplateRPH, error) {
+// NewRawAddressRPH creates an address from an R puzzle hash.
+func NewRawAddressRPH(rph []byte) (*RawAddressRPH, error) {
 	if len(rph) != scriptHashLength {
-		return nil, ErrBadHashLength
+		return nil, ErrBadScriptHashLength
 	}
-	return &ScriptTemplateRPH{rph: rph}, nil
+	return &RawAddressRPH{rph: rph}, nil
 }
 
-func (a *ScriptTemplateRPH) RPH() []byte {
+func (a *RawAddressRPH) RPH() []byte {
 	return a.rph
 }
 
-func (a *ScriptTemplateRPH) Bytes() []byte {
+func (a *RawAddressRPH) Bytes() []byte {
 	return append([]byte{scriptTypeRPH}, a.rph...)
 }
 
-func (a *ScriptTemplateRPH) Equal(other ScriptTemplate) bool {
+func (a *RawAddressRPH) Equal(other RawAddress) bool {
 	if other == nil {
 		return false
 	}
 	switch o := other.(type) {
-	case *ScriptTemplateRPH:
+	case *RawAddressRPH:
 		return bytes.Equal(a.rph, o.rph)
 	case *AddressRPH:
 		return bytes.Equal(a.rph, o.rph)

@@ -218,7 +218,7 @@ func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) 
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, output := range tx.TxOut {
-		outputAddress, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}
@@ -237,7 +237,7 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	}
 
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.ScriptTemplateFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
@@ -320,7 +320,7 @@ func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chain
 
 func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.ScriptTemplateFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
 			continue
 		}
@@ -341,7 +341,7 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool)
 	}
 
 	for index, output := range tx.TxOut {
-		address, err := bitcoin.ScriptTemplateFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue
 		}

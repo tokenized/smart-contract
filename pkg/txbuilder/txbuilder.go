@@ -18,16 +18,16 @@ const (
 
 type TxBuilder struct {
 	MsgTx         *wire.MsgTx
-	Inputs        []*InputSupplement     // Input Data that is not in wire.MsgTx
-	Outputs       []*OutputSupplement    // Output Data that is not in wire.MsgTx
-	ChangeAddress bitcoin.ScriptTemplate // The address to pay extra bitcoins to if a change output isn't specified
-	DustLimit     uint64                 // Smallest amount of bitcoin for a valid spendable output
-	FeeRate       float32                // The target fee rate in sat/byte
+	Inputs        []*InputSupplement  // Input Data that is not in wire.MsgTx
+	Outputs       []*OutputSupplement // Output Data that is not in wire.MsgTx
+	ChangeAddress bitcoin.RawAddress  // The address to pay extra bitcoins to if a change output isn't specified
+	DustLimit     uint64              // Smallest amount of bitcoin for a valid spendable output
+	FeeRate       float32             // The target fee rate in sat/byte
 }
 
 // NewTx returns a new TxBuilder with the specified change PKH
 // changePKH (Public Key Hash) is a 20 byte slice.
-func NewTxBuilder(changeAddress bitcoin.ScriptTemplate, dustLimit uint64, feeRate float32) *TxBuilder {
+func NewTxBuilder(changeAddress bitcoin.RawAddress, dustLimit uint64, feeRate float32) *TxBuilder {
 	tx := wire.MsgTx{Version: DefaultVersion, LockTime: 0}
 	result := TxBuilder{
 		MsgTx:         &tx,
@@ -38,7 +38,7 @@ func NewTxBuilder(changeAddress bitcoin.ScriptTemplate, dustLimit uint64, feeRat
 	return &result
 }
 
-func NewTxBuilderFromWire(changeAddress bitcoin.ScriptTemplate, dustLimit uint64, feeRate float32, tx *wire.MsgTx, inputs []*wire.MsgTx) (*TxBuilder, error) {
+func NewTxBuilderFromWire(changeAddress bitcoin.RawAddress, dustLimit uint64, feeRate float32, tx *wire.MsgTx, inputs []*wire.MsgTx) (*TxBuilder, error) {
 	result := TxBuilder{
 		MsgTx:         tx,
 		ChangeAddress: changeAddress,
@@ -101,7 +101,7 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 // AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the
 //   specified address.
 // isChange marks the output to receive remaining bitcoin.
-func (tx *TxBuilder) AddPaymentOutput(address bitcoin.ScriptTemplate, value uint64, isChange bool) error {
+func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isChange bool) error {
 	return tx.AddOutput(address.LockingScript(), value, isChange, false)
 }
 
@@ -111,7 +111,7 @@ func (tx *TxBuilder) AddPaymentOutput(address bitcoin.ScriptTemplate, value uint
 // These dust outputs are meant as "notifiers" so that an address will see this transaction and
 //   process the data in it. If value is later added to this output, the value replaces the dust
 //   limit amount rather than adding to it.
-func (tx *TxBuilder) AddDustOutput(address bitcoin.ScriptTemplate, isChange bool) error {
+func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isChange bool) error {
 	return tx.AddOutput(address.LockingScript(), tx.DustLimit, isChange, true)
 }
 
@@ -173,19 +173,19 @@ type OutputSupplement struct {
 }
 
 // InputAddress returns the address that is paying to the input.
-func (tx *TxBuilder) InputAddress(index int) (bitcoin.ScriptTemplate, error) {
+func (tx *TxBuilder) InputAddress(index int) (bitcoin.RawAddress, error) {
 	if index >= len(tx.Inputs) {
 		return nil, errors.New("Input index out of range")
 	}
-	return bitcoin.ScriptTemplateFromLockingScript(tx.Inputs[index].LockScript)
+	return bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockScript)
 }
 
 // OutputAddress returns the address that the output is paying to.
-func (tx *TxBuilder) OutputAddress(index int) (bitcoin.ScriptTemplate, error) {
+func (tx *TxBuilder) OutputAddress(index int) (bitcoin.RawAddress, error) {
 	if index >= len(tx.MsgTx.TxOut) {
 		return nil, errors.New("Output index out of range")
 	}
-	return bitcoin.ScriptTemplateFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
+	return bitcoin.RawAddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
 }
 
 // Serialize returns the byte payload of the transaction.
