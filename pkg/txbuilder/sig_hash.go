@@ -43,6 +43,12 @@ func (shc *SigHashCache) Clear() {
 	shc.hashOutputs = nil
 }
 
+// ClearOutputs resets the outputs hash. This should be used if anything in the transaction outputs
+//   changes and the signatures need to be recalculated.
+func (shc *SigHashCache) ClearOutputs() {
+	shc.hashOutputs = nil
+}
+
 // HashPrevOuts calculates a single hash of all the previous outputs (txid:index) referenced within
 //   the specified transaction.
 func (shc *SigHashCache) HashPrevOuts(tx *wire.MsgTx) []byte {

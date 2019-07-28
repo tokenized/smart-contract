@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(true)
+	test = tests.New(false)
 	if test == nil {
 		fmt.Printf("Failed to create test environment\n")
 		return 1
