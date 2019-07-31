@@ -29,12 +29,13 @@ import (
 )
 
 type Transfer struct {
-	handler   protomux.Handler
-	MasterDB  *db.DB
-	Config    *node.Config
-	Headers   node.BitcoinHeaders
-	Tracer    *filters.Tracer
-	Scheduler *scheduler.Scheduler
+	handler         protomux.Handler
+	MasterDB        *db.DB
+	Config          *node.Config
+	Headers         node.BitcoinHeaders
+	Tracer          *filters.Tracer
+	Scheduler       *scheduler.Scheduler
+	HoldingsChannel *holdings.CacheChannel
 }
 
 type rejectError struct {
@@ -219,10 +220,11 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 		err := node.Respond(ctx, w, settleTx.MsgTx)
 		if err == nil {
-			if err := t.saveHoldings(ctx, assetUpdates, contractPKH); err != nil {
+			if err = t.saveHoldings(ctx, assetUpdates, contractPKH); err != nil {
 				return err
 			}
 		}
+
 		return err
 	}
 
@@ -263,9 +265,11 @@ func (t *Transfer) saveHoldings(ctx context.Context,
 
 	for assetCode, hds := range updates {
 		for _, h := range hds {
-			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, h); err != nil {
+			cacheItem, err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, h)
+			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
+			t.HoldingsChannel.Add(cacheItem)
 		}
 	}
 
@@ -738,10 +742,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			if err != nil {
 				return errors.Wrap(err, "Failed to get holding")
 			}
-			hds[settleOutputIndex] = &h
-			updatedHoldings[*inputPKH] = &h
+			hds[settleOutputIndex] = h
+			updatedHoldings[*inputPKH] = h
 
-			if err := holdings.AddDebit(&h, txid, sender.Quantity, v.Now); err != nil {
+			if err := holdings.AddDebit(h, txid, sender.Quantity, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: contract=%s asset=%s party=%s",
 						contractPKH, assetTransfer.AssetCode.String(), inputPKH.String())
@@ -794,10 +798,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			if err != nil {
 				return errors.Wrap(err, "Failed to get holding")
 			}
-			hds[settleOutputIndex] = &h
-			updatedHoldings[receiver.Address] = &h
+			hds[settleOutputIndex] = h
+			updatedHoldings[receiver.Address] = h
 
-			if err := holdings.AddDeposit(&h, txid, receiver.Quantity, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, txid, receiver.Quantity, v.Now); err != nil {
 				node.LogWarn(ctx, "Send failed : %s : contract=%s asset=%s party=%s",
 					err, contractPKH, assetTransfer.AssetCode.String(), receiver.Address.String())
 				return rejectError{code: protocol.RejectMsgMalformed}
@@ -1075,13 +1079,13 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
-	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+	assetUpdates := make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*state.Holding)
 	for _, assetSettlement := range msg.Assets {
 		if assetSettlement.AssetType == "CUR" && assetSettlement.AssetCode.IsZero() {
 			continue // Bitcoin transaction
 		}
 
-		hds := make(map[protocol.PublicKeyHash]state.Holding)
+		hds := make(map[protocol.PublicKeyHash]*state.Holding)
 		assetUpdates[assetSettlement.AssetCode] = hds
 
 		if assetSettlement.ContractIndex == 0xffff {
@@ -1116,7 +1120,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 				return errors.Wrap(err, "Failed to get holding")
 			}
 
-			err = holdings.FinalizeTx(&h, txid, msg.Timestamp)
+			err = holdings.FinalizeTx(h, txid, msg.Timestamp)
 			if err != nil {
 				return fmt.Errorf("Failed settlement finalize for holding : %s %s : %s",
 					assetSettlement.AssetCode.String(), pkh.String(), err)
@@ -1128,9 +1132,11 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 	for assetCode, hds := range assetUpdates {
 		for _, h := range hds {
-			if err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, &h); err != nil {
+			cacheItem, err := holdings.Save(ctx, t.MasterDB, contractPKH, &assetCode, h)
+			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
+			t.HoldingsChannel.Add(cacheItem)
 		}
 	}
 

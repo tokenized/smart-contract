@@ -1,11 +1,11 @@
 package tests
 
 import (
+	"context"
 	"os"
 	"runtime/pprof"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -37,7 +38,9 @@ func BenchmarkTransfers(b *testing.B) {
 	defer tests.Recover(b)
 
 	b.Run("simple", simpleTransfersBenchmark)
+	b.Run("separate", separateTransfersBenchmark)
 	b.Run("oracle", oracleTransfersBenchmark)
+	b.Run("tree", treeTransfersBenchmark)
 	// b.Run("null", nullBenchmark)
 }
 
@@ -48,6 +51,7 @@ func nullBenchmark(b *testing.B) {
 	}
 }
 
+// simpleTransfersBenchmark simulates a transfer from the issuer to N addresses.
 func simpleTransfersBenchmark(b *testing.B) {
 	ctx := test.Context
 
@@ -122,7 +126,8 @@ func simpleTransfersBenchmark(b *testing.B) {
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		test.HoldingsChannel)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -148,40 +153,53 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	for i, request := range requests {
-		if _, err := server.HandleTx(ctx, request); err != nil {
-			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-		}
+	wgInternal := sync.WaitGroup{}
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		for i, request := range requests {
+			if _, err := server.HandleTx(ctx, request); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
 
-		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
 		}
-	}
+	}()
 
-	responsesProcessed := 0
-	for responsesProcessed < b.N {
-		response := getResponse()
-		if response == nil {
-			time.Sleep(time.Millisecond)
-			continue
-		}
-		responsesProcessed++
-		// rType := responseType(response)
-		// if rType != "T2" {
-		// 	b.Fatalf("Invalid response type : %s", rType)
-		// }
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		responsesProcessed := 0
+		for responsesProcessed < b.N {
+			response := getResponse()
+			if response == nil {
+				continue
+			}
+			responsesProcessed++
+			// rType := responseType(response)
+			// if rType != "T2" {
+			// 	b.Fatalf("Invalid response type : %s", rType)
+			// }
 
-		if _, err := server.HandleTx(ctx, response); err != nil {
-			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-		}
+			if _, err := server.HandleTx(ctx, response); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
 
-		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
-			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
 		}
-	}
+	}()
+
+	wgInternal.Wait()
 
 	pprof.StopCPUProfile()
 	b.StopTimer()
+
+	server.Stop(ctx)
+	wg.Wait()
 
 	// Check balance
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
@@ -194,9 +212,202 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if h.FinalizedBalance != 0 {
 		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
 	}
+}
+
+// separateTransfersBenchmark simulates a transfer from the issuer to N addresses.
+func separateTransfersBenchmark(b *testing.B) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+
+	requests := make([]*wire.MsgTx, 0, b.N)
+	hashes := make([]*chainhash.Hash, 0, b.N)
+	senders := make([]*wallet.Key, 0, b.N)
+	receivers := make([]*wallet.Key, 0, b.N)
+	transferAmount := uint64(1)
+	for i := 0; i < b.N; i++ {
+		senderKey, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
+		}
+		senders = append(senders, senderKey)
+
+		err = mockUpHolding(ctx, senderKey.Address, transferAmount)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+		}
+
+		receiverKey, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
+		}
+
+		receivers = append(receivers, receiverKey)
+
+		// Create Transfer message
+		transferData := protocol.Transfer{}
+
+		assetTransferData := protocol.AssetTransfer{
+			ContractIndex: 0, // first output
+			AssetType:     testAssetType,
+			AssetCode:     testAssetCode,
+		}
+
+		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiverKey.Key.PublicKey().Bytes())),
+				Quantity: transferAmount})
+
+		transferData.Assets = append(transferData.Assets, assetTransferData)
+
+		// Build transfer transaction
+		transferTx := wire.NewMsgTx(2)
+
+		// From sender
+		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), senderKey.Address)
+		transferInputHash := fundingTx.TxHash()
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+
+		// To contract
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+
+		// Data output
+		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+		}
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+		test.RPCNode.SaveTX(ctx, transferTx)
+		requests = append(requests, transferTx)
+		hash := transferTx.TxHash()
+		hashes = append(hashes, &hash)
+	}
+
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := filters.NewTracer()
+	walletKeys := test.Wallet.ListAll()
+	pubKeys := make([][]byte, 0, len(walletKeys))
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
+	}
+	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		test.HoldingsChannel)
+
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	responses = make([]*wire.MsgTx, 0, b.N)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			b.Logf("Server failed : %s", err)
+		}
+	}()
+
+	profFile, err := os.OpenFile("separate_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
+	}
+	err = pprof.StartCPUProfile(profFile)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
+	}
+	b.ResetTimer()
+
+	wgInternal := sync.WaitGroup{}
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		for i, request := range requests {
+			if _, err := server.HandleTx(ctx, request); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+		}
+	}()
+
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		responsesProcessed := 0
+		for responsesProcessed < b.N {
+			response := getResponse()
+			if response == nil {
+				continue
+			}
+			responsesProcessed++
+			// rType := responseType(response)
+			// if rType != "T2" {
+			// 	b.Fatalf("Invalid response type : %s", rType)
+			// }
+
+			if _, err := server.HandleTx(ctx, response); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
+		}
+	}()
+
+	wgInternal.Wait()
+
+	pprof.StopCPUProfile()
+	b.StopTimer()
 
 	server.Stop(ctx)
 	wg.Wait()
+
+	// Check balance
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+
+	for _, sender := range senders {
+		senderPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(sender.Key.PublicKey().Bytes()))
+		v := ctx.Value(node.KeyValues).(*node.Values)
+		h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, senderPKH, v.Now)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to get sender holding : %s", tests.Failed, err)
+		}
+		if h.FinalizedBalance != 0 {
+			b.Fatalf("\t%s\tSender balance incorrect : %d", tests.Failed, h.FinalizedBalance)
+		}
+	}
+
+	for _, receiver := range receivers {
+		receiverPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver.Key.PublicKey().Bytes()))
+		v := ctx.Value(node.KeyValues).(*node.Values)
+		h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, receiverPKH, v.Now)
+		if err != nil {
+			b.Fatalf("\t%s\tFailed to get receiver holding : %s", tests.Failed, err)
+		}
+		if h.FinalizedBalance != transferAmount {
+			b.Fatalf("\t%s\tReceiver balance incorrect : %d", tests.Failed, h.FinalizedBalance)
+		}
+	}
 }
 
 func oracleTransfersBenchmark(b *testing.B) {
@@ -299,7 +510,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter)
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		test.HoldingsChannel)
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -324,42 +536,52 @@ func oracleTransfersBenchmark(b *testing.B) {
 		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
 	}
 	b.ResetTimer()
-	for i, request := range requests {
-		if _, err := server.HandleTx(ctx, request); err != nil {
-			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+
+	wgInternal := sync.WaitGroup{}
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		for i, request := range requests {
+			if _, err := server.HandleTx(ctx, request); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+
+			// Commented because validation isn't part of smartcontract benchmark.
+			// Uncomment to ensure benchmark is still functioning properly.
+			// checkResponse(b, "T2")
 		}
+	}()
 
-		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-			b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		responsesProcessed := 0
+		for responsesProcessed < b.N {
+			response := getResponse()
+			if response == nil {
+				continue
+			}
+			responsesProcessed++
+			// rType := responseType(response)
+			// if rType != "T2" {
+			// 	b.Fatalf("Invalid response type : %s", rType)
+			// }
+
+			if _, err := server.HandleTx(ctx, response); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
 		}
+	}()
 
-		// Commented because validation isn't part of smartcontract benchmark.
-		// Uncomment to ensure benchmark is still functioning properly.
-		// checkResponse(b, "T2")
-	}
-
-	responsesProcessed := 0
-	for responsesProcessed < b.N {
-		response := getResponse()
-		if response == nil {
-			time.Sleep(time.Millisecond)
-			continue
-		}
-		responsesProcessed++
-		// rType := responseType(response)
-		// if rType != "T2" {
-		// 	b.Fatalf("Invalid response type : %s", rType)
-		// }
-
-		if _, err := server.HandleTx(ctx, response); err != nil {
-			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-		}
-
-		if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
-			b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-		}
-	}
-
+	wgInternal.Wait()
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
@@ -377,6 +599,245 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	server.Stop(ctx)
 	wg.Wait()
+}
+
+// splitTransfer creates a transfer transaction that splits the senders balance and sends it to two
+//   new users. It returns the transfer tx, and the new user's keys.
+func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64) (*wire.MsgTx, *wallet.Key, *wallet.Key) {
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 30000+balance, sender.Address)
+
+	receiver1, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
+	}
+
+	receiver2, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
+	}
+
+	// Create Transfer message
+	transferAmount := balance / 2
+	transferData := protocol.Transfer{}
+
+	// Mock up holding because otherwise we must wait for settlement, which shouldn't count for benchmark
+	err = mockUpHolding(ctx, receiver1.Address, transferAmount)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+	err = mockUpHolding(ctx, receiver2.Address, transferAmount)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	assetTransferData := protocol.AssetTransfer{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCode,
+	}
+
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		protocol.QuantityIndex{Index: 0, Quantity: transferAmount * 2})
+
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+		protocol.AssetReceiver{
+			Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver1.Key.PublicKey().Bytes())),
+			Quantity: transferAmount})
+
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
+		protocol.AssetReceiver{
+			Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver2.Key.PublicKey().Bytes())),
+			Quantity: transferAmount})
+
+	transferData.Assets = append(transferData.Assets, assetTransferData)
+
+	// Build transfer transaction
+	transferTx := wire.NewMsgTx(2)
+
+	transferInputHash := fundingTx.TxHash()
+
+	// From issuer
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
+
+	// Data output
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+	test.RPCNode.SaveTX(ctx, transferTx)
+
+	return transferTx, receiver1, receiver2
+}
+
+func splitTransferRecurse(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64,
+	levels uint) ([]*wire.MsgTx, []*wallet.Key) {
+
+	// split this transfer
+	tx, receiver1, receiver2 := splitTransfer(b, ctx, sender, balance)
+
+	if levels == 1 {
+		return []*wire.MsgTx{tx}, []*wallet.Key{receiver1, receiver2}
+	}
+
+	// Create another level
+	childCount := (1 << (levels + 1)) - 1
+	txs := make([]*wire.MsgTx, 0, childCount+1)
+	receivers := make([]*wallet.Key, 0, 2+(2*childCount))
+
+	txs = append(txs, tx)
+	receivers = append(receivers, receiver1)
+	receivers = append(receivers, receiver2)
+
+	newTxs1, newReceivers1 := splitTransferRecurse(b, ctx, receiver1, balance/2, levels-1)
+	txs = append(txs, newTxs1...)
+	receivers = append(receivers, newReceivers1...)
+
+	newTxs2, newReceivers2 := splitTransferRecurse(b, ctx, receiver2, balance/2, levels-1)
+	txs = append(txs, newTxs2...)
+	receivers = append(receivers, newReceivers2...)
+
+	return txs, receivers
+}
+
+// treeTransfersBenchmark creates an asset, then splits their balance in half until the number of
+//   transfer txs is met.
+func treeTransfersBenchmark(b *testing.B) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	levels := uint(1)
+	nodes := (1 << levels) - 1
+	for nodes < b.N {
+		levels++
+		nodes = (1 << levels) - 1
+	}
+	// fmt.Printf("Using %d tree levels for %d transfers\n", levels, nodes)
+
+	err = mockUpAsset(ctx, true, true, true, uint64(nodes)*2, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+
+	requests, _ := splitTransferRecurse(b, ctx, issuerKey, uint64(nodes)*2, levels)
+	hashes := make([]*chainhash.Hash, 0, nodes)
+	for _, request := range requests {
+		hash := request.TxHash()
+		hashes = append(hashes, &hash)
+	}
+
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := filters.NewTracer()
+	walletKeys := test.Wallet.ListAll()
+	pubKeys := make([][]byte, 0, len(walletKeys))
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
+	}
+	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		test.HoldingsChannel)
+
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	responses = make([]*wire.MsgTx, 0, b.N)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			b.Logf("Server failed : %s", err)
+		}
+	}()
+
+	profFile, err := os.OpenFile("tree_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
+	}
+	err = pprof.StartCPUProfile(profFile)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to start prof : %v", tests.Failed, err)
+	}
+	b.ResetTimer()
+
+	wgInternal := sync.WaitGroup{}
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		for i, request := range requests {
+			if _, err := server.HandleTx(ctx, request); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
+				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
+			}
+
+			if i >= b.N {
+				break
+			}
+		}
+	}()
+
+	wgInternal.Add(1)
+	go func() {
+		defer wgInternal.Done()
+		responsesProcessed := 0
+		for responsesProcessed < b.N {
+			response := getResponse()
+			if response == nil {
+				continue
+			}
+			responsesProcessed++
+			// rType := responseType(response)
+			// if rType != "T2" {
+			// 	b.Fatalf("Invalid response type : %s", rType)
+			// }
+
+			if _, err := server.HandleTx(ctx, response); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
+
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
+			}
+		}
+	}()
+
+	wgInternal.Wait()
+	pprof.StopCPUProfile()
+	b.StopTimer()
+
+	server.Stop(ctx)
+	wg.Wait()
+
+	// Check balance
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
+	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	if err != nil {
+		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if h.FinalizedBalance != 0 {
+		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
+	}
 }
 
 func sendTokens(t *testing.T) {

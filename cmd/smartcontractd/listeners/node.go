@@ -50,6 +50,8 @@ type Server struct {
 	incomingTxs   IncomingTxChannel
 	processingTxs ProcessingTxChannel
 
+	holdingsChannel *holdings.CacheChannel
+
 	TxSentCount        int
 	AlternateResponder protomux.ResponderFunc
 }
@@ -66,6 +68,7 @@ func NewServer(
 	tracer *filters.Tracer,
 	utxos *utxos.UTXOs,
 	txFilter *filters.TxFilter,
+	holdingsChannel *holdings.CacheChannel,
 ) *Server {
 	result := Server{
 		wallet:           wallet,
@@ -83,10 +86,8 @@ func NewServer(
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
+		holdingsChannel:  holdingsChannel,
 	}
-
-	result.incomingTxs.Open(100)
-	result.processingTxs.Open(100)
 
 	keys := wallet.ListAll()
 	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
@@ -107,6 +108,10 @@ func (server *Server) Run(ctx context.Context) error {
 	server.Handler.SetResponder(server.respondTx)
 	server.Handler.SetReprocessor(server.reprocessTx)
 
+	server.incomingTxs.Open(100)
+	server.processingTxs.Open(100)
+	server.holdingsChannel.Open(5000)
+
 	// Register listeners
 	if server.SpyNode != nil {
 		server.SpyNode.RegisterListener(server)
@@ -124,11 +129,12 @@ func (server *Server) Run(ctx context.Context) error {
 			defer wg.Done()
 			if err := server.SpyNode.Run(ctx); err != nil {
 				node.LogError(ctx, "Spynode failed : %s", err)
+				node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
+				server.Scheduler.Stop(ctx)
+				server.incomingTxs.Close()
+				server.processingTxs.Close()
+				server.holdingsChannel.Close()
 			}
-			node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
-			server.Scheduler.Stop(ctx)
-			server.incomingTxs.Close()
-			server.processingTxs.Close()
 			node.LogVerbose(ctx, "Spynode finished")
 		}()
 	}
@@ -138,13 +144,14 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.Scheduler.Run(ctx); err != nil {
 			node.LogError(ctx, "Scheduler failed : %s", err)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
+			server.processingTxs.Close()
+			server.holdingsChannel.Close()
 		}
-		if server.SpyNode != nil {
-			node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
-			server.SpyNode.Stop(ctx)
-		}
-		server.incomingTxs.Close()
-		server.processingTxs.Close()
 		node.LogVerbose(ctx, "Scheduler finished")
 	}()
 
@@ -156,6 +163,14 @@ func (server *Server) Run(ctx context.Context) error {
 			defer wg.Done()
 			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, server.Headers); err != nil {
 				node.LogError(ctx, "Pre-process failed : %s", err)
+				server.Scheduler.Stop(ctx)
+				if server.SpyNode != nil {
+					node.LogVerbose(ctx, "Process incoming thread stopping Spynode")
+					server.SpyNode.Stop(ctx)
+				}
+				server.incomingTxs.Close()
+				server.processingTxs.Close()
+				server.holdingsChannel.Close()
 			}
 			node.LogVerbose(ctx, "Pre-process thread finished")
 		}()
@@ -167,16 +182,35 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.ProcessTxs(ctx); err != nil {
 			node.LogError(ctx, "Process failed : %s", err)
+			server.Scheduler.Stop(ctx)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Process thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
 		}
 		node.LogVerbose(ctx, "Process thread finished")
 	}()
 
+	// Start holdings cache writer thread
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := holdings.ProcessCacheItems(ctx, server.MasterDB, server.holdingsChannel); err != nil {
+			node.LogError(ctx, "Process holdings cache failed : %s", err)
+			server.Scheduler.Stop(ctx)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Process cache thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
+			server.processingTxs.Close()
+		}
+		node.LogVerbose(ctx, "Process holdings cache thread finished")
+	}()
+
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
-
-	if err := holdings.WriteCache(ctx, server.MasterDB); err != nil {
-		return err
-	}
 
 	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
@@ -193,6 +227,7 @@ func (server *Server) Stop(ctx context.Context) error {
 	schedulerErr := server.Scheduler.Stop(ctx)
 	server.incomingTxs.Close()
 	server.processingTxs.Close()
+	server.holdingsChannel.Close()
 
 	if spynodeErr != nil && schedulerErr != nil {
 		return errors.Wrap(errors.Wrap(spynodeErr, schedulerErr.Error()), "SpyNode and Scheduler failed")

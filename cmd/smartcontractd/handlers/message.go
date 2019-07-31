@@ -30,12 +30,13 @@ import (
 )
 
 type Message struct {
-	MasterDB  *db.DB
-	Config    *node.Config
-	Headers   node.BitcoinHeaders
-	Tracer    *filters.Tracer
-	Scheduler *scheduler.Scheduler
-	UTXOs     *utxos.UTXOs
+	MasterDB        *db.DB
+	Config          *node.Config
+	Headers         node.BitcoinHeaders
+	Tracer          *filters.Tracer
+	Scheduler       *scheduler.Scheduler
+	UTXOs           *utxos.UTXOs
+	HoldingsChannel *holdings.CacheChannel
 }
 
 // ProcessMessage handles an incoming Message OP_RETURN.
@@ -387,9 +388,11 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	for assetCode, hds := range assetUpdates {
 		for _, h := range hds {
-			if err := holdings.Save(ctx, m.MasterDB, contractPKH, &assetCode, h); err != nil {
+			cacheItem, err := holdings.Save(ctx, m.MasterDB, contractPKH, &assetCode, h)
+			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
+			m.HoldingsChannel.Add(cacheItem)
 		}
 	}
 
@@ -804,7 +807,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 					return errors.Wrap(err, "Failed to get sender holding")
 				}
 
-				settlementQuantity, err = holdings.CheckDebit(&h, txid, sender.Quantity)
+				settlementQuantity, err = holdings.CheckDebit(h, txid, sender.Quantity)
 				if err != nil {
 					node.LogWarn(ctx, "Send invalid : %s %s : %s",
 						assetTransfer.AssetCode.String(), inputPKH.String(), err)
@@ -842,7 +845,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 					return errors.Wrap(err, "Failed to get reciever holding")
 				}
 
-				settlementQuantity, err = holdings.CheckDeposit(&h, txid, receiver.Quantity)
+				settlementQuantity, err = holdings.CheckDeposit(h, txid, receiver.Quantity)
 				if err != nil {
 					node.LogWarn(ctx, "Receive invalid : %s %s : %s",
 						assetTransfer.AssetCode.String(), receiver.Address.String(), err)

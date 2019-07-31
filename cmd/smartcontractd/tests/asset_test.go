@@ -590,10 +590,11 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 		UpdatedAt:        assetData.UpdatedAt,
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	err = holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
 	if err != nil {
 		return err
 	}
+	test.HoldingsChannel.Add(cacheItem)
 
 	err = asset.Save(ctx, test.MasterDB, contractPKH, &assetData)
 	if err != nil {
@@ -660,10 +661,11 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 		UpdatedAt:        assetData.UpdatedAt,
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	err = holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &issuerHolding)
 	if err != nil {
 		return err
 	}
+	test.HoldingsChannel.Add(cacheItem)
 
 	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
 	err = asset.Save(ctx, test.MasterDB, contract2PKH, &assetData)
@@ -700,7 +702,12 @@ func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uin
 		UpdatedAt:        protocol.CurrentTimestamp(),
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	return holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
+	if err != nil {
+		return err
+	}
+	test.HoldingsChannel.Add(cacheItem)
+	return nil
 }
 
 func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
@@ -722,5 +729,10 @@ func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity ui
 		UpdatedAt:        protocol.CurrentTimestamp(),
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	return holdings.Save(ctx, test.MasterDB, contract2PKH, &testAsset2Code, &h)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, contract2PKH, &testAsset2Code, &h)
+	if err != nil {
+		return err
+	}
+	test.HoldingsChannel.Add(cacheItem)
+	return nil
 }
