@@ -147,7 +147,7 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 		initial = false
 		if err = node.connect(ctx); err != nil {
-			logger.Verbose(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
+			logger.Error(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
 			time.Sleep(5 * time.Second)
 			continue
 		}
