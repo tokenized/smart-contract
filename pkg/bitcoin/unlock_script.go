@@ -110,7 +110,7 @@ func PublicKeyFromUnlockingScript(unlockingScript []byte) ([]byte, error) {
 	}
 
 	secondPush := make([]byte, pushSize)
-	_, err = buf.Read(firstPush)
+	_, err = buf.Read(secondPush)
 	if err != nil {
 		return nil, err
 	}
