@@ -48,7 +48,7 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 	}
 
 	secondPush := make([]byte, pushSize)
-	_, err = buf.Read(firstPush)
+	_, err = buf.Read(secondPush)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func PublicKeyFromUnlockingScript(unlockingScript []byte) ([]byte, error) {
 
 // isSignature returns true if the data is an encoded signature.
 func isSignature(b []byte) bool {
-	return len(b) > 40 && b[1] == 0x30 // compound header byte
+	return len(b) > 40 && b[0] == 0x30 // compound header byte
 }
 
 // isPublicKey returns true if the data is an encoded and compressed public key.
