@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/utxos"
@@ -29,25 +30,26 @@ const (
 )
 
 type Test struct {
-	Context      context.Context
-	Headers      *mockHeaders
-	RPCNode      *mockRpcNode
-	NodeConfig   node.Config
-	MasterKey    *wallet.Key
-	ContractKey  *wallet.Key
-	FeeKey       *wallet.Key
-	Master2Key   *wallet.Key
-	Contract2Key *wallet.Key
-	Fee2Key      *wallet.Key
-	UTXOs        *utxos.UTXOs
-	Wallet       *wallet.Wallet
-	MasterDB     *db.DB
-	Scheduler    *scheduler.Scheduler
-	schStarted   bool
-	path         string
+	Context         context.Context
+	Headers         *mockHeaders
+	RPCNode         *mockRpcNode
+	NodeConfig      node.Config
+	MasterKey       *wallet.Key
+	ContractKey     *wallet.Key
+	FeeKey          *wallet.Key
+	Master2Key      *wallet.Key
+	Contract2Key    *wallet.Key
+	Fee2Key         *wallet.Key
+	UTXOs           *utxos.UTXOs
+	Wallet          *wallet.Wallet
+	MasterDB        *db.DB
+	Scheduler       *scheduler.Scheduler
+	HoldingsChannel *holdings.CacheChannel
+	schStarted      bool
+	path            string
 }
 
-func New(logToStdOut bool) *Test {
+func New(logFileName string) *Test {
 
 	// Random value used by helpers
 	testHelperRand = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -56,8 +58,13 @@ func New(logToStdOut bool) *Test {
 	// Logging
 
 	var ctx context.Context
-	if logToStdOut {
-		ctx = node.ContextWithDevelopmentLogger(NewContext(), os.Stdout)
+	if len(logFileName) > 0 {
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open log file : %v\n", err)
+			return nil
+		}
+		ctx = node.ContextWithDevelopmentLogger(NewContext(), logFile)
 	} else {
 		ctx = node.ContextWithNoLogger(NewContext())
 	}
@@ -168,24 +175,27 @@ func New(logToStdOut bool) *Test {
 	// ============================================================
 	// Result
 
-	return &Test{
-		Context:      ctx,
-		Headers:      newMockHeaders(),
-		RPCNode:      rpcNode,
-		NodeConfig:   nodeConfig,
-		MasterKey:    masterKey,
-		ContractKey:  contractKey,
-		FeeKey:       feeKey,
-		Master2Key:   master2Key,
-		Contract2Key: contract2Key,
-		Fee2Key:      fee2Key,
-		Wallet:       testWallet,
-		MasterDB:     masterDB,
-		UTXOs:        testUTXOs,
-		Scheduler:    testScheduler,
-		schStarted:   true,
-		path:         path,
+	result := Test{
+		Context:         ctx,
+		Headers:         newMockHeaders(),
+		RPCNode:         rpcNode,
+		NodeConfig:      nodeConfig,
+		MasterKey:       masterKey,
+		ContractKey:     contractKey,
+		FeeKey:          feeKey,
+		Master2Key:      master2Key,
+		Contract2Key:    contract2Key,
+		Fee2Key:         fee2Key,
+		Wallet:          testWallet,
+		MasterDB:        masterDB,
+		UTXOs:           testUTXOs,
+		Scheduler:       testScheduler,
+		schStarted:      true,
+		path:            path,
+		HoldingsChannel: &holdings.CacheChannel{},
 	}
+
+	return &result
 }
 
 // Reset is used to reset the test state complete.

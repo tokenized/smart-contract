@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -148,6 +149,8 @@ func main() {
 
 	utxos := bootstrap.LoadUTXOsFromDB(ctx, masterDB)
 
+	var holdingsChannel holdings.CacheChannel
+
 	appHandlers, apiErr := handlers.API(
 		ctx,
 		masterWallet,
@@ -157,6 +160,7 @@ func main() {
 		&sch,
 		spyNode,
 		utxos,
+		&holdingsChannel,
 	)
 
 	if apiErr != nil {
@@ -175,6 +179,7 @@ func main() {
 		tracer,
 		utxos,
 		txFilter,
+		&holdingsChannel,
 	)
 
 	// -------------------------------------------------------------------------

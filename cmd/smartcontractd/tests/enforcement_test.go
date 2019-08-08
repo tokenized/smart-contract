@@ -108,7 +108,7 @@ func freezeOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
-	balance := holdings.UnfrozenBalance(&h, v.Now)
+	balance := holdings.UnfrozenBalance(h, v.Now)
 	if balance != 100 {
 		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 100)
 	}
@@ -210,7 +210,7 @@ func freezeAuthorityOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
-	balance := holdings.UnfrozenBalance(&h, v.Now)
+	balance := holdings.UnfrozenBalance(h, v.Now)
 	if balance != 100 {
 		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 100)
 	}
@@ -299,7 +299,7 @@ func thawOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
 
-	balance := holdings.UnfrozenBalance(&h, v.Now)
+	balance := holdings.UnfrozenBalance(h, v.Now)
 	if balance != 300 {
 		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 300)
 	}
@@ -396,8 +396,11 @@ func confiscateOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
+	if !userPKH.Equal(userHolding.PKH) {
+		t.Fatalf("\t%s\tFailed to get correct user holding : %s != %s", tests.Failed, userPKH.String(), userHolding.PKH.String())
+	}
 	if userHolding.FinalizedBalance != 200 {
-		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed, userHolding.FinalizedBalance, 200)
+		t.Fatalf("\t%s\tUser token balance incorrect : %d/%d != %d : %s", tests.Failed, userHolding.FinalizedBalance, userHolding.PendingBalance, 200, userHolding.PKH.String())
 	}
 	t.Logf("\t%s\tUser token balance verified : %d", tests.Success, userHolding.FinalizedBalance)
 }
@@ -627,8 +630,8 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	// }
 	//
 	// ts := protocol.CurrentTimestamp()
-	// err = holdings.AddFreeze(&h, freezeTxId, quantity, protocol.CurrentTimestamp(),
+	// err = holdings.AddFreeze(h, freezeTxId, quantity, protocol.CurrentTimestamp(),
 	// 	protocol.NewTimestamp(ts.Nano()+100000000000))
-	// holdings.FinalizeTx(&h, freezeTxId, v.Now)
-	// return freezeTxId, holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, &h)
+	// holdings.FinalizeTx(h, freezeTxId, v.Now)
+	// return freezeTxId, holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCode, h)
 }

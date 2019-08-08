@@ -33,6 +33,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 	// switch errors.Cause(err) {
 	// }
 
+	// fmt.Printf("Error : %s\n", err)
 	LogDepth(ctx, logger.LevelError, 1, "%s", err)
 }
 

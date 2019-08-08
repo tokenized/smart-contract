@@ -149,7 +149,7 @@ func addressFromHex(s string, params *chaincfg.Params) (btcutil.Address, error) 
 //
 // As the json package requires map keys to be strings, this special function
 // handles key converstion.
-func dumpHoldingJSON(h state.Holding) error {
+func dumpHoldingJSON(h *state.Holding) error {
 	holdingStatuses := h.HoldingStatuses
 	h.HoldingStatuses = nil
 

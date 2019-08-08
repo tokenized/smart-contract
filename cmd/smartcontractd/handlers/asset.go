@@ -25,8 +25,9 @@ import (
 )
 
 type Asset struct {
-	MasterDB *db.DB
-	Config   *node.Config
+	MasterDB        *db.DB
+	Config          *node.Config
+	HoldingsChannel *holdings.CacheChannel
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
@@ -314,7 +315,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	var h state.Holding
+	var h *state.Holding
 	updateHoldings := false
 	if ac.TokenQty != as.TokenQty {
 		updateHoldings = true
@@ -328,7 +329,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
 
 		if ac.TokenQty < as.TokenQty {
-			if err := holdings.AddDebit(&h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
 				if err == holdings.ErrInsufficientHoldings {
 					return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
@@ -337,7 +338,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 				}
 			}
 		} else {
-			if err := holdings.AddDeposit(&h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to increase administration holdings : %s", v.TraceID, err)
 				return errors.Wrap(err, "Failed to increase holdings")
 			}
@@ -367,9 +368,11 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if updateHoldings {
-		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
+		a.HoldingsChannel.Add(cacheItem)
 	}
 
 	return nil
@@ -477,11 +480,13 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
-		holdings.AddDeposit(&h, txid, msg.TokenQty, msg.Timestamp)
-		holdings.FinalizeTx(&h, txid, msg.Timestamp)
-		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		holdings.AddDeposit(h, txid, msg.TokenQty, msg.Timestamp)
+		holdings.FinalizeTx(h, txid, msg.Timestamp)
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
+		a.HoldingsChannel.Add(cacheItem)
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -525,7 +530,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			node.Log(ctx, "Updating asset modification governance (%s) : %d", msg.AssetCode.String(), *ua.AssetModificationGovernance)
 		}
 
-		var h state.Holding
+		var h *state.Holding
 		updateHoldings := false
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
@@ -539,7 +544,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 			txid := protocol.TxIdFromBytes(itx.Hash[:])
 
-			holdings.FinalizeTx(&h, txid, msg.Timestamp)
+			holdings.FinalizeTx(h, txid, msg.Timestamp)
 			updateHoldings = true
 
 			if msg.TokenQty > as.TokenQty {
@@ -573,9 +578,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 
 		if updateHoldings {
-			if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+			cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+			if err != nil {
 				return errors.Wrap(err, "Failed to save holdings")
 			}
+			a.HoldingsChannel.Add(cacheItem)
 		}
 		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to update asset : %s", msg.AssetCode.String())

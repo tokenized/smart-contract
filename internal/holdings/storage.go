@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -12,43 +13,66 @@ import (
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
+var (
+	ErrNotInCache = errors.New("Not in cache")
+)
+
+// Options
+//   Periodically write holdings that haven't been written for x seconds
+//   Build deltas and only write deltas
+//     holding statuses are fixed size
+//
+
 const storageKey = "contracts"
 const storageSubKey = "holdings"
 
-var cache map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding
+type cacheUpdate struct {
+	h        *state.Holding
+	modified bool // true when modified since last write to storage.
+	lock     sync.Mutex
+}
 
-// Put a single holding in cache
+var cache map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate
+var cacheLock sync.Mutex
+
+// Save puts a single holding in cache. A CacheItem is returned and should be put in a CacheChannel
+//   to be written to storage asynchronously, or be synchronously written to storage by immediately
+//   calling Write.
 func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, h *state.Holding) error {
+	assetCode *protocol.AssetCode, h *state.Holding) (*CacheItem, error) {
+
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
 	}
 	contract, exists := cache[*contractPKH]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
 		cache[*contractPKH] = contract
 	}
 	asset, exists := cache[*contractPKH][*assetCode]
 	if !exists {
-		asset = make(map[protocol.PublicKeyHash]state.Holding)
+		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
 		cache[*contractPKH][*assetCode] = asset
 	}
 
-	asset[h.PKH] = *h
+	cu, exists := asset[h.PKH]
 
-	//
-	// This code and comment should be removed soon -SG
-	// See https://github.com/tokenized/smart-contract/pull/20
-	//
-	// if err := WriteCache(ctx, dbConn); err != nil {
-	// 	return errors.Wrap(err, "holdings.Save")
-	// }
-	//
+	if exists {
+		cu.lock.Lock()
+		cu.h = h
+		cu.modified = true
+		cu.lock.Unlock()
+	} else {
+		asset[h.PKH] = &cacheUpdate{h: h, modified: true}
+	}
 
-	return nil
+	return NewCacheItem(contractPKH, assetCode, &h.PKH), nil
 }
 
+// List provides a list of all holdings in storage for a specified asset.
 func List(ctx context.Context,
 	dbConn *db.DB,
 	contractPKH *protocol.PublicKeyHash,
@@ -63,26 +87,33 @@ func List(ctx context.Context,
 	return dbConn.List(ctx, path)
 }
 
-// Fetch a single holding from storage
+// Fetch fetches a single holding from storage and places it in the cache.
 func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) (state.Holding, error) {
+	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) (*state.Holding, error) {
+
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
 	}
 	contract, exists := cache[*contractPKH]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]state.Holding)
+		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
 		cache[*contractPKH] = contract
 	}
 	asset, exists := contract[*assetCode]
 	if !exists {
-		asset = make(map[protocol.PublicKeyHash]state.Holding)
+		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
-	result, exists := asset[*pkh]
+	cu, exists := asset[*pkh]
 	if exists {
-		return result, nil
+		// Copy so the object in cache will not be unintentionally modified (by reference)
+		// We don't want it to be modified unless Save is called.
+		cu.lock.Lock()
+		defer cu.lock.Unlock()
+		return copyHolding(cu.h), nil
 	}
 
 	key := buildStoragePath(contractPKH, assetCode, pkh)
@@ -90,35 +121,106 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
 		if err == db.ErrNotFound {
-			return result, ErrNotFound
+			return nil, ErrNotFound
 		}
 
-		return result, errors.Wrap(err, "Failed to fetch holding")
+		return nil, errors.Wrap(err, "Failed to fetch holding")
 	}
 
 	// Prepare the asset object
-	result, err = deserializeHolding(bytes.NewBuffer(b))
+	readResult, err := deserializeHolding(bytes.NewBuffer(b))
 	if err != nil {
-		return result, errors.Wrap(err, "Failed to deserialize holding")
+		return nil, errors.Wrap(err, "Failed to deserialize holding")
 	}
 
-	asset[*pkh] = result
+	asset[*pkh] = &cacheUpdate{h: readResult, modified: false}
 
-	//
-	// This code and comment should be removed soon -SG
-	// See https://github.com/tokenized/smart-contract/pull/20
-	//
-	// WriteCache(ctx, dbConn)
-	//
+	return readResult, nil
+}
 
-	return result, nil
+func copyHolding(h *state.Holding) *state.Holding {
+	result := *h
+	result.HoldingStatuses = make(map[protocol.TxId]*state.HoldingStatus)
+	for key, val := range h.HoldingStatuses {
+		result.HoldingStatuses[key] = val
+	}
+	return &result
 }
 
 func Reset(ctx context.Context) {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
 	cache = nil
 }
 
-// Put a single holding in storage
+func WriteCache(ctx context.Context, dbConn *db.DB) error {
+
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
+	if cache == nil {
+		return nil
+	}
+
+	for contractPKH, assets := range cache {
+		for assetCode, assetHoldings := range assets {
+			for _, cu := range assetHoldings {
+				cu.lock.Lock()
+				if cu.modified {
+					if err := write(ctx, dbConn, &contractPKH, &assetCode, cu.h); err != nil {
+						cu.lock.Unlock()
+						return err
+					}
+					cu.modified = false
+				}
+				cu.lock.Unlock()
+			}
+		}
+	}
+	return nil
+}
+
+// Write updates storage for an item from the cache if it has been modified since the last write.
+func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) error {
+
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
+	if cache == nil {
+		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
+	}
+	contract, exists := cache[*contractPKH]
+	if !exists {
+		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
+		cache[*contractPKH] = contract
+	}
+	asset, exists := contract[*assetCode]
+	if !exists {
+		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
+		contract[*assetCode] = asset
+	}
+	cu, exists := asset[*pkh]
+	if !exists {
+		return ErrNotInCache
+	}
+
+	cu.lock.Lock()
+	defer cu.lock.Unlock()
+
+	if !cu.modified {
+		return nil
+	}
+
+	if err := write(ctx, dbConn, contractPKH, assetCode, cu.h); err != nil {
+		return err
+	}
+
+	cu.modified = false
+	return nil
+}
+
 func write(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
 	assetCode *protocol.AssetCode, h *state.Holding) error {
 
@@ -131,28 +233,6 @@ func write(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return err
 	}
 
-	return nil
-}
-
-func WriteCache(ctx context.Context, dbConn *db.DB) error {
-	if cache == nil {
-		return nil
-	}
-
-	for contractPKH, assets := range cache {
-		for assetCode, assetHoldings := range assets {
-			for _, h := range assetHoldings {
-				data, err := serializeHolding(&h)
-				if err != nil {
-					return errors.Wrap(err, "Failed to serialize holding")
-				}
-
-				if err := dbConn.Put(ctx, buildStoragePath(&contractPKH, &assetCode, &h.PKH), data); err != nil {
-					return err
-				}
-			}
-		}
-	}
 	return nil
 }
 
@@ -204,6 +284,7 @@ func serializeHolding(h *state.Holding) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, uint32(len(h.HoldingStatuses))); err != nil {
 		return nil, err
 	}
+
 	for _, value := range h.HoldingStatuses {
 		if err := serializeHoldingStatus(&buf, value); err != nil {
 			return nil, err
@@ -257,49 +338,49 @@ func serializeString(buf *bytes.Buffer, v []byte) error {
 	return nil
 }
 
-func deserializeHolding(buf *bytes.Buffer) (state.Holding, error) {
+func deserializeHolding(buf *bytes.Buffer) (*state.Holding, error) {
 	var result state.Holding
 
 	// Version
 	var version uint8
 	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
-		return result, err
+		return &result, err
 	}
 	if version != 0 {
-		return result, fmt.Errorf("Unknown version : %d", version)
+		return &result, fmt.Errorf("Unknown version : %d", version)
 	}
 
 	if err := result.PKH.Write(buf); err != nil {
-		return result, err
+		return &result, err
 	}
 
 	if err := binary.Read(buf, binary.LittleEndian, &result.PendingBalance); err != nil {
-		return result, err
+		return &result, err
 	}
 	if err := binary.Read(buf, binary.LittleEndian, &result.FinalizedBalance); err != nil {
-		return result, err
+		return &result, err
 	}
 	if err := result.CreatedAt.Write(buf); err != nil {
-		return result, err
+		return &result, err
 	}
 	if err := result.UpdatedAt.Write(buf); err != nil {
-		return result, err
+		return &result, err
 	}
 
 	result.HoldingStatuses = make(map[protocol.TxId]*state.HoldingStatus)
 	var length uint32
 	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
-		return result, err
+		return &result, err
 	}
 	for i := 0; i < int(length); i++ {
 		var hs state.HoldingStatus
 		if err := deserializeHoldingStatus(buf, &hs); err != nil {
-			return result, err
+			return &result, err
 		}
 		result.HoldingStatuses[hs.TxId] = &hs
 	}
 
-	return result, nil
+	return &result, nil
 }
 
 func deserializeHoldingStatus(buf *bytes.Buffer, hs *state.HoldingStatus) error {

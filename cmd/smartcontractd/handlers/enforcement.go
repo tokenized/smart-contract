@@ -23,8 +23,9 @@ import (
 )
 
 type Enforcement struct {
-	MasterDB *db.DB
-	Config   *node.Config
+	MasterDB        *db.DB
+	Config          *node.Config
+	HoldingsChannel *holdings.CacheChannel
 }
 
 // OrderRequest handles an incoming Order request and prepares a Confiscation response
@@ -340,7 +341,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 					return errors.Wrap(err, "Failed to get holding")
 				}
 
-				err = holdings.CheckFreeze(&h, &msg.FreezeTxId, quantity.Quantity)
+				err = holdings.CheckFreeze(h, &msg.FreezeTxId, quantity.Quantity)
 				if err != nil {
 					node.LogWarn(ctx, "Freeze holding status invalid : %s : %s", h.PKH.String(), err)
 					return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -408,7 +409,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotPermitted)
 	}
 
-	hds := make(map[protocol.PublicKeyHash]state.Holding)
+	hds := make(map[protocol.PublicKeyHash]*state.Holding)
 	txid := protocol.TxIdFromBytes(itx.Hash[:])
 
 	// Confiscation <- Order
@@ -459,7 +460,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.AddDebit(&h, txid, target.Quantity, v.Now)
+		err = holdings.AddDebit(h, txid, target.Quantity, v.Now)
 		if err != nil {
 			node.LogWarn(ctx, "Failed confiscation for holding : %s %s : %s",
 				msg.AssetCode.String(), target.Address.String(), err)
@@ -494,7 +495,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	if err != nil {
 		return errors.Wrap(err, "Failed to get holding")
 	}
-	err = holdings.AddDeposit(&depositHolding, txid, depositAmount, v.Now)
+	err = holdings.AddDeposit(depositHolding, txid, depositAmount, v.Now)
 	if err != nil {
 		node.LogWarn(ctx, "Failed confiscation deposit : %s %s : %s",
 			msg.AssetCode.String(), msg.DepositAddress.String(), err)
@@ -523,9 +524,11 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	}
 
 	for _, h := range hds {
-		if err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holding")
 		}
+		e.HoldingsChannel.Add(cacheItem)
 	}
 	node.Log(ctx, "Updated holdings : %s", msg.AssetCode.String())
 	return nil
@@ -584,7 +587,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	reconciliation.Timestamp = v.Now
 	reconciliation.Quantities = make([]protocol.QuantityIndex, 0, len(msg.TargetAddresses))
 	txid := protocol.TxIdFromBytes(itx.Hash[:])
-	hds := make(map[protocol.PublicKeyHash]state.Holding)
+	hds := make(map[protocol.PublicKeyHash]*state.Holding)
 
 	// Build outputs
 	// 1..n - Target Addresses
@@ -614,7 +617,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.AddDebit(&h, txid, target.Quantity, v.Now)
+		err = holdings.AddDebit(h, txid, target.Quantity, v.Now)
 		if err != nil {
 			node.LogWarn(ctx, "Failed reconciliation for holding : %s %s : %s",
 				msg.AssetCode.String(), target.Address.String(), err)
@@ -676,9 +679,11 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	}
 
 	for _, h := range hds {
-		if err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holding")
 		}
+		e.HoldingsChannel.Add(cacheItem)
 	}
 	return nil
 }
@@ -739,7 +744,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.Wrap(err, "Failed to update asset freeze period")
 			}
 		} else {
-			hds := make(map[protocol.PublicKeyHash]state.Holding)
+			hds := make(map[protocol.PublicKeyHash]*state.Holding)
 			txid := protocol.TxIdFromBytes(itx.Hash[:])
 
 			// Validate target addresses
@@ -758,7 +763,8 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 				if exists {
 					node.LogWarn(ctx, "Address used more than once : %s %s",
 						msg.AssetCode.String(), userPKH.String())
-					return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+					return fmt.Errorf("Address used more than once : %s %s",
+						msg.AssetCode.String(), userPKH.String())
 				}
 
 				h, err := holdings.GetHolding(ctx, e.MasterDB, contractPKH, &msg.AssetCode,
@@ -767,20 +773,23 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 					return errors.Wrap(err, "Failed to get holding")
 				}
 
-				err = holdings.AddFreeze(&h, txid, quantity.Quantity, msg.FreezePeriod, msg.Timestamp)
+				err = holdings.AddFreeze(h, txid, quantity.Quantity, msg.FreezePeriod, msg.Timestamp)
 				if err != nil {
 					node.LogWarn(ctx, "Failed to add freeze to holding : %s %s : %s",
 						msg.AssetCode.String(), userPKH.String(), err)
-					return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+					return fmt.Errorf("Failed to add freeze to holding : %s %s : %s",
+						msg.AssetCode.String(), userPKH.String(), err)
 				}
 
 				hds[*userPKH] = h
 			}
 
 			for _, h := range hds {
-				if err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+				cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, h)
+				if err != nil {
 					return errors.Wrap(err, "Failed to save holding")
 				}
+				e.HoldingsChannel.Add(cacheItem)
 			}
 		}
 	}
@@ -866,7 +875,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 				return errors.Wrap(err, "Failed to clear asset freeze period")
 			}
 		} else {
-			hds := make(map[protocol.PublicKeyHash]state.Holding)
+			hds := make(map[protocol.PublicKeyHash]*state.Holding)
 			freezeTxId := protocol.TxIdFromBytes(freezeTx.Hash[:])
 
 			// Validate target addresses
@@ -885,7 +894,8 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 				if exists {
 					node.LogWarn(ctx, "Address used more than once : %s %s",
 						freeze.AssetCode.String(), userPKH.String())
-					return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+					return fmt.Errorf("Address used more than once : %s %s",
+						freeze.AssetCode.String(), userPKH.String())
 				}
 
 				h, err := holdings.GetHolding(ctx, e.MasterDB, contractPKH, &freeze.AssetCode,
@@ -894,20 +904,23 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 					return errors.Wrap(err, "Failed to get holding")
 				}
 
-				err = holdings.RevertStatus(&h, freezeTxId)
+				err = holdings.RevertStatus(h, freezeTxId)
 				if err != nil {
 					node.LogWarn(ctx, "Failed thaw for holding : %s %s : %s",
 						freeze.AssetCode.String(), userPKH.String(), err)
-					return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+					return fmt.Errorf("Failed thaw for holding : %s %s : %s",
+						freeze.AssetCode.String(), userPKH.String(), err)
 				}
 
 				hds[*userPKH] = h
 			}
 
 			for _, h := range hds {
-				if err := holdings.Save(ctx, e.MasterDB, contractPKH, &freeze.AssetCode, &h); err != nil {
+				cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &freeze.AssetCode, h)
+				if err != nil {
 					return errors.Wrap(err, "Failed to save holding")
 				}
+				e.HoldingsChannel.Add(cacheItem)
 			}
 		}
 	}
@@ -951,7 +964,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	}
 
 	// Apply confiscations
-	hds := make(map[protocol.PublicKeyHash]state.Holding)
+	hds := make(map[protocol.PublicKeyHash]*state.Holding)
 
 	highestIndex := uint16(0)
 	for _, quantity := range msg.Quantities {
@@ -965,7 +978,8 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		if exists {
 			node.LogWarn(ctx, "Address used more than once : %s %s",
 				msg.AssetCode.String(), userPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return fmt.Errorf("Address used more than once : %s %s",
+				msg.AssetCode.String(), userPKH.String())
 		}
 
 		h, err := holdings.GetHolding(ctx, e.MasterDB, contractPKH, &msg.AssetCode,
@@ -974,11 +988,12 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(&h, txid, msg.Timestamp)
+		err = holdings.FinalizeTx(h, txid, msg.Timestamp)
 		if err != nil {
 			node.LogWarn(ctx, "Failed confiscation finalize for holding : %s %s : %s",
 				msg.AssetCode.String(), userPKH.String(), err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return fmt.Errorf("Failed confiscation finalize for holding : %s %s : %s",
+				msg.AssetCode.String(), userPKH.String(), err)
 		}
 
 		hds[*userPKH] = h
@@ -1001,19 +1016,22 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to get holding")
 	}
 
-	err = holdings.FinalizeTx(&h, txid, msg.Timestamp)
+	err = holdings.FinalizeTx(h, txid, msg.Timestamp)
 	if err != nil {
 		node.LogWarn(ctx, "Failed confiscation finalize for holding : %s %s : %s",
 			msg.AssetCode.String(), depositPKH.String(), err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return fmt.Errorf("Failed confiscation finalize for holding : %s %s : %s",
+			msg.AssetCode.String(), depositPKH.String(), err)
 	}
 
 	hds[*depositPKH] = h
 
 	for _, h := range hds {
-		if err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holding")
 		}
+		e.HoldingsChannel.Add(cacheItem)
 	}
 
 	node.Log(ctx, "Processed Confiscation : %s", msg.AssetCode.String())
@@ -1037,7 +1055,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	}
 
 	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])
-	hds := make(map[protocol.PublicKeyHash]state.Holding)
+	hds := make(map[protocol.PublicKeyHash]*state.Holding)
 
 	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
@@ -1066,7 +1084,8 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 		if exists {
 			node.LogWarn(ctx, "Address used more than once : %s %s",
 				msg.AssetCode.String(), userPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return fmt.Errorf("Address used more than once : %s %s",
+				msg.AssetCode.String(), userPKH.String())
 		}
 
 		h, err := holdings.GetHolding(ctx, e.MasterDB, contractPKH, &msg.AssetCode,
@@ -1075,11 +1094,12 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(&h, txid, msg.Timestamp)
+		err = holdings.FinalizeTx(h, txid, msg.Timestamp)
 		if err != nil {
 			node.LogWarn(ctx, "Failed reconciliation finalize for holding : %s %s : %s",
 				msg.AssetCode.String(), userPKH.String(), err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return fmt.Errorf("Failed reconciliation finalize for holding : %s %s : %s",
+				msg.AssetCode.String(), userPKH.String(), err)
 		}
 
 		hds[*userPKH] = h
@@ -1090,9 +1110,11 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	}
 
 	for _, h := range hds {
-		if err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, e.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holding")
 		}
+		e.HoldingsChannel.Add(cacheItem)
 	}
 
 	node.Log(ctx, "Processed Confiscation : %s", msg.AssetCode.String())

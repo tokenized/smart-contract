@@ -330,7 +330,7 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 			continue
 		}
 
-		result += holdings.VotingBalance(as, &h, applyMultiplier, now)
+		result += holdings.VotingBalance(as, h, applyMultiplier, now)
 	}
 
 	return result

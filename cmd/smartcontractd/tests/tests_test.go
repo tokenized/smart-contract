@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(true)
+	test = tests.New("")
 	if test == nil {
 		fmt.Printf("Failed to create test environment\n")
 		return 1
@@ -75,6 +75,7 @@ func testMain(m *testing.M) int {
 		test.Scheduler,
 		test.Headers,
 		test.UTXOs,
+		test.HoldingsChannel,
 	)
 
 	if err != nil {

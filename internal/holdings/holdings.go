@@ -26,7 +26,7 @@ var (
 
 // GetHolding returns the holding data for a PKH.
 func GetHolding(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash, now protocol.Timestamp) (state.Holding, error) {
+	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash, now protocol.Timestamp) (*state.Holding, error) {
 
 	result, err := Fetch(ctx, dbConn, contractPKH, assetCode, pkh)
 	if err == nil {
@@ -36,7 +36,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractPKH *protocol.Public
 		return result, err
 	}
 
-	result = state.Holding{
+	result = &state.Holding{
 		PKH:             *pkh,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -58,7 +58,7 @@ func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
 		if status.Code != byte('F') {
 			continue
 		}
-		if StatusExpired(status, now) {
+		if statusExpired(status, now) {
 			continue
 		}
 		if status.Amount > unfrozenBalance {
@@ -92,7 +92,7 @@ func UnfrozenBalance(h *state.Holding, now protocol.Timestamp) uint64 {
 		if status.Code != byte('F') {
 			continue
 		}
-		if StatusExpired(status, now) {
+		if statusExpired(status, now) {
 			continue
 		}
 		if status.Amount > result {
@@ -109,7 +109,7 @@ func UnfrozenBalance(h *state.Holding, now protocol.Timestamp) uint64 {
 func FinalizeTx(h *state.Holding, txid *protocol.TxId, now protocol.Timestamp) error {
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
-		return fmt.Errorf("Missing freeze : %s", txid.String())
+		return fmt.Errorf("Missing status to finalize : %s", txid.String())
 	}
 
 	h.UpdatedAt = now
@@ -269,8 +269,8 @@ func RevertStatus(h *state.Holding, txid *protocol.TxId) error {
 	return nil
 }
 
-// StatusExpired checks to see if a holding status has expired
-func StatusExpired(hs *state.HoldingStatus, now protocol.Timestamp) bool {
+// statusExpired checks to see if a holding status has expired
+func statusExpired(hs *state.HoldingStatus, now protocol.Timestamp) bool {
 	if hs.Expires.Nano() == 0 {
 		return false
 	}

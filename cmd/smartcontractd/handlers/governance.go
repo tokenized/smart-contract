@@ -144,7 +144,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		if msg.Initiator > 0 && holdings.VotingBalance(as, &h,
+		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			node.LogWarn(ctx, "Requestor is not a holder : %s %s", msg.AssetCode.String(), senderPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
@@ -492,7 +492,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		quantity = holdings.VotingBalance(as, &h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		quantity = holdings.VotingBalance(as, h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	} else {
 		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, holderPKH,
 			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
