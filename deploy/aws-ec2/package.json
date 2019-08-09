@@ -12,9 +12,9 @@
         "cdk": "cdk"
     },
     "devDependencies": {
-        "@types/node": "^8.10.49",
+        "@types/node": "^8.10.51",
         "aws-cdk": "^0.15.2",
-        "typescript": "^3.5.2"
+        "typescript": "^3.5.3"
     },
     "dependencies": {
         "@aws-cdk/assets": "^0.15.2",
