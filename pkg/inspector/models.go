@@ -5,16 +5,14 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Input struct {
-	Address btcutil.Address
+	Address bitcoin.RawAddress
 	Index   uint32
 	Value   int64
 	UTXO    UTXO
@@ -22,7 +20,7 @@ type Input struct {
 }
 
 type Output struct {
-	Address btcutil.Address
+	Address bitcoin.RawAddress
 	Index   uint32
 	Value   int64
 	UTXO    UTXO
@@ -30,8 +28,8 @@ type Output struct {
 
 type UTXO struct {
 	Hash     chainhash.Hash
-	PkScript []byte
 	Index    uint32
+	PkScript []byte
 	Value    int64
 }
 
@@ -39,26 +37,8 @@ func (u UTXO) ID() string {
 	return fmt.Sprintf("%v:%v", u.Hash, u.Index)
 }
 
-func (u UTXO) PublicAddress(params *chaincfg.Params) (btcutil.Address, error) {
-	if len(u.PkScript) != 25 &&
-		u.PkScript[0] != txscript.OP_DUP &&
-		u.PkScript[1] != txscript.OP_HASH160 {
-
-		return nil, fmt.Errorf("Invalid pkScript %s : %v", u.Hash, u.PkScript)
-	}
-
-	return btcutil.NewAddressPubKeyHash(u.PkScript[3:23], params)
-}
-
-func (u UTXO) ScriptAddress() ([]byte, error) {
-	if len(u.PkScript) != 25 &&
-		u.PkScript[0] != txscript.OP_DUP &&
-		u.PkScript[1] != txscript.OP_HASH160 {
-
-		return nil, fmt.Errorf("Invalid pkScript %s : %v", u.Hash, u.PkScript)
-	}
-
-	return u.PkScript[3:23], nil
+func (u UTXO) Address() (bitcoin.RawAddress, error) {
+	return bitcoin.RawAddressFromLockingScript(u.PkScript)
 }
 
 // UTXOs is a wrapper for a []UTXO.
@@ -76,18 +56,16 @@ func (u UTXOs) Value() int64 {
 }
 
 // ForAddress returns UTXOs that match the given Address.
-func (u UTXOs) ForAddress(address btcutil.Address) (UTXOs, error) {
+func (u UTXOs) ForAddress(address bitcoin.RawAddress) (UTXOs, error) {
 	filtered := UTXOs{}
 
-	s := address.ScriptAddress()
-
 	for _, utxo := range u {
-		utxoAddress, err := utxo.ScriptAddress()
+		utxoAddress, err := utxo.Address()
 		if err != nil {
 			continue
 		}
 
-		if !bytes.Equal(utxoAddress, s) {
+		if !address.Equal(utxoAddress) {
 			continue
 		}
 
@@ -120,7 +98,7 @@ func (in *Input) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (in *Input) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
+func (in *Input) Read(buf *bytes.Buffer) error {
 	msg := wire.MsgTx{}
 	if err := msg.Deserialize(buf); err != nil {
 		return err
@@ -141,7 +119,7 @@ func (in *Input) Read(buf *bytes.Buffer, netParams *chaincfg.Params) error {
 
 	// Calculate address
 	var err error
-	in.Address, err = in.UTXO.PublicAddress(netParams)
+	in.Address, err = in.UTXO.Address()
 	if err != nil {
 		return err
 	}

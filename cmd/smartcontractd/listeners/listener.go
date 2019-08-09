@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -83,7 +84,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chain
 			return nil
 		}
 
-		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, &server.Config.ChainParams, server.Config.IsTest)
+		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
@@ -108,7 +109,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	if server.inSync {
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
-			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, &server.Config.ChainParams, server.Config.IsTest)
+			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to get reverted tx : %s", err)
 			}
@@ -145,7 +146,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Iterate through votes for each contract and if they aren't complete schedule a finalizer.
 	keys := server.wallet.ListAll()
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
+		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 		votes, err := vote.List(ctx, server.MasterDB, contractPKH)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list votes : %s", err)
@@ -163,7 +164,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
 			}
-			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
+			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve vote tx : %s", err)
 				return nil
@@ -181,7 +182,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Schedule pending transfer timeouts
 	// Iterate through pending transfers for each contract and if they aren't complete schedule a timeout.
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(key.Address.ScriptAddress())
+		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 		transfers, err := transfer.List(ctx, server.MasterDB, contractPKH)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list transfers : %s", err)
@@ -195,7 +196,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
 			}
-			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, &server.Config.ChainParams, server.Config.IsTest)
+			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve transfer tx : %s", err)
 				return nil

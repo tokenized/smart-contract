@@ -4,10 +4,10 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 var cmdConvert = &cobra.Command{
@@ -18,19 +18,11 @@ var cmdConvert = &cobra.Command{
 			return errors.New("Incorrect argument count")
 		}
 
-		var params *chaincfg.Params
 		network := network(c)
 		if len(network) == 0 {
 			return nil
 		}
-		if network == "testnet" {
-			params = &chaincfg.TestNet3Params
-		} else if network == "mainnet" {
-			params = &chaincfg.MainNetParams
-		} else {
-			fmt.Printf("Unknown network : %s\n", network)
-			return nil
-		}
+		params := bitcoin.NewChainParams(network)
 
 		address, err := btcutil.DecodeAddress(args[0], params)
 		if err == nil {

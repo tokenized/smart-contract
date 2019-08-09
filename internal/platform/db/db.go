@@ -126,8 +126,8 @@ func (db *DB) Remove(ctx context.Context, key string) error {
 	return db.storage.Remove(ctx, key)
 }
 
-// List things from storage
-func (db *DB) List(ctx context.Context, keyStart string) ([][]byte, error) {
+// Search for things in storage
+func (db *DB) Search(ctx context.Context, keyStart string) ([][]byte, error) {
 	if db.storage == nil {
 		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -136,6 +136,15 @@ func (db *DB) List(ctx context.Context, keyStart string) ([][]byte, error) {
 	}
 
 	return db.storage.Search(ctx, query)
+}
+
+// List returns the keys under a given path.
+func (db *DB) List(ctx context.Context, key string) ([]string, error) {
+	if db.storage == nil {
+		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
+	}
+
+	return db.storage.List(ctx, key)
 }
 
 func (db *DB) Clear(ctx context.Context, keyStart string) error {

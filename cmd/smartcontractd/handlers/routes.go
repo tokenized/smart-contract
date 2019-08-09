@@ -3,13 +3,14 @@ package handlers
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -19,10 +20,11 @@ func API(
 	masterWallet wallet.WalletInterface,
 	config *node.Config,
 	masterDB *db.DB,
-	tracer *listeners.Tracer,
+	tracer *filters.Tracer,
 	sch *scheduler.Scheduler,
 	headers node.BitcoinHeaders,
 	utxos *utxos.UTXOs,
+	holdingsChannel *holdings.CacheChannel,
 ) (protomux.Handler, error) {
 
 	app := node.New(config, masterWallet)
@@ -40,8 +42,9 @@ func API(
 
 	// Register asset based events.
 	a := Asset{
-		MasterDB: masterDB,
-		Config:   config,
+		MasterDB:        masterDB,
+		Config:          config,
+		HoldingsChannel: holdingsChannel,
 	}
 
 	app.Handle("SEE", protocol.CodeAssetDefinition, a.DefinitionRequest)
@@ -50,12 +53,13 @@ func API(
 
 	// Register transfer based operations.
 	t := Transfer{
-		handler:   app,
-		MasterDB:  masterDB,
-		Config:    config,
-		Headers:   headers,
-		Tracer:    tracer,
-		Scheduler: sch,
+		handler:         app,
+		MasterDB:        masterDB,
+		Config:          config,
+		Headers:         headers,
+		Tracer:          tracer,
+		Scheduler:       sch,
+		HoldingsChannel: holdingsChannel,
 	}
 
 	app.Handle("SEE", protocol.CodeTransfer, t.TransferRequest)
@@ -64,8 +68,9 @@ func API(
 
 	// Register enforcement based events.
 	e := Enforcement{
-		MasterDB: masterDB,
-		Config:   config,
+		MasterDB:        masterDB,
+		Config:          config,
+		HoldingsChannel: holdingsChannel,
 	}
 
 	app.Handle("SEE", protocol.CodeOrder, e.OrderRequest)
@@ -91,12 +96,13 @@ func API(
 
 	// Register message based operations.
 	m := Message{
-		MasterDB:  masterDB,
-		Config:    config,
-		Headers:   headers,
-		Tracer:    tracer,
-		Scheduler: sch,
-		UTXOs:     utxos,
+		MasterDB:        masterDB,
+		Config:          config,
+		Headers:         headers,
+		Tracer:          tracer,
+		Scheduler:       sch,
+		UTXOs:           utxos,
+		HoldingsChannel: holdingsChannel,
 	}
 
 	app.Handle("SEE", protocol.CodeMessage, m.ProcessMessage)

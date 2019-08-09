@@ -5,13 +5,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 )
 
 var (
@@ -115,7 +114,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	outputs := make([]Output, 0, len(itx.MsgTx.TxOut))
 
 	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, n, node.GetChainParams())
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, n)
 
 		if err != nil {
 			return err
@@ -132,7 +131,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	return nil
 }
 
-func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int, netParams *chaincfg.Params) (*Output, error) {
+func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
 	// Zero value output
@@ -140,17 +139,16 @@ func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int, netParams *chaincf
 		return nil, nil
 	}
 
-	// Skip non-P2PKH scripts
-	if !isPayToPublicKeyHash(txout.PkScript) {
-		return nil, nil
+	address, err := bitcoin.RawAddressFromLockingScript(txout.PkScript)
+	if err != nil {
+		if err == bitcoin.ErrUnknownScriptTemplate {
+			return nil, nil // Skip non-payto scripts
+		} else {
+			return nil, err
+		}
 	}
 
 	utxo := NewUTXOFromHashWire(hash, tx, uint32(n))
-
-	address, err := utxo.PublicAddress(netParams)
-	if err != nil {
-		return nil, err
-	}
 
 	output := Output{
 		Address: address,
@@ -174,7 +172,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 			return err
 		}
 
-		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index, node.GetChainParams())
+		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index)
 		if err != nil {
 			return err
 		}
@@ -186,10 +184,10 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 	return nil
 }
 
-func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32, netParams *chaincfg.Params) (*Input, error) {
+func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32) (*Input, error) {
 	utxo := NewUTXOFromHashWire(hash, tx, n)
 
-	address, err := utxo.PublicAddress(netParams)
+	address, err := utxo.Address()
 	if err != nil {
 		return nil, err
 	}
@@ -255,14 +253,14 @@ func (itx *Transaction) UTXOs() UTXOs {
 	return utxos
 }
 
-func (itx *Transaction) IsRelevant(contractAddress btcutil.Address) bool {
+func (itx *Transaction) IsRelevant(contractAddress bitcoin.RawAddress) bool {
 	for _, input := range itx.Inputs {
-		if bytes.Equal(input.Address.ScriptAddress(), contractAddress.ScriptAddress()) {
+		if input.Address.Equal(contractAddress) {
 			return true
 		}
 	}
 	for _, output := range itx.Outputs {
-		if bytes.Equal(output.Address.ScriptAddress(), contractAddress.ScriptAddress()) {
+		if output.Address.Equal(contractAddress) {
 			return true
 		}
 	}
@@ -270,7 +268,7 @@ func (itx *Transaction) IsRelevant(contractAddress btcutil.Address) bool {
 }
 
 // ContractAddresses returns the contract address, which may include more than one
-func (itx *Transaction) ContractAddresses() []btcutil.Address {
+func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
@@ -280,9 +278,9 @@ func (itx *Transaction) ContractPKHs() [][]byte {
 }
 
 // Addresses returns all the PKH addresses involved in the transaction
-func (itx *Transaction) Addresses() []btcutil.Address {
+func (itx *Transaction) Addresses() []bitcoin.RawAddress {
 	l := len(itx.Inputs) + len(itx.Outputs)
-	addresses := make([]btcutil.Address, l, l)
+	addresses := make([]bitcoin.RawAddress, l, l)
 
 	for i, input := range itx.Inputs {
 		addresses[i] = input.Address
@@ -296,13 +294,13 @@ func (itx *Transaction) Addresses() []btcutil.Address {
 }
 
 // AddressesUnique returns the unique PKH addresses involved in a transaction
-func (itx *Transaction) AddressesUnique() []btcutil.Address {
+func (itx *Transaction) AddressesUnique() []bitcoin.RawAddress {
 	return uniqueAddresses(itx.Addresses())
 }
 
 // uniqueAddresses is an isolated function used for testing
-func uniqueAddresses(s []btcutil.Address) []btcutil.Address {
-	u := []btcutil.Address{}
+func uniqueAddresses(s []bitcoin.RawAddress) []bitcoin.RawAddress {
+	u := []bitcoin.RawAddress{}
 
 	// Spin over every address and check if it is found
 	// in the list of unique addresses
@@ -316,9 +314,9 @@ func uniqueAddresses(s []btcutil.Address) []btcutil.Address {
 
 		for _, x := range u {
 			// We have seen this address
-			if x.String() == v.String() {
+			if x.Equal(v) {
 				seen = true
-				continue
+				break
 			}
 		}
 
@@ -347,7 +345,7 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTest bool) error {
+func (itx *Transaction) Read(buf *bytes.Buffer, isTest bool) error {
 	version, err := buf.ReadByte() // Version
 	if err != nil {
 		return err
@@ -366,7 +364,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 	// Inputs
 	itx.Inputs = make([]Input, len(msg.TxIn))
 	for i, _ := range itx.Inputs {
-		if err := itx.Inputs[i].Read(buf, netParams); err != nil {
+		if err := itx.Inputs[i].Read(buf); err != nil {
 			return err
 		}
 	}
@@ -379,7 +377,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, netParams *chaincfg.Params, isTe
 	// Outputs
 	outputs := []Output{}
 	for i := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, i, netParams)
+		output, err := buildOutput(&itx.Hash, itx.MsgTx, i)
 
 		if err != nil {
 			return err

@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func TestParseTX(t *testing.T) {
@@ -30,6 +31,10 @@ func TestParseTX(t *testing.T) {
 
 	// the hash of the TX being parsed.
 	txHash := newHash("2c68cf3e1216acaa1e274dfd3b665b6a9d1d1d252e68d190f9fffc5f7e11fd27")
+	address, _ := bitcoin.DecodeAddress("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
+	address2, _ := bitcoin.DecodeAddress("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
+	script, _ := bitcoin.RawAddressFromLockingScript(address.LockingScript())
+	script2, _ := bitcoin.RawAddressFromLockingScript(address2.LockingScript())
 
 	wantTX := &Transaction{
 		Hash:  txHash,
@@ -48,7 +53,7 @@ func TestParseTX(t *testing.T) {
 		// },
 		Outputs: []Output{
 			Output{
-				Address: decodeAddress("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc"),
+				Address: script,
 				Index:   0,
 				Value:   600,
 				UTXO: UTXO{
@@ -59,7 +64,7 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 			Output{
-				Address: decodeAddress("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM"),
+				Address: script2,
 				Index:   1,
 				Value:   7604510,
 				UTXO: UTXO{
@@ -72,7 +77,7 @@ func TestParseTX(t *testing.T) {
 		},
 	}
 
-	ignore := cmpopts.IgnoreUnexported(btcutil.AddressPubKeyHash{})
+	ignore := cmpopts.IgnoreUnexported()
 
 	if diff := cmp.Diff(itx, wantTX, ignore); diff != "" {
 		t.Fatalf("\t%s\tShould get the expected result. Diff:\n%s", "\u2717", diff)

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -15,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -147,7 +147,7 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 		initial = false
 		if err = node.connect(ctx); err != nil {
-			logger.Verbose(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
+			logger.Error(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -308,16 +308,17 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
+
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
 			untrusted.BroadcastTx(ctx, tx)
 		}
 	}
-	node.untrustedLock.Unlock()
 	return nil
 }
 
-// BroadcastTx broadcasts a tx to the network.
+// BroadcastTxUntrustedOnly broadcasts a tx to the network.
 func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	logger.Info(ctx, "Broadcasting tx : %s", tx.TxHash())
@@ -328,13 +329,14 @@ func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) 
 
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
+	defer node.untrustedLock.Unlock()
+
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
 			logger.Info(ctx, "(%s) Broadcasting tx : %s", untrusted.address, tx.TxHash())
 			untrusted.BroadcastTx(ctx, tx)
 		}
 	}
-	node.untrustedLock.Unlock()
 	return nil
 }
 
@@ -770,8 +772,8 @@ func (node *Node) check(ctx context.Context) error {
 			return err
 		}
 
-		if !node.queueOutgoing(headerRequest) {
-			logger.Debug(ctx, "Requesting headers")
+		if node.queueOutgoing(headerRequest) {
+			logger.Debug(ctx, "Requesting headers after : %s", headerRequest.BlockLocatorHashes[0])
 			node.state.MarkHeadersRequested()
 		}
 	}

@@ -68,7 +68,8 @@ func Remove(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 // List all pending transfer for a specified contract.
 func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) ([]*state.PendingTransfer, error) {
 
-	data, err := dbConn.List(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String(), storageSubKey))
+	// TODO: This should probably use dbConn.List for greater efficiency
+	data, err := dbConn.Search(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String(), storageSubKey))
 	if err != nil {
 		return nil, err
 	}

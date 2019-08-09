@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -31,19 +31,11 @@ var cmdSign = &cobra.Command{
 }
 
 func transferSign(c *cobra.Command, args []string) error {
-	var params *chaincfg.Params
 	network := network(c)
 	if len(network) == 0 {
 		return nil
 	}
-	if network == "testnet" {
-		params = &chaincfg.TestNet3Params
-	} else if network == "mainnet" {
-		params = &chaincfg.MainNetParams
-	} else {
-		fmt.Printf("Unknown network : %s\n", network)
-		return nil
-	}
+	params := bitcoin.NewChainParams(network)
 
 	// Create struct
 	opReturn := protocol.TypeMapping(protocol.CodeTransfer)

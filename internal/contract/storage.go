@@ -7,9 +7,9 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/pkg/errors"
 )
 
@@ -80,9 +80,9 @@ func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {
 	// Expand oracle public keys
-	data.FullOracles = make([]*btcec.PublicKey, 0, len(data.Oracles))
+	data.FullOracles = make([]bitcoin.PublicKey, 0, len(data.Oracles))
 	for _, key := range data.Oracles {
-		fullKey, err := btcec.ParsePubKey(key.PublicKey, btcec.S256())
+		fullKey, err := bitcoin.DecodePublicKeyBytes(key.PublicKey)
 		if err != nil {
 			return err
 		}

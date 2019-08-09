@@ -7,8 +7,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -60,7 +60,7 @@ func createContract(t *testing.T) {
 	}
 
 	// Create funding tx
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
 
 	// Build offer transaction
 	offerTx := wire.NewMsgTx(2)
@@ -71,7 +71,7 @@ func createContract(t *testing.T) {
 	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&offerInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
@@ -175,7 +175,7 @@ func createContract(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Verify data
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
@@ -223,7 +223,7 @@ func contractAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address)
 
 	amendmentData := protocol.ContractAmendment{
 		ContractRevision: 0,
@@ -243,7 +243,7 @@ func contractAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
@@ -275,7 +275,7 @@ func contractAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract name
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
@@ -313,7 +313,7 @@ func contractProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up vote result : %v", tests.Failed, err)
 	}
 
-	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000015, issuerKey.Address.ScriptAddress())
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000015, issuerKey.Address)
 
 	amendmentData := protocol.ContractAmendment{
 		ContractRevision: 0,
@@ -331,7 +331,7 @@ func contractProposalAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, txbuilder.P2PKHScriptForPKH(test.ContractKey.Address.ScriptAddress())))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
@@ -363,7 +363,7 @@ func contractProposalAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract type
-	contractPKH := protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
@@ -380,7 +380,7 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes())),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -396,8 +396,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 
 		CreatedAt:         protocol.CurrentTimestamp(),
 		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.MasterKey.Key.PublicKey().Bytes())),
 	}
 
 	// Define permissions for asset fields
@@ -424,7 +424,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(test.Contract2Key.Address.ScriptAddress()),
+		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes())),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -440,8 +440,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 
 		CreatedAt:         protocol.CurrentTimestamp(),
 		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.Master2Key.Address.ScriptAddress()),
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Master2Key.Key.PublicKey().Bytes())),
 	}
 
 	// Define permissions for asset fields
@@ -466,7 +466,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 
 func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string) error {
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(test.ContractKey.Address.ScriptAddress()),
+		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes())),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -482,9 +482,9 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 
 		CreatedAt:         protocol.CurrentTimestamp(),
 		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(issuerKey.Address.ScriptAddress()),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(test.MasterKey.Address.ScriptAddress()),
-		Oracles:           []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.PublicKey.SerializeCompressed()}},
+		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
+		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.MasterKey.Key.PublicKey().Bytes())),
+		Oracles:           []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
 	// Define permissions for asset fields

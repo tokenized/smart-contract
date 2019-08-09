@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -22,7 +22,7 @@ func TestGetQuantity(t *testing.T) {
 		name    string
 		message protocol.OpReturnMessage
 		tx      *Transaction
-		address btcutil.Address
+		address bitcoin.Address
 		want    Balance
 	}{
 		// {

@@ -2,46 +2,46 @@ package listeners
 
 import (
 	"context"
-	"crypto/sha256"
 	"sync"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
-	"golang.org/x/crypto/ripemd160"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 )
 
 type Server struct {
-	wallet           wallet.WalletInterface
-	Config           *node.Config
-	MasterDB         *db.DB
-	RpcNode          inspector.NodeInterface
-	SpyNode          *spynode.Node
-	Headers          node.BitcoinHeaders
-	Scheduler        *scheduler.Scheduler
-	Tracer           *Tracer
-	utxos            *utxos.UTXOs
-	lock             sync.Mutex
-	Handler          protomux.Handler
-	contractPKHs     [][]byte // Used to determine which txs will be needed again
-	walletLock       sync.RWMutex
-	pendingResponses []*wire.MsgTx
-	revertedTxs      []*chainhash.Hash
-	blockHeight      int // track current block height for confirm messages
-	inSync           bool
+	wallet            wallet.WalletInterface
+	Config            *node.Config
+	MasterDB          *db.DB
+	RpcNode           inspector.NodeInterface
+	SpyNode           *spynode.Node
+	Headers           node.BitcoinHeaders
+	Scheduler         *scheduler.Scheduler
+	Tracer            *filters.Tracer
+	utxos             *utxos.UTXOs
+	lock              sync.Mutex
+	Handler           protomux.Handler
+	contractAddresses []bitcoin.RawAddress // Used to determine which txs will be needed again
+	walletLock        sync.RWMutex
+	txFilter          *filters.TxFilter
+	pendingResponses  []*wire.MsgTx
+	revertedTxs       []*chainhash.Hash
+	blockHeight       int // track current block height for confirm messages
+	inSync            bool
 
 	pendingTxs  map[chainhash.Hash]*IncomingTxData
 	readyTxs    []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
@@ -49,6 +49,8 @@ type Server struct {
 
 	incomingTxs   IncomingTxChannel
 	processingTxs ProcessingTxChannel
+
+	holdingsChannel *holdings.CacheChannel
 
 	TxSentCount        int
 	AlternateResponder protomux.ResponderFunc
@@ -63,8 +65,10 @@ func NewServer(
 	spyNode *spynode.Node,
 	headers node.BitcoinHeaders,
 	sch *scheduler.Scheduler,
-	tracer *Tracer,
+	tracer *filters.Tracer,
 	utxos *utxos.UTXOs,
+	txFilter *filters.TxFilter,
+	holdingsChannel *holdings.CacheChannel,
 ) *Server {
 	result := Server{
 		wallet:           wallet,
@@ -77,19 +81,23 @@ func NewServer(
 		Tracer:           tracer,
 		Handler:          handler,
 		utxos:            utxos,
+		txFilter:         txFilter,
 		pendingTxs:       make(map[chainhash.Hash]*IncomingTxData),
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
+		holdingsChannel:  holdingsChannel,
 	}
 
-	result.incomingTxs.Open(100)
-	result.processingTxs.Open(100)
-
 	keys := wallet.ListAll()
-	result.contractPKHs = make([][]byte, 0, len(keys))
+	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
 	for _, key := range keys {
-		result.contractPKHs = append(result.contractPKHs, key.Address.ScriptAddress())
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
+			wire.BitcoinNet(config.ChainParams.Net))
+		if err != nil {
+			return nil
+		}
+		result.contractAddresses = append(result.contractAddresses, address)
 	}
 
 	return &result
@@ -99,6 +107,10 @@ func (server *Server) Run(ctx context.Context) error {
 	// Set responder
 	server.Handler.SetResponder(server.respondTx)
 	server.Handler.SetReprocessor(server.reprocessTx)
+
+	server.incomingTxs.Open(100)
+	server.processingTxs.Open(100)
+	server.holdingsChannel.Open(5000)
 
 	// Register listeners
 	if server.SpyNode != nil {
@@ -117,11 +129,12 @@ func (server *Server) Run(ctx context.Context) error {
 			defer wg.Done()
 			if err := server.SpyNode.Run(ctx); err != nil {
 				node.LogError(ctx, "Spynode failed : %s", err)
+				node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
+				server.Scheduler.Stop(ctx)
+				server.incomingTxs.Close()
+				server.processingTxs.Close()
+				server.holdingsChannel.Close()
 			}
-			node.LogVerbose(ctx, "Spynode thread stopping Scheduler")
-			server.Scheduler.Stop(ctx)
-			server.incomingTxs.Close()
-			server.processingTxs.Close()
 			node.LogVerbose(ctx, "Spynode finished")
 		}()
 	}
@@ -131,22 +144,17 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.Scheduler.Run(ctx); err != nil {
 			node.LogError(ctx, "Scheduler failed : %s", err)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
+			server.processingTxs.Close()
+			server.holdingsChannel.Close()
 		}
-		if server.SpyNode != nil {
-			node.LogVerbose(ctx, "Scheduler thread stopping Spynode")
-			server.SpyNode.Stop(ctx)
-		}
-		server.incomingTxs.Close()
-		server.processingTxs.Close()
 		node.LogVerbose(ctx, "Scheduler finished")
 	}()
 
-	rks := server.wallet.ListAll()
-	contractPKHs := make([]*protocol.PublicKeyHash, 0, len(rks))
-	for _, cpkh := range server.contractPKHs {
-		pkh := protocol.PublicKeyHashFromBytes(cpkh)
-		contractPKHs = append(contractPKHs, pkh)
-	}
 	for i := 0; i < server.Config.PreprocessThreads; i++ {
 		node.Log(ctx, "Starting pre-process thread %d", i)
 		// Start preprocess thread
@@ -155,6 +163,14 @@ func (server *Server) Run(ctx context.Context) error {
 			defer wg.Done()
 			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, server.Headers); err != nil {
 				node.LogError(ctx, "Pre-process failed : %s", err)
+				server.Scheduler.Stop(ctx)
+				if server.SpyNode != nil {
+					node.LogVerbose(ctx, "Process incoming thread stopping Spynode")
+					server.SpyNode.Stop(ctx)
+				}
+				server.incomingTxs.Close()
+				server.processingTxs.Close()
+				server.holdingsChannel.Close()
 			}
 			node.LogVerbose(ctx, "Pre-process thread finished")
 		}()
@@ -166,18 +182,37 @@ func (server *Server) Run(ctx context.Context) error {
 		defer wg.Done()
 		if err := server.ProcessTxs(ctx); err != nil {
 			node.LogError(ctx, "Process failed : %s", err)
+			server.Scheduler.Stop(ctx)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Process thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
 		}
 		node.LogVerbose(ctx, "Process thread finished")
+	}()
+
+	// Start holdings cache writer thread
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := holdings.ProcessCacheItems(ctx, server.MasterDB, server.holdingsChannel); err != nil {
+			node.LogError(ctx, "Process holdings cache failed : %s", err)
+			server.Scheduler.Stop(ctx)
+			if server.SpyNode != nil {
+				node.LogVerbose(ctx, "Process cache thread stopping Spynode")
+				server.SpyNode.Stop(ctx)
+			}
+			server.incomingTxs.Close()
+			server.processingTxs.Close()
+		}
+		node.LogVerbose(ctx, "Process holdings cache thread finished")
 	}()
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	if err := holdings.WriteCache(ctx, server.MasterDB); err != nil {
-		return err
-	}
-
-	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
 	}
 
@@ -192,6 +227,7 @@ func (server *Server) Stop(ctx context.Context) error {
 	schedulerErr := server.Scheduler.Stop(ctx)
 	server.incomingTxs.Close()
 	server.processingTxs.Close()
+	server.holdingsChannel.Close()
 
 	if spynodeErr != nil && schedulerErr != nil {
 		return errors.Wrap(errors.Wrap(spynodeErr, schedulerErr.Error()), "SpyNode and Scheduler failed")
@@ -270,13 +306,13 @@ func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) 
 	defer server.lock.Unlock()
 
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
+	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, &itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractPKHs)
+	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "LOST", itx)
 }
 
@@ -285,27 +321,65 @@ func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transactio
 }
 
 // AddContractKey adds a new contract key to those being monitored.
-func (server *Server) AddContractKey(ctx context.Context, k *btcec.PrivateKey) error {
+func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	pubkey := k.PubKey()
-	hash160 := ripemd160.New()
-	hash256 := sha256.Sum256(pubkey.SerializeCompressed())
-	hash160.Write(hash256[:])
-	address, err := btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &server.Config.ChainParams)
+	address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()), k.Network())
 	if err != nil {
 		return err
 	}
 	newKey := wallet.Key{
-		Address:    address,
-		PrivateKey: k,
-		PublicKey:  pubkey,
+		Address: address,
+		Key:     k,
 	}
+
+	node.Log(ctx, "Adding key : %x", bitcoin.Hash160(k.PublicKey().Bytes()))
 	server.wallet.Add(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err
 	}
-	server.contractPKHs = append(server.contractPKHs, address.ScriptAddress())
+	server.contractAddresses = append(server.contractAddresses, address)
+
+	server.txFilter.AddPubKey(ctx, k.PublicKey().Bytes())
+	return nil
+}
+
+// RemoveContractKeyIfUnused removes a contract key from those being monitored if it hasn't been used yet.
+func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.Key) error {
+	server.walletLock.Lock()
+	defer server.walletLock.Unlock()
+
+	pkh := bitcoin.Hash160(k.PublicKey().Bytes())
+	address, err := bitcoin.NewAddressPKH(pkh, k.Network())
+	if err != nil {
+		return err
+	}
+	newKey := wallet.Key{
+		Address: address,
+		Key:     k,
+	}
+
+	// Check if contract exists
+	contractPKH := protocol.PublicKeyHashFromBytes(pkh)
+	_, err = contract.Retrieve(ctx, server.MasterDB, contractPKH)
+	if err != contract.ErrNotFound {
+		return nil
+	}
+
+	node.Log(ctx, "Removing key : %s", contractPKH.String())
+	server.wallet.Remove(&newKey)
+	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
+		return err
+	}
+
+	for i, caddress := range server.contractAddresses {
+		if address.Equal(caddress) {
+			server.contractAddresses = append(server.contractAddresses[:i], server.contractAddresses[i+1:]...)
+			break
+		}
+	}
+
+	server.txFilter.RemovePubKey(ctx, k.PublicKey().Bytes())
 	return nil
 }

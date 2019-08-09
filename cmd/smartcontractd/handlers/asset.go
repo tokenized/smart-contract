@@ -12,21 +12,22 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
 type Asset struct {
-	MasterDB *db.DB
-	Config   *node.Config
+	MasterDB        *db.DB
+	Config          *node.Config
+	HoldingsChannel *holdings.CacheChannel
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
@@ -48,7 +49,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -75,8 +76,13 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Verify administration is sender of tx.
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), ct.AdministrationPKH.Bytes()) {
-		node.LogWarn(ctx, "Only administration can create assets: %x", itx.Inputs[0].Address.ScriptAddress())
+	addressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
+	if !ok || !bytes.Equal(addressPKH, ct.AdministrationPKH.Bytes()) {
+		if ok {
+			node.LogWarn(ctx, "Only administration can create assets: %x", addressPKH)
+		} else {
+			node.LogWarn(ctx, "Only administration can create assets")
+		}
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotAdministration)
 	}
 
@@ -132,8 +138,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	ac.AssetCode = *assetCode
 	ac.AssetIndex = uint64(len(ct.AssetCodes))
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -172,7 +178,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Asset
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -183,7 +189,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
 	}
 
-	requestorPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	requestorAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
+	if !ok {
+		node.LogVerbose(ctx, "Requestor is not PKH : %s", msg.AssetCode.String())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
+	}
+	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH)
 	if !contract.IsOperator(ctx, ct, requestorPKH) {
 		node.LogVerbose(ctx, "Requestor is not operator : %s", msg.AssetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
@@ -220,7 +231,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams, a.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -304,7 +315,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
 	}
 
-	var h state.Holding
+	var h *state.Holding
 	updateHoldings := false
 	if ac.TokenQty != as.TokenQty {
 		updateHoldings = true
@@ -318,7 +329,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
 
 		if ac.TokenQty < as.TokenQty {
-			if err := holdings.AddDebit(&h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
 				if err == holdings.ErrInsufficientHoldings {
 					return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
@@ -327,15 +338,15 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 				}
 			}
 		} else {
-			if err := holdings.AddDeposit(&h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to increase administration holdings : %s", v.TraceID, err)
 				return errors.Wrap(err, "Failed to increase holdings")
 			}
 		}
 	}
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &a.Config.ChainParams)
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -357,9 +368,11 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if updateHoldings {
-		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
+		a.HoldingsChannel.Add(cacheItem)
 	}
 
 	return nil
@@ -382,9 +395,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Locate Asset
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		return fmt.Errorf("Asset Creation not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
+	if !itx.Inputs[0].Address.Equal(rk.Address) {
+		return fmt.Errorf("Asset Creation not from contract : %x",
+			itx.Inputs[0].Address.Bytes())
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, contractPKH)
@@ -402,7 +416,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, &a.Config.ChainParams, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
@@ -419,7 +433,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, &a.Config.ChainParams, a.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve vote result tx")
 			}
@@ -466,11 +480,13 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
-		holdings.AddDeposit(&h, txid, msg.TokenQty, msg.Timestamp)
-		holdings.FinalizeTx(&h, txid, msg.Timestamp)
-		if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+		holdings.AddDeposit(h, txid, msg.TokenQty, msg.Timestamp)
+		holdings.FinalizeTx(h, txid, msg.Timestamp)
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
+		a.HoldingsChannel.Add(cacheItem)
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -514,7 +530,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 			node.Log(ctx, "Updating asset modification governance (%s) : %d", msg.AssetCode.String(), *ua.AssetModificationGovernance)
 		}
 
-		var h state.Holding
+		var h *state.Holding
 		updateHoldings := false
 		if as.TokenQty != msg.TokenQty {
 			ua.TokenQty = &msg.TokenQty
@@ -528,7 +544,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 
 			txid := protocol.TxIdFromBytes(itx.Hash[:])
 
-			holdings.FinalizeTx(&h, txid, msg.Timestamp)
+			holdings.FinalizeTx(h, txid, msg.Timestamp)
 			updateHoldings = true
 
 			if msg.TokenQty > as.TokenQty {
@@ -562,9 +578,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter, it
 		}
 
 		if updateHoldings {
-			if err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &h); err != nil {
+			cacheItem, err := holdings.Save(ctx, a.MasterDB, contractPKH, &msg.AssetCode, h)
+			if err != nil {
 				return errors.Wrap(err, "Failed to save holdings")
 			}
+			a.HoldingsChannel.Add(cacheItem)
 		}
 		if err := asset.Update(ctx, a.MasterDB, contractPKH, &msg.AssetCode, &ua, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to update asset : %s", msg.AssetCode.String())

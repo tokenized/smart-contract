@@ -3,28 +3,24 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ripemd160"
 )
 
 type Wallet struct {
-	Key           *btcec.PrivateKey
-	PublicKeyHash []byte
-	outputs       []Output
-	path          string
+	Key     bitcoin.Key
+	Address bitcoin.RawAddress
+	outputs []Output
+	path    string
 }
 
 type Output struct {
@@ -125,25 +121,19 @@ func (wallet *Wallet) RemoveUTXO(txId chainhash.Hash, index uint32, script []byt
 	return false
 }
 
-func (wallet *Wallet) Address(net *chaincfg.Params) (btcutil.Address, error) {
-	return btcutil.NewAddressPubKeyHash(wallet.PublicKeyHash, net)
-}
-
-func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net *chaincfg.Params) error {
-	wif, err := btcutil.DecodeWIF(wifKey)
-	if err != nil {
-		return errors.Wrap(err, "Failed to decode wallet key")
+func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.BitcoinNet) error {
+	// Private Key
+	var err error
+	wallet.Key, err = bitcoin.DecodeKeyString(wifKey)
+	if !bitcoin.DecodeNetMatches(wallet.Key.Network(), net) {
+		return errors.New("Incorrect network encoding")
 	}
 
-	// Private Key
-	wallet.Key = wif.PrivKey
-
-	// Pub Key Hash
-	hash256 := sha256.New()
-	hash160 := ripemd160.New()
-	hash256.Write(wallet.Key.PubKey().SerializeCompressed())
-	hash160.Write(hash256.Sum(nil))
-	wallet.PublicKeyHash = hash160.Sum(nil)
+	// Pub Key Hash Address
+	wallet.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
+	if err != nil {
+		return err
+	}
 
 	// Load Outputs
 	wallet.path = path
@@ -171,11 +161,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net *chainc
 	logger.Info(ctx, "Loaded wallet with %d outputs, %d unspent, and balance of %.08f",
 		len(wallet.outputs), unspentCount, BitcoinsFromSatoshis(wallet.Balance()))
 
-	address, err := wallet.Address(net)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get wallet address")
-	}
-	logger.Info(ctx, "Wallet address : %s", address)
+	logger.Info(ctx, "Wallet address : %x", wallet.Address.Bytes())
 	return nil
 }
 

@@ -2,27 +2,25 @@ package tests
 
 import (
 	"context"
-	"crypto/sha256"
+	"fmt"
 	"math/rand"
 	"os"
 	"runtime/debug"
 	"testing"
 	"time"
 
-	"github.com/tokenized/smart-contract/internal/platform/config"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/utxos"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ripemd160"
 )
 
 // Success and failure markers.
@@ -32,25 +30,26 @@ const (
 )
 
 type Test struct {
-	Context      context.Context
-	Headers      *mockHeaders
-	RPCNode      *mockRpcNode
-	NodeConfig   node.Config
-	MasterKey    *wallet.Key
-	ContractKey  *wallet.Key
-	FeeKey       *wallet.Key
-	Master2Key   *wallet.Key
-	Contract2Key *wallet.Key
-	Fee2Key      *wallet.Key
-	UTXOs        *utxos.UTXOs
-	Wallet       *wallet.Wallet
-	MasterDB     *db.DB
-	Scheduler    *scheduler.Scheduler
-	schStarted   bool
-	path         string
+	Context         context.Context
+	Headers         *mockHeaders
+	RPCNode         *mockRpcNode
+	NodeConfig      node.Config
+	MasterKey       *wallet.Key
+	ContractKey     *wallet.Key
+	FeeKey          *wallet.Key
+	Master2Key      *wallet.Key
+	Contract2Key    *wallet.Key
+	Fee2Key         *wallet.Key
+	UTXOs           *utxos.UTXOs
+	Wallet          *wallet.Wallet
+	MasterDB        *db.DB
+	Scheduler       *scheduler.Scheduler
+	HoldingsChannel *holdings.CacheChannel
+	schStarted      bool
+	path            string
 }
 
-func New(logToStdOut bool) *Test {
+func New(logFileName string) *Test {
 
 	// Random value used by helpers
 	testHelperRand = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -59,8 +58,13 @@ func New(logToStdOut bool) *Test {
 	// Logging
 
 	var ctx context.Context
-	if logToStdOut {
-		ctx = node.ContextWithDevelopmentLogger(NewContext(), os.Stdout)
+	if len(logFileName) > 0 {
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open log file : %v\n", err)
+			return nil
+		}
+		ctx = node.ContextWithDevelopmentLogger(NewContext(), logFile)
 	} else {
 		ctx = node.ContextWithNoLogger(NewContext())
 	}
@@ -72,27 +76,32 @@ func New(logToStdOut bool) *Test {
 		ContractProviderID: "TokenizedTest",
 		Version:            "TestVersion",
 		DustLimit:          256,
-		ChainParams:        config.NewChainParams("mainnet"),
+		ChainParams:        bitcoin.NewChainParams("mainnet"),
 		FeeRate:            1.0,
 		RequestTimeout:     1000000000000,
 		IsTest:             true,
 	}
 
-	feeKey, err := GenerateKey(nodeConfig.ChainParams)
+	feeKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate fee key : %v", err)
+		fmt.Printf("main : Failed to generate fee key : %v\n", err)
 		return nil
 	}
 
-	fee2Key, err := GenerateKey(nodeConfig.ChainParams)
+	fee2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate fee 2 key : %v", err)
+		fmt.Printf("main : Failed to generate fee 2 key : %v\n", err)
 		return nil
 	}
 
-	nodeConfig.FeePKH = protocol.PublicKeyHashFromBytes(feeKey.Address.ScriptAddress())
+	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()),
+		wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	if err != nil {
+		fmt.Printf("main : Failed to create fee 2 address : %v\n", err)
+		return nil
+	}
 
-	rpcNode := newMockRpcNode(&nodeConfig.ChainParams)
+	rpcNode := newMockRpcNode(nodeConfig.ChainParams)
 
 	// ============================================================
 	// Database
@@ -103,7 +112,7 @@ func New(logToStdOut bool) *Test {
 		Root:   path,
 	})
 	if err != nil {
-		node.LogError(ctx, "main : Failed to create DB : %v", err)
+		fmt.Printf("main : Failed to create DB : %v\n", err)
 		return nil
 	}
 
@@ -112,42 +121,42 @@ func New(logToStdOut bool) *Test {
 
 	testUTXOs, err := utxos.Load(ctx, masterDB)
 	if err != nil {
-		node.LogError(ctx, "main : Failed to load UTXOs : %v", err)
+		fmt.Printf("main : Failed to load UTXOs : %v\n", err)
 		return nil
 	}
 
-	masterKey, err := GenerateKey(nodeConfig.ChainParams)
+	masterKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate master key : %v", err)
+		fmt.Printf("main : Failed to generate master key : %v\n", err)
 		return nil
 	}
 
-	contractKey, err := GenerateKey(nodeConfig.ChainParams)
+	contractKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate contract key : %v", err)
+		fmt.Printf("main : Failed to generate contract key : %v\n", err)
 		return nil
 	}
 
 	testWallet := wallet.New()
 	if err := testWallet.Add(contractKey); err != nil {
-		node.LogError(ctx, "main : Failed to add contract key to wallet : %v", err)
+		fmt.Printf("main : Failed to add contract key to wallet : %v\n", err)
 		return nil
 	}
 
-	master2Key, err := GenerateKey(nodeConfig.ChainParams)
+	master2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate master 2 key : %v", err)
+		fmt.Printf("main : Failed to generate master 2 key : %v\n", err)
 		return nil
 	}
 
-	contract2Key, err := GenerateKey(nodeConfig.ChainParams)
+	contract2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
 	if err != nil {
-		node.LogError(ctx, "main : Failed to generate contract 2 key : %v", err)
+		fmt.Printf("main : Failed to generate contract 2 key : %v\n", err)
 		return nil
 	}
 
 	if err := testWallet.Add(contract2Key); err != nil {
-		node.LogError(ctx, "main : Failed to add contract 2 key to wallet : %v", err)
+		fmt.Printf("main : Failed to add contract 2 key to wallet : %v\n", err)
 		return nil
 	}
 
@@ -158,7 +167,7 @@ func New(logToStdOut bool) *Test {
 
 	go func() {
 		if err := testScheduler.Run(ctx); err != nil {
-			node.LogError(ctx, "Scheduler failed : %s", err)
+			fmt.Printf("Scheduler failed : %s\n", err)
 		}
 		node.Log(ctx, "Scheduler finished")
 	}()
@@ -166,24 +175,27 @@ func New(logToStdOut bool) *Test {
 	// ============================================================
 	// Result
 
-	return &Test{
-		Context:      ctx,
-		Headers:      newMockHeaders(),
-		RPCNode:      rpcNode,
-		NodeConfig:   nodeConfig,
-		MasterKey:    masterKey,
-		ContractKey:  contractKey,
-		FeeKey:       feeKey,
-		Master2Key:   master2Key,
-		Contract2Key: contract2Key,
-		Fee2Key:      fee2Key,
-		Wallet:       testWallet,
-		MasterDB:     masterDB,
-		UTXOs:        testUTXOs,
-		Scheduler:    testScheduler,
-		schStarted:   true,
-		path:         path,
+	result := Test{
+		Context:         ctx,
+		Headers:         newMockHeaders(),
+		RPCNode:         rpcNode,
+		NodeConfig:      nodeConfig,
+		MasterKey:       masterKey,
+		ContractKey:     contractKey,
+		FeeKey:          feeKey,
+		Master2Key:      master2Key,
+		Contract2Key:    contract2Key,
+		Fee2Key:         fee2Key,
+		Wallet:          testWallet,
+		MasterDB:        masterDB,
+		UTXOs:           testUTXOs,
+		Scheduler:       testScheduler,
+		schStarted:      true,
+		path:            path,
+		HoldingsChannel: &holdings.CacheChannel{},
 	}
+
+	return &result
 }
 
 // Reset is used to reset the test state complete.
@@ -218,22 +230,18 @@ func NewContext() context.Context {
 	return context.WithValue(context.Background(), node.KeyValues, &values)
 }
 
-// GenerateKey does something
-func GenerateKey(chainParams chaincfg.Params) (*wallet.Key, error) {
-	key, err := btcec.NewPrivateKey(btcec.S256())
+// GenerateKey generates a new wallet key.
+func GenerateKey(net wire.BitcoinNet) (*wallet.Key, error) {
+	key, err := bitcoin.GenerateKeyS256(net)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")
 	}
 
 	result := wallet.Key{
-		PrivateKey: key,
-		PublicKey:  key.PubKey(),
+		Key: key,
 	}
 
-	hash256 := sha256.Sum256(result.PublicKey.SerializeCompressed())
-	hash160 := ripemd160.New()
-	hash160.Write(hash256[:])
-	result.Address, err = btcutil.NewAddressPubKeyHash(hash160.Sum(nil), &chainParams)
+	result.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), net)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create key address")
 	}

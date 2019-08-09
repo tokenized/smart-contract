@@ -2,19 +2,20 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
-	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -47,8 +48,9 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New(false)
+	test = tests.New("")
 	if test == nil {
+		fmt.Printf("Failed to create test environment\n")
 		return 1
 	}
 	defer test.TearDown()
@@ -61,7 +63,7 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// API
 
-	tracer := listeners.NewTracer()
+	tracer := filters.NewTracer()
 
 	var err error
 	a, err = handlers.API(
@@ -73,6 +75,7 @@ func testMain(m *testing.M) int {
 		test.Scheduler,
 		test.Headers,
 		test.UTXOs,
+		test.HoldingsChannel,
 	)
 
 	if err != nil {
@@ -85,27 +88,27 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// Keys
 
-	userKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	userKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	user2Key, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	user2Key, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	issuerKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	issuerKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	oracleKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	oracleKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	authorityKey, err = tests.GenerateKey(test.NodeConfig.ChainParams)
+	authorityKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
@@ -148,7 +151,7 @@ func responseType(tx *wire.MsgTx) string {
 }
 
 // checkResponse fails the test if the respons is not of the specified type
-func checkResponse(t testing.TB, responseCode string) {
+func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	ctx := test.Context
 
 	responseLock.Lock()
@@ -203,6 +206,7 @@ func checkResponse(t testing.TB, responseCode string) {
 	responseLock.Unlock()
 
 	t.Logf("\t%s\tResponse processed : %s", tests.Success, responseCode)
+	return response
 }
 
 // checkResponses fails the test if all responses are not of the specified type

@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	SubSystem = "RPCNode" // For logger
+	// SubSystem is used by the logger package
+	SubSystem = "RPCNode"
 )
 
 type RPCNode struct {
@@ -225,8 +226,7 @@ func (r *RPCNode) ListUnspent(ctx context.Context, address btcutil.Address) ([]b
 }
 
 // SendRawTransaction broadcasts a raw transaction
-func (r *RPCNode) SendRawTransaction(ctx context.Context,
-	tx *wire.MsgTx) error {
+func (r *RPCNode) SendRawTransaction(ctx context.Context, tx *wire.MsgTx) error {
 
 	nx, err := r.txToBtcdTX(tx)
 	if err != nil {
@@ -251,8 +251,7 @@ func (r *RPCNode) SaveTX(ctx context.Context, msg *wire.MsgTx) error {
 }
 
 // SendTX sends a tx to the remote server to be broadcast to the P2P network.
-func (r *RPCNode) SendTX(ctx context.Context,
-	tx *wire.MsgTx) (*chainhash.Hash, error) {
+func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, error) {
 
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "SendTX")

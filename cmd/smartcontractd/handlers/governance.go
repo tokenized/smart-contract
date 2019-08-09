@@ -13,15 +13,15 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/internal/platform/wallet"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -52,7 +52,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -74,13 +74,18 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Verify first two outputs are to contract
-	if len(itx.Outputs) < 2 || !bytes.Equal(itx.Outputs[0].Address.ScriptAddress(), contractPKH.Bytes()) ||
-		!bytes.Equal(itx.Outputs[1].Address.ScriptAddress(), contractPKH.Bytes()) {
+	if len(itx.Outputs) < 2 || !itx.Outputs[0].Address.Equal(rk.Address) ||
+		!itx.Outputs[1].Address.Equal(rk.Address) {
 		node.LogWarn(ctx, "Proposal failed to fund vote and result txs")
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
 	}
 
-	senderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	senderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
+	if !ok {
+		node.LogWarn(ctx, "Sender not PKH")
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+	senderPKH := protocol.PublicKeyHashFromBytes(senderAddressPKH.PKH())
 
 	// Check if sender is allowed to make proposal
 	if msg.Initiator == 0 { // Administration Proposal
@@ -139,7 +144,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		if msg.Initiator > 0 && holdings.VotingBalance(as, &h,
+		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			node.LogWarn(ctx, "Requestor is not a holder : %s %s", msg.AssetCode.String(), senderPKH.String())
 			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
@@ -255,8 +260,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	// Build Response
 	vote := protocol.Vote{Timestamp: v.Now}
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &g.Config.ChainParams)
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -301,7 +306,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
@@ -313,12 +318,12 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Verify input is from contract
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
+	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return errors.New("Response not from contract")
 	}
 
 	// Retrieve Proposal
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return errors.New("Proposal not found for vote")
 	}
@@ -398,7 +403,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
 	if err != nil {
@@ -426,7 +431,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
 		node.LogWarn(ctx, "Proposal not found for vote : %s", contractPKH.String())
 		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
@@ -466,7 +471,12 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// TODO Handle transfers during vote time to ensure they don't vote the same tokens more than once.
 
-	holderPKH := protocol.PublicKeyHashFromBytes(itx.Inputs[0].Address.ScriptAddress())
+	holderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
+	if !ok {
+		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
 	quantity := uint64(0)
 
 	// Add applicable holdings
@@ -482,7 +492,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		quantity = holdings.VotingBalance(as, &h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		quantity = holdings.VotingBalance(as, h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	} else {
 		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, holderPKH,
 			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
@@ -508,8 +518,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	ballotCounted.Quantity = quantity
 	ballotCounted.Timestamp = v.Now
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &g.Config.ChainParams)
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -545,9 +555,9 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.New("Ballot counted response invalid")
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		return fmt.Errorf("Ballot counted not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
+	if !itx.Inputs[0].Address.Equal(rk.Address) {
+		return fmt.Errorf("Ballot counted not from contract : %x", itx.Inputs[0].Address.Bytes())
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
@@ -559,7 +569,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
 	}
 
-	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, &g.Config.ChainParams, g.Config.IsTest)
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Ballot cast not found for ballot counted msg : %s", contractPKH.String())
 	}
@@ -574,7 +584,12 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
 
-	holderPKH := protocol.PublicKeyHashFromBytes(castTx.Inputs[0].Address.ScriptAddress())
+	holderAddressPKH, ok := castTx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
+	if !ok {
+		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
+		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	}
+	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
 
 	ballot := state.Ballot{
 		PKH:       *holderPKH,
@@ -605,7 +620,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	node.LogVerbose(ctx, "Finalizing vote : %s", itx.Hash.String())
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 
 	// Retrieve contract
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
@@ -626,7 +641,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	// Get Proposal
 	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, &g.Config.ChainParams, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Proposal not found for vote : %s", contractPKH.String())
 	}
@@ -652,8 +667,8 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to calculate vote results")
 	}
 
-	// Convert to btcutil.Address
-	contractAddress, err := btcutil.NewAddressPubKeyHash(contractPKH.Bytes(), &g.Config.ChainParams)
+	// Convert to bitcoin.RawAddress
+	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
 	if err != nil {
 		return err
 	}
@@ -692,9 +707,9 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Result reponse invalid")
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(rk.Address.ScriptAddress())
-	if !bytes.Equal(itx.Inputs[0].Address.ScriptAddress(), contractPKH.Bytes()) {
-		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.ScriptAddress())
+	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
+	if !itx.Inputs[0].Address.Equal(rk.Address) {
+		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.Bytes())
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -250,7 +250,11 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 			continue
 		}
 
-		contractOutputPKH := protocol.PublicKeyHashFromBytes(itx.Outputs[assetTransfer.ContractIndex].Address.ScriptAddress())
+		addressPKH, ok := bitcoin.PKH(itx.Outputs[assetTransfer.ContractIndex].Address)
+		if !ok {
+			continue
+		}
+		contractOutputPKH := protocol.PublicKeyHashFromBytes(addressPKH)
 		if contractOutputPKH == nil {
 			continue // Invalid contract index
 		}
@@ -292,7 +296,7 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 	}
 
 	// Parse signature
-	oracleSig, err := btcec.ParseSignature(assetReceiver.OracleConfirmationSig, btcec.S256())
+	oracleSig, err := bitcoin.DecodeSignatureBytes(assetReceiver.OracleConfirmationSig)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
