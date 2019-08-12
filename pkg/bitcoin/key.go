@@ -30,6 +30,9 @@ type Key interface {
 	// Bytes returns non-network specific type followed by the key data.
 	Bytes() []byte
 
+	// Number returns the numeric value of the key.
+	Number() []byte
+
 	// PublicKey returns the public key.
 	PublicKey() PublicKey
 
@@ -116,6 +119,7 @@ func (k *KeyS256) String() string {
 	return encodeAddress(b)
 }
 
+// Numbers returns the 32 byte values representing the 256 bit big-endian integer of the x and y coordinates.
 // Network returns the network id for the key.
 func (k *KeyS256) Network() wire.BitcoinNet {
 	return k.net

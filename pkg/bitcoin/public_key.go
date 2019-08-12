@@ -10,6 +10,9 @@ type PublicKey interface {
 
 	// Bytes returns the serialized compressed public key.
 	Bytes() []byte
+
+	// Numbers returns the numeric values of the x and y coordinates.
+	Numbers() ([]byte, []byte)
 }
 
 // DecodePublicKeyString converts key text to a key.
@@ -55,4 +58,9 @@ func (k *PublicKeyS256) String() string {
 // Bytes returns serialized compressed key data.
 func (k *PublicKeyS256) Bytes() []byte {
 	return k.key.SerializeCompressed()
+}
+
+// Numbers returns the 32 byte values representing the 256 bit big-endian integer of the x and y coordinates.
+func (k *PublicKeyS256) Numbers() ([]byte, []byte) {
+	return k.key.X.Bytes(), k.key.Y.Bytes()
 }
