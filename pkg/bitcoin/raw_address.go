@@ -3,6 +3,8 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 )
 
 const (
@@ -150,6 +152,8 @@ func (a *RawAddressPKH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.pkh, o.pkh)
 	case *AddressPKH:
 		return bytes.Equal(a.pkh, o.pkh)
+	case *JSONRawAddress:
+		return a.Equal(o.RawAddress())
 	}
 	return false
 }
@@ -194,6 +198,8 @@ func (a *RawAddressSH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.sh, o.sh)
 	case *AddressSH:
 		return bytes.Equal(a.sh, o.sh)
+	case *JSONRawAddress:
+		return a.Equal(o.RawAddress())
 	}
 	return false
 }
@@ -279,6 +285,8 @@ func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
 			}
 		}
 		return true
+	case *JSONRawAddress:
+		return a.Equal(o.RawAddress())
 	}
 
 	return false
@@ -336,6 +344,8 @@ func (a *RawAddressRPH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.rph, o.rph)
 	case *AddressRPH:
 		return bytes.Equal(a.rph, o.rph)
+	case *JSONRawAddress:
+		return a.Equal(o.RawAddress())
 	}
 	return false
 }
@@ -348,4 +358,66 @@ func (a *RawAddressRPH) Serialize(buf *bytes.Buffer) error {
 		return err
 	}
 	return nil
+}
+
+// JSONRawAddress is a form of RawAddress that can be marshalled and unmarshalled to/from JSON.
+// RawAddress can't because it is only an interface.
+type JSONRawAddress struct {
+	ra RawAddress
+}
+
+func NewJSONRawAddress(ra RawAddress) *JSONRawAddress {
+	return &JSONRawAddress{ra}
+}
+
+func (a *JSONRawAddress) RawAddress() RawAddress {
+	return a.ra
+}
+
+// Bytes returns the non-network specific type followed by the address data.
+func (a *JSONRawAddress) Bytes() []byte {
+	return a.ra.Bytes()
+}
+
+// LockingScript returns the bitcoin output(locking) script for paying to the address.
+func (a *JSONRawAddress) LockingScript() []byte {
+	return a.ra.LockingScript()
+}
+
+// Equal returns true if the address parameter has the same value.
+func (a *JSONRawAddress) Equal(other RawAddress) bool {
+	return a.ra.Equal(other)
+}
+
+// Serialize writes the address into a buffer.
+func (a *JSONRawAddress) Serialize(buf *bytes.Buffer) error {
+	return a.ra.Serialize(buf)
+}
+
+// MarshalJSON converts to json.
+func (a *JSONRawAddress) MarshalJSON() ([]byte, error) {
+	if a.ra == nil {
+		return []byte("\"\""), nil
+	}
+	return []byte(fmt.Sprintf("\"%x\"", a.ra.Bytes())), nil
+}
+
+// UnmarshalJSON converts from json.
+func (a *JSONRawAddress) UnmarshalJSON(data []byte) error {
+	if len(data) < 2 {
+		return fmt.Errorf("Too short for RawAddress hex data : %d", len(data))
+	}
+
+	if len(data) == 2 {
+		a.ra = nil // empty
+		return nil
+	}
+
+	raw := make([]byte, (len(data)-2)/2)
+	_, err := hex.Decode(raw, data[1:len(data)-1])
+	if err != nil {
+		return err
+	}
+	a.ra, err = DecodeRawAddress(raw)
+	return err
 }

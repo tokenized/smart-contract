@@ -60,7 +60,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
-	contract.Address = contractAddress
+	contract.Address = bitcoin.NewJSONRawAddress(contractAddress)
 	contract.Revision = 0
 	contract.CreatedAt = now
 	contract.UpdatedAt = now
@@ -213,9 +213,9 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	}
 
 	newContract := *c
-	newContract.Address = newContractAddress
+	newContract.Address = bitcoin.NewJSONRawAddress(newContractAddress)
 
-	c.MovedTo = newContractAddress
+	c.MovedTo = bitcoin.NewJSONRawAddress(newContractAddress)
 
 	if err = Save(ctx, dbConn, c); err != nil {
 		return err

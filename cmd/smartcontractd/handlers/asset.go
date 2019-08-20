@@ -74,14 +74,16 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExpired)
 	}
 
-	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, asset.FieldCount, len(ct.VotingSystems)); err != nil {
+	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, asset.FieldCount,
+		len(ct.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid asset auth flags : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
 	// Verify administration is sender of tx.
 	if !itx.Inputs[0].Address.Equal(ct.AdministrationAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+			wire.BitcoinNet(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotAdministration)
 	}

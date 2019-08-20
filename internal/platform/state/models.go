@@ -8,17 +8,17 @@ import (
 
 // Contract represents a Smart Contract.
 type Contract struct {
-	Address      bitcoin.RawAddress `json:"Address,omitempty"`
-	Revision     uint32             `json:"Revision,omitempty"`
-	CreatedAt    protocol.Timestamp `json:"CreatedAt,omitempty"`
-	UpdatedAt    protocol.Timestamp `json:"UpdatedAt,omitempty"`
-	Timestamp    protocol.Timestamp `json:"Timestamp,omitempty"`
-	FreezePeriod protocol.Timestamp `json:"FreezePeriod,omitempty"`
+	Address      *bitcoin.JSONRawAddress `json:"Address,omitempty"`
+	Revision     uint32                  `json:"Revision,omitempty"`
+	CreatedAt    protocol.Timestamp      `json:"CreatedAt,omitempty"`
+	UpdatedAt    protocol.Timestamp      `json:"UpdatedAt,omitempty"`
+	Timestamp    protocol.Timestamp      `json:"Timestamp,omitempty"`
+	FreezePeriod protocol.Timestamp      `json:"FreezePeriod,omitempty"`
 
-	AdministrationAddress bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
-	OperatorAddress       bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
-	MasterAddress         bitcoin.RawAddress `json:"MasterAddress,omitempty"`
-	MovedTo               bitcoin.RawAddress `json:"MovedTo,omitempty"`
+	AdministrationAddress *bitcoin.JSONRawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       *bitcoin.JSONRawAddress `json:"OperatorAddress,omitempty"`
+	MasterAddress         *bitcoin.JSONRawAddress `json:"MasterAddress,omitempty"`
+	MovedTo               *bitcoin.JSONRawAddress `json:"MovedTo,omitempty"`
 
 	ContractName           string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType    uint32                       `json:"BodyOfAgreementType,omitempty"`
@@ -69,7 +69,7 @@ type Asset struct {
 }
 
 type Holding struct {
-	Address bitcoin.RawAddress `json:"Address,omitempty"`
+	Address *bitcoin.JSONRawAddress `json:"Address,omitempty"`
 	// Balance after all pending changes have been finalized
 	PendingBalance uint64 `json:"PendingBalance,omitempty"`
 	// Balance without pending changes
@@ -119,10 +119,10 @@ type Vote struct {
 }
 
 type Ballot struct {
-	Address   bitcoin.RawAddress `json:"Address,omitempty"`
-	Vote      string             `json:"Vote,omitempty"`
-	Quantity  uint64             `json:"Quantity,omitempty"`
-	Timestamp protocol.Timestamp `json:"Timestamp,omitempty"`
+	Address   *bitcoin.JSONRawAddress `json:"Address,omitempty"`
+	Vote      string                  `json:"Vote,omitempty"`
+	Quantity  uint64                  `json:"Quantity,omitempty"`
+	Timestamp protocol.Timestamp      `json:"Timestamp,omitempty"`
 }
 
 // PendingTransfer defines the information required to monitor pending multi-contract transfers.

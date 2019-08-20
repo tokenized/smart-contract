@@ -130,6 +130,8 @@ func NewAddressFromRawAddress(st RawAddress, net wire.BitcoinNet) Address {
 		return t
 	case *AddressRPH:
 		return t
+	case *JSONRawAddress:
+		return NewAddressFromRawAddress(t.RawAddress(), net)
 	}
 
 	return nil
@@ -143,6 +145,8 @@ func PKH(st RawAddress) ([]byte, bool) {
 		return a.PKH(), true
 	case *AddressPKH:
 		return a.PKH(), true
+	case *JSONRawAddress:
+		return PKH(a.RawAddress())
 	}
 
 	return nil, false
@@ -156,6 +160,8 @@ func SH(st RawAddress) ([]byte, bool) {
 		return a.SH(), true
 	case *AddressSH:
 		return a.SH(), true
+	case *JSONRawAddress:
+		return SH(a.RawAddress())
 	}
 
 	return nil, false
@@ -169,6 +175,8 @@ func PKHs(st RawAddress) ([]byte, bool) {
 		return a.PKHs(), true
 	case *AddressMultiPKH:
 		return a.PKHs(), true
+	case *JSONRawAddress:
+		return PKHs(a.RawAddress())
 	}
 
 	return nil, false
@@ -182,6 +190,8 @@ func RPH(st RawAddress) ([]byte, bool) {
 		return a.RPH(), true
 	case *AddressRPH:
 		return a.RPH(), true
+	case *JSONRawAddress:
+		return RPH(a.RawAddress())
 	}
 
 	return nil, false

@@ -332,11 +332,11 @@ func deserializeHolding(buf *bytes.Reader) (*state.Holding, error) {
 		return &result, fmt.Errorf("Unknown version : %d", version)
 	}
 
-	var err error
-	result.Address, err = bitcoin.DeserializeRawAddress(buf)
+	ra, err := bitcoin.DeserializeRawAddress(buf)
 	if err != nil {
 		return &result, err
 	}
+	result.Address = bitcoin.NewJSONRawAddress(ra)
 
 	if err := binary.Read(buf, binary.LittleEndian, &result.PendingBalance); err != nil {
 		return &result, err

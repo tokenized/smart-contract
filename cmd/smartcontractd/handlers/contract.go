@@ -405,10 +405,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.AdministrationAddress = offerTx.Inputs[0].Address // First input of offer tx
+		nc.AdministrationAddress = bitcoin.NewJSONRawAddress(offerTx.Inputs[0].Address) // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			nc.OperatorAddress = offerTx.Inputs[1].Address // Second input of offer tx
+			nc.OperatorAddress = bitcoin.NewJSONRawAddress(offerTx.Inputs[1].Address) // Second input of offer tx
 		}
+		fmt.Printf("New Contract Admin : %x\n", nc.AdministrationAddress.Bytes())
 
 		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err)
@@ -430,7 +431,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.AdministrationAddress = request.Inputs[1].Address
+			uc.AdministrationAddress = bitcoin.NewJSONRawAddress(request.Inputs[1].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
 				wire.BitcoinNet(w.Config.ChainParams.Net))
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
@@ -446,7 +447,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			uc.OperatorAddress = request.Inputs[index].Address
+			uc.OperatorAddress = bitcoin.NewJSONRawAddress(request.Inputs[index].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
 				wire.BitcoinNet(w.Config.ChainParams.Net))
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())

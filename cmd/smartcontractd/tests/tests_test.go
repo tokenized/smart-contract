@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New("")
+	test = tests.New("./test.log")
 	if test == nil {
 		fmt.Printf("Failed to create test environment\n")
 		return 1

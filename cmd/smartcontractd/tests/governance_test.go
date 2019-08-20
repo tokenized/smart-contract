@@ -451,7 +451,7 @@ func mockUpBallot(ctx context.Context, address bitcoin.RawAddress, quantity uint
 	}
 
 	vt.Ballots = append(vt.Ballots, &state.Ballot{
-		Address:   address,
+		Address:   bitcoin.NewJSONRawAddress(address),
 		Vote:      v,
 		Quantity:  quantity,
 		Timestamp: protocol.CurrentTimestamp(),

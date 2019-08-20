@@ -7,6 +7,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -71,7 +72,7 @@ func createContract(t *testing.T) {
 	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&offerInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, test.ContractKey.Address.LockingScript()))
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(1000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
@@ -129,7 +130,8 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to convert response to rejection", tests.Failed)
 	}
 	if reject.RejectionCode != actions.RejectMsgMalformed {
-		t.Fatalf("\t%s\tWrong reject code for contract offer reject", tests.Failed)
+		t.Fatalf("\t%s\tWrong reject code for contract offer reject : %d", tests.Failed,
+			reject.RejectionCode)
 	}
 
 	t.Logf("\t%s\tInvalid Contract offer rejection : (%d) %s", tests.Success, reject.RejectionCode,
@@ -378,7 +380,7 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             test.ContractKey.Address,
+		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -393,8 +395,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 		ContractFee:            1000,
 		CreatedAt:              protocol.CurrentTimestamp(),
 		UpdatedAt:              protocol.CurrentTimestamp(),
-		AdministrationAddress:  issuerKey.Address,
-		MasterAddress:          test.MasterKey.Address,
+		AdministrationAddress:  bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:          bitcoin.NewJSONRawAddress(test.MasterKey.Address),
 	}
 
 	// Define permissions for asset fields
@@ -421,7 +423,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             test.Contract2Key.Address,
+		Address:             bitcoin.NewJSONRawAddress(test.Contract2Key.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -437,8 +439,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: issuerKey.Address,
-		MasterAddress:         test.Master2Key.Address,
+		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewJSONRawAddress(test.Master2Key.Address),
 	}
 
 	// Define permissions for asset fields
@@ -464,7 +466,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType string,
 	issuerRole uint32, issuerName string) error {
 	var contractData = state.Contract{
-		Address:             test.ContractKey.Address,
+		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -480,8 +482,8 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: issuerKey.Address,
-		MasterAddress:         test.MasterKey.Address,
+		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewJSONRawAddress(test.MasterKey.Address),
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
