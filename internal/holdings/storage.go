@@ -33,7 +33,7 @@ type cacheUpdate struct {
 	lock     sync.Mutex
 }
 
-var cache map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate
+var cache map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate
 var cacheLock sync.Mutex
 
 // Save puts a single holding in cache. A CacheItem is returned and should be put in a CacheChannel
@@ -46,20 +46,28 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
 	}
-	contract, exists := cache[contractAddress]
-	if !exists {
-		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
-		cache[contractAddress] = contract
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
 	}
-	asset, exists := cache[contractAddress][*assetCode]
+	contract, exists := cache[*contractHash]
 	if !exists {
-		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
+		contract = make(map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+		cache[*contractHash] = contract
+	}
+	asset, exists := contract[*assetCode]
+	if !exists {
+		asset = make(map[bitcoin.Hash20]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
 
-	cu, exists := asset[h.Address]
+	addressHash, err := h.Address.Hash()
+	if err != nil {
+		return nil, err
+	}
+	cu, exists := asset[*addressHash]
 
 	if exists {
 		cu.lock.Lock()
@@ -67,10 +75,10 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 		cu.modified = true
 		cu.lock.Unlock()
 	} else {
-		asset[h.Address] = &cacheUpdate{h: h, modified: true}
+		asset[*addressHash] = &cacheUpdate{h: h, modified: true}
 	}
 
-	return NewCacheItem(contractAddress, assetCode, h.Address), nil
+	return NewCacheItem(contractHash, assetCode, addressHash), nil
 }
 
 // List provides a list of all holdings in storage for a specified asset.
@@ -96,19 +104,27 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
 	}
-	contract, exists := cache[contractAddress]
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+	contract, exists := cache[*contractHash]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
-		cache[contractAddress] = contract
+		contract = make(map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+		cache[*contractHash] = contract
 	}
 	asset, exists := contract[*assetCode]
 	if !exists {
-		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
+		asset = make(map[bitcoin.Hash20]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
-	cu, exists := asset[address]
+	addressHash, err := address.Hash()
+	if err != nil {
+		return nil, err
+	}
+	cu, exists := asset[*addressHash]
 	if exists {
 		// Copy so the object in cache will not be unintentionally modified (by reference)
 		// We don't want it to be modified unless Save is called.
@@ -117,7 +133,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return copyHolding(cu.h), nil
 	}
 
-	key := buildStoragePath(contractAddress, assetCode, address)
+	key := buildStoragePath(contractHash, assetCode, addressHash)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -134,7 +150,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return nil, errors.Wrap(err, "Failed to deserialize holding")
 	}
 
-	asset[address] = &cacheUpdate{h: readResult, modified: false}
+	asset[*addressHash] = &cacheUpdate{h: readResult, modified: false}
 
 	return readResult, nil
 }
@@ -156,7 +172,6 @@ func Reset(ctx context.Context) {
 }
 
 func WriteCache(ctx context.Context, dbConn *db.DB) error {
-
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
@@ -164,12 +179,12 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 		return nil
 	}
 
-	for contractAddress, assets := range cache {
+	for contractHash, assets := range cache {
 		for assetCode, assetHoldings := range assets {
-			for _, cu := range assetHoldings {
+			for addressHash, cu := range assetHoldings {
 				cu.lock.Lock()
 				if cu.modified {
-					if err := write(ctx, dbConn, contractAddress, &assetCode, cu.h); err != nil {
+					if err := write(ctx, dbConn, &contractHash, &assetCode, &addressHash, cu.h); err != nil {
 						cu.lock.Unlock()
 						return err
 					}
@@ -183,26 +198,26 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 }
 
 // Write updates storage for an item from the cache if it has been modified since the last write.
-func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, address bitcoin.RawAddress) error {
+func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
+	assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) error {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
 	}
-	contract, exists := cache[contractAddress]
+	contract, exists := cache[*contractHash]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
-		cache[contractAddress] = contract
+		contract = make(map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+		cache[*contractHash] = contract
 	}
 	asset, exists := contract[*assetCode]
 	if !exists {
-		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
+		asset = make(map[bitcoin.Hash20]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
-	cu, exists := asset[address]
+	cu, exists := asset[*addressHash]
 	if !exists {
 		return ErrNotInCache
 	}
@@ -214,7 +229,7 @@ func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractAddress bitcoi
 		return nil
 	}
 
-	if err := write(ctx, dbConn, contractAddress, assetCode, cu.h); err != nil {
+	if err := write(ctx, dbConn, contractHash, assetCode, addressHash, cu.h); err != nil {
 		return err
 	}
 
@@ -222,15 +237,15 @@ func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractAddress bitcoi
 	return nil
 }
 
-func write(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, h *state.Holding) error {
+func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
+	assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20, h *state.Holding) error {
 
 	data, err := serializeHolding(h)
 	if err != nil {
 		return errors.Wrap(err, "Failed to serialize holding")
 	}
 
-	if err := dbConn.Put(ctx, buildStoragePath(contractAddress, assetCode, h.Address), data); err != nil {
+	if err := dbConn.Put(ctx, buildStoragePath(contractHash, assetCode, addressHash), data); err != nil {
 		return err
 	}
 
@@ -238,11 +253,9 @@ func write(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode,
-	address bitcoin.RawAddress) string {
-
-	return fmt.Sprintf("%s/%x/%s/%s/%x", storageKey, contractAddress.Bytes(), storageSubKey,
-		assetCode.String(), address.Bytes())
+func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) string {
+	return fmt.Sprintf("%s/%x/%s/%s/%x", storageKey, contractHash, storageSubKey,
+		assetCode.String(), addressHash)
 }
 
 func serializeHolding(h *state.Holding) ([]byte, error) {

@@ -14,38 +14,47 @@ import (
 
 const storageKey = "contracts"
 
-var cache map[bitcoin.RawAddress]*state.Contract
+var cache map[bitcoin.Hash20]*state.Contract
 
 // Put a single contract in storage
 func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
+	contractHash, err := contract.Address.Hash()
+	if err != nil {
+		return err
+	}
+
 	b, err := json.Marshal(contract)
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal contract")
 	}
 
-	key := buildStoragePath(contract.Address)
+	key := buildStoragePath(contractHash)
 
 	if err := dbConn.Put(ctx, key, b); err != nil {
 		return err
 	}
 
 	if cache == nil {
-		cache = make(map[bitcoin.RawAddress]*state.Contract)
+		cache = make(map[bitcoin.Hash20]*state.Contract)
 	}
-	cache[contract.Address] = contract
+	cache[*contractHash] = contract
 	return nil
 }
 
 // Fetch a single contract from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
 	if cache != nil {
-		result, exists := cache[contractAddress]
+		result, exists := cache[*contractHash]
 		if exists {
 			return result, nil
 		}
 	}
 
-	key := buildStoragePath(contractAddress)
+	key := buildStoragePath(contractHash)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -73,8 +82,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractAddress bitcoin.RawAddress) string {
-	return fmt.Sprintf("%s/%x/contract", storageKey, contractAddress.Bytes())
+func buildStoragePath(contractHash *bitcoin.Hash20) string {
+	return fmt.Sprintf("%s/%x/contract", storageKey, contractHash)
 }
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {

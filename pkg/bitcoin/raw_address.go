@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 )
 
@@ -32,6 +33,9 @@ type RawAddress interface {
 
 	// Serialize writes the address into a buffer.
 	Serialize(*bytes.Buffer) error
+
+	// Hash returns the hash corresponding to the address.
+	Hash() (*Hash20, error)
 }
 
 // DecodeRawAddress decodes a binary bitcoin script template. It returns the script
@@ -168,6 +172,11 @@ func (a *RawAddressPKH) Serialize(buf *bytes.Buffer) error {
 	return nil
 }
 
+// Hash returns the hash corresponding to the address.
+func (a *RawAddressPKH) Hash() (*Hash20, error) {
+	return NewHash20(a.pkh)
+}
+
 /******************************************* SH ***************************************************/
 type RawAddressSH struct {
 	sh []byte
@@ -212,6 +221,11 @@ func (a *RawAddressSH) Serialize(buf *bytes.Buffer) error {
 		return err
 	}
 	return nil
+}
+
+// Hash returns the hash corresponding to the address.
+func (a *RawAddressSH) Hash() (*Hash20, error) {
+	return NewHash20(a.sh)
 }
 
 /**************************************** MultiPKH ************************************************/
@@ -314,6 +328,11 @@ func (a *RawAddressMultiPKH) Serialize(buf *bytes.Buffer) error {
 	return nil
 }
 
+// Hash returns the hash corresponding to the address.
+func (a *RawAddressMultiPKH) Hash() (*Hash20, error) {
+	return NewHash20(Hash160(a.Bytes()))
+}
+
 /***************************************** RPH ************************************************/
 type RawAddressRPH struct {
 	rph []byte
@@ -360,6 +379,11 @@ func (a *RawAddressRPH) Serialize(buf *bytes.Buffer) error {
 	return nil
 }
 
+// Hash returns the hash corresponding to the address.
+func (a *RawAddressRPH) Hash() (*Hash20, error) {
+	return NewHash20(a.rph)
+}
+
 // JSONRawAddress is a form of RawAddress that can be marshalled and unmarshalled to/from JSON.
 // RawAddress can't because it is only an interface.
 type JSONRawAddress struct {
@@ -392,6 +416,14 @@ func (a *JSONRawAddress) Equal(other RawAddress) bool {
 // Serialize writes the address into a buffer.
 func (a *JSONRawAddress) Serialize(buf *bytes.Buffer) error {
 	return a.ra.Serialize(buf)
+}
+
+// Hash returns the hash corresponding to the address.
+func (a *JSONRawAddress) Hash() (*Hash20, error) {
+	if a.ra == nil {
+		return nil, errors.New("Empty JSON Raw Address")
+	}
+	return a.ra.Hash()
 }
 
 // MarshalJSON converts to json.

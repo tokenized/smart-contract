@@ -12,25 +12,25 @@ import (
 
 // CacheItem is a reference to an item in the cache that needs to be written to storage.
 type CacheItem struct {
-	contract bitcoin.RawAddress
+	contractHash *bitcoin.Hash20
 	asset    *protocol.AssetCode
-	address  bitcoin.RawAddress
+	addressHash  *bitcoin.Hash20
 }
 
 // NewCacheItem creates a new CacheItem.
-func NewCacheItem(contract bitcoin.RawAddress, asset *protocol.AssetCode,
-	address bitcoin.RawAddress) *CacheItem {
+func NewCacheItem(contractHash *bitcoin.Hash20, asset *protocol.AssetCode,
+	addressHash *bitcoin.Hash20) *CacheItem {
 	result := CacheItem{
-		contract: contract,
+		contractHash: contractHash,
 		asset:    asset,
-		address:  address,
+		addressHash:  addressHash,
 	}
 	return &result
 }
 
 // Write writes a cache item to storage.
 func (ci *CacheItem) Write(ctx context.Context, dbConn *db.DB) error {
-	return WriteCacheUpdate(ctx, dbConn, ci.contract, ci.asset, ci.address)
+	return WriteCacheUpdate(ctx, dbConn, ci.contractHash, ci.asset, ci.addressHash)
 }
 
 // CacheChannel is a channel of items in cache waiting to be written to storage.

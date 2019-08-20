@@ -42,7 +42,7 @@ type Contract struct {
 
 	AssetCodes []*protocol.AssetCode `json:"AssetCodes,omitempty"`
 
-	FullOracles []bitcoin.PublicKey
+	FullOracles []bitcoin.PublicKey `json:"_,omitempty"`
 }
 
 type Asset struct {
