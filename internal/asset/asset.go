@@ -6,6 +6,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -22,12 +24,14 @@ var (
 )
 
 // Retrieve gets the specified asset from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode) (*state.Asset, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode) (*state.Asset, error) {
+
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Retrieve")
 	defer span.End()
 
 	// Find asset in storage
-	a, err := Fetch(ctx, dbConn, contractPKH, assetCode)
+	a, err := Fetch(ctx, dbConn, contractAddress, assetCode)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +40,9 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKe
 }
 
 // Create the asset
-func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
+
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Create")
 	defer span.End()
 
@@ -49,7 +55,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		return err
 	}
 
-	a.ID = *assetCode
+	a.Code = assetCode
 	a.Revision = 0
 	a.CreatedAt = now
 	a.UpdatedAt = now
@@ -67,17 +73,17 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		a.AssetPayload = []byte{}
 	}
 
-	return Save(ctx, dbConn, contractPKH, &a)
+	return Save(ctx, dbConn, contractAddress, &a)
 }
 
 // Update the asset
-func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
 	// Find asset
-	a, err := Fetch(ctx, dbConn, contractPKH, assetCode)
+	a, err := Fetch(ctx, dbConn, contractAddress, assetCode)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -126,12 +132,12 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 
 	a.UpdatedAt = now
 
-	return Save(ctx, dbConn, contractPKH, a)
+	return Save(ctx, dbConn, contractAddress, a)
 }
 
 // ValidateVoting returns an error if voting is not allowed.
-func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint8,
-	votingSystem *protocol.VotingSystem) error {
+func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint32,
+	votingSystem *actions.VotingSystemField) error {
 
 	switch initiatorType {
 	case 0: // Administration

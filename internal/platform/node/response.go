@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -46,8 +47,8 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 //   receivers based on the transfer request data. We will need to analyze the transfer request
 //   data to determine which inputs were to have funded sending bitcoins, and return the bitcoins
 //   to them.
-func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, code uint8) error {
-	rejectionCode := protocol.GetRejectionCode(code)
+func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, code uint32) error {
+	rejectionCode := actions.RejectionData(code)
 	if rejectionCode == nil {
 		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
 		return ErrNoResponse
@@ -56,10 +57,10 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	v := ctx.Value(KeyValues).(*Values)
 
 	// Build rejection
-	rejection := protocol.Rejection{
+	rejection := actions.Rejection{
 		RejectionCode: code,
 		Message:       rejectionCode.Label,
-		Timestamp:     v.Now,
+		Timestamp:     v.Now.Nano(),
 	}
 
 	// Contract address
@@ -113,14 +114,14 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 				output.Value = w.Config.DustLimit
 			}
 			rejectTx.AddPaymentOutput(output.Address, output.Value, output.Change)
-			rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(i))
+			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(i))
 			if w.RejectAddress != nil && output.Address.Equal(w.RejectAddress) {
 				rejectAddressFound = true
-				rejection.RejectAddressIndex = uint16(i)
+				rejection.RejectAddressIndex = uint32(i)
 			}
 		}
 		if !rejectAddressFound && w.RejectAddress != nil {
-			rejection.AddressIndexes = append(rejection.AddressIndexes, uint16(len(rejectTx.Outputs)))
+			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(len(rejectTx.Outputs)))
 			rejectTx.AddDustOutput(w.RejectAddress, false)
 		}
 	} else {
@@ -154,7 +155,8 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 }
 
 // RespondSuccess broadcasts a successful message
-func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, msg protocol.OpReturnMessage) error {
+func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction,
+	wk *wallet.Key, msg actions.Action) error {
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
@@ -176,7 +178,8 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Add specified inputs
 	for _, utxo := range utxos {
-		respondTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
+		respondTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript,
+			uint64(utxo.Value))
 	}
 
 	// Add specified outputs
@@ -201,7 +204,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
-			return RespondReject(ctx, w, itx, wk, protocol.RejectInsufficientTxFeeFunding)
+			return RespondReject(ctx, w, itx, wk, actions.RejectInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse

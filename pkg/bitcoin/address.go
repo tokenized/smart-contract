@@ -122,6 +122,14 @@ func NewAddressFromRawAddress(st RawAddress, net wire.BitcoinNet) Address {
 		return &AddressMultiPKH{t, net}
 	case *RawAddressRPH:
 		return &AddressRPH{t, net}
+	case *AddressPKH:
+		return t
+	case *AddressSH:
+		return t
+	case *AddressMultiPKH:
+		return t
+	case *AddressRPH:
+		return t
 	}
 
 	return nil

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -32,33 +33,33 @@ type cacheUpdate struct {
 	lock     sync.Mutex
 }
 
-var cache map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate
+var cache map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate
 var cacheLock sync.Mutex
 
 // Save puts a single holding in cache. A CacheItem is returned and should be put in a CacheChannel
 //   to be written to storage asynchronously, or be synchronously written to storage by immediately
 //   calling Write.
-func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, h *state.Holding) (*CacheItem, error) {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
+		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
 	}
-	contract, exists := cache[*contractPKH]
+	contract, exists := cache[contractAddress]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
-		cache[*contractPKH] = contract
+		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache[contractAddress] = contract
 	}
-	asset, exists := cache[*contractPKH][*assetCode]
+	asset, exists := cache[contractAddress][*assetCode]
 	if !exists {
-		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
-		cache[*contractPKH][*assetCode] = asset
+		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
+		contract[*assetCode] = asset
 	}
 
-	cu, exists := asset[h.PKH]
+	cu, exists := asset[h.Address]
 
 	if exists {
 		cu.lock.Lock()
@@ -66,21 +67,21 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 		cu.modified = true
 		cu.lock.Unlock()
 	} else {
-		asset[h.PKH] = &cacheUpdate{h: h, modified: true}
+		asset[h.Address] = &cacheUpdate{h: h, modified: true}
 	}
 
-	return NewCacheItem(contractPKH, assetCode, &h.PKH), nil
+	return NewCacheItem(contractAddress, assetCode, h.Address), nil
 }
 
 // List provides a list of all holdings in storage for a specified asset.
 func List(ctx context.Context,
 	dbConn *db.DB,
-	contractPKH *protocol.PublicKeyHash,
+	contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode) ([]string, error) {
 
-	path := fmt.Sprintf("%s/%s/%s/%s",
+	path := fmt.Sprintf("%s/%x/%s/%s",
 		storageKey,
-		contractPKH.String(),
+		contractAddress.Bytes(),
 		storageSubKey,
 		assetCode.String())
 
@@ -88,26 +89,26 @@ func List(ctx context.Context,
 }
 
 // Fetch fetches a single holding from storage and places it in the cache.
-func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) (*state.Holding, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode, address bitcoin.RawAddress) (*state.Holding, error) {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
+		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
 	}
-	contract, exists := cache[*contractPKH]
+	contract, exists := cache[contractAddress]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
-		cache[*contractPKH] = contract
+		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache[contractAddress] = contract
 	}
 	asset, exists := contract[*assetCode]
 	if !exists {
-		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
+		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
-	cu, exists := asset[*pkh]
+	cu, exists := asset[address]
 	if exists {
 		// Copy so the object in cache will not be unintentionally modified (by reference)
 		// We don't want it to be modified unless Save is called.
@@ -116,7 +117,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return copyHolding(cu.h), nil
 	}
 
-	key := buildStoragePath(contractPKH, assetCode, pkh)
+	key := buildStoragePath(contractAddress, assetCode, address)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -128,12 +129,12 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	}
 
 	// Prepare the asset object
-	readResult, err := deserializeHolding(bytes.NewBuffer(b))
+	readResult, err := deserializeHolding(bytes.NewReader(b))
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to deserialize holding")
 	}
 
-	asset[*pkh] = &cacheUpdate{h: readResult, modified: false}
+	asset[address] = &cacheUpdate{h: readResult, modified: false}
 
 	return readResult, nil
 }
@@ -163,12 +164,12 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 		return nil
 	}
 
-	for contractPKH, assets := range cache {
+	for contractAddress, assets := range cache {
 		for assetCode, assetHoldings := range assets {
 			for _, cu := range assetHoldings {
 				cu.lock.Lock()
 				if cu.modified {
-					if err := write(ctx, dbConn, &contractPKH, &assetCode, cu.h); err != nil {
+					if err := write(ctx, dbConn, contractAddress, &assetCode, cu.h); err != nil {
 						cu.lock.Unlock()
 						return err
 					}
@@ -182,26 +183,26 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 }
 
 // Write updates storage for an item from the cache if it has been modified since the last write.
-func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash) error {
+func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode, address bitcoin.RawAddress) error {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
+		cache = make(map[bitcoin.RawAddress]map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
 	}
-	contract, exists := cache[*contractPKH]
+	contract, exists := cache[contractAddress]
 	if !exists {
-		contract = make(map[protocol.AssetCode]map[protocol.PublicKeyHash]*cacheUpdate)
-		cache[*contractPKH] = contract
+		contract = make(map[protocol.AssetCode]map[bitcoin.RawAddress]*cacheUpdate)
+		cache[contractAddress] = contract
 	}
 	asset, exists := contract[*assetCode]
 	if !exists {
-		asset = make(map[protocol.PublicKeyHash]*cacheUpdate)
+		asset = make(map[bitcoin.RawAddress]*cacheUpdate)
 		contract[*assetCode] = asset
 	}
-	cu, exists := asset[*pkh]
+	cu, exists := asset[address]
 	if !exists {
 		return ErrNotInCache
 	}
@@ -213,7 +214,7 @@ func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractPKH *protocol.
 		return nil
 	}
 
-	if err := write(ctx, dbConn, contractPKH, assetCode, cu.h); err != nil {
+	if err := write(ctx, dbConn, contractAddress, assetCode, cu.h); err != nil {
 		return err
 	}
 
@@ -221,7 +222,7 @@ func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractPKH *protocol.
 	return nil
 }
 
-func write(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func write(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, h *state.Holding) error {
 
 	data, err := serializeHolding(h)
@@ -229,7 +230,7 @@ func write(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		return errors.Wrap(err, "Failed to serialize holding")
 	}
 
-	if err := dbConn.Put(ctx, buildStoragePath(contractPKH, assetCode, &h.PKH), data); err != nil {
+	if err := dbConn.Put(ctx, buildStoragePath(contractAddress, assetCode, h.Address), data); err != nil {
 		return err
 	}
 
@@ -237,11 +238,11 @@ func write(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode,
-	pkh *protocol.PublicKeyHash) string {
+func buildStoragePath(contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode,
+	address bitcoin.RawAddress) string {
 
-	return fmt.Sprintf("%s/%s/%s/%s/%s", storageKey, contractPKH.String(), storageSubKey,
-		assetCode.String(), pkh.String())
+	return fmt.Sprintf("%s/%x/%s/%s/%x", storageKey, contractAddress.Bytes(), storageSubKey,
+		assetCode.String(), address.Bytes())
 }
 
 func serializeHolding(h *state.Holding) ([]byte, error) {
@@ -252,11 +253,7 @@ func serializeHolding(h *state.Holding) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := h.PKH.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = buf.Write(data); err != nil {
+	if err := h.Address.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
@@ -266,18 +263,11 @@ func serializeHolding(h *state.Holding) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, h.FinalizedBalance); err != nil {
 		return nil, err
 	}
-	data, err = h.CreatedAt.Serialize()
-	if err != nil {
+
+	if err := h.CreatedAt.Serialize(&buf); err != nil {
 		return nil, err
 	}
-	if _, err := buf.Write(data); err != nil {
-		return nil, err
-	}
-	data, err = h.UpdatedAt.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := h.UpdatedAt.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
@@ -299,22 +289,14 @@ func serializeHoldingStatus(buf *bytes.Buffer, hs *state.HoldingStatus) error {
 		return err
 	}
 
-	data, err := hs.Expires.Serialize()
-	if err != nil {
-		return err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := hs.Expires.Serialize(buf); err != nil {
 		return err
 	}
 	if err := binary.Write(buf, binary.LittleEndian, hs.Amount); err != nil {
 		return err
 	}
 
-	data, err = hs.TxId.Serialize()
-	if err != nil {
-		return err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := hs.TxId.Serialize(buf); err != nil {
 		return err
 	}
 
@@ -338,7 +320,7 @@ func serializeString(buf *bytes.Buffer, v []byte) error {
 	return nil
 }
 
-func deserializeHolding(buf *bytes.Buffer) (*state.Holding, error) {
+func deserializeHolding(buf *bytes.Reader) (*state.Holding, error) {
 	var result state.Holding
 
 	// Version
@@ -350,7 +332,9 @@ func deserializeHolding(buf *bytes.Buffer) (*state.Holding, error) {
 		return &result, fmt.Errorf("Unknown version : %d", version)
 	}
 
-	if err := result.PKH.Write(buf); err != nil {
+	var err error
+	result.Address, err = bitcoin.DeserializeRawAddress(buf)
+	if err != nil {
 		return &result, err
 	}
 
@@ -360,10 +344,12 @@ func deserializeHolding(buf *bytes.Buffer) (*state.Holding, error) {
 	if err := binary.Read(buf, binary.LittleEndian, &result.FinalizedBalance); err != nil {
 		return &result, err
 	}
-	if err := result.CreatedAt.Write(buf); err != nil {
+	result.CreatedAt, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return &result, err
 	}
-	if err := result.UpdatedAt.Write(buf); err != nil {
+	result.UpdatedAt, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return &result, err
 	}
 
@@ -377,24 +363,27 @@ func deserializeHolding(buf *bytes.Buffer) (*state.Holding, error) {
 		if err := deserializeHoldingStatus(buf, &hs); err != nil {
 			return &result, err
 		}
-		result.HoldingStatuses[hs.TxId] = &hs
+		result.HoldingStatuses[*hs.TxId] = &hs
 	}
 
 	return &result, nil
 }
 
-func deserializeHoldingStatus(buf *bytes.Buffer, hs *state.HoldingStatus) error {
+func deserializeHoldingStatus(buf *bytes.Reader, hs *state.HoldingStatus) error {
 	if err := binary.Read(buf, binary.LittleEndian, &hs.Code); err != nil {
 		return err
 	}
 
-	if err := hs.Expires.Write(buf); err != nil {
+	var err error
+	hs.Expires, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return err
 	}
 	if err := binary.Read(buf, binary.LittleEndian, &hs.Amount); err != nil {
 		return err
 	}
-	if err := hs.TxId.Write(buf); err != nil {
+	hs.TxId, err = protocol.DeserializeTxId(buf)
+	if err != nil {
 		return err
 	}
 	if err := binary.Read(buf, binary.LittleEndian, &hs.SettleQuantity); err != nil {
@@ -407,7 +396,7 @@ func deserializeHoldingStatus(buf *bytes.Buffer, hs *state.HoldingStatus) error 
 	return nil
 }
 
-func deserializeString(buf *bytes.Buffer) ([]byte, error) {
+func deserializeString(buf *bytes.Reader) ([]byte, error) {
 	var length uint32
 	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
 		return nil, err

@@ -17,7 +17,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
@@ -361,13 +360,13 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 	}
 
 	// Check if contract exists
-	contractPKH := protocol.PublicKeyHashFromBytes(pkh)
-	_, err = contract.Retrieve(ctx, server.MasterDB, contractPKH)
+	_, err = contract.Retrieve(ctx, server.MasterDB, address)
 	if err != contract.ErrNotFound {
 		return nil
 	}
 
-	node.Log(ctx, "Removing key : %s", contractPKH.String())
+	stringAddress := bitcoin.NewAddressFromRawAddress(address, wire.BitcoinNet(server.Config.ChainParams.Net))
+	node.Log(ctx, "Removing key : %s", stringAddress.String())
 	server.wallet.Remove(&newKey)
 	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
 		return err

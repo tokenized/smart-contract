@@ -8,14 +8,13 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 )
 
 const storageKey = "contracts"
 
-var cache map[protocol.PublicKeyHash]*state.Contract
+var cache map[bitcoin.RawAddress]*state.Contract
 
 // Put a single contract in storage
 func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
@@ -24,29 +23,29 @@ func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
 		return errors.Wrap(err, "Failed to marshal contract")
 	}
 
-	key := buildStoragePath(&contract.ID)
+	key := buildStoragePath(contract.Address)
 
 	if err := dbConn.Put(ctx, key, b); err != nil {
 		return err
 	}
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]*state.Contract)
+		cache = make(map[bitcoin.RawAddress]*state.Contract)
 	}
-	cache[contract.ID] = contract
+	cache[contract.Address] = contract
 	return nil
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
 	if cache != nil {
-		result, exists := cache[*contractPKH]
+		result, exists := cache[contractAddress]
 		if exists {
 			return result, nil
 		}
 	}
 
-	key := buildStoragePath(contractPKH)
+	key := buildStoragePath(contractAddress)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -74,8 +73,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
-	return fmt.Sprintf("%s/%s/contract", storageKey, contractPKH.String())
+func buildStoragePath(contractAddress bitcoin.RawAddress) string {
+	return fmt.Sprintf("%s/%x/contract", storageKey, contractAddress.Bytes())
 }
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {

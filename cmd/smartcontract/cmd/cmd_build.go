@@ -17,6 +17,8 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -53,8 +55,8 @@ func buildAction(c *cobra.Command, args []string) error {
 	actionType := strings.ToUpper(args[0])
 
 	// Create struct
-	opReturn := protocol.TypeMapping(actionType)
-	if opReturn == nil {
+	action := actions.NewActionFromCode(actionType)
+	if action == nil {
 		fmt.Printf("Unsupported action type : %s\n", actionType)
 		return nil
 	}
@@ -68,20 +70,20 @@ func buildAction(c *cobra.Command, args []string) error {
 	}
 
 	// Put json data into opReturn struct
-	if err := json.Unmarshal(data, opReturn); err != nil {
+	if err := json.Unmarshal(data, action); err != nil {
 		fmt.Printf("Failed to unmarshal %s json file : %s\n", actionType, err)
 		return nil
 	}
 
 	// validate the message
-	if err := opReturn.Validate(); err != nil {
+	if err := action.Validate(); err != nil {
 		fmt.Printf("Error: %v\n", err)
-		fmt.Printf("Message : %+v\n", opReturn)
+		fmt.Printf("Message : %+v\n", action)
 
 		return nil
 	}
 
-	script, err := protocol.Serialize(opReturn, true)
+	script, err := protocol.Serialize(action, true)
 	if err != nil {
 		fmt.Printf("Failed to serialize %s op return : %s\n", actionType, err)
 		return nil
@@ -102,7 +104,8 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
+			theClient.Config.FeeRate)
 
 		// Add output to contract
 		contractOutputIndex := uint32(0)
@@ -214,7 +217,7 @@ func buildAction(c *cobra.Command, args []string) error {
 	} else if b64Format {
 		fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(script))
 	} else {
-		data, err = json.MarshalIndent(opReturn, "", "  ")
+		data, err = json.MarshalIndent(action, "", "  ")
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s", actionType))
 		}
@@ -223,35 +226,35 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	switch actionType {
 	case "A1":
-		assetDef, ok := opReturn.(*protocol.AssetDefinition)
+		assetDef, ok := action.(*actions.AssetDefinition)
 		if !ok {
 			fmt.Printf("Failed to convert to asset definition")
 			return nil
 		}
 
-		if err := assetDef.Validate(); err != nil {
+		if err := action.Validate(); err != nil {
 			fmt.Printf("Invalid asset definition : %s\n", err)
 			return nil
 		}
 
-		payload := protocol.AssetTypeMapping(assetDef.AssetType)
-		if payload == nil {
-			fmt.Printf("Invalid asset type : %s\n", assetDef.AssetType)
+		asset, err := assets.Deserialize([]byte(assetDef.AssetType), assetDef.AssetPayload)
+		if err != nil {
+			fmt.Printf("Failed to parse asset payload : %s\n", err)
 			return nil
 		}
 
-		_, err := payload.Write(assetDef.AssetPayload)
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetDef.AssetType))
+		if err := asset.Validate(); err != nil {
+			fmt.Printf("Invalid asset payload : %s\n", err)
+			return nil
 		}
 
 		fmt.Printf("Payload : %s\n", assetDef.AssetType)
 		if hexFormat {
-			fmt.Printf("%x\n", payload)
+			fmt.Printf("%x\n", asset)
 		} else if b64Format {
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetDef.AssetPayload))
 		} else {
-			data, err = json.MarshalIndent(payload, "", "  ")
+			data, err = json.MarshalIndent(asset, "", "  ")
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetDef.AssetType))
 			}
@@ -259,35 +262,35 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 	case "A2":
-		assetCreation, ok := opReturn.(*protocol.AssetCreation)
+		assetCreation, ok := action.(*actions.AssetCreation)
 		if !ok {
 			fmt.Printf("Failed to convert to asset creation")
 			return nil
 		}
 
-		if err := assetCreation.Validate(); err != nil {
+		if err := action.Validate(); err != nil {
 			fmt.Printf("Invalid asset creation : %s\n", err)
 			return nil
 		}
 
-		payload := protocol.AssetTypeMapping(assetCreation.AssetType)
-		if payload == nil {
-			fmt.Printf("Invalid asset type : %s\n", assetCreation.AssetType)
+		asset, err := assets.Deserialize([]byte(assetCreation.AssetType), assetCreation.AssetPayload)
+		if err != nil {
+			fmt.Printf("Failed to parse asset payload : %s\n", err)
 			return nil
 		}
 
-		_, err := payload.Write(assetCreation.AssetPayload)
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetCreation.AssetType))
+		if err := asset.Validate(); err != nil {
+			fmt.Printf("Invalid asset payload : %s\n", err)
+			return nil
 		}
 
 		fmt.Printf("Payload : %s\n", assetCreation.AssetType)
 		if hexFormat {
-			fmt.Printf("%x\n", payload)
+			fmt.Printf("%x\n", asset)
 		} else if b64Format {
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetCreation.AssetPayload))
 		} else {
-			data, err = json.MarshalIndent(payload, "", "  ")
+			data, err = json.MarshalIndent(asset, "", "  ")
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetCreation.AssetType))
 			}
@@ -302,7 +305,7 @@ func buildAssetPayload(c *cobra.Command, args []string) error {
 	assetType := strings.ToUpper(args[0])
 
 	// Create struct
-	payload := protocol.AssetTypeMapping(assetType)
+	payload := assets.NewAssetFromCode(assetType)
 	if payload == nil {
 		return fmt.Errorf("Unsupported asset type : %s", assetType)
 	}
@@ -319,7 +322,7 @@ func buildAssetPayload(c *cobra.Command, args []string) error {
 		return errors.Wrap(err, fmt.Sprintf("Failed to unmarshal %s json file", assetType))
 	}
 
-	data, err := payload.Serialize()
+	data, err := payload.Bytes()
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s asset payload", assetType))
 	}

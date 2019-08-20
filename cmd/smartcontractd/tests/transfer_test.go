@@ -19,6 +19,9 @@ import (
 	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -58,7 +61,8 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -74,21 +78,21 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 		// Create Transfer message
 		transferAmount := uint64(1)
-		transferData := protocol.Transfer{}
+		transferData := actions.Transfer{}
 
-		assetTransferData := protocol.AssetTransfer{
+		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode,
+			AssetCode:     testAssetCode.Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+			&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
 				Quantity: transferAmount})
 
-		transferData.Assets = append(transferData.Assets, assetTransferData)
+		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(2)
@@ -202,10 +206,9 @@ func simpleTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -221,7 +224,8 @@ func separateTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -255,21 +259,21 @@ func separateTransfersBenchmark(b *testing.B) {
 		receivers = append(receivers, receiverKey)
 
 		// Create Transfer message
-		transferData := protocol.Transfer{}
+		transferData := actions.Transfer{}
 
-		assetTransferData := protocol.AssetTransfer{
+		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode,
+			AssetCode:     testAssetCode.Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-			protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiverKey.Key.PublicKey().Bytes())),
+			&actions.AssetReceiverField{Address: receiverKey.Address.Bytes(),
 				Quantity: transferAmount})
 
-		transferData.Assets = append(transferData.Assets, assetTransferData)
+		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(2)
@@ -383,12 +387,10 @@ func separateTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-
 	for _, sender := range senders {
-		senderPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(sender.Key.PublicKey().Bytes()))
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, senderPKH, v.Now)
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+			sender.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get sender holding : %s", tests.Failed, err)
 		}
@@ -398,9 +400,9 @@ func separateTransfersBenchmark(b *testing.B) {
 	}
 
 	for _, receiver := range receivers {
-		receiverPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver.Key.PublicKey().Bytes()))
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, receiverPKH, v.Now)
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+			receiver.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get receiver holding : %s", tests.Failed, err)
 		}
@@ -416,7 +418,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
+	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+		"I", 1, "John Bitcoin")
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
@@ -436,25 +439,24 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 		// Create Transfer message
 		transferAmount := uint64(1)
-		transferData := protocol.Transfer{}
+		transferData := actions.Transfer{}
 
-		assetTransferData := protocol.AssetTransfer{
+		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode,
+			AssetCode:     testAssetCode.Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-			protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 		blockHeight := test.Headers.LastHeight(ctx) - 5
 		blockHash, err := test.Headers.Hash(ctx, blockHeight)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
-		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-			protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount, blockHash)
+		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
+			testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -463,16 +465,16 @@ func oracleTransfersBenchmark(b *testing.B) {
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 		}
-		receiver := protocol.AssetReceiver{
-			Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+		receiver := actions.AssetReceiverField{
+			Address:               userKey.Address.Bytes(),
 			Quantity:              transferAmount,
 			OracleSigAlgorithm:    1,
 			OracleConfirmationSig: oracleSig,
 			OracleSigBlockHeight:  uint32(blockHeight),
 		}
-		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
+		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 
-		transferData.Assets = append(transferData.Assets, assetTransferData)
+		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(2)
@@ -586,10 +588,9 @@ func oracleTransfersBenchmark(b *testing.B) {
 	b.StopTimer()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -618,7 +619,7 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 
 	// Create Transfer message
 	transferAmount := balance / 2
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
 	// Mock up holding because otherwise we must wait for settlement, which shouldn't count for benchmark
 	err = mockUpHolding(ctx, receiver1.Address, transferAmount)
@@ -630,26 +631,26 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 		b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transferAmount * 2})
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount * 2})
 
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{
-			Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver1.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{
+			Address:  receiver1.Address.Bytes(),
 			Quantity: transferAmount})
 
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{
-			Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(receiver2.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{
+			Address:  receiver2.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -712,7 +713,8 @@ func treeTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -828,10 +830,9 @@ func treeTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -846,7 +847,8 @@ func sendTokens(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -859,21 +861,21 @@ func sendTokens(t *testing.T) {
 
 	// Create Transfer message
 	transferAmount := uint64(250)
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -945,7 +947,7 @@ func sendTokens(t *testing.T) {
 	// Check the response
 	response := checkResponse(t, "T2")
 
-	var responseMsg protocol.OpReturnMessage
+	var responseMsg actions.Action
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
 		if err == nil {
@@ -956,7 +958,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tResponse doesn't contain tokenized op return", tests.Failed)
 	}
 
-	settlement, ok := responseMsg.(*protocol.Settlement)
+	settlement, ok := responseMsg.(*actions.Settlement)
 	if !ok {
 		t.Fatalf("\t%s\tResponse isn't a settlement", tests.Failed)
 	}
@@ -972,10 +974,9 @@ func sendTokens(t *testing.T) {
 	}
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -986,8 +987,8 @@ func sendTokens(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
-	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1051,7 +1052,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tResponse doesn't contain tokenized op return", tests.Failed)
 	}
 
-	settlement, ok = responseMsg.(*protocol.Settlement)
+	settlement, ok = responseMsg.(*actions.Settlement)
 	if !ok {
 		t.Fatalf("\t%s\tResponse isn't a settlement", tests.Failed)
 	}
@@ -1067,7 +1068,8 @@ func sendTokens(t *testing.T) {
 	}
 
 	// Check issuer and user balance
-	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1078,7 +1080,8 @@ func sendTokens(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userHolding, err = holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	userHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1096,7 +1099,8 @@ func multiExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -1110,7 +1114,8 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 	}
 
-	err = mockUpContract2(ctx, "Test Contract 2", "This is a mock contract and means nothing.", 'I', 1, "Karl Bitcoin", true, true, false, false, false)
+	err = mockUpContract2(ctx, "Test Contract 2", "This is a mock contract and means nothing.", "I",
+		1, "Karl Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -1128,39 +1133,39 @@ func multiExchange(t *testing.T) {
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
 
 	// Create Transfer message
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
 	// Transfer asset 1 from user1 to user2
 	transfer1Amount := uint64(50)
-	assetTransfer1Data := protocol.AssetTransfer{
+	assetTransfer1Data := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transfer1Amount})
+		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
 	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(user2Key.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transfer1Amount})
 
-	transferData.Assets = append(transferData.Assets, assetTransfer1Data)
+	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
 
 	// Transfer asset 2 from user2 to user1
 	transfer2Amount := uint64(150)
-	assetTransfer2Data := protocol.AssetTransfer{
+	assetTransfer2Data := actions.AssetTransferField{
 		ContractIndex: 1, // first output
 		AssetType:     testAsset2Type,
-		AssetCode:     testAsset2Code,
+		AssetCode:     testAsset2Code.Bytes(),
 	}
 
 	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
-		protocol.QuantityIndex{Index: 1, Quantity: transfer2Amount})
+		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
 	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transfer2Amount})
 
-	transferData.Assets = append(transferData.Assets, assetTransfer2Data)
+	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -1223,17 +1228,18 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Type() != "M1" {
+	if responseItx.MsgProto.Code() != "M1" {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	settlementRequestMessage, ok := responseItx.MsgProto.(*protocol.Message)
+	settlementRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
 
-	if settlementRequestMessage.MessageType != protocol.CodeSettlementRequest {
-		t.Fatalf("\t%s\tResponse itx is not Settlement Request : %d", tests.Failed, settlementRequestMessage.MessageType)
+	if settlementRequestMessage.MessageCode != messages.CodeSettlementRequest {
+		t.Fatalf("\t%s\tResponse itx is not Settlement Request : %d", tests.Failed,
+			settlementRequestMessage.MessageCode)
 	}
 
 	test.RPCNode.SaveTX(ctx, response)
@@ -1262,17 +1268,18 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Type() != "M1" {
+	if responseItx.MsgProto.Code() != "M1" {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	signatureRequestMessage, ok := responseItx.MsgProto.(*protocol.Message)
+	signatureRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
 
-	if signatureRequestMessage.MessageType != protocol.CodeSignatureRequest {
-		t.Fatalf("\t%s\tResponse itx is not Signature Request : %d", tests.Failed, signatureRequestMessage.MessageType)
+	if signatureRequestMessage.MessageCode != messages.CodeSignatureRequest {
+		t.Fatalf("\t%s\tResponse itx is not Signature Request : %d", tests.Failed,
+			signatureRequestMessage.MessageCode)
 	}
 
 	test.RPCNode.SaveTX(ctx, response)
@@ -1288,10 +1295,9 @@ func multiExchange(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	user1PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
-	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user1PKH, v.Now)
+	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1302,8 +1308,8 @@ func multiExchange(t *testing.T) {
 
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
-	user2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(user2Key.Key.PublicKey().Bytes()))
-	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, user2PKH, v.Now)
+	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1314,19 +1320,21 @@ func multiExchange(t *testing.T) {
 
 	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
-	contract2PKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes()))
-	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, contract2PKH, &testAsset2Code, user1PKH, v.Now)
+	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
+		&testAsset2Code, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
 
 	if user1Holding.FinalizedBalance != transfer2Amount {
-		t.Fatalf("\t%s\tUser 1 token 2 balance incorrect : %d != %d", tests.Failed, user1Holding.FinalizedBalance, transfer2Amount)
+		t.Fatalf("\t%s\tUser 1 token 2 balance incorrect : %d != %d", tests.Failed,
+			user1Holding.FinalizedBalance, transfer2Amount)
 	}
 
 	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
-	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, contract2PKH, &testAsset2Code, user2PKH, v.Now)
+	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
+		&testAsset2Code, user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1344,7 +1352,8 @@ func oracleTransfer(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
+	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+		"I", 1, "John Bitcoin")
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
@@ -1361,24 +1370,24 @@ func oracleTransfer(t *testing.T) {
 
 	// Create Transfer message
 	transferAmount := uint64(250)
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders, protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	blockHeight := test.Headers.LastHeight(ctx) - 5
 	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
-	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-		protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount, blockHash)
+	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
+		testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1387,16 +1396,16 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := protocol.AssetReceiver{
-		Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+	receiver := actions.AssetReceiverField{
+		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig,
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -1440,8 +1449,8 @@ func oracleTransfer(t *testing.T) {
 
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
-	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1452,8 +1461,8 @@ func oracleTransfer(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
-	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1471,7 +1480,8 @@ func oracleTransferBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin")
+	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+		"I", 1, "John Bitcoin")
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
@@ -1489,25 +1499,24 @@ func oracleTransferBad(t *testing.T) {
 
 	// Create Transfer message
 	transferAmount := uint64(250)
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	blockHeight := test.Headers.LastHeight(ctx) - 4
 	blockHash, err := test.Headers.Hash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
-	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, &testAssetCode,
-		protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())), transferAmount+1, blockHash)
+	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
+		testAssetCode.Bytes(), userKey.Address, transferAmount+1, blockHash)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1516,31 +1525,33 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := protocol.AssetReceiver{
-		Address:               *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+	receiver := actions.AssetReceiverField{
+		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig,
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, receiver)
+	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	bitcoinTransferAmount := uint64(50000)
-	bitcoinTransferData := protocol.AssetTransfer{
-		ContractIndex: uint16(0xffff),
-		AssetType:     protocol.CodeCurrency,
+	bitcoinTransferData := actions.AssetTransferField{
+		ContractIndex: uint32(0x0000ffff),
+		AssetType:     assets.CodeCurrency,
 	}
 
-	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders, protocol.QuantityIndex{Index: 1, Quantity: bitcoinTransferAmount})
+	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders,
+		&actions.QuantityIndexField{Index: 1, Quantity: bitcoinTransferAmount})
 
-	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers, protocol.AssetReceiver{
-		Address:  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
-		Quantity: bitcoinTransferAmount,
-	})
+	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers,
+		&actions.AssetReceiverField{
+			Address:  issuerKey.Address.Bytes(),
+			Quantity: bitcoinTransferAmount,
+		})
 
-	transferData.Assets = append(transferData.Assets, bitcoinTransferData)
+	transferData.Assets = append(transferData.Assets, &bitcoinTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -1619,7 +1630,8 @@ func permitted(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -1633,21 +1645,21 @@ func permitted(t *testing.T) {
 
 	// Create Transfer message
 	transferAmount := uint64(250)
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -1690,10 +1702,9 @@ func permitted(t *testing.T) {
 	checkResponse(t, "T2")
 
 	// Check issuer and user balance
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	issuerPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes()))
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, issuerPKH, v.Now)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1704,8 +1715,8 @@ func permitted(t *testing.T) {
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
-	userPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes()))
-	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCode, userPKH, v.Now)
+	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCode, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1723,7 +1734,8 @@ func permittedBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
@@ -1743,23 +1755,23 @@ func permittedBad(t *testing.T) {
 
 	// Create Transfer message
 	transferAmount := uint64(250)
-	transferData := protocol.Transfer{}
+	transferData := actions.Transfer{}
 
-	assetTransferData := protocol.AssetTransfer{
+	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode,
+		AssetCode:     testAssetCode.Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 0, Quantity: transferAmount})
+		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
-		protocol.QuantityIndex{Index: 1, Quantity: user2Holding})
+		&actions.QuantityIndexField{Index: 1, Quantity: user2Holding})
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		protocol.AssetReceiver{Address: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(userKey.Key.PublicKey().Bytes())),
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount + user2Holding})
 
-	transferData.Assets = append(transferData.Assets, assetTransferData)
+	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(2)
@@ -1818,12 +1830,12 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote reject itx : %v", tests.Failed, err)
 	}
 
-	reject, ok := rejectItx.MsgProto.(*protocol.Rejection)
+	reject, ok := rejectItx.MsgProto.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tFailed to convert reject data", tests.Failed)
 	}
 
-	if reject.RejectionCode != protocol.RejectAssetNotPermitted {
+	if reject.RejectionCode != actions.RejectAssetNotPermitted {
 		t.Fatalf("\t%s\tRejection code incorrect : %d", tests.Failed, reject.RejectionCode)
 	}
 

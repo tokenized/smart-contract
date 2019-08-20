@@ -27,6 +27,9 @@ type RawAddress interface {
 
 	// Equal returns true if the address parameter has the same value.
 	Equal(RawAddress) bool
+
+	// Serialize writes the address into a buffer.
+	Serialize(*bytes.Buffer) error
 }
 
 // DecodeRawAddress decodes a binary bitcoin script template. It returns the script
@@ -40,14 +43,19 @@ func DecodeRawAddress(b []byte) (RawAddress, error) {
 	case scriptTypeMultiPKH:
 		b = b[1:] // remove type
 		// Parse required count
-		buf := bytes.NewBuffer(b[:2])
+		buf := bytes.NewBuffer(b[:4])
 		var required uint16
 		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
 			return nil, err
 		}
-		b = b[2:] // remove required
-		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
-		for len(b) >= 0 {
+		// Parse hash count
+		var count uint16
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return nil, err
+		}
+		b = b[4:] // remove counts
+		pkhs := make([][]byte, 0, count)
+		for i := uint16(0); i < count; i++ {
 			if len(b) < scriptHashLength {
 				return nil, ErrBadScriptHashLength
 			}
@@ -57,6 +65,56 @@ func DecodeRawAddress(b []byte) (RawAddress, error) {
 		return NewRawAddressMultiPKH(required, pkhs)
 	case scriptTypeRPH:
 		return NewRawAddressRPH(b[1:])
+	}
+
+	return nil, ErrBadType
+}
+
+func DeserializeRawAddress(buf *bytes.Reader) (RawAddress, error) {
+	t, err := buf.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+
+	switch t {
+	case scriptTypePKH:
+		pkh := make([]byte, scriptHashLength)
+		if _, err := buf.Read(pkh); err != nil {
+			return nil, err
+		}
+		return NewRawAddressPKH(pkh)
+	case scriptTypeSH:
+		sh := make([]byte, scriptHashLength)
+		if _, err := buf.Read(sh); err != nil {
+			return nil, err
+		}
+		return NewRawAddressSH(sh)
+	case scriptTypeMultiPKH:
+		// Parse required count
+		var required uint16
+		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+			return nil, err
+		}
+		// Parse hash count
+		var count uint16
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return nil, err
+		}
+		pkhs := make([][]byte, 0, count)
+		for i := uint16(0); i < count; i++ {
+			pkh := make([]byte, scriptHashLength)
+			if _, err := buf.Read(pkh); err != nil {
+				return nil, err
+			}
+			pkhs = append(pkhs, pkh)
+		}
+		return NewRawAddressMultiPKH(required, pkhs)
+	case scriptTypeRPH:
+		rph := make([]byte, scriptHashLength)
+		if _, err := buf.Read(rph); err != nil {
+			return nil, err
+		}
+		return NewRawAddressRPH(rph)
 	}
 
 	return nil, ErrBadType
@@ -96,6 +154,16 @@ func (a *RawAddressPKH) Equal(other RawAddress) bool {
 	return false
 }
 
+func (a *RawAddressPKH) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(scriptTypePKH); err != nil {
+		return err
+	}
+	if _, err := buf.Write(a.pkh); err != nil {
+		return err
+	}
+	return nil
+}
+
 /******************************************* SH ***************************************************/
 type RawAddressSH struct {
 	sh []byte
@@ -130,6 +198,16 @@ func (a *RawAddressSH) Equal(other RawAddress) bool {
 	return false
 }
 
+func (a *RawAddressSH) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(scriptTypeSH); err != nil {
+		return err
+	}
+	if _, err := buf.Write(a.sh); err != nil {
+		return err
+	}
+	return nil
+}
+
 /**************************************** MultiPKH ************************************************/
 type RawAddressMultiPKH struct {
 	pkhs     [][]byte
@@ -155,13 +233,14 @@ func (a *RawAddressMultiPKH) PKHs() []byte {
 }
 
 func (a *RawAddressMultiPKH) Bytes() []byte {
-	b := make([]byte, 0, 3+(len(a.pkhs)*scriptHashLength))
+	b := make([]byte, 0, 5+(len(a.pkhs)*scriptHashLength))
 
 	b = append(b, byte(scriptTypeMultiPKH))
 
-	// Append required count
+	// Append required and hash counts
 	var numBuf bytes.Buffer
 	binary.Write(&numBuf, binary.LittleEndian, a.required)
+	binary.Write(&numBuf, binary.LittleEndian, uint16(len(a.pkhs)))
 	b = append(b, numBuf.Bytes()...)
 
 	// Append all pkhs
@@ -205,6 +284,28 @@ func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
 	return false
 }
 
+func (a *RawAddressMultiPKH) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(scriptTypeMultiPKH); err != nil {
+		return err
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, a.required); err != nil {
+		return err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, uint16(len(a.pkhs))); err != nil {
+		return err
+	}
+
+	// Write all pkhs
+	for _, pkh := range a.pkhs {
+		if _, err := buf.Write(pkh); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 /***************************************** RPH ************************************************/
 type RawAddressRPH struct {
 	rph []byte
@@ -237,4 +338,14 @@ func (a *RawAddressRPH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.rph, o.rph)
 	}
 	return false
+}
+
+func (a *RawAddressRPH) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(scriptTypeRPH); err != nil {
+		return err
+	}
+	if _, err := buf.Write(a.rph); err != nil {
+		return err
+	}
+	return nil
 }

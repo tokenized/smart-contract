@@ -1,36 +1,38 @@
 package contract
 
 import (
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // NewContract defines what we require when creating a Contract record.
 type NewContract struct {
-	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
+	Timestamp protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AdministrationPKH protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
-	OperatorPKH       protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
-	MasterPKH         protocol.PublicKeyHash `json:"master_pkh,omitempty"`
+	AdministrationAddress bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
+	MasterAddress         bitcoin.RawAddress `json:"MasterAddress,omitempty"`
 
-	ContractName           string                  `json:"contract_name,omitempty"`
-	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
-	BodyOfAgreement        []byte                  `json:"body_of_agreement,omitempty"`
-	ContractType           string                  `json:"contract_type,omitempty"`
-	SupportingDocs         []protocol.Document     `json:"supporting_docs,omitempty"`
-	GoverningLaw           string                  `json:"governing_law,omitempty"`
-	Jurisdiction           string                  `json:"jurisdiction,omitempty"`
-	ContractExpiration     protocol.Timestamp      `json:"contract_expiration,omitempty"`
-	ContractURI            string                  `json:"contract_uri,omitempty"`
-	Issuer                 protocol.Entity         `json:"issuer,omitempty"`
-	IssuerLogoURL          string                  `json:"issuer_logo_url,omitempty"`
-	ContractOperator       protocol.Entity         `json:"contract_operator,omitempty"`
-	ContractAuthFlags      []byte                  `json:"contract_auth_flags,omitempty"`
-	ContractFee            uint64                  `json:"contract_fee,omitempty"`
-	VotingSystems          []protocol.VotingSystem `json:"voting_systems,omitempty"`
-	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
-	AdministrationProposal bool                    `json:"administration_proposal,omitempty"`
-	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
-	Oracle                 []protocol.Oracle       `json:"oracle,omitempty"`
+	ContractName           string                       `json:"ContractName,omitempty"`
+	BodyOfAgreementType    uint32                       `json:"BodyOfAgreementType,omitempty"`
+	BodyOfAgreement        []byte                       `json:"BodyOfAgreement,omitempty"`
+	ContractType           string                       `json:"ContractType,omitempty"`
+	SupportingDocs         []*actions.DocumentField     `json:"SupportingDocs,omitempty"`
+	GoverningLaw           string                       `json:"GoverningLaw,omitempty"`
+	Jurisdiction           string                       `json:"Jurisdiction,omitempty"`
+	ContractExpiration     protocol.Timestamp           `json:"ContractExpiration,omitempty"`
+	ContractURI            string                       `json:"ContractURI,omitempty"`
+	Issuer                 actions.EntityField          `json:"Issuer,omitempty"`
+	IssuerLogoURL          string                       `json:"IssuerLogoURL,omitempty"`
+	ContractOperator       actions.EntityField          `json:"ContractOperator,omitempty"`
+	ContractAuthFlags      []byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractFee            uint64                       `json:"ContractFee,omitempty"`
+	VotingSystems          []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
+	RestrictedQtyAssets    uint64                       `json:"RestrictedQtyAssets,omitempty"`
+	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
+	HolderProposal         bool                         `json:"HolderProposal,omitempty"`
+	Oracle                 []*actions.OracleField       `json:"Oracle,omitempty"`
 }
 
 // UpdateContract defines what information may be provided to modify an existing
@@ -40,31 +42,31 @@ type NewContract struct {
 // we do not want to use pointers to basic types but we make exceptions around
 // marshalling/unmarshalling.
 type UpdateContract struct {
-	Revision  *uint32             `json:"revision,omitempty"`
-	Timestamp *protocol.Timestamp `json:"timestamp,omitempty"`
+	Revision  *uint32             `json:"Revision,omitempty"`
+	Timestamp *protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AdministrationPKH *protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
-	OperatorPKH       *protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
+	AdministrationAddress bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
 
-	ContractName           *string                  `json:"contract_name,omitempty"`
-	BodyOfAgreementType    *uint8                   `json:"body_of_agreement_type,omitempty"`
-	BodyOfAgreement        *[]byte                  `json:"body_of_agreement,omitempty"`
-	ContractType           *string                  `json:"contract_type,omitempty"`
-	SupportingDocs         *[]protocol.Document     `json:"supporting_docs,omitempty"`
-	GoverningLaw           *string                  `json:"governing_law,omitempty"`
-	Jurisdiction           *string                  `json:"jurisdiction,omitempty"`
-	ContractExpiration     *protocol.Timestamp      `json:"contract_expiration,omitempty"`
-	ContractURI            *string                  `json:"contract_uri,omitempty"`
-	Issuer                 *protocol.Entity         `json:"issuer,omitempty"`
-	IssuerLogoURL          *string                  `json:"issuer_logo_url,omitempty"`
-	ContractOperator       *protocol.Entity         `json:"contract_operator,omitempty"`
-	ContractAuthFlags      *[]byte                  `json:"contract_auth_flags,omitempty"`
-	ContractFee            *uint64                  `json:"contract_fee,omitempty"`
-	VotingSystems          *[]protocol.VotingSystem `json:"voting_systems,omitempty"`
-	RestrictedQtyAssets    *uint64                  `json:"restricted_qty_assets,omitempty"`
-	AdministrationProposal *bool                    `json:"administration_proposal,omitempty"`
-	HolderProposal         *bool                    `json:"holder_proposal,omitempty"`
-	Oracles                *[]protocol.Oracle       `json:"oracle,omitempty"`
+	ContractName           *string                       `json:"ContractName,omitempty"`
+	BodyOfAgreementType    *uint32                       `json:"BodyOfAgreementType,omitempty"`
+	BodyOfAgreement        *[]byte                       `json:"BodyOfAgreement,omitempty"`
+	ContractType           *string                       `json:"ContractType,omitempty"`
+	SupportingDocs         *[]*actions.DocumentField     `json:"SupportingDocs,omitempty"`
+	GoverningLaw           *string                       `json:"GoverningLaw,omitempty"`
+	Jurisdiction           *string                       `json:"Jurisdiction,omitempty"`
+	ContractExpiration     *protocol.Timestamp           `json:"ContractExpiration,omitempty"`
+	ContractURI            *string                       `json:"ContractURI,omitempty"`
+	Issuer                 *actions.EntityField          `json:"Issuer,omitempty"`
+	IssuerLogoURL          *string                       `json:"IssuerLogoURL,omitempty"`
+	ContractOperator       *actions.EntityField          `json:"ContractOperator,omitempty"`
+	ContractAuthFlags      *[]byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractFee            *uint64                       `json:"ContractFee,omitempty"`
+	VotingSystems          *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
+	RestrictedQtyAssets    *uint64                       `json:"RestrictedQtyAssets,omitempty"`
+	AdministrationProposal *bool                         `json:"AdministrationProposal,omitempty"`
+	HolderProposal         *bool                         `json:"HolderProposal,omitempty"`
+	Oracles                *[]*actions.OracleField       `json:"Oracles,omitempty"`
 
-	FreezePeriod *protocol.Timestamp `json:"freeze_period,omitempty"`
+	FreezePeriod *protocol.Timestamp `json:"FreezePeriod,omitempty"`
 }

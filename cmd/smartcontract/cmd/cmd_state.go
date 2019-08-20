@@ -13,10 +13,10 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/assets"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -36,64 +36,61 @@ var cmdState = &cobra.Command{
 
 		params := bitcoin.NewChainParams(cfg.Bitcoin.Network)
 
-		pkh, err := btcutil.DecodeAddress(args[0], params)
+		address, err := bitcoin.DecodeAddress(args[0])
 		if err != nil {
 			return err
 		}
 
 		masterDB := bootstrap.NewMasterDB(ctx, cfg)
 
-		return loadContract(ctx, c, masterDB, pkh, params)
+		return loadContract(ctx, c, masterDB, address, params)
 	},
 }
 
 func loadContract(ctx context.Context,
 	cmd *cobra.Command,
 	db *db.DB,
-	address btcutil.Address,
+	address bitcoin.Address,
 	params *chaincfg.Params) error {
 
-	pkh := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
-
-	c, err := contract.Fetch(ctx, db, pkh)
+	c, err := contract.Fetch(ctx, db, address)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("# Contract %s\n\n", address)
+	fmt.Printf("# Contract %s\n\n", address.String())
 
 	if err := dumpJSON(c); err != nil {
 		return err
 	}
 
 	for _, assetCode := range c.AssetCodes {
-		a, err := asset.Fetch(ctx, db, &c.ID, &assetCode)
+		a, err := asset.Fetch(ctx, db, c.Address, assetCode)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("## Asset %x\n\n", a.ID.Bytes())
+		fmt.Printf("## Asset %x\n\n", a.Code.Bytes())
 
 		if err := dumpJSON(a); err != nil {
 			return err
 		}
 
-		payload := protocol.AssetTypeMapping(a.AssetType)
-
-		if _, err := payload.Write(a.AssetPayload); err != nil {
+		asset, err := assets.Deserialize([]byte(a.AssetType), a.AssetPayload)
+		if err != nil {
 			return err
 		}
 
 		fmt.Printf("### Payload\n\n")
 
-		if err := dumpJSON(payload); err != nil {
+		if err := dumpJSON(asset); err != nil {
 			return err
 		}
 
 		fmt.Printf("### Holdings\n\n")
 
 		// get the PKH's inside the holders/asset_code directory
-		keys, err := holdings.List(ctx, db, pkh, &assetCode)
+		keys, err := holdings.List(ctx, db, address, assetCode)
 		if err != nil {
 			return nil
 		}
@@ -102,32 +99,29 @@ func loadContract(ctx context.Context,
 			// split the key into parts.
 			parts := strings.Split(key, "/")
 
-			// the last part of the key is the PKH of the owner, in hex format.
+			// the last part of the key is the raw address of the owner, in hex format.
 			owner := parts[len(parts)-1]
 
 			// Convert the hex representation to an Address, which is used
 			// for display purposes.
-			address, err := addressFromHex(owner, params)
+			ownerRawAddress, err := addressFromHex(owner)
 			if err != nil {
 				return err
 			}
-
-			// create the PKH from the bytes
-			ownerPKH := protocol.PublicKeyHashFromBytes(address.ScriptAddress())
 
 			// we can get the holding for this owner now
-			h, err := holdings.Fetch(ctx, db, pkh, &assetCode, ownerPKH)
+			h, err := holdings.Fetch(ctx, db, address, assetCode, ownerRawAddress)
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("#### Holding for %s\n\n", address)
+			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, wire.BitcoinNet(params.Net))
+			fmt.Printf("#### Holding for %s\n\n", ownerAddress.String())
 
 			if err := dumpHoldingJSON(h); err != nil {
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -135,14 +129,14 @@ func loadContract(ctx context.Context,
 
 // addressFromHex returns a decoded Address from a the hex representation of
 // a PKH.
-func addressFromHex(s string, params *chaincfg.Params) (btcutil.Address, error) {
+func addressFromHex(s string) (bitcoin.RawAddress, error) {
 
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}
 
-	return btcutil.NewAddressPubKeyHash(b, params)
+	return bitcoin.DecodeRawAddress(b)
 }
 
 // dumpHoldingJSON dumps a Holding to JSON.

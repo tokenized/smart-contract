@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -60,7 +61,6 @@ func NewTransaction(ctx context.Context, raw string, isTest bool) (*Transaction,
 	// Set up the Wire transaction
 	tx := wire.MsgTx{}
 	buf := bytes.NewReader(b)
-
 	if err := tx.Deserialize(buf); err != nil {
 		return nil, errors.Wrap(ErrDecodeFail, "deserializing wire message")
 	}
@@ -102,12 +102,11 @@ func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *w
 	}
 
 	// Find and deserialize protocol message
-	var msg protocol.OpReturnMessage
+	var msg actions.Action
 	var err error
 	for _, txOut := range tx.TxOut {
 		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
-
 			break // Tokenized output found
 		}
 	}

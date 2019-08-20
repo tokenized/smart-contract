@@ -8,10 +8,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
@@ -146,8 +144,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Iterate through votes for each contract and if they aren't complete schedule a finalizer.
 	keys := server.wallet.ListAll()
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		votes, err := vote.List(ctx, server.MasterDB, contractPKH)
+		votes, err := vote.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list votes : %s", err)
 			return nil
@@ -182,8 +179,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Schedule pending transfer timeouts
 	// Iterate through pending transfers for each contract and if they aren't complete schedule a timeout.
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		transfers, err := transfer.List(ctx, server.MasterDB, contractPKH)
+		transfers, err := transfer.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list transfers : %s", err)
 			return nil

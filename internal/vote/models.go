@@ -2,33 +2,34 @@ package vote
 
 import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // NewVote defines what information may be provided to create a Vote.
 type NewVote struct {
-	Initiator          uint8                `json:"initiator,omit_empty"`
-	VoteSystem         uint8                `json:"vote_system,omit_empty"`
-	ContractWideVote   bool                 `json:"contract_wide_vote,omit_empty"`
-	AssetSpecificVote  bool                 `json:"asset_specific_vote,omit_empty"`
-	AssetType          string               `json:"asset_type,omit_empty"`
-	AssetCode          protocol.AssetCode   `json:"asset_code,omit_empty"`
-	Specific           bool                 `json:"specific,omit_empty"`
-	ProposedAmendments []protocol.Amendment `json:"proposed_amendments,omit_empty"`
+	Initiator          uint32                   `json:"Initiator,omitempty"`
+	VoteSystem         uint32                   `json:"VoteSystem,omitempty"`
+	ContractWideVote   bool                     `json:"ContractWideVote,omitempty"`
+	AssetSpecificVote  bool                     `json:"AssetSpecificVote,omitempty"`
+	AssetType          string                   `json:"AssetType,omitempty"`
+	AssetCode          protocol.AssetCode       `json:"AssetCode,omitempty"`
+	Specific           bool                     `json:"Specific,omitempty"`
+	ProposedAmendments []actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
-	VoteTxId     protocol.TxId      `json:"vote_tx_id,omit_empty"`
-	ProposalTxId protocol.TxId      `json:"proposal_tx_id,omit_empty"`
-	TokenQty     uint64             `json:"token_qty,omit_empty"`
-	Expires      protocol.Timestamp `json:"expires,omit_empty"`
-	Timestamp    protocol.Timestamp `json:"timestamp,omit_empty"`
+	VoteTxId     protocol.TxId      `json:"VoteTxId,omitempty"`
+	ProposalTxId protocol.TxId      `json:"ProposalTxId,omitempty"`
+	TokenQty     uint64             `json:"TokenQty,omitempty"`
+	Expires      protocol.Timestamp `json:"Expires,omitempty"`
+	Timestamp    protocol.Timestamp `json:"Timestamp,omitempty"`
 }
 
 // UpdateVote struct { defines what information may be provided to modify an
 // existing Vote.
 type UpdateVote struct {
-	CompletedAt *protocol.Timestamp `json:"completed_at,omit_empty"`
-	AppliedTxId *protocol.TxId      `json:"applied_tx_id,omit_empty"`
-	OptionTally *[]uint64           `json:"option_tally,omit_empty"`
-	Result      *string             `json:"result,omit_empty"`
-	NewBallot   *state.Ballot       `json:"new_ballot,omit_empty"`
+	CompletedAt *protocol.Timestamp `json:"CompletedAt,omitempty"`
+	AppliedTxId *protocol.TxId      `json:"AppliedTxId,omitempty"`
+	OptionTally *[]uint64           `json:"OptionTally,omitempty"`
+	Result      *string             `json:"Result,omitempty"`
+	NewBallot   *state.Ballot       `json:"NewBallot,omitempty"`
 }

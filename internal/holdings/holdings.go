@@ -7,6 +7,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -25,10 +26,10 @@ var (
 )
 
 // GetHolding returns the holding data for a PKH.
-func GetHolding(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
-	assetCode *protocol.AssetCode, pkh *protocol.PublicKeyHash, now protocol.Timestamp) (*state.Holding, error) {
+func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
 
-	result, err := Fetch(ctx, dbConn, contractPKH, assetCode, pkh)
+	result, err := Fetch(ctx, dbConn, contractAddress, assetCode, address)
 	if err == nil {
 		return result, nil
 	}
@@ -37,7 +38,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractPKH *protocol.Public
 	}
 
 	result = &state.Holding{
-		PKH:             *pkh,
+		Address:         address,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 		HoldingStatuses: make(map[protocol.TxId]*state.HoldingStatus),
@@ -149,7 +150,7 @@ func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol
 	hs := state.HoldingStatus{
 		Code:           byte('S'),
 		Amount:         amount,
-		TxId:           *txid,
+		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
 	}
 	h.HoldingStatuses[*txid] = &hs
@@ -169,7 +170,7 @@ func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, now protoc
 	hs := state.HoldingStatus{
 		Code:           byte('R'),
 		Amount:         amount,
-		TxId:           *txid,
+		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
 	}
 	h.HoldingStatuses[*txid] = &hs
@@ -192,7 +193,7 @@ func AddFreeze(h *state.Holding, txid *protocol.TxId, amount uint64,
 		Code:    byte('F'), // Freeze
 		Expires: timeout,
 		Amount:  amount,
-		TxId:    *txid,
+		TxId:    txid,
 	}
 	h.HoldingStatuses[*txid] = &hs
 	return nil

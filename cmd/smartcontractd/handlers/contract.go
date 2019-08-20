@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -16,6 +17,8 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -33,9 +36,9 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Offer")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.ContractOffer)
+	msg, ok := itx.MsgProto.(*actions.ContractOffer)
 	if !ok {
-		return errors.New("Could not assert as *protocol.ContractOffer")
+		return errors.New("Could not assert as *actions.ContractOffer")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -47,12 +50,12 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-	_, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != contract.ErrNotFound {
 		if err == nil {
-			node.LogWarn(ctx, "Contract already exists : %s", contractPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExists)
+			address := bitcoin.NewAddressFromRawAddress(rk.Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+			node.LogWarn(ctx, "Contract already exists : %s", address.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExists)
 		} else {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
@@ -60,31 +63,31 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
 		node.LogWarn(ctx, "Contract body of agreement hash is incorrect length : %d", len(msg.BodyOfAgreement))
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
-	if msg.ContractExpiration.Nano() != 0 && msg.ContractExpiration.Nano() < v.Now.Nano() {
-		node.LogWarn(ctx, "Expiration already passed : %d", msg.ContractExpiration.Nano())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+	if msg.ContractExpiration != 0 && msg.ContractExpiration < v.Now.Nano() {
+		node.LogWarn(ctx, "Expiration already passed : %d", msg.ContractExpiration)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract auth flags : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
-		if err = vote.ValidateVotingSystem(&votingSystem); err != nil {
+		if err = vote.ValidateVotingSystem(votingSystem); err != nil {
 			node.LogWarn(ctx, "Invalid voting system : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 	}
 
 	node.Log(ctx, "Accepting contract offer : %s", msg.ContractName)
 
 	// Contract Formation <- Contract Offer
-	cf := protocol.ContractFormation{}
+	cf := actions.ContractFormation{}
 
 	err = node.Convert(ctx, &msg, &cf)
 	if err != nil {
@@ -92,18 +95,12 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	cf.ContractRevision = 0
-	cf.Timestamp = v.Now
-
-	// Convert to bitcoin.RawAddress
-	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
-	if err != nil {
-		return err
-	}
+	cf.Timestamp = v.Now.Nano()
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, contractAddress, 0)
+	w.AddOutput(ctx, rk.Address, 0)
 	w.AddContractFee(ctx, msg.ContractFee)
 
 	// Save Tx for when formation is processed.
@@ -116,11 +113,13 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
-func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
+
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Amendment")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.ContractAmendment)
+	msg, ok := itx.MsgProto.(*actions.ContractAmendment)
 	if !ok {
 		return errors.New("Could not assert as *protocol.ContractAmendment")
 	}
@@ -134,42 +133,38 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if !ct.MovedTo.IsZero() {
-		node.LogWarn(ctx, "Contract address changed : %s", ct.MovedTo.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, wire.BitcoinNet(w.Config.ChainParams.Net))
+		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
 
-	requestorAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
-	if !ok {
-		node.LogVerbose(ctx, "Requestor is not PKH : %x", itx.Inputs[0].Address.Bytes())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
-	}
-	requestorPKH := protocol.PublicKeyHashFromBytes(requestorAddressPKH)
-	if !contract.IsOperator(ctx, ct, requestorPKH) {
-		node.LogVerbose(ctx, "Requestor is not operator : %s", requestorPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
+	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
 	}
 
 	if ct.Revision != msg.ContractRevision {
-		node.LogWarn(ctx, "Incorrect contract revision (%s) : specified %d != current %d", ct.ContractName, msg.ContractRevision, ct.Revision)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractRevision)
+		node.LogWarn(ctx, "Incorrect contract revision (%s) : specified %d != current %d",
+			ct.ContractName, msg.ContractRevision, ct.Revision)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractRevision)
 	}
 
 	// Check proposal if there was one
 	proposed := false
-	proposalInitiator := uint8(0)
-	votingSystem := uint8(0)
+	proposalInitiator := uint32(0)
+	votingSystem := uint32(0)
 
-	if !msg.RefTxID.IsZero() { // Vote Result Action allowing these amendments
+	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
 		proposed = true
 
-		refTxId, err := chainhash.NewHash(msg.RefTxID.Bytes())
+		refTxId, err := chainhash.NewHash(msg.RefTxID)
 		if err != nil {
 			return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
 		}
@@ -178,56 +173,57 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
-		voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		// Retrieve the vote
-		vt, err := vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+		voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+		vt, err := vote.Retrieve(ctx, c.MasterDB, rk.Address, voteTxId)
 		if err == vote.ErrNotFound {
-			node.LogWarn(ctx, "Vote not found : %s", voteResult.VoteTxId.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
+			node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteNotFound)
 		} else if err != nil {
-			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteResult.VoteTxId.String(), err)
+			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
 			return errors.Wrap(err, "Failed to retrieve vote")
 		}
 
 		if vt.CompletedAt.Nano() == 0 {
 			node.LogWarn(ctx, "Vote not complete yet")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		if vt.Result != "A" {
 			node.LogWarn(ctx, "Vote result not A(Accept) : %s", vt.Result)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		if !vt.Specific {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		if vt.AssetSpecificVote {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		// Verify proposal amendments match these amendments.
 		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
 			node.LogWarn(ctx, "%s : Proposal has different count of amendments : %d != %d",
 				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 		}
 
 		for i, amendment := range voteResult.ProposedAmendments {
 			if !amendment.Equal(msg.Amendments[i]) {
 				node.LogWarn(ctx, "Proposal amendment %d doesn't match", i)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 			}
 		}
 
@@ -238,42 +234,31 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
-		node.LogWarn(ctx, "Cannot reduce allowable assets below existing number: %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAssetQtyReduction)
+		node.LogWarn(ctx, "Cannot reduce allowable assets below existing number")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAssetQtyReduction)
 	}
 
 	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
 		if len(itx.Inputs) < 2 {
 			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractBothOperatorsRequired)
 		}
 
-		requestor1AddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
-		if !ok {
+		if itx.Inputs[0].Address.Equal(itx.Inputs[1].Address) ||
+			!contract.IsOperator(ctx, ct, itx.Inputs[0].Address) ||
+			!contract.IsOperator(ctx, ct, itx.Inputs[1].Address) {
 			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
-		}
-		requestor1PKH := protocol.PublicKeyHashFromBytes(requestor1AddressPKH)
-		requestor2AddressPKH, ok := bitcoin.PKH(itx.Inputs[1].Address)
-		if !ok {
-			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
-		}
-		requestor2PKH := protocol.PublicKeyHashFromBytes(requestor2AddressPKH)
-		if requestor1PKH.Equal(*requestor2PKH) || !contract.IsOperator(ctx, ct, requestor1PKH) ||
-			!contract.IsOperator(ctx, ct, requestor2PKH) {
-			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractBothOperatorsRequired)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractBothOperatorsRequired)
 		}
 	}
 
 	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
 		node.LogWarn(ctx, "Contract amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAuthFlags)
 	}
 
 	// Contract Formation <- Contract Amendment
-	cf := protocol.ContractFormation{}
+	cf := actions.ContractFormation{}
 
 	// Get current state
 	err = node.Convert(ctx, ct, &cf)
@@ -283,30 +268,24 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
-	cf.Timestamp = v.Now
+	cf.Timestamp = v.Now.Nano()
 
 	if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
 		node.LogWarn(ctx, "Contract amendments failed : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
-
-	// Convert to bitcoin.RawAddress
-	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
-	if err != nil {
-		return errors.Wrap(err, "Failed to convert contract PKH to address")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, contractAddress, 0)
+	w.AddOutput(ctx, rk.Address, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Administration change. New administration in second input
 	if msg.ChangeAdministrationAddress {
 		if len(itx.Inputs) < 2 {
 			node.LogWarn(ctx, "New administration specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 		}
 	}
 
@@ -318,7 +297,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 		if index >= len(itx.Inputs) {
 			node.LogWarn(ctx, "New operator specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 		}
 	}
 
@@ -327,20 +306,22 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to save tx")
 	}
 
-	node.Log(ctx, "Accepting contract amendment (%s) : %s", ct.ContractName, contractPKH.String())
+	node.Log(ctx, "Accepting contract amendment (%s)", ct.ContractName)
 
 	// Respond with a formation
 	return node.RespondSuccess(ctx, w, itx, rk, &cf)
 }
 
 // FormationResponse handles an outgoing Contract Formation and writes it to the state
-func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
+
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Formation")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.ContractFormation)
+	msg, ok := itx.MsgProto.(*actions.ContractFormation)
 	if !ok {
-		return errors.New("Could not assert as *protocol.ContractFormation")
+		return errors.New("Could not assert as *actions.ContractFormation")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -349,32 +330,32 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		return fmt.Errorf("Contract formation not from contract : %x",
 			itx.Inputs[0].Address.Bytes())
 	}
 
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct != nil && !ct.MovedTo.IsZero() {
-		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	if ct != nil && ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, wire.BitcoinNet(w.Config.ChainParams.Net))
+		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
 	// Get request tx
 	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 	var vt *state.Vote
-	var amendment *protocol.ContractAmendment
+	var amendment *actions.ContractAmendment
 	if err == nil && request != nil {
 		var ok bool
-		amendment, ok = request.MsgProto.(*protocol.ContractAmendment)
+		amendment, ok = request.MsgProto.(*actions.ContractAmendment)
 
-		if ok && !amendment.RefTxID.IsZero() {
-			refTxId, err := chainhash.NewHash(amendment.RefTxID.Bytes())
+		if ok && len(amendment.RefTxID) != 0 {
+			refTxId, err := chainhash.NewHash(amendment.RefTxID)
 			if err != nil {
 				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
 			}
@@ -385,13 +366,14 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("Vote Result tx not found for amendment")
 			}
 
-			voteResult, ok := voteResultTx.MsgProto.(*protocol.Result)
+			voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
 			if !ok {
 				return errors.New("Vote Result invalid for amendment")
 			}
 
 			// Retrieve the vote
-			vt, err = vote.Retrieve(ctx, c.MasterDB, contractPKH, &voteResult.VoteTxId)
+			voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+			vt, err = vote.Retrieve(ctx, c.MasterDB, rk.Address, voteTxId)
 			if err == vote.ErrNotFound {
 				return errors.New("Vote not found for amendment")
 			} else if err != nil {
@@ -418,36 +400,27 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Get offer from it
-		offer, ok := offerTx.MsgProto.(*protocol.ContractOffer)
+		offer, ok := offerTx.MsgProto.(*actions.ContractOffer)
 		if !ok {
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		adminAddressPKH, ok := bitcoin.PKH(offerTx.Inputs[0].Address)
-		if !ok {
-			node.LogWarn(ctx, "Input 0 not PKH (%s)", contractName)
-			return fmt.Errorf("Input 0 not PKH (%s)", contractName)
-		}
-		nc.AdministrationPKH = *protocol.PublicKeyHashFromBytes(adminAddressPKH) // First input of offer tx
+		nc.AdministrationAddress = offerTx.Inputs[0].Address // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			operatorAddressPKH, ok := bitcoin.PKH(offerTx.Inputs[1].Address)
-			if !ok {
-				node.LogWarn(ctx, "Input 1 not PKH (%s)", contractName)
-				return fmt.Errorf("Input 1 not PKH (%s)", contractName)
-			}
-			nc.OperatorPKH = *protocol.PublicKeyHashFromBytes(operatorAddressPKH) // Second input of offer tx
+			nc.OperatorAddress = offerTx.Inputs[1].Address // Second input of offer tx
 		}
 
-		if err := contract.Create(ctx, c.MasterDB, contractPKH, &nc, v.Now); err != nil {
-			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err.Error())
+		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
+			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err)
 			return err
 		}
-		node.Log(ctx, "Created contract (%s) : %s", contractName, contractPKH.String())
+		node.Log(ctx, "Created contract (%s)", contractName)
 	} else {
 		// Prepare update object
+		ts := protocol.NewTimestamp(msg.Timestamp)
 		uc := contract.UpdateContract{
 			Revision:  &msg.ContractRevision,
-			Timestamp: &msg.Timestamp,
+			Timestamp: &ts,
 		}
 
 		// Pull from amendment tx.
@@ -457,12 +430,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			adminAddressPKH, ok := bitcoin.PKH(request.Inputs[1].Address)
-			if !ok {
-				return errors.New("New administration not PKH")
-			}
-			uc.AdministrationPKH = protocol.PublicKeyHashFromBytes(adminAddressPKH)
-			node.Log(ctx, "Updating contract administration PKH : %s", uc.AdministrationPKH.String())
+			uc.AdministrationAddress = request.Inputs[1].Address
+			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
+				wire.BitcoinNet(w.Config.ChainParams.Net))
+			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
 		// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
@@ -475,12 +446,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			operatorAddressPKH, ok := bitcoin.PKH(request.Inputs[index].Address)
-			if !ok {
-				return errors.New("New operator not PKH")
-			}
-			uc.OperatorPKH = protocol.PublicKeyHashFromBytes(operatorAddressPKH)
-			node.Log(ctx, "Updating contract operator PKH : %s", uc.OperatorPKH.String())
+			uc.OperatorAddress = request.Inputs[index].Address
+			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
+				wire.BitcoinNet(w.Config.ChainParams.Net))
+			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
 		}
 
 		// Required pointers
@@ -532,9 +501,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating contract jurisdiction (%s) : %s", ct.ContractName, *uc.Jurisdiction)
 		}
 
-		if ct.ContractExpiration.Nano() != msg.ContractExpiration.Nano() {
-			uc.ContractExpiration = &msg.ContractExpiration
-			newExpiration := time.Unix(int64(msg.ContractExpiration.Nano()), 0)
+		if ct.ContractExpiration.Nano() != msg.ContractExpiration {
+			ts := protocol.NewTimestamp(msg.ContractExpiration)
+			uc.ContractExpiration = &ts
+			newExpiration := time.Unix(int64(msg.ContractExpiration), 0)
 			node.Log(ctx, "Updating contract expiration (%s) : %s", ct.ContractName, newExpiration.Format(time.UnixDate))
 		}
 
@@ -544,7 +514,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if !ct.Issuer.Equal(msg.Issuer) {
-			uc.Issuer = &msg.Issuer
+			uc.Issuer = msg.Issuer
 			node.Log(ctx, "Updating contract issuer data (%s)", ct.ContractName)
 		}
 
@@ -554,7 +524,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if !ct.ContractOperator.Equal(msg.ContractOperator) {
-			uc.ContractOperator = &msg.ContractOperator
+			uc.ContractOperator = msg.ContractOperator
 			node.Log(ctx, "Updating contract operator data (%s)", ct.ContractName)
 		}
 
@@ -615,15 +585,16 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			uc.VotingSystems = &msg.VotingSystems
 		}
 
-		if err := contract.Update(ctx, c.MasterDB, contractPKH, &uc, v.Now); err != nil {
+		if err := contract.Update(ctx, c.MasterDB, rk.Address, &uc, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to update contract")
 		}
-		node.Log(ctx, "Updated contract (%s) : %s", msg.ContractName, contractPKH.String())
+		node.Log(ctx, "Updated contract (%s)", msg.ContractName)
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
 			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
-			if err := vote.MarkApplied(ctx, c.MasterDB, contractPKH, &vt.VoteTxId, protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+			if err := vote.MarkApplied(ctx, c.MasterDB, rk.Address, vt.VoteTxId,
+				protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
@@ -637,9 +608,9 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.AddressChange")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.ContractAddressChange)
+	msg, ok := itx.MsgProto.(*actions.ContractAddressChange)
 	if !ok {
-		return errors.New("Could not assert as *protocol.ContractAddressChange")
+		return errors.New("Could not assert as *actions.ContractAddressChange")
 	}
 
 	// Validate all fields have valid values.
@@ -649,20 +620,22 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, c.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	// Check that it is from the master PKH
-	masterAddressPKH, ok := bitcoin.PKH(itx.Inputs[0].Address)
-	if !ok {
-		return errors.New("Contract address change not from PKH")
+	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		node.LogWarn(ctx, "Contract address change must be from master address : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 	}
-	if bytes.Equal(masterAddressPKH, ct.MasterPKH.Bytes()) {
-		node.LogWarn(ctx, "Contract address change must be from master PKH : %x", masterAddressPKH)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+
+	newContractAddress, err := bitcoin.DecodeRawAddress(msg.NewContractAddress)
+	if err != nil {
+		node.LogWarn(ctx, "Invalid new contract address : %x", msg.NewContractAddress)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 	}
 
 	// Check that it is to the current contract address and the new contract address
@@ -672,19 +645,19 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 		if output.Address.Equal(rk.Address) {
 			toCurrent = true
 		}
-		outputAddressPKH, ok := bitcoin.PKH(output.Address)
-		if ok && bytes.Equal(outputAddressPKH, msg.NewContractPKH.Bytes()) {
+		if output.Address.Equal(newContractAddress) {
 			toNew = true
 		}
 	}
 
 	if !toCurrent || !toNew {
 		node.LogWarn(ctx, "Contract address change must be to current and new PKH")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectTxMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 	}
 
 	// Perform move
-	err = contract.Move(ctx, c.MasterDB, contractPKH, &msg.NewContractPKH, msg.Timestamp)
+	err = contract.Move(ctx, c.MasterDB, rk.Address, newContractAddress,
+		protocol.NewTimestamp(msg.Timestamp))
 	if err != nil {
 		return err
 	}
@@ -695,8 +668,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 }
 
 // checkContractAmendmentsPermissions verifies that the amendments are permitted bases on the auth flags.
-func checkContractAmendmentsPermissions(ct *state.Contract, amendments []protocol.Amendment, proposed bool,
-	proposalInitiator, votingSystem uint8) error {
+func checkContractAmendmentsPermissions(ct *state.Contract, amendments []*actions.AmendmentField, proposed bool,
+	proposalInitiator, votingSystem uint32) error {
 
 	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, contract.FieldCount, len(ct.VotingSystems))
 	if err != nil {
@@ -736,7 +709,7 @@ func checkContractAmendmentsPermissions(ct *state.Contract, amendments []protoco
 }
 
 // applyContractAmendments applies the amendments to the contract formation.
-func applyContractAmendments(cf *protocol.ContractFormation, amendments []protocol.Amendment) error {
+func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField) error {
 	authFieldsUpdated := false
 	for _, amendment := range amendments {
 		switch amendment.FieldIndex {
@@ -747,7 +720,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("BodyOfAgreementType amendment value is wrong size : %d", len(amendment.Data))
 			}
-			cf.BodyOfAgreementType = uint8(amendment.Data[0])
+			cf.BodyOfAgreementType = uint32(amendment.Data[0])
 
 		case 2: // BodyOfAgreement
 			cf.BodyOfAgreement = amendment.Data
@@ -763,20 +736,23 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 						amendment.Element)
 				}
 
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := cf.SupportingDocs[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment SupportingDocs[%d] failed to deserialize : %s",
-						amendment.Element, err)
+				cf.SupportingDocs[amendment.Element].Reset()
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, cf.SupportingDocs[amendment.Element]); err != nil {
+						return fmt.Errorf("Contract amendment SupportingDocs[%d] failed to deserialize : %s",
+							amendment.Element, err)
+					}
 				}
 
 			case 1: // Add element
-				buf := bytes.NewBuffer(amendment.Data)
-				newDocument := protocol.Document{}
-				if err := newDocument.Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to SupportingDocs failed to deserialize : %s",
-						err)
+				newDocument := actions.DocumentField{}
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, &newDocument); err != nil {
+						return fmt.Errorf("Contract amendment addition to SupportingDocs failed to deserialize : %s",
+							err)
+					}
 				}
-				cf.SupportingDocs = append(cf.SupportingDocs, newDocument)
+				cf.SupportingDocs = append(cf.SupportingDocs, &newDocument)
 
 			case 2: // Delete element
 				if int(amendment.Element) >= len(cf.SupportingDocs) {
@@ -800,10 +776,12 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
 			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := cf.ContractExpiration.Write(buf); err != nil {
+			buf := bytes.NewReader(amendment.Data)
+			contractExpiration, err := protocol.DeserializeTimestamp(buf)
+			if err != nil {
 				return fmt.Errorf("ContractExpiration amendment value failed to deserialize : %s", err)
 			}
+			cf.ContractExpiration = contractExpiration.Nano()
 
 		case 8: // ContractURI
 			cf.ContractURI = string(amendment.Data)
@@ -817,7 +795,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				if len(amendment.Data) != 1 {
 					return fmt.Errorf("Issuer.Type amendment value is wrong size : %d", len(amendment.Data))
 				}
-				cf.Issuer.Type = amendment.Data[0]
+				cf.Issuer.Type = string([]byte{amendment.Data[0]})
 
 			case 2: // LEI
 				cf.Issuer.LEI = string(amendment.Data)
@@ -860,20 +838,23 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 							amendment.SubfieldElement)
 					}
 
-					buf := bytes.NewBuffer(amendment.Data)
-					if err := cf.Issuer.Administration[amendment.SubfieldElement].Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment Issuer.Administration[%d] failed to deserialize : %s",
-							amendment.SubfieldElement, err)
+					cf.Issuer.Administration[amendment.SubfieldElement].Reset()
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, cf.Issuer.Administration[amendment.SubfieldElement]); err != nil {
+							return fmt.Errorf("Contract amendment Issuer.Administration[%d] failed to deserialize : %s",
+								amendment.SubfieldElement, err)
+						}
 					}
 
 				case 1: // Add element
-					buf := bytes.NewBuffer(amendment.Data)
-					newAdministrator := protocol.Administrator{}
-					if err := newAdministrator.Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment addition to Issuer.Administration failed to deserialize : %s",
-							err)
+					newAdministrator := actions.AdministratorField{}
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, &newAdministrator); err != nil {
+							return fmt.Errorf("Contract amendment addition to Issuer.Administration failed to deserialize : %s",
+								err)
+						}
 					}
-					cf.Issuer.Administration = append(cf.Issuer.Administration, newAdministrator)
+					cf.Issuer.Administration = append(cf.Issuer.Administration, &newAdministrator)
 
 				case 2: // Delete element
 					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
@@ -895,20 +876,23 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 							amendment.SubfieldElement)
 					}
 
-					buf := bytes.NewBuffer(amendment.Data)
-					if err := cf.Issuer.Management[amendment.SubfieldElement].Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment Issuer.Management[%d] failed to deserialize : %s",
-							amendment.SubfieldElement, err)
+					cf.Issuer.Management[amendment.SubfieldElement].Reset()
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, cf.Issuer.Management[amendment.SubfieldElement]); err != nil {
+							return fmt.Errorf("Contract amendment Issuer.Management[%d] failed to deserialize : %s",
+								amendment.SubfieldElement, err)
+						}
 					}
 
 				case 1: // Add element
-					buf := bytes.NewBuffer(amendment.Data)
-					newManager := protocol.Manager{}
-					if err := newManager.Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment addition to Issuer.Management failed to deserialize : %s",
-							err)
+					newManager := actions.ManagerField{}
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, &newManager); err != nil {
+							return fmt.Errorf("Contract amendment addition to Issuer.Management failed to deserialize : %s",
+								err)
+						}
 					}
-					cf.Issuer.Management = append(cf.Issuer.Management, newManager)
+					cf.Issuer.Management = append(cf.Issuer.Management, &newManager)
 
 				case 2: // Delete element
 					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
@@ -941,7 +925,7 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 				if len(amendment.Data) != 1 {
 					return fmt.Errorf("ContractOperator.Type amendment value is wrong size : %d", len(amendment.Data))
 				}
-				cf.ContractOperator.Type = amendment.Data[0]
+				cf.ContractOperator.Type = string([]byte{amendment.Data[0]})
 
 			case 2: // LEI
 				cf.ContractOperator.LEI = string(amendment.Data)
@@ -984,20 +968,24 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 							amendment.SubfieldElement)
 					}
 
-					buf := bytes.NewBuffer(amendment.Data)
-					if err := cf.ContractOperator.Administration[amendment.SubfieldElement].Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment ContractOperator.Administration[%d] failed to deserialize : %s",
-							amendment.SubfieldElement, err)
+					cf.ContractOperator.Administration[amendment.SubfieldElement].Reset()
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, cf.ContractOperator.Administration[amendment.SubfieldElement]); err != nil {
+							return fmt.Errorf("Contract amendment ContractOperator.Administration[%d] failed to deserialize : %s",
+								amendment.SubfieldElement, err)
+						}
 					}
 
 				case 1: // Add element
-					buf := bytes.NewBuffer(amendment.Data)
-					newAdministrator := protocol.Administrator{}
-					if err := newAdministrator.Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment addition to ContractOperator.Administration failed to deserialize : %s",
-							err)
+					newAdministrator := actions.AdministratorField{}
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, &newAdministrator); err != nil {
+							return fmt.Errorf("Contract amendment addition to ContractOperator.Administration failed to deserialize : %s",
+								err)
+						}
 					}
-					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration, newAdministrator)
+
+					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration, &newAdministrator)
 
 				case 2: // Delete element
 					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
@@ -1019,20 +1007,24 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 							amendment.SubfieldElement)
 					}
 
-					buf := bytes.NewBuffer(amendment.Data)
-					if err := cf.ContractOperator.Management[amendment.SubfieldElement].Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment ContractOperator.Management[%d] failed to deserialize : %s",
-							amendment.SubfieldElement, err)
+					cf.ContractOperator.Management[amendment.SubfieldElement].Reset()
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, cf.ContractOperator.Management[amendment.SubfieldElement]); err != nil {
+							return fmt.Errorf("Contract amendment ContractOperator.Management[%d] failed to deserialize : %s",
+								amendment.SubfieldElement, err)
+						}
 					}
 
 				case 1: // Add element
-					buf := bytes.NewBuffer(amendment.Data)
-					newManager := protocol.Manager{}
-					if err := newManager.Write(buf); err != nil {
-						return fmt.Errorf("Contract amendment addition to ContractOperator.Management failed to deserialize : %s",
-							err)
+					newManager := actions.ManagerField{}
+					if len(amendment.Data) != 0 {
+						if err := proto.Unmarshal(amendment.Data, &newManager); err != nil {
+							return fmt.Errorf("Contract amendment addition to ContractOperator.Management failed to deserialize : %s",
+								err)
+						}
 					}
-					cf.ContractOperator.Management = append(cf.ContractOperator.Management, newManager)
+
+					cf.ContractOperator.Management = append(cf.ContractOperator.Management, &newManager)
 
 				case 2: // Delete element
 					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
@@ -1071,20 +1063,24 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 						amendment.Element)
 				}
 
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := cf.VotingSystems[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment VotingSystems[%d] failed to deserialize : %s",
-						amendment.Element, err)
+				cf.VotingSystems[amendment.Element].Reset()
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, cf.VotingSystems[amendment.Element]); err != nil {
+						return fmt.Errorf("Contract amendment VotingSystems[%d] failed to deserialize : %s",
+							amendment.Element, err)
+					}
 				}
 
 			case 1: // Add element
-				buf := bytes.NewBuffer(amendment.Data)
-				newVotingSystem := protocol.VotingSystem{}
-				if err := newVotingSystem.Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to VotingSystems failed to deserialize : %s",
-						err)
+				newVotingSystem := actions.VotingSystemField{}
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, &newVotingSystem); err != nil {
+						return fmt.Errorf("Contract amendment addition to VotingSystems failed to deserialize : %s",
+							err)
+					}
 				}
-				cf.VotingSystems = append(cf.VotingSystems, newVotingSystem)
+
+				cf.VotingSystems = append(cf.VotingSystems, &newVotingSystem)
 
 			case 2: // Delete element
 				if int(amendment.Element) >= len(cf.VotingSystems) {
@@ -1133,20 +1129,24 @@ func applyContractAmendments(cf *protocol.ContractFormation, amendments []protoc
 						amendment.Element)
 				}
 
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := cf.Oracles[amendment.Element].Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment Oracles[%d] failed to deserialize : %s",
-						amendment.Element, err)
+				cf.Oracles[amendment.Element].Reset()
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, cf.Oracles[amendment.Element]); err != nil {
+						return fmt.Errorf("Contract amendment Oracles[%d] failed to deserialize : %s",
+							amendment.Element, err)
+					}
 				}
 
 			case 1: // Add element
-				buf := bytes.NewBuffer(amendment.Data)
-				newOracle := protocol.Oracle{}
-				if err := newOracle.Write(buf); err != nil {
-					return fmt.Errorf("Contract amendment addition to Oracles failed to deserialize : %s",
-						err)
+				newOracle := actions.OracleField{}
+				if len(amendment.Data) != 0 {
+					if err := proto.Unmarshal(amendment.Data, &newOracle); err != nil {
+						return fmt.Errorf("Contract amendment addition to Oracles failed to deserialize : %s",
+							err)
+					}
 				}
-				cf.Oracles = append(cf.Oracles, newOracle)
+
+				cf.Oracles = append(cf.Oracles, &newOracle)
 
 			case 2: // Delete element
 				if int(amendment.Element) >= len(cf.Oracles) {

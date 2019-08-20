@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -16,29 +17,29 @@ import (
 var (
 	// Incoming protocol message types (requests)
 	incomingMessageTypes = map[string]bool{
-		protocol.CodeContractOffer:     true,
-		protocol.CodeContractAmendment: true,
-		protocol.CodeAssetDefinition:   true,
-		protocol.CodeAssetModification: true,
-		protocol.CodeTransfer:          true,
-		protocol.CodeProposal:          true,
-		protocol.CodeBallotCast:        true,
-		protocol.CodeOrder:             true,
+		actions.CodeContractOffer:     true,
+		actions.CodeContractAmendment: true,
+		actions.CodeAssetDefinition:   true,
+		actions.CodeAssetModification: true,
+		actions.CodeTransfer:          true,
+		actions.CodeProposal:          true,
+		actions.CodeBallotCast:        true,
+		actions.CodeOrder:             true,
 	}
 
 	// Outgoing protocol message types (responses)
 	outgoingMessageTypes = map[string]bool{
-		protocol.CodeAssetCreation:     true,
-		protocol.CodeContractFormation: true,
-		protocol.CodeSettlement:        true,
-		protocol.CodeVote:              true,
-		protocol.CodeBallotCounted:     true,
-		protocol.CodeResult:            true,
-		protocol.CodeFreeze:            true,
-		protocol.CodeThaw:              true,
-		protocol.CodeConfiscation:      true,
-		protocol.CodeReconciliation:    true,
-		protocol.CodeRejection:         true,
+		actions.CodeAssetCreation:     true,
+		actions.CodeContractFormation: true,
+		actions.CodeSettlement:        true,
+		actions.CodeVote:              true,
+		actions.CodeBallotCounted:     true,
+		actions.CodeResult:            true,
+		actions.CodeFreeze:            true,
+		actions.CodeThaw:              true,
+		actions.CodeConfiscation:      true,
+		actions.CodeReconciliation:    true,
+		actions.CodeRejection:         true,
 	}
 )
 
@@ -47,28 +48,26 @@ var (
 type Transaction struct {
 	Hash       chainhash.Hash
 	MsgTx      *wire.MsgTx
-	MsgProto   protocol.OpReturnMessage
+	MsgProto   actions.Action
 	Inputs     []Input
 	Outputs    []Output
-	RejectCode uint8
+	RejectCode uint32
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
 //   the NewBaseTransactionFromWire function.
 func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 	// Find and deserialize protocol message
-	var msg protocol.OpReturnMessage
 	var err error
 	for _, txOut := range itx.MsgTx.TxOut {
-		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
+		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
-			itx.MsgProto = msg
-			if err := msg.Validate(); err != nil {
-				itx.RejectCode = protocol.RejectMsgMalformed
+			if err := itx.MsgProto.Validate(); err != nil {
+				itx.RejectCode = actions.RejectMsgMalformed
 				logger.Warn(ctx, "Protocol message is invalid : %s", err)
 				return nil
 			}
-			return nil // Tokenized output found
+			break // Tokenized output found
 		}
 	}
 
@@ -83,7 +82,7 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 
 	if err := itx.MsgProto.Validate(); err != nil {
 		logger.Warn(ctx, "Protocol message is invalid : %s", err)
-		itx.RejectCode = protocol.RejectMsgMalformed
+		itx.RejectCode = actions.RejectMsgMalformed
 		return nil
 	}
 
@@ -227,7 +226,7 @@ func (itx *Transaction) IsIncomingMessageType() bool {
 		return false
 	}
 
-	_, ok := incomingMessageTypes[itx.MsgProto.Type()]
+	_, ok := incomingMessageTypes[itx.MsgProto.Code()]
 	return ok
 }
 
@@ -238,7 +237,7 @@ func (itx *Transaction) IsOutgoingMessageType() bool {
 		return false
 	}
 
-	_, ok := outgoingMessageTypes[itx.MsgProto.Type()]
+	_, ok := outgoingMessageTypes[itx.MsgProto.Code()]
 	return ok
 }
 
@@ -341,7 +340,7 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 		}
 	}
 
-	buf.WriteByte(itx.RejectCode)
+	buf.WriteByte(uint8(itx.RejectCode))
 	return nil
 }
 
@@ -369,10 +368,11 @@ func (itx *Transaction) Read(buf *bytes.Buffer, isTest bool) error {
 		}
 	}
 
-	itx.RejectCode, err = buf.ReadByte()
+	rejectCode, err := buf.ReadByte()
 	if err != nil {
 		return err
 	}
+	itx.RejectCode = uint32(rejectCode)
 
 	// Outputs
 	outputs := []Output{}

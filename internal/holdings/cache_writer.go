@@ -6,30 +6,31 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // CacheItem is a reference to an item in the cache that needs to be written to storage.
 type CacheItem struct {
-	contract *protocol.PublicKeyHash
+	contract bitcoin.RawAddress
 	asset    *protocol.AssetCode
-	pkh      *protocol.PublicKeyHash
+	address  bitcoin.RawAddress
 }
 
 // NewCacheItem creates a new CacheItem.
-func NewCacheItem(contract *protocol.PublicKeyHash, asset *protocol.AssetCode,
-	pkh *protocol.PublicKeyHash) *CacheItem {
+func NewCacheItem(contract bitcoin.RawAddress, asset *protocol.AssetCode,
+	address bitcoin.RawAddress) *CacheItem {
 	result := CacheItem{
 		contract: contract,
 		asset:    asset,
-		pkh:      pkh,
+		address:  address,
 	}
 	return &result
 }
 
 // Write writes a cache item to storage.
 func (ci *CacheItem) Write(ctx context.Context, dbConn *db.DB) error {
-	return WriteCacheUpdate(ctx, dbConn, ci.contract, ci.asset, ci.pkh)
+	return WriteCacheUpdate(ctx, dbConn, ci.contract, ci.asset, ci.address)
 }
 
 // CacheChannel is a channel of items in cache waiting to be written to storage.
