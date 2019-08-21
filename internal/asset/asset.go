@@ -14,10 +14,6 @@ import (
 	"go.opencensus.io/trace"
 )
 
-const (
-	FieldCount = 12 // The number of fields that can be changed with amendments.
-)
-
 var (
 	// ErrNotFound abstracts the standard not found error.
 	ErrNotFound = errors.New("Asset not found")

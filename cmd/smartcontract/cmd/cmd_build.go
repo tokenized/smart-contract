@@ -1,16 +1,17 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -19,6 +20,9 @@ import (
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -27,8 +31,6 @@ const (
 	FlagBase64Format = "b64"
 	FlagSend         = "send"
 )
-
-var emptyHash bitcoin.Hash32
 
 var cmdBuild = &cobra.Command{
 	Use:   "build <typeCode> <jsonFile>",
@@ -80,8 +82,78 @@ func buildAction(c *cobra.Command, args []string) error {
 	if err := action.Validate(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		fmt.Printf("Message : %+v\n", action)
-
 		return nil
+	}
+
+	// Validate smart contract rules
+	switch m := action.(type) {
+	case *actions.ContractOffer:
+		fmt.Printf("Checking Contract Offer\n")
+		_, err := protocol.ReadAuthFlags(m.ContractAuthFlags, actions.ContractFieldCount, len(m.VotingSystems))
+		if err != nil {
+			fmt.Printf("Setting default auth flags\n")
+			permissions := make([]protocol.Permission, actions.ContractFieldCount)
+			votingSystems := make([]bool, len(m.VotingSystems))
+			for i, _ := range votingSystems {
+				votingSystems[i] = true
+			}
+			permission := protocol.Permission{
+				Permitted:              true,
+				AdministrationProposal: true,
+				HolderProposal:         true,
+				VotingSystemsAllowed:   votingSystems,
+			}
+			for i, _ := range permissions {
+				permissions[i] = permission
+				fmt.Printf("Field %d : %+v\n", i, permissions[i])
+			}
+
+			m.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				return nil
+			}
+		}
+
+	case *actions.AssetDefinition:
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("How many voting systems are in the contract: ")
+		votingSystemCountString, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Failed to read user input : %s\n", err)
+			return nil
+		}
+		votingSystemCount, err := strconv.Atoi(strings.TrimSpace(votingSystemCountString))
+		if err != nil {
+			fmt.Printf("User input is not an integer : %s\n", err)
+			return nil
+		}
+		fmt.Printf("Checking Asset Definition\n")
+		_, err = protocol.ReadAuthFlags(m.AssetAuthFlags, actions.AssetFieldCount, votingSystemCount)
+		if err != nil {
+			fmt.Printf("Setting default auth flags\n")
+			permissions := make([]protocol.Permission, actions.AssetFieldCount)
+			votingSystems := make([]bool, votingSystemCount)
+			for i, _ := range votingSystems {
+				votingSystems[i] = true
+			}
+			permission := protocol.Permission{
+				Permitted:              true,
+				AdministrationProposal: true,
+				HolderProposal:         true,
+				VotingSystemsAllowed:   votingSystems,
+			}
+			for i, _ := range permissions {
+				permissions[i] = permission
+				fmt.Printf("Field %d : %+v\n", i, permissions[i])
+			}
+			m.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+				return nil
+			}
+		}
+
 	}
 
 	script, err := protocol.Serialize(action, true)
@@ -92,8 +164,8 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
 	b64Format, _ := c.Flags().GetBool(FlagBase64Format)
-	txFormat, _ := c.Flags().GetBool(FlagTx)
-	if txFormat {
+	buildTx, _ := c.Flags().GetBool(FlagTx)
+	if buildTx {
 		ctx := client.Context()
 		if ctx == nil {
 			return nil
@@ -105,8 +177,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-			theClient.Config.FeeRate)
+		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit, theClient.Config.FeeRate)
 
 		// Add output to contract
 		contractOutputIndex := uint32(0)
@@ -139,6 +210,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Add inputs
+		var emptyHash bitcoin.Hash32
 		fee := tx.EstimatedFee()
 		inputValue := uint64(0)
 		for _, output := range theClient.Wallet.UnspentOutputs() {
@@ -179,9 +251,8 @@ func buildAction(c *cobra.Command, args []string) error {
 			logger.Warn(ctx, "Tx is not inspector tokenized")
 		}
 
-		fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
-
 		if hexFormat {
+			fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
 			var buf bytes.Buffer
 			err := tx.MsgTx.Serialize(&buf)
 			if err != nil {
@@ -189,6 +260,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			fmt.Printf("%x\n", buf.Bytes())
 		} else if b64Format {
+			fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
 			var buf bytes.Buffer
 			err := tx.MsgTx.Serialize(&buf)
 			if err != nil {
@@ -196,11 +268,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(buf.Bytes()))
 		} else {
-			data, err = json.MarshalIndent(tx.MsgTx, "", "  ")
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s tx", actionType))
-			}
-			fmt.Printf(string(data) + "\n")
+			fmt.Println(tx.MsgTx.String())
 		}
 
 		send, _ := c.Flags().GetBool(FlagSend)
@@ -232,29 +300,29 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		if err := action.Validate(); err != nil {
+		if err := assetDef.Validate(); err != nil {
 			fmt.Printf("Invalid asset definition : %s\n", err)
 			return nil
 		}
 
-		asset, err := assets.Deserialize([]byte(assetDef.AssetType), assetDef.AssetPayload)
-		if err != nil {
-			fmt.Printf("Failed to parse asset payload : %s\n", err)
+		payload := assets.NewAssetFromCode(assetDef.AssetType)
+		if payload == nil {
+			fmt.Printf("Invalid asset type : %s\n", assetDef.AssetType)
 			return nil
 		}
 
-		if err := asset.Validate(); err != nil {
-			fmt.Printf("Invalid asset payload : %s\n", err)
-			return nil
+		assetDef.AssetPayload, err = payload.Bytes()
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetDef.AssetType))
 		}
 
 		fmt.Printf("Payload : %s\n", assetDef.AssetType)
 		if hexFormat {
-			fmt.Printf("%x\n", asset)
+			fmt.Printf("%x\n", payload)
 		} else if b64Format {
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetDef.AssetPayload))
 		} else {
-			data, err = json.MarshalIndent(asset, "", "  ")
+			data, err = json.MarshalIndent(payload, "", "  ")
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetDef.AssetType))
 			}
@@ -268,29 +336,29 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		if err := action.Validate(); err != nil {
+		if err := assetCreation.Validate(); err != nil {
 			fmt.Printf("Invalid asset creation : %s\n", err)
 			return nil
 		}
 
-		asset, err := assets.Deserialize([]byte(assetCreation.AssetType), assetCreation.AssetPayload)
-		if err != nil {
-			fmt.Printf("Failed to parse asset payload : %s\n", err)
+		payload := assets.NewAssetFromCode(assetCreation.AssetType)
+		if payload == nil {
+			fmt.Printf("Invalid asset type : %s\n", assetCreation.AssetType)
 			return nil
 		}
 
-		if err := asset.Validate(); err != nil {
-			fmt.Printf("Invalid asset payload : %s\n", err)
-			return nil
+		assetCreation.AssetPayload, err = payload.Bytes()
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetCreation.AssetType))
 		}
 
 		fmt.Printf("Payload : %s\n", assetCreation.AssetType)
 		if hexFormat {
-			fmt.Printf("%x\n", asset)
+			fmt.Printf("%x\n", payload)
 		} else if b64Format {
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetCreation.AssetPayload))
 		} else {
-			data, err = json.MarshalIndent(asset, "", "  ")
+			data, err = json.MarshalIndent(payload, "", "  ")
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetCreation.AssetType))
 			}

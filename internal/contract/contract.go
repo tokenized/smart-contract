@@ -17,11 +17,6 @@ import (
 	"go.opencensus.io/trace"
 )
 
-const (
-	FieldCount       = 20 // The count of fields that can be changed with amendments.
-	EntityFieldCount = 15 // The count of fields in an entity that can be changed with amendments.
-)
-
 var (
 	// ErrNotFound abstracts the standard not found error.
 	ErrNotFound = errors.New("Contract not found")

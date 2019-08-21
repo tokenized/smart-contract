@@ -285,6 +285,25 @@ func (msg *MsgTx) TxHash() *bitcoin.Hash32 {
 	return result
 }
 
+func (msg *MsgTx) String() string {
+	result := fmt.Sprintf("TxId: %s\n", msg.TxHash().String())
+	result += fmt.Sprintf("  Version: %d\n", msg.Version)
+	result += "  Inputs:\n\n"
+	for _, input := range msg.TxIn {
+		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
+			input.PreviousOutPoint.Hash.String())
+		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Sequence: %x\n\n", input.Sequence)
+	}
+	result += "  Outputs:\n\n"
+	for _, output := range msg.TxOut {
+		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
+		result += fmt.Sprintf("    Script: %x\n\n", output.PkScript)
+	}
+	result += fmt.Sprintf("  LockTime: %d\n", msg.LockTime)
+	return result
+}
+
 // Copy creates a deep copy of a transaction so that the original does not get
 // modified when the copy is manipulated.
 func (msg *MsgTx) Copy() *MsgTx {

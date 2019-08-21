@@ -346,7 +346,7 @@ func assetAmendment(t *testing.T) {
 	}
 
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: 10, // Token quantity
+		FieldIndex: actions.AssetFieldTokenQty,
 		Data:       buf.Bytes(),
 	})
 
@@ -441,7 +441,7 @@ func assetProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
 	assetAmendment := actions.AmendmentField{
-		FieldIndex: 11,
+		FieldIndex: actions.AssetFieldAssetPayload,
 		Data:       payloadData,
 	}
 	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)

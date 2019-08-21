@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -20,6 +19,7 @@ import (
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -69,7 +69,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
+	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, actions.ContractFieldCount, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract auth flags : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
@@ -669,7 +669,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 func checkContractAmendmentsPermissions(ct *state.Contract, amendments []*actions.AmendmentField, proposed bool,
 	proposalInitiator, votingSystem uint32) error {
 
-	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, contract.FieldCount, len(ct.VotingSystems))
+	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, actions.ContractFieldCount, len(ct.VotingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid contract auth flags : %s", err)
 	}
@@ -711,22 +711,22 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 	authFieldsUpdated := false
 	for _, amendment := range amendments {
 		switch amendment.FieldIndex {
-		case 0: // ContractName
+		case actions.ContractFieldContractName:
 			cf.ContractName = string(amendment.Data)
 
-		case 1: // BodyOfAgreementType
+		case actions.ContractFieldBodyOfAgreementType:
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("BodyOfAgreementType amendment value is wrong size : %d", len(amendment.Data))
 			}
 			cf.BodyOfAgreementType = uint32(amendment.Data[0])
 
-		case 2: // BodyOfAgreement
+		case actions.ContractFieldBodyOfAgreement:
 			cf.BodyOfAgreement = amendment.Data
 
-		case 3: // ContractType
+		case actions.ContractFieldContractType:
 			cf.ContractType = string(amendment.Data)
 
-		case 4: // SupportingDocs
+		case actions.ContractFieldSupportingDocs:
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(cf.SupportingDocs) {
@@ -764,13 +764,13 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("Invalid contract amendment operation for SupportingDocs : %d", amendment.Operation)
 			}
 
-		case 5: // GoverningLaw
+		case actions.ContractFieldGoverningLaw:
 			cf.GoverningLaw = string(amendment.Data)
 
-		case 6: // Jurisdiction
+		case actions.ContractFieldJurisdiction:
 			cf.Jurisdiction = string(amendment.Data)
 
-		case 7: // ContractExpiration
+		case actions.ContractFieldContractExpiration:
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -781,54 +781,51 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 			cf.ContractExpiration = contractExpiration.Nano()
 
-		case 8: // ContractURI
+		case actions.ContractFieldContractURI:
 			cf.ContractURI = string(amendment.Data)
 
-		case 9: // Issuer
+		case actions.ContractFieldIssuer:
 			switch amendment.SubfieldIndex {
-			case 0: // Name
+			case actions.EntityFieldName:
 				cf.Issuer.Name = string(amendment.Data)
 
-			case 1: // Type
+			case actions.EntityFieldType:
 				if len(amendment.Data) != 1 {
 					return fmt.Errorf("Issuer.Type amendment value is wrong size : %d", len(amendment.Data))
 				}
 				cf.Issuer.Type = string([]byte{amendment.Data[0]})
 
-			case 2: // LEI
+			case actions.EntityFieldLEI:
 				cf.Issuer.LEI = string(amendment.Data)
 
-			case 3: // AddressIncluded
-				return fmt.Errorf("Amendment attempting to change Issuer.AddressIncluded")
-
-			case 4: // UnitNumber
+			case actions.EntityFieldUnitNumber:
 				cf.Issuer.UnitNumber = string(amendment.Data)
 
-			case 5: // BuildingNumber
+			case actions.EntityFieldBuildingNumber:
 				cf.Issuer.BuildingNumber = string(amendment.Data)
 
-			case 6: // Street
+			case actions.EntityFieldStreet:
 				cf.Issuer.Street = string(amendment.Data)
 
-			case 7: // SuburbCity
+			case actions.EntityFieldSuburbCity:
 				cf.Issuer.SuburbCity = string(amendment.Data)
 
-			case 8: // TerritoryStateProvinceCode
+			case actions.EntityFieldTerritoryStateProvinceCode:
 				cf.Issuer.TerritoryStateProvinceCode = string(amendment.Data)
 
-			case 9: // CountryCode
+			case actions.EntityFieldCountryCode:
 				cf.Issuer.CountryCode = string(amendment.Data)
 
-			case 10: // PostalZIPCode
+			case actions.EntityFieldPostalZIPCode:
 				cf.Issuer.PostalZIPCode = string(amendment.Data)
 
-			case 11: // EmailAddress
+			case actions.EntityFieldEmailAddress:
 				cf.Issuer.EmailAddress = string(amendment.Data)
 
-			case 12: // PhoneNumber
+			case actions.EntityFieldPhoneNumber:
 				cf.Issuer.PhoneNumber = string(amendment.Data)
 
-			case 13: // Administration []Administrator
+			case actions.EntityFieldAdministration: // []*actions.Administrator
 				switch amendment.Operation {
 				case 0: // Modify
 					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
@@ -866,7 +863,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 					return fmt.Errorf("Invalid contract amendment operation for Issuer.Administration : %d", amendment.Operation)
 				}
 
-			case 14: // Management []Manager
+			case actions.EntityFieldManagement: // []*actions.Manager
 				switch amendment.Operation {
 				case 0: // Modify
 					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
@@ -908,13 +905,10 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("Contract amendment subfield offset for Issuer out of range : %d", amendment.SubfieldIndex)
 			}
 
-		case 10: // IssuerLogoURL
+		case actions.ContractFieldIssuerLogoURL:
 			cf.IssuerLogoURL = string(amendment.Data)
 
-		case 11: // ContractOperatorIncluded
-			return fmt.Errorf("Amendment attempting to change ContractOperatorIncluded")
-
-		case 12: // ContractOperator
+		case actions.ContractFieldContractOperator:
 			switch amendment.SubfieldIndex {
 			case 0: // Name
 				cf.ContractOperator.Name = string(amendment.Data)
@@ -1040,11 +1034,11 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("Contract amendment subfield offset for ContractOperator out of range : %d", amendment.SubfieldIndex)
 			}
 
-		case 13: // ContractAuthFlags
+		case actions.ContractFieldContractAuthFlags:
 			cf.ContractAuthFlags = amendment.Data
 			authFieldsUpdated = true
 
-		case 14: // ContractFee
+		case actions.ContractFieldContractFee:
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractFee amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1053,7 +1047,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("ContractFee amendment value failed to deserialize : %s", err)
 			}
 
-		case 15: // VotingSystems
+		case actions.ContractFieldVotingSystems:
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(cf.VotingSystems) {
@@ -1092,7 +1086,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d", amendment.Operation)
 			}
 
-		case 16: // RestrictedQtyAssets
+		case actions.ContractFieldRestrictedQtyAssets:
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1101,7 +1095,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("RestrictedQtyAssets amendment value failed to deserialize : %s", err)
 			}
 
-		case 17: // AdministrationProposal
+		case actions.ContractFieldAdministrationProposal:
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1110,7 +1104,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 18: // HolderProposal
+		case actions.ContractFieldHolderProposal:
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -1119,7 +1113,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
 			}
 
-		case 19: // Oracles
+		case actions.ContractFieldOracles:
 			switch amendment.Operation {
 			case 0: // Modify
 				if int(amendment.Element) >= len(cf.Oracles) {
@@ -1164,7 +1158,8 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 	}
 
 	if authFieldsUpdated {
-		if _, err := protocol.ReadAuthFlags(cf.ContractAuthFlags, contract.FieldCount, len(cf.VotingSystems)); err != nil {
+		if _, err := protocol.ReadAuthFlags(cf.ContractAuthFlags, actions.ContractFieldCount,
+			len(cf.VotingSystems)); err != nil {
 			return fmt.Errorf("Invalid contract auth flags : %s", err)
 		}
 	}
