@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // TestTx tests the MsgTx API.
@@ -20,8 +20,8 @@ func TestTx(t *testing.T) {
 	// pver := ProtocolVersion
 
 	// Block 100000 hash.
-	hashStr := "3ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
-	hash, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
+	hash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestTx(t *testing.T) {
 	// testing package functionality.
 	prevOutIndex := uint32(1)
 	prevOut := NewOutPoint(hash, prevOutIndex)
-	if !prevOut.Hash.IsEqual(hash) {
+	if !prevOut.Hash.Equal(hash) {
 		t.Errorf("NewOutPoint: wrong hash - got %v, want %v",
 			spew.Sprint(&prevOut.Hash), spew.Sprint(hash))
 	}
@@ -130,7 +130,7 @@ func TestTx(t *testing.T) {
 func TestTxHash(t *testing.T) {
 	// Hash of first transaction from block 113875.
 	hashStr := "f051e59b5e2503ac626d03aaeac8ab7be2d72ba4b7e97119c5852d70d52dcb86"
-	wantHash, err := chainhash.NewHashFromStr(hashStr)
+	wantHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 		return
@@ -140,7 +140,7 @@ func TestTxHash(t *testing.T) {
 	msgTx := NewMsgTx(1)
 	txIn := TxIn{
 		PreviousOutPoint: OutPoint{
-			Hash:  chainhash.Hash{},
+			Hash:  bitcoin.Hash32{},
 			Index: 0xffffffff,
 		},
 		SignatureScript: []byte{0x04, 0x31, 0xdc, 0x00, 0x1b, 0x01, 0x62},
@@ -168,7 +168,7 @@ func TestTxHash(t *testing.T) {
 
 	// Ensure the hash produced is expected.
 	txHash := msgTx.TxHash()
-	if !txHash.IsEqual(wantHash) {
+	if !txHash.Equal(wantHash) {
 		t.Errorf("TxHash: wrong hash - got %v, want %v",
 			spew.Sprint(txHash), spew.Sprint(wantHash))
 	}
@@ -644,7 +644,7 @@ var multiTx = &MsgTx{
 	TxIn: []*TxIn{
 		{
 			PreviousOutPoint: OutPoint{
-				Hash:  chainhash.Hash{},
+				Hash:  bitcoin.Hash32{},
 				Index: 0xffffffff,
 			},
 			SignatureScript: []byte{

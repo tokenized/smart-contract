@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerStorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -41,9 +41,9 @@ func TestHandlers(test *testing.T) {
 		"5809a72ee084625365067ff140c0cfedd05adc7a8a5040399409e9cca8ab4255",
 		"2a7927d2f953770fcd899902975ad7067a1adef3f572d5d8d196bfe0cbc7d954",
 	}
-	merkleTxids := make([]*chainhash.Hash, 0, 6)
+	merkleTxids := make([]*bitcoin.Hash32, 0, 6)
 	for _, hashString := range merkleTxIdStrings {
-		hash, err := chainhash.NewHashFromStr(hashString)
+		hash, err := bitcoin.NewHash32FromStr(hashString)
 		if err != nil {
 			test.Errorf("Failed to create hash : %v", err)
 		}
@@ -53,7 +53,7 @@ func TestHandlers(test *testing.T) {
 	merkleRoot := CalculateMerkleLevel(ctx, merkleTxids)
 	test.Logf("Merkle Test : %s", merkleRoot.String())
 
-	correctMerkleRoot, err := chainhash.NewHashFromStr("5f7b966b938cdb0dbf08a6bcd53e8854a6583b211452cf5dd5214dddd286e923")
+	correctMerkleRoot, err := bitcoin.NewHash32FromStr("5f7b966b938cdb0dbf08a6bcd53e8854a6583b211452cf5dd5214dddd286e923")
 	if *merkleRoot != *correctMerkleRoot {
 		test.Errorf("Failed merkle root hash calculation, should be : %s", correctMerkleRoot.String())
 	}
@@ -63,7 +63,7 @@ func TestHandlers(test *testing.T) {
 	store := storage.NewFilesystemStorage(storageConfig)
 
 	// Setup config
-	startHash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+	startHash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	config, err := data.NewConfig(&chaincfg.MainNetParams, "test", "Tokenized Test", startHash.String(), 8, 2000)
 	if err != nil {
 		test.Errorf("Failed to create config : %v", err)
@@ -116,7 +116,7 @@ func TestHandlers(test *testing.T) {
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
 	txs := make([]*wire.MsgTx, 0, testBlockCount)
 	headersMsg := wire.NewMsgHeaders()
-	zeroHash, _ := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+	zeroHash, _ := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	previousHash, err := blockRepo.Hash(ctx, 0)
 	if err != nil {
 		test.Errorf("Failed to get genesis hash : %s", err)
@@ -140,7 +140,7 @@ func TestHandlers(test *testing.T) {
 		txs = append(txs, tx)
 
 		merkleRoot := tx.TxHash()
-		header := wire.NewBlockHeader(1, previousHash, &merkleRoot, 0, 0)
+		header := wire.NewBlockHeader(1, previousHash, merkleRoot, 0, 0)
 		header.Timestamp = time.Unix(int64(t), 0)
 		t += 600
 		block := wire.NewMsgBlock(header)
@@ -153,7 +153,7 @@ func TestHandlers(test *testing.T) {
 			test.Errorf("Failed to add header to headers message : %v", err)
 		}
 		hash := header.BlockHash()
-		previousHash = &hash
+		previousHash = hash
 	}
 
 	merkleRoot1, err := CalculateMerkleHash(ctx, txs)
@@ -175,7 +175,7 @@ func TestHandlers(test *testing.T) {
 	reorgHeadersMsg := wire.NewMsgHeaders()
 	reorgBlocks := make([]*wire.MsgBlock, 0, testBlockCount)
 	hash := blocks[testBlockCount-reorgDepth].Header.BlockHash()
-	previousHash = &hash
+	previousHash = hash
 	test.Logf("Reorging to (%d) : %s", (testBlockCount-reorgDepth)+1, previousHash.String())
 	for i := testBlockCount - reorgDepth; i < testBlockCount; i++ {
 		height := (testBlockCount - reorgDepth) + 1 + i
@@ -195,7 +195,7 @@ func TestHandlers(test *testing.T) {
 		txs = append(txs, tx)
 
 		merkleRoot := tx.TxHash()
-		header := wire.NewBlockHeader(int32(wire.ProtocolVersion), previousHash, &merkleRoot, 0, 1)
+		header := wire.NewBlockHeader(int32(wire.ProtocolVersion), previousHash, merkleRoot, 0, 1)
 		block := wire.NewMsgBlock(header)
 		if err := block.AddTransaction(tx); err != nil {
 			test.Errorf(fmt.Sprintf("Failed to add tx to block (%d)", height), err)
@@ -206,7 +206,7 @@ func TestHandlers(test *testing.T) {
 			test.Errorf("Failed to add header to reorg headers message : %v", err)
 		}
 		hash := header.BlockHash()
-		previousHash = &hash
+		previousHash = hash
 	}
 
 	merkleRoot2, err := CalculateMerkleHash(ctx, txs)
@@ -286,13 +286,13 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 		test.Errorf("Block repo height %d doesn't match added %d", blockRepo.LastHeight(), len(blocks))
 	}
 
-	if blocks[len(blocks)-1].Header.BlockHash() != *blockRepo.LastHash() {
+	if !blocks[len(blocks)-1].Header.BlockHash().Equal(blockRepo.LastHash()) {
 		test.Errorf("Block repo last hash doesn't match last added")
 	}
 
 	for i := 0; i < testBlockCount; i++ {
 		hash := blocks[i].Header.BlockHash()
-		height, _ := blockRepo.Height(&hash)
+		height, _ := blockRepo.Height(hash)
 		if height != i+1 {
 			test.Errorf("Block repo height %d should be %d : %s", height, i+1, hash.String())
 		}
@@ -302,7 +302,7 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 		hash, err := blockRepo.Hash(ctx, i+1)
 		if err != nil || hash == nil {
 			test.Errorf("Block repo hash failed at height %d", i+1)
-		} else if *hash != blocks[i].Header.BlockHash() {
+		} else if !hash.Equal(blocks[i].Header.BlockHash()) {
 			test.Errorf("Block repo hash %d should : %s", i+1, blocks[i].Header.BlockHash().String())
 		}
 	}
@@ -321,13 +321,13 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 		test.Errorf("Block repo height %d doesn't match added %d after reload", blockRepo.LastHeight(), len(blocks))
 	}
 
-	if blocks[len(blocks)-1].Header.BlockHash() != *blockRepo.LastHash() {
+	if !blocks[len(blocks)-1].Header.BlockHash().Equal(blockRepo.LastHash()) {
 		test.Errorf("Block repo last hash doesn't match last added after reload")
 	}
 
 	for i := 0; i < testBlockCount; i++ {
 		hash := blocks[i].Header.BlockHash()
-		height, _ := blockRepo.Height(&hash)
+		height, _ := blockRepo.Height(hash)
 		if height != i+1 {
 			test.Errorf("Block repo height %d should be %d : %s", height, i+1, hash.String())
 		}
@@ -337,7 +337,7 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 		hash, err := blockRepo.Hash(ctx, i+1)
 		if err != nil || hash == nil {
 			test.Errorf("Block repo hash failed at height %d", i+1)
-		} else if *hash != blocks[i].Header.BlockHash() {
+		} else if !hash.Equal(blocks[i].Header.BlockHash()) {
 			test.Errorf("Block repo hash %d should : %s", i+1, blocks[i].Header.BlockHash().String())
 		}
 	}
@@ -379,7 +379,7 @@ func (listener *TestListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bo
 	return true, nil
 }
 
-func (listener *TestListener) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+func (listener *TestListener) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	switch msgType {
 	case ListenerMsgTxStateConfirm:
 		listener.test.Logf("Tx confirm : %s", txid.String())

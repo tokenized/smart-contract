@@ -14,7 +14,6 @@ import (
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -83,7 +82,7 @@ func transferSign(c *cobra.Command, args []string) error {
 	for i, b := range hash {
 		reverseHash[31-i] = b
 	}
-	blockHash, err := chainhash.NewHash(reverseHash)
+	blockHash, err := bitcoin.NewHash32(reverseHash)
 	if err != nil {
 		fmt.Printf("Invalid block hash : %s\n", err)
 		return nil

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -25,13 +24,13 @@ var cmdGen = &cobra.Command{
 		}
 		params := bitcoin.NewChainParams(network)
 
-		key, err := bitcoin.GenerateKeyS256(wire.BitcoinNet(params.Net))
+		key, err := bitcoin.GenerateKeyS256(bitcoin.Network(params.Net))
 		if err != nil {
 			fmt.Printf("Failed to generate key : %s\n", err)
 			return nil
 		}
 
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), wire.BitcoinNet(params.Net))
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), bitcoin.Network(params.Net))
 		if err != nil {
 			fmt.Printf("Failed to generate address : %s\n", err)
 			return nil

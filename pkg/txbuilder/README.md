@@ -23,7 +23,7 @@ builder := txbuilder.NewTxBuilder(changeAddress, 512, 1.1)
 
 // Add an input
 // To spend an input you need the txid, output index, and the locking script and value from that output.
-hash, err := chainhash.NewHashFromStr("c762a29a4beb4821ad843590c3f11ffaed38b7eadc74557bdf36da3539921531")
+hash, err := bitcoin.NewHash32FromStr("c762a29a4beb4821ad843590c3f11ffaed38b7eadc74557bdf36da3539921531")
 index := uint32(0)
 value := uint64(2000)
 spendAddress, net, err := bitcoin.DecodeAddressString("mupiWN44gq3NZmvZuMMyx8KbRwism69Gbw")

@@ -3,16 +3,16 @@ package bitcoin
 import (
 	"fmt"
 
-	"github.com/tokenized/smart-contract/pkg/wire"
-
 	"github.com/btcsuite/btcd/chaincfg"
 	btcdwire "github.com/btcsuite/btcd/wire"
 )
 
+type Network uint32
+
 const (
-	MainNet       wire.BitcoinNet = 0xe8f3e1e3
-	TestNet       wire.BitcoinNet = 0xf4f3e5f4
-	StressTestNet wire.BitcoinNet = 0xfbcec4f9
+	MainNet       Network = 0xe8f3e1e3
+	TestNet       Network = 0xf4f3e5f4
+	StressTestNet Network = 0xfbcec4f9
 )
 
 var (

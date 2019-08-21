@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
@@ -28,6 +27,8 @@ const (
 	FlagBase64Format = "b64"
 	FlagSend         = "send"
 )
+
+var emptyHash bitcoin.Hash32
 
 var cmdBuild = &cobra.Command{
 	Use:   "build <typeCode> <jsonFile>",
@@ -138,14 +139,13 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Add inputs
-		var emptyHash chainhash.Hash
 		fee := tx.EstimatedFee()
 		inputValue := uint64(0)
 		for _, output := range theClient.Wallet.UnspentOutputs() {
 			if fee+tx.OutputValue(false)+funding < inputValue {
 				break
 			}
-			if output.SpentByTxId != emptyHash {
+			if !emptyHash.Equal(output.SpentByTxId) {
 				continue
 			}
 			err := tx.AddInput(output.OutPoint, output.PkScript, output.Value)

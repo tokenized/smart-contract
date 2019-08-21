@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // TestGetData tests the MsgGetData API.
@@ -37,7 +37,7 @@ func TestGetData(t *testing.T) {
 	}
 
 	// Ensure inventory vectors are added properly.
-	hash := chainhash.Hash{}
+	hash := bitcoin.Hash32{}
 	iv := NewInvVect(InvTypeBlock, &hash)
 	err := msg.AddInvVect(iv)
 	if err != nil {
@@ -72,15 +72,15 @@ func TestGetData(t *testing.T) {
 // numbers of inventory vectors and protocol versions.
 func TestGetDataWire(t *testing.T) {
 	// Block 203707 hash.
-	hashStr := "3264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
-	blockHash, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "00000000000003264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
+	blockHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Transation 1 of Block 203707 hash.
 	hashStr = "d28a3dc7392bf00a9855ee93dd9a81eff82a2c4fe57fbd42cfe71b487accfaf0"
-	txHash, err := chainhash.NewHashFromStr(hashStr)
+	txHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
@@ -237,8 +237,8 @@ func TestGetDataWireErrors(t *testing.T) {
 	wireErr := &MessageError{}
 
 	// Block 203707 hash.
-	hashStr := "3264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
-	blockHash, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "00000000000003264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
+	blockHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -14,7 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -449,11 +449,11 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 		if marked || tx.Relevant {
 			// Notify of confirm
 			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, hash)
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, *hash)
 			}
 
 			// Add to txs for block
-			if _, err = node.txs.Add(ctx, hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
+			if _, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
 				return err
 			}
 		}
@@ -486,7 +486,7 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 
 	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
 	//   processing the same tx twice at the same time.
-	if added, err := node.txs.Add(ctx, hash, tx.Trusted, tx.Safe, -1); err != nil {
+	if added, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, -1); err != nil {
 		return errors.Wrap(err, "Failed to add to tx repo")
 	} else if !added {
 		return nil // Already seen
@@ -517,13 +517,13 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 	if marked {
 		// Notify of conflicting txs
 		if len(conflicts) > 0 {
-			node.txs.MarkUnsafe(ctx, hash)
+			node.txs.MarkUnsafe(ctx, *hash)
 			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateUnsafe, hash)
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateUnsafe, *hash)
 			}
 		} else if tx.Safe {
 			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, hash)
+				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *hash)
 			}
 		}
 	} else {
@@ -1068,7 +1068,7 @@ func (node *Node) LastHeight(ctx context.Context) int {
 	return node.blocks.LastHeight()
 }
 
-func (node *Node) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+func (node *Node) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	return node.blocks.Hash(ctx, height)
 }
 

@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +22,7 @@ const (
 
 // Block represents a block on the blockchain.
 type Block struct {
-	Hash   chainhash.Hash
+	Hash   bitcoin.Hash32
 	Height int
 }
 
@@ -32,7 +32,7 @@ type BlockRepository struct {
 	store       storage.Storage
 	height      int                    // Height of the latest block
 	lastHeaders []wire.BlockHeader     // Hashes in the latest key/file
-	heights     map[chainhash.Hash]int // Lookup of block height by hash
+	heights     map[bitcoin.Hash32]int // Lookup of block height by hash
 	mutex       sync.Mutex
 }
 
@@ -43,7 +43,7 @@ func NewBlockRepository(config *data.Config, store storage.Storage) *BlockReposi
 		store:       store,
 		height:      -1,
 		lastHeaders: make([]wire.BlockHeader, 0, blocksPerKey),
-		heights:     make(map[chainhash.Hash]int),
+		heights:     make(map[bitcoin.Hash32]int),
 	}
 	return &result
 }
@@ -57,7 +57,7 @@ func (repo *BlockRepository) Initialize(ctx context.Context, genesisTime uint32)
 	header := wire.BlockHeader{Timestamp: time.Unix(int64(genesisTime), 0)}
 	repo.lastHeaders = append(repo.lastHeaders, header)
 	repo.height = 0
-	repo.heights[header.BlockHash()] = repo.height
+	repo.heights[*header.BlockHash()] = repo.height
 	return nil
 }
 
@@ -68,7 +68,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 
 	// Clear
 	repo.height = -1
-	repo.heights = make(map[chainhash.Hash]int)
+	repo.heights = make(map[bitcoin.Hash32]int)
 
 	// Build hash height map from genesis and load lastHeaders
 	previousFileSize := -1
@@ -93,7 +93,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 
 		// Add this set of headers to the heights map
 		for i, h := range headers {
-			repo.heights[h.BlockHash()] = repo.height + i + 1
+			repo.heights[*h.BlockHash()] = repo.height + i + 1
 		}
 
 		previousFileSize = len(headers)
@@ -113,11 +113,11 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 		logger.Verbose(ctx, "Adding %s genesis block", repo.config.ChainParams.Name)
 		if repo.config.ChainParams.Name == "mainnet" {
 			// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-			prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+			prevhash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 			if err != nil {
 				return errors.Wrap(err, "Failed to create genesis prev hash")
 			}
-			merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
+			merklehash, err := bitcoin.NewHash32FromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
 			if err != nil {
 				return errors.Wrap(err, "Failed to create genesis merkle hash")
 			}
@@ -131,15 +131,15 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 			}
 			repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
 			repo.height = 0
-			repo.heights[genesisHeader.BlockHash()] = repo.height
+			repo.heights[*genesisHeader.BlockHash()] = repo.height
 			logger.Verbose(ctx, "Added genesis block : %s", genesisHeader.BlockHash().String())
 		} else { // testnet
 			// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-			prevhash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+			prevhash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 			if err != nil {
 				return errors.Wrap(err, "Failed to create genesis prev hash")
 			}
-			merklehash, err := chainhash.NewHashFromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
+			merklehash, err := bitcoin.NewHash32FromStr("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b")
 			if err != nil {
 				return errors.Wrap(err, "Failed to create genesis merkle hash")
 			}
@@ -153,7 +153,7 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 			}
 			repo.lastHeaders = append(repo.lastHeaders, genesisHeader)
 			repo.height = 0
-			repo.heights[genesisHeader.BlockHash()] = repo.height
+			repo.heights[*genesisHeader.BlockHash()] = repo.height
 			logger.Verbose(ctx, "Added testnet genesis block : %s", genesisHeader.BlockHash().String())
 		}
 	}
@@ -178,7 +178,7 @@ func (repo *BlockRepository) Add(ctx context.Context, header *wire.BlockHeader) 
 
 	repo.lastHeaders = append(repo.lastHeaders, *header)
 	repo.height++
-	repo.heights[header.BlockHash()] = repo.height
+	repo.heights[*header.BlockHash()] = repo.height
 	return nil
 }
 
@@ -191,26 +191,26 @@ func (repo *BlockRepository) LastHeight() int {
 }
 
 // Return the block hash for the specified height
-func (repo *BlockRepository) LastHash() *chainhash.Hash {
+func (repo *BlockRepository) LastHash() *bitcoin.Hash32 {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
 	result := repo.lastHeaders[len(repo.lastHeaders)-1].BlockHash()
-	return &result
+	return result
 }
 
-func (repo *BlockRepository) Contains(hash chainhash.Hash) bool {
+func (repo *BlockRepository) Contains(hash *bitcoin.Hash32) bool {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
-	_, exists := repo.heights[hash]
+	_, exists := repo.heights[*hash]
 	return exists
 }
 
 // Returns:
 //   int - height of hash if it exists
 //   bool - true if the hash exists
-func (repo *BlockRepository) Height(hash *chainhash.Hash) (int, bool) {
+func (repo *BlockRepository) Height(hash *bitcoin.Hash32) (int, bool) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
@@ -219,7 +219,7 @@ func (repo *BlockRepository) Height(hash *chainhash.Hash) (int, bool) {
 }
 
 // Return the block hash for the specified height
-func (repo *BlockRepository) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+func (repo *BlockRepository) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
@@ -227,7 +227,7 @@ func (repo *BlockRepository) Hash(ctx context.Context, height int) (*chainhash.H
 }
 
 // This function is internal and doesn't lock the mutex so it can be internally without double locking.
-func (repo *BlockRepository) getHash(ctx context.Context, height int) (*chainhash.Hash, error) {
+func (repo *BlockRepository) getHash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	if height > repo.height {
 		return nil, errors.New("Hash height beyond tip") // We don't know the hash for that height yet
 	}
@@ -235,7 +235,7 @@ func (repo *BlockRepository) getHash(ctx context.Context, height int) (*chainhas
 	if repo.height-height < len(repo.lastHeaders) {
 		// This height is in the lastHeaders set
 		result := repo.lastHeaders[len(repo.lastHeaders)-1-(repo.height-height)].BlockHash()
-		return &result, nil
+		return result, nil
 	}
 
 	// Read from storage
@@ -252,7 +252,7 @@ func (repo *BlockRepository) getHash(ctx context.Context, height int) (*chainhas
 
 	offset := height % blocksPerKey
 	result := headers[offset].BlockHash()
-	return &result, nil
+	return result, nil
 }
 
 // Return the block time for the specified height

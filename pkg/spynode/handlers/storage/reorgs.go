@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
@@ -40,7 +40,7 @@ type Reorg struct {
 // Note: These do not prove the txs were in the block without all txids or a merkle tree.
 type ReorgBlock struct {
 	Header wire.BlockHeader
-	TxIds  []chainhash.Hash
+	TxIds  []bitcoin.Hash32
 }
 
 // Save saves the active reorg.
@@ -215,7 +215,7 @@ func (block *ReorgBlock) Read(buf *bytes.Buffer) error {
 		return err
 	}
 
-	block.TxIds = make([]chainhash.Hash, count)
+	block.TxIds = make([]bitcoin.Hash32, count)
 	for i, _ := range block.TxIds {
 		if _, err := buf.Read(block.TxIds[i][:]); err != nil {
 			return err

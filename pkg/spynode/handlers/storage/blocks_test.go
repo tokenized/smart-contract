@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestBlocks(test *testing.T) {
@@ -19,12 +19,12 @@ func TestBlocks(test *testing.T) {
 	testRevertHeights := [...]int{2400, 2000, 1999, 500}
 
 	// Generate block hashes
-	blocks := make([]chainhash.Hash, 0, testBlockCount)
+	blocks := make([]*bitcoin.Hash32, 0, testBlockCount)
 	seed := rand.NewSource(time.Now().UnixNano())
 	randGen := rand.New(seed)
 
 	// Setup config
-	startHash, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+	startHash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	config, err := data.NewConfig(&chaincfg.MainNetParams, "test", "Tokenized Test", startHash.String(), 8, 2000)
 	if err != nil {
 		test.Errorf("Failed to create config : %v", err)
@@ -43,7 +43,7 @@ func TestBlocks(test *testing.T) {
 		repo.Add(ctx, &header)
 		t += 600
 		blocks = append(blocks, header.BlockHash())
-		header.PrevBlock = blocks[len(blocks)-1]
+		header.PrevBlock = *blocks[len(blocks)-1]
 	}
 
 	if err := repo.Save(ctx); err != nil {
@@ -57,7 +57,7 @@ func TestBlocks(test *testing.T) {
 			test.Errorf("Failed to revert repo : %v", err)
 		}
 
-		if *repo.LastHash() != blocks[revertHeight] {
+		if !repo.LastHash().Equal(blocks[revertHeight]) {
 			test.Errorf("Failed to revert repo to height %d", revertHeight)
 		}
 

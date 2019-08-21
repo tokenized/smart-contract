@@ -15,8 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // TestGovernance is the entry point for testing governance functions.
@@ -76,7 +74,7 @@ func holderProposal(t *testing.T) {
 	proposalInputHash := fundingTx.TxHash()
 
 	// From user
-	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
+	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
@@ -181,7 +179,7 @@ func sendBallot(t *testing.T) {
 	ballotInputHash := fundingTx.TxHash()
 
 	// From pkh
-	ballotTx.TxIn = append(ballotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&ballotInputHash, 0), make([]byte, 130)))
+	ballotTx.TxIn = append(ballotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(ballotInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -481,7 +479,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	proposalInputHash := fundingTx.TxHash()
 
 	// From user
-	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
+	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
@@ -522,7 +520,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	voteInputHash := proposalTx.TxHash()
 
 	// From user
-	voteTx.TxIn = append(voteTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&voteInputHash, 1), make([]byte, 130)))
+	voteTx.TxIn = append(voteTx.TxIn, wire.NewTxIn(wire.NewOutPoint(voteInputHash, 1), make([]byte, 130)))
 
 	// To contract
 	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -583,7 +581,7 @@ func mockUpProposal(ctx context.Context) error {
 	proposalInputHash := fundingTx.TxHash()
 
 	// From user
-	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&proposalInputHash, 0), make([]byte, 130)))
+	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
@@ -693,11 +691,10 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	// Build result transaction
 	resultTx := wire.NewMsgTx(2)
 
-	var resultInputHash chainhash.Hash
-	resultInputHash = fundingTx.TxHash()
+	resultInputHash := fundingTx.TxHash()
 
 	// From issuer
-	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&resultInputHash, 0), make([]byte, 130)))
+	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(resultInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))

@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -89,27 +90,27 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// Keys
 
-	userKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	userKey, err = tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	user2Key, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	user2Key, err = tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	issuerKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	issuerKey, err = tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	oracleKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	oracleKey, err = tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}
 
-	authorityKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	authorityKey, err = tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		panic(err)
 	}

@@ -103,7 +103,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	for _, utxo := range utxos {
-		rejectTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
+		rejectTx.AddInput(wire.OutPoint{Hash: *utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
 	}
 
 	// Add a dust output to the requestor, but so they will also receive change.
@@ -178,7 +178,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Add specified inputs
 	for _, utxo := range utxos {
-		respondTx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.PkScript,
+		respondTx.AddInput(wire.OutPoint{Hash: *utxo.Hash, Index: utxo.Index}, utxo.PkScript,
 			uint64(utxo.Value))
 	}
 

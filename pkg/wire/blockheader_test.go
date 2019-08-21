@@ -27,11 +27,11 @@ func TestBlockHeader(t *testing.T) {
 	bh := NewBlockHeader(1, &hash, &merkleHash, bits, nonce)
 
 	// Ensure we get the same data back out.
-	if !bh.PrevBlock.IsEqual(&hash) {
+	if !bh.PrevBlock.Equal(&hash) {
 		t.Errorf("NewBlockHeader: wrong prev hash - got %v, want %v",
 			spew.Sprint(bh.PrevBlock), spew.Sprint(hash))
 	}
-	if !bh.MerkleRoot.IsEqual(&merkleHash) {
+	if !bh.MerkleRoot.Equal(&merkleHash) {
 		t.Errorf("NewBlockHeader: wrong merkle root - got %v, want %v",
 			spew.Sprint(bh.MerkleRoot), spew.Sprint(merkleHash))
 	}

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 var (
@@ -32,7 +30,7 @@ type Address interface {
 	String() string
 
 	// Network returns the network id for the address.
-	Network() wire.BitcoinNet
+	Network() Network
 
 	RawAddress
 }
@@ -101,7 +99,7 @@ func DecodeAddress(address string) (Address, error) {
 
 // DecodeNetMatches returns true if the decoded network id matches the specified network id.
 // All test network ids decode as TestNet.
-func DecodeNetMatches(decoded wire.BitcoinNet, desired wire.BitcoinNet) bool {
+func DecodeNetMatches(decoded Network, desired Network) bool {
 	switch decoded {
 	case MainNet:
 		return desired == MainNet
@@ -112,7 +110,7 @@ func DecodeNetMatches(decoded wire.BitcoinNet, desired wire.BitcoinNet) bool {
 	return false
 }
 
-func NewAddressFromRawAddress(st RawAddress, net wire.BitcoinNet) Address {
+func NewAddressFromRawAddress(st RawAddress, net Network) Address {
 	switch t := st.(type) {
 	case *RawAddressPKH:
 		return &AddressPKH{t, net}
@@ -200,11 +198,11 @@ func RPH(st RawAddress) ([]byte, bool) {
 /****************************************** PKH ***************************************************/
 type AddressPKH struct {
 	*RawAddressPKH
-	net wire.BitcoinNet
+	net Network
 }
 
 // NewAddressPKH creates an address from a public key hash.
-func NewAddressPKH(pkh []byte, net wire.BitcoinNet) (*AddressPKH, error) {
+func NewAddressPKH(pkh []byte, net Network) (*AddressPKH, error) {
 	st, err := NewRawAddressPKH(pkh)
 	if err != nil {
 		return nil, err
@@ -227,18 +225,18 @@ func (a *AddressPKH) String() string {
 }
 
 // Network returns the network id for the address.
-func (a *AddressPKH) Network() wire.BitcoinNet {
+func (a *AddressPKH) Network() Network {
 	return a.net
 }
 
 /******************************************* SH ***************************************************/
 type AddressSH struct {
 	*RawAddressSH
-	net wire.BitcoinNet
+	net Network
 }
 
 // NewAddressSH creates an address from a script hash.
-func NewAddressSH(sh []byte, net wire.BitcoinNet) (*AddressSH, error) {
+func NewAddressSH(sh []byte, net Network) (*AddressSH, error) {
 	st, err := NewRawAddressSH(sh)
 	if err != nil {
 		return nil, err
@@ -261,18 +259,18 @@ func (a *AddressSH) String() string {
 }
 
 // Network returns the network id for the address.
-func (a *AddressSH) Network() wire.BitcoinNet {
+func (a *AddressSH) Network() Network {
 	return a.net
 }
 
 /**************************************** MultiPKH ************************************************/
 type AddressMultiPKH struct {
 	*RawAddressMultiPKH
-	net wire.BitcoinNet
+	net Network
 }
 
 // NewAddressMultiPKH creates an address from a required signature count and some public key hashes.
-func NewAddressMultiPKH(required uint16, pkhs [][]byte, net wire.BitcoinNet) (*AddressMultiPKH, error) {
+func NewAddressMultiPKH(required uint16, pkhs [][]byte, net Network) (*AddressMultiPKH, error) {
 	st, err := NewRawAddressMultiPKH(required, pkhs)
 	if err != nil {
 		return nil, err
@@ -309,18 +307,18 @@ func (a *AddressMultiPKH) String() string {
 }
 
 // Network returns the network id for the address.
-func (a *AddressMultiPKH) Network() wire.BitcoinNet {
+func (a *AddressMultiPKH) Network() Network {
 	return a.net
 }
 
 /***************************************** RPH ************************************************/
 type AddressRPH struct {
 	*RawAddressRPH
-	net wire.BitcoinNet
+	net Network
 }
 
 // NewAddressRPH creates an address from an R puzzle hash.
-func NewAddressRPH(rph []byte, net wire.BitcoinNet) (*AddressRPH, error) {
+func NewAddressRPH(rph []byte, net Network) (*AddressRPH, error) {
 	st, err := NewRawAddressRPH(rph)
 	if err != nil {
 		return nil, err
@@ -343,7 +341,7 @@ func (a *AddressRPH) String() string {
 }
 
 // Network returns the network id for the address.
-func (a *AddressRPH) Network() wire.BitcoinNet {
+func (a *AddressRPH) Network() Network {
 	return a.net
 }
 

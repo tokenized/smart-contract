@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
-var zeroTxId chainhash.Hash
+var zeroTxId bitcoin.Hash32
 
 type UTXOs struct {
 	list []*UTXO
@@ -18,7 +17,7 @@ type UTXOs struct {
 type UTXO struct {
 	OutPoint wire.OutPoint
 	Output   wire.TxOut
-	SpentBy  chainhash.Hash // Tx Id of transaction that spent utxo
+	SpentBy  *bitcoin.Hash32 // Tx Id of transaction that spent utxo
 }
 
 // Add adds/spends UTXOs based on the tx.
@@ -47,7 +46,7 @@ func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 				if !found {
 					// Add
 					newUTXO := UTXO{
-						OutPoint: wire.OutPoint{Hash: txHash, Index: uint32(index)},
+						OutPoint: wire.OutPoint{Hash: *txHash, Index: uint32(index)},
 						Output:   *output,
 					}
 					us.list = append(us.list, &newUTXO)

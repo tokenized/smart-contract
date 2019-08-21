@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type Key struct {
@@ -27,7 +26,7 @@ func NewKey(key bitcoin.Key) *Key {
 	return &result
 }
 
-func (rk *Key) Read(buf *bytes.Buffer, net wire.BitcoinNet) error {
+func (rk *Key) Read(buf *bytes.Buffer, net bitcoin.Network) error {
 	var length uint8
 	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
 		return err

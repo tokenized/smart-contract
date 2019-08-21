@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
-
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func TestPKH(t *testing.T) {
 	tests := []struct {
 		pkhText string
-		net     wire.BitcoinNet
+		net     Network
 		want    string
 		err     error
 	}{
@@ -124,7 +122,7 @@ func TestPKH(t *testing.T) {
 func TestSH(t *testing.T) {
 	tests := []struct {
 		pkhText string
-		net     wire.BitcoinNet
+		net     Network
 		want    string
 		err     error
 	}{

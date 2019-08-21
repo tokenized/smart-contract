@@ -91,7 +91,7 @@ func createAsset(t *testing.T) {
 	assetInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
-	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
@@ -214,7 +214,7 @@ func assetIndex(t *testing.T) {
 	assetInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
-	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
@@ -271,7 +271,7 @@ func assetIndex(t *testing.T) {
 	assetInputHash = fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
-	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&assetInputHash, 0), make([]byte, 130)))
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
@@ -356,7 +356,7 @@ func assetAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -471,7 +471,7 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))

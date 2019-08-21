@@ -141,7 +141,7 @@ var cmdBench = &cobra.Command{
 		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
@@ -186,7 +186,7 @@ var cmdBench = &cobra.Command{
 		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
@@ -234,7 +234,7 @@ var cmdBench = &cobra.Command{
 			tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 				theClient.Config.FeeRate)
 
-			if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
@@ -478,7 +478,7 @@ func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, nam
 	hash := tx.TxHash()
 	for incomingTx := range client.IncomingTx.Channel {
 		for _, input := range incomingTx.TxIn {
-			if input.PreviousOutPoint.Hash == hash {
+			if input.PreviousOutPoint.Hash.Equal(hash) {
 				return incomingTx
 			}
 		}

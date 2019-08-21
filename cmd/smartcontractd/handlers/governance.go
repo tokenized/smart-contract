@@ -19,11 +19,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -61,7 +59,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
@@ -93,7 +91,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		// Sender must hold balance of at least one asset
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address) {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-				wire.BitcoinNet(w.Config.ChainParams.Net))
+				bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
 		}
@@ -147,7 +145,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-				wire.BitcoinNet(w.Config.ChainParams.Net))
+				bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Requestor is not a holder : %x %s", msg.AssetCode, address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
 		}
@@ -312,7 +310,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -322,7 +320,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve Proposal
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return errors.New("Proposal not found for vote")
 	}
@@ -415,7 +413,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
@@ -436,7 +434,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Get Proposal
-	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	hash, err := bitcoin.NewHash32(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
 		node.LogWarn(ctx, "Proposal not found for vote")
@@ -503,7 +501,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	if quantity == 0 {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
 	}
@@ -536,7 +534,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Respond with a vote
 	address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-		wire.BitcoinNet(w.Config.ChainParams.Net))
+		bitcoin.Network(w.Config.ChainParams.Net))
 	node.LogWarn(ctx, "Accepting ballot for %d from %s", quantity, address.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
@@ -558,7 +556,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Ballot counted not from contract : %s", address.String())
 	}
 
@@ -569,11 +567,11 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Ballot cast not found for ballot counted msg")
 	}
@@ -626,7 +624,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -638,7 +636,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Get Proposal
-	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	hash, err := bitcoin.NewHash32(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Proposal not found for vote")
@@ -702,7 +700,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Vote result not from contract : %x", address.String())
 	}
 
@@ -713,7 +711,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 

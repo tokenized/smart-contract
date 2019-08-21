@@ -16,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/google/uuid"
@@ -82,20 +81,20 @@ func New(logFileName string) *Test {
 		IsTest:             true,
 	}
 
-	feeKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	feeKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate fee key : %v\n", err)
 		return nil
 	}
 
-	fee2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	fee2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate fee 2 key : %v\n", err)
 		return nil
 	}
 
 	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()),
-		wire.BitcoinNet(nodeConfig.ChainParams.Net))
+		bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to create fee 2 address : %v\n", err)
 		return nil
@@ -125,13 +124,13 @@ func New(logFileName string) *Test {
 		return nil
 	}
 
-	masterKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	masterKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate master key : %v\n", err)
 		return nil
 	}
 
-	contractKey, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	contractKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate contract key : %v\n", err)
 		return nil
@@ -143,13 +142,13 @@ func New(logFileName string) *Test {
 		return nil
 	}
 
-	master2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	master2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate master 2 key : %v\n", err)
 		return nil
 	}
 
-	contract2Key, err := GenerateKey(wire.BitcoinNet(nodeConfig.ChainParams.Net))
+	contract2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
 	if err != nil {
 		fmt.Printf("main : Failed to generate contract 2 key : %v\n", err)
 		return nil
@@ -231,7 +230,7 @@ func NewContext() context.Context {
 }
 
 // GenerateKey generates a new wallet key.
-func GenerateKey(net wire.BitcoinNet) (*wallet.Key, error) {
+func GenerateKey(net bitcoin.Network) (*wallet.Key, error) {
 	key, err := bitcoin.GenerateKeyS256(net)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")

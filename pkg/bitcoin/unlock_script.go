@@ -3,12 +3,10 @@ package bitcoin
 import (
 	"bytes"
 	"errors"
-
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // AddressFromUnlockingScript returns the address associated with the specified unlocking script.
-func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Address, error) {
+func AddressFromUnlockingScript(unlockingScript []byte, net Network) (Address, error) {
 	st, err := RawAddressFromUnlockingScript(unlockingScript)
 	if err != nil {
 		return nil, err

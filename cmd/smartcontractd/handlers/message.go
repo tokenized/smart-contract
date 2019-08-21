@@ -26,7 +26,6 @@ import (
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -149,7 +148,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	if hash != nil {
 		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, m.Config.IsTest)
 	} else {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, m.Config.IsTest)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, itx.Inputs[0].UTXO.Hash, m.Config.IsTest)
 	}
 	if err != nil {
 		return nil
@@ -279,8 +278,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Get transfer tx
-	var transferTxId *chainhash.Hash
-	transferTxId, err = chainhash.NewHash(settlementRequest.TransferTxId)
+	var transferTxId *bitcoin.Hash32
+	transferTxId, err = bitcoin.NewHash32(settlementRequest.TransferTxId)
 	if err != nil {
 		return err
 	}
@@ -342,7 +341,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
 			actions.RejectContractMoved)
@@ -419,7 +418,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 			// Remove tracer for this request.
 			boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.Address)
 			if boomerangIndex != 0xffffffff {
-				outpoint := wire.OutPoint{Hash: transferTx.Hash, Index: boomerangIndex}
+				outpoint := wire.OutPoint{Hash: *transferTx.Hash, Index: boomerangIndex}
 				m.Tracer.Remove(ctx, &outpoint)
 			}
 
@@ -496,7 +495,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
 			actions.RejectContractMoved)
@@ -790,7 +789,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				settlementQuantity, err = holdings.CheckDebit(h, txid, sender.Quantity)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-						wire.BitcoinNet(config.ChainParams.Net))
+						bitcoin.Network(config.ChainParams.Net))
 					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
 						address.String(), err)
 					return rejectError{code: actions.RejectMsgMalformed}
@@ -822,7 +821,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 			if settleOutputIndex == uint32(0x0000ffff) {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					wire.BitcoinNet(config.ChainParams.Net))
+					bitcoin.Network(config.ChainParams.Net))
 				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
 					assetOffset, receiverOffset, address.String())
 			}
@@ -839,7 +838,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				settlementQuantity, err = holdings.CheckDeposit(h, txid, receiver.Quantity)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-						wire.BitcoinNet(config.ChainParams.Net))
+						bitcoin.Network(config.ChainParams.Net))
 					node.LogWarn(ctx, "Receive invalid : %x %s : %s",
 						assetTransfer.AssetCode, address.String(), err)
 					return rejectError{code: actions.RejectMsgMalformed}

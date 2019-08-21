@@ -13,7 +13,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/assets"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -115,7 +114,7 @@ func loadContract(ctx context.Context,
 				return err
 			}
 
-			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, wire.BitcoinNet(params.Net))
+			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, bitcoin.Network(params.Net))
 			fmt.Printf("#### Holding for %s\n\n", ownerAddress.String())
 
 			if err := dumpHoldingJSON(h); err != nil {

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 	MaxInvPerMsg = 50000
 
 	// Maximum payload size for an inventory vector.
-	maxInvVectPayload = 4 + chainhash.HashSize
+	maxInvVectPayload = 4 + bitcoin.Hash32Size
 )
 
 // InvType represents the allowed types of inventory vectors.  See InvVect.
@@ -53,11 +53,11 @@ func (invtype InvType) String() string {
 // another peer.
 type InvVect struct {
 	Type InvType        // Type of data
-	Hash chainhash.Hash // Hash of the data
+	Hash bitcoin.Hash32 // Hash of the data
 }
 
 // NewInvVect returns a new InvVect using the provided type and hash.
-func NewInvVect(typ InvType, hash *chainhash.Hash) *InvVect {
+func NewInvVect(typ InvType, hash *bitcoin.Hash32) *InvVect {
 	return &InvVect{
 		Type: typ,
 		Hash: *hash,

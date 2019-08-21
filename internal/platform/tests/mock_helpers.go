@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // Generate a fake funding tx so inspector can build off of it.
@@ -26,14 +25,14 @@ func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address
 // RPC Node
 
 type mockRpcNode struct {
-	txs    map[chainhash.Hash]*wire.MsgTx
+	txs    map[bitcoin.Hash32]*wire.MsgTx
 	params *chaincfg.Params
 	lock   sync.Mutex
 }
 
 func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
 	result := mockRpcNode{
-		txs:    make(map[chainhash.Hash]*wire.MsgTx),
+		txs:    make(map[bitcoin.Hash32]*wire.MsgTx),
 		params: params,
 	}
 	return &result
@@ -42,11 +41,11 @@ func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
 func (cache *mockRpcNode) SaveTX(ctx context.Context, tx *wire.MsgTx) error {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
-	cache.txs[tx.TxHash()] = tx
+	cache.txs[*tx.TxHash()] = tx
 	return nil
 }
 
-func (cache *mockRpcNode) GetTX(ctx context.Context, txid *chainhash.Hash) (*wire.MsgTx, error) {
+func (cache *mockRpcNode) GetTX(ctx context.Context, txid *bitcoin.Hash32) (*wire.MsgTx, error) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	tx, ok := cache.txs[*txid]
@@ -56,7 +55,7 @@ func (cache *mockRpcNode) GetTX(ctx context.Context, txid *chainhash.Hash) (*wir
 	return nil, errors.New("Couldn't find tx in cache")
 }
 
-func (cache *mockRpcNode) GetTXs(ctx context.Context, txids []*chainhash.Hash) ([]*wire.MsgTx, error) {
+func (cache *mockRpcNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.MsgTx, error) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 	result := make([]*wire.MsgTx, len(txids))
@@ -79,7 +78,7 @@ func (cache *mockRpcNode) GetChainParams() *chaincfg.Params {
 
 type mockHeaders struct {
 	height int
-	hashes []*chainhash.Hash
+	hashes []*bitcoin.Hash32
 	times  []uint32
 }
 
@@ -93,7 +92,7 @@ func (h *mockHeaders) LastHeight(ctx context.Context) int {
 	return h.height
 }
 
-func (h *mockHeaders) Hash(ctx context.Context, height int) (*chainhash.Hash, error) {
+func (h *mockHeaders) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	if height > h.height {
 		return nil, errors.New("Above current height")
 	}

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
@@ -19,7 +20,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -194,7 +194,7 @@ func (listener LogListener) HandleTx(ctx context.Context, msg *wire.MsgTx) (bool
 	return true, nil
 }
 
-func (listener LogListener) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+func (listener LogListener) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	listener.mutex.Lock()
 	defer listener.mutex.Unlock()
 

@@ -53,7 +53,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		lastHash = handler.blocks.LastHash()
 	}
 
-	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 && message.Headers[0].BlockHash() == *lastHash)) {
+	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 && lastHash.Equal(message.Headers[0].BlockHash()))) {
 		logger.Info(ctx, "Headers in sync at height %d", handler.blocks.LastHeight())
 		handler.state.SetPendingSync() // We are in sync
 		if handler.state.StartHeight() == -1 {
@@ -84,9 +84,9 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 			if request {
 				// Request it if it isn't already requested.
-				if handler.state.AddBlockRequest(&hash) {
-					logger.Debug(ctx, "Requesting block : %s", hash)
-					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
+				if handler.state.AddBlockRequest(hash) {
+					logger.Debug(ctx, "Requesting block : %s", hash.String())
+					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
 						response = append(response, getBlocks)
@@ -95,17 +95,17 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				}
 			}
 
-			lastHash = &hash
+			lastHash = hash
 			continue
 		}
 
-		if hash == *lastHash {
+		if hash.Equal(lastHash) {
 			continue
 		}
 
 		// Check if we already have this block
-		if handler.blocks.Contains(hash) || handler.state.BlockIsRequested(&hash) ||
-			handler.state.BlockIsToBeRequested(&hash) {
+		if handler.blocks.Contains(hash) || handler.state.BlockIsRequested(hash) ||
+			handler.state.BlockIsToBeRequested(hash) {
 			continue
 		}
 
@@ -144,7 +144,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				if len(handler.listeners) > 0 {
 					// Send block revert notification
 					hash := header.BlockHash()
-					blockMessage := BlockMessage{Hash: hash, Height: height}
+					blockMessage := BlockMessage{Hash: *hash, Height: height}
 					for _, listener := range handler.listeners {
 						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}
@@ -191,9 +191,9 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 			if request {
 				// Request it if it isn't already requested.
-				if handler.state.AddBlockRequest(&hash) {
+				if handler.state.AddBlockRequest(hash) {
 					logger.Debug(ctx, "Requesting block : %s", hash)
-					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, &hash))
+					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
 						response = append(response, getBlocks)
@@ -221,7 +221,7 @@ func (handler HeadersHandler) addHeader(ctx context.Context, header *wire.BlockH
 	startHeight := handler.state.StartHeight()
 	if startHeight == -1 {
 		// Check if it is the start block
-		if handler.config.StartHash == header.BlockHash() {
+		if handler.config.StartHash.Equal(header.BlockHash()) {
 			startHeight = handler.blocks.LastHeight() + 1
 			handler.state.SetStartHeight(startHeight)
 			logger.Verbose(ctx, "Found start block at height %d", startHeight)

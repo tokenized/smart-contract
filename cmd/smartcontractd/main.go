@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
 )
@@ -114,12 +113,12 @@ func main() {
 	// Wallet
 
 	masterWallet := bootstrap.NewWallet()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey, wire.BitcoinNet(appConfig.ChainParams.Net)); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, bitcoin.Network(appConfig.ChainParams.Net)); err != nil {
 		panic(err)
 	}
 
 	contractAddress := bitcoin.NewAddressFromRawAddress(masterWallet.KeyStore.GetAddresses()[0],
-		wire.BitcoinNet(appConfig.ChainParams.Net))
+		bitcoin.Network(appConfig.ChainParams.Net))
 	logger.Info(ctx, "Contract address : %s", contractAddress.String())
 
 	// -------------------------------------------------------------------------

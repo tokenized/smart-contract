@@ -17,11 +17,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -53,7 +51,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != contract.ErrNotFound {
 		if err == nil {
-			address := bitcoin.NewAddressFromRawAddress(rk.Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+			address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Contract already exists : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExists)
 		} else {
@@ -139,13 +137,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
 	}
@@ -164,9 +162,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
 		proposed = true
 
-		refTxId, err := chainhash.NewHash(msg.RefTxID)
+		refTxId, err := bitcoin.NewHash32(msg.RefTxID)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+			return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
 		}
 
 		// Retrieve Vote Result
@@ -342,12 +340,12 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if ct != nil && ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+	request, err := transactions.GetTx(ctx, c.MasterDB, itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 	var vt *state.Vote
 	var amendment *actions.ContractAmendment
 	if err == nil && request != nil {
@@ -355,9 +353,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		amendment, ok = request.MsgProto.(*actions.ContractAmendment)
 
 		if ok && len(amendment.RefTxID) != 0 {
-			refTxId, err := chainhash.NewHash(amendment.RefTxID)
+			refTxId, err := bitcoin.NewHash32(amendment.RefTxID)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+				return errors.Wrap(err, "Failed to convert protocol.TxId to bitcoin.Hash32")
 			}
 
 			// Retrieve Vote Result
@@ -394,7 +392,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
 		}
@@ -433,7 +431,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 			uc.AdministrationAddress = bitcoin.NewJSONRawAddress(request.Inputs[1].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
-				wire.BitcoinNet(w.Config.ChainParams.Net))
+				bitcoin.Network(w.Config.ChainParams.Net))
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
@@ -449,7 +447,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 			uc.OperatorAddress = bitcoin.NewJSONRawAddress(request.Inputs[index].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
-				wire.BitcoinNet(w.Config.ChainParams.Net))
+				bitcoin.Network(w.Config.ChainParams.Net))
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
 		}
 
@@ -628,7 +626,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 
 	// Check that it is from the master PKH
 	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address change must be from master address : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
 	}

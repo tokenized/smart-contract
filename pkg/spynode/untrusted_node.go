@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -174,7 +174,7 @@ func (node *UntrustedNode) BroadcastTx(ctx context.Context, tx *wire.MsgTx) erro
 
 // ProcessBlock is called when a block is being processed.
 // It is responsible for any cleanup as a result of a block.
-func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []chainhash.Hash) error {
+func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []*bitcoin.Hash32) error {
 	node.txTracker.Remove(ctx, txids)
 	return nil
 }

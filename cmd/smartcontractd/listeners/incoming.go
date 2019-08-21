@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -30,12 +29,12 @@ func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
 
 	server.pendingLock.Lock()
 
-	_, exists := server.pendingTxs[intx.Itx.Hash]
+	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
 		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash.String())
 	}
-	server.pendingTxs[intx.Itx.Hash] = intx
+	server.pendingTxs[*intx.Itx.Hash] = intx
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
@@ -65,12 +64,12 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 			}
 		}
 
-		server.markPreprocessed(ctx, &intx.Itx.Hash)
+		server.markPreprocessed(ctx, intx.Itx.Hash)
 	}
 	return nil
 }
 
-func (server *Server) markPreprocessed(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -94,7 +93,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 			toRemove++
 		} else if intx.IsPreprocessed && intx.IsReady {
 			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
-			delete(server.pendingTxs, intx.Itx.Hash)
+			delete(server.pendingTxs, *intx.Itx.Hash)
 			toRemove++
 		} else {
 			break
@@ -107,7 +106,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 	}
 }
 
-func (server *Server) MarkSafe(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -119,12 +118,12 @@ func (server *Server) MarkSafe(ctx context.Context, txid *chainhash.Hash) {
 	intx.IsReady = true
 	if !intx.InReady {
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 }
 
-func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -143,7 +142,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
 	}
 }
 
-func (server *Server) CancelPendingTx(ctx context.Context, txid *chainhash.Hash) bool {
+func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32) bool {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -164,7 +163,7 @@ func (server *Server) CancelPendingTx(ctx context.Context, txid *chainhash.Hash)
 	return true
 }
 
-func (server *Server) MarkConfirmed(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -176,7 +175,7 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *chainhash.Hash) {
 	intx.IsReady = true
 	if !intx.InReady {
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 }

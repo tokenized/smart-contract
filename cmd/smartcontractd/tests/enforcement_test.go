@@ -66,7 +66,7 @@ func freezeOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -166,7 +166,7 @@ func freezeAuthorityOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -256,7 +256,7 @@ func thawOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -341,7 +341,7 @@ func confiscateOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, test.ContractKey.Address.LockingScript()))
@@ -446,7 +446,7 @@ func reconcileOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, test.ContractKey.Address.LockingScript()))
@@ -548,7 +548,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))

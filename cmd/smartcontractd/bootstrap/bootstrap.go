@@ -14,7 +14,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func NewContextWithDevelopmentLogger() context.Context {
@@ -84,7 +83,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	if err != nil {
 		logger.Fatal(ctx, "Invalid fee address : %s", err)
 	}
-	if !bitcoin.DecodeNetMatches(feeAddress.Network(), wire.BitcoinNet(appConfig.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(feeAddress.Network(), bitcoin.Network(appConfig.ChainParams.Net)) {
 		logger.Fatal(ctx, "Wrong fee address encoding network")
 	}
 	appConfig.FeeAddress = feeAddress

@@ -13,7 +13,7 @@ import (
 // CacheItem is a reference to an item in the cache that needs to be written to storage.
 type CacheItem struct {
 	contractHash *bitcoin.Hash20
-	asset    *protocol.AssetCode
+	asset        *protocol.AssetCode
 	addressHash  *bitcoin.Hash20
 }
 
@@ -22,7 +22,7 @@ func NewCacheItem(contractHash *bitcoin.Hash20, asset *protocol.AssetCode,
 	addressHash *bitcoin.Hash20) *CacheItem {
 	result := CacheItem{
 		contractHash: contractHash,
-		asset:    asset,
+		asset:        asset,
 		addressHash:  addressHash,
 	}
 	return &result

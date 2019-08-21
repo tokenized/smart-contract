@@ -21,7 +21,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
 )
@@ -97,7 +96,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 
 	// -------------------------------------------------------------------------
 	// Wallet
-	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), wire.BitcoinNet(client.Config.ChainParams.Net))
+	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), bitcoin.Network(client.Config.ChainParams.Net))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +107,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
-	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), wire.BitcoinNet(client.Config.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), bitcoin.Network(client.Config.ChainParams.Net)) {
 		return nil, errors.Wrap(err, "Contract address encoded for wrong network")
 	}
 	logger.Info(ctx, "Contract address : %s", client.Config.Contract)
@@ -281,13 +280,13 @@ func (client *Client) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 }
 
 // Tx confirm, cancel, unsafe, and revert messages.
-func (client *Client) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+func (client *Client) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
 	var tx *wire.MsgTx
 	txIndex := 0
 	for i, pendingTx := range client.pendingTxs {
-		if pendingTx.TxHash() == txid {
+		if txid.Equal(pendingTx.TxHash()) {
 			tx = pendingTx
 			txIndex = i
 			break

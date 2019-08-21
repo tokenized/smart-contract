@@ -17,12 +17,10 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -59,7 +57,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
@@ -83,7 +81,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Verify administration is sender of tx.
 	if !itx.Inputs[0].Address.Equal(ct.AdministrationAddress) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotAdministration)
 	}
@@ -104,7 +102,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		address := bitcoin.NewAddressFromRawAddress(rk.Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(), assetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractFixedQuantity)
 	}
@@ -127,7 +125,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
 	}
 
-	address := bitcoin.NewAddressFromRawAddress(rk.Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+	address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
 	node.Log(ctx, "Accepting asset creation request : %s %s", address.String(), assetCode.String())
 
 	// Asset Creation <- Asset Definition
@@ -182,13 +180,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, wire.BitcoinNet(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %x %s", msg.AssetCode, address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
 	}
@@ -219,9 +217,9 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
 		proposed = true
 
-		refTxId, err := chainhash.NewHash(msg.RefTxID)
+		refTxId, err := bitcoin.NewHash32(msg.RefTxID)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+			return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
 		}
 
 		// Retrieve Vote Result
@@ -399,7 +397,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			wire.BitcoinNet(w.Config.ChainParams.Net))
+			bitcoin.Network(w.Config.ChainParams.Net))
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -410,7 +408,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
@@ -421,9 +419,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		modification, ok = request.MsgProto.(*actions.AssetModification)
 
 		if ok && len(modification.RefTxID) != 0 {
-			refTxId, err := chainhash.NewHash(modification.RefTxID)
+			refTxId, err := bitcoin.NewHash32(modification.RefTxID)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert protocol.TxId to chainhash")
+				return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
 			}
 
 			// Retrieve Vote Result

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -72,7 +71,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 
 	requests := make([]*wire.MsgTx, 0, b.N)
-	hashes := make([]*chainhash.Hash, 0, b.N)
+	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
 
@@ -100,7 +99,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferInputHash := fundingTx.TxHash()
 
 		// From issuer
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -115,7 +114,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		test.RPCNode.SaveTX(ctx, transferTx)
 		requests = append(requests, transferTx)
 		hash := transferTx.TxHash()
-		hashes = append(hashes, &hash)
+		hashes = append(hashes, hash)
 	}
 
 	test.NodeConfig.PreprocessThreads = 4
@@ -191,7 +190,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 		}
@@ -235,12 +234,12 @@ func separateTransfersBenchmark(b *testing.B) {
 	}
 
 	requests := make([]*wire.MsgTx, 0, b.N)
-	hashes := make([]*chainhash.Hash, 0, b.N)
+	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	senders := make([]*wallet.Key, 0, b.N)
 	receivers := make([]*wallet.Key, 0, b.N)
 	transferAmount := uint64(1)
 	for i := 0; i < b.N; i++ {
-		senderKey, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		senderKey, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
 		}
@@ -251,7 +250,7 @@ func separateTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 		}
 
-		receiverKey, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+		receiverKey, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
 		}
@@ -281,7 +280,7 @@ func separateTransfersBenchmark(b *testing.B) {
 		// From sender
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), senderKey.Address)
 		transferInputHash := fundingTx.TxHash()
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -296,7 +295,7 @@ func separateTransfersBenchmark(b *testing.B) {
 		test.RPCNode.SaveTX(ctx, transferTx)
 		requests = append(requests, transferTx)
 		hash := transferTx.TxHash()
-		hashes = append(hashes, &hash)
+		hashes = append(hashes, hash)
 	}
 
 	test.NodeConfig.PreprocessThreads = 4
@@ -372,7 +371,7 @@ func separateTransfersBenchmark(b *testing.B) {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 		}
@@ -433,7 +432,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	}
 
 	requests := make([]*wire.MsgTx, 0, b.N)
-	hashes := make([]*chainhash.Hash, 0, b.N)
+	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
 
@@ -482,7 +481,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferInputHash := fundingTx.TxHash()
 
 		// From issuer
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -497,7 +496,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		test.RPCNode.SaveTX(ctx, transferTx)
 		requests = append(requests, transferTx)
 		hash := transferTx.TxHash()
-		hashes = append(hashes, &hash)
+		hashes = append(hashes, hash)
 	}
 
 	test.NodeConfig.PreprocessThreads = 4
@@ -577,7 +576,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 		}
@@ -607,12 +606,12 @@ func oracleTransfersBenchmark(b *testing.B) {
 func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64) (*wire.MsgTx, *wallet.Key, *wallet.Key) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 30000+balance, sender.Address)
 
-	receiver1, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	receiver1, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
 	}
 
-	receiver2, err := tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	receiver2, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
 	}
@@ -658,7 +657,7 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
@@ -733,10 +732,10 @@ func treeTransfersBenchmark(b *testing.B) {
 	}
 
 	requests, _ := splitTransferRecurse(b, ctx, issuerKey, uint64(nodes)*2, levels)
-	hashes := make([]*chainhash.Hash, 0, nodes)
+	hashes := make([]*bitcoin.Hash32, 0, nodes)
 	for _, request := range requests {
 		hash := request.TxHash()
-		hashes = append(hashes, &hash)
+		hashes = append(hashes, hash)
 	}
 
 	test.NodeConfig.PreprocessThreads = 4
@@ -816,7 +815,7 @@ func treeTransfersBenchmark(b *testing.B) {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, response.TxHash()); err != nil {
+			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
 				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
 			}
 		}
@@ -883,7 +882,7 @@ func sendTokens(t *testing.T) {
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, test.ContractKey.Address.LockingScript()))
@@ -1008,7 +1007,7 @@ func sendTokens(t *testing.T) {
 	transferInputHash = fundingTx2.TxHash()
 
 	// From issuer
-	transferTx2.TxIn = append(transferTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx2.TxIn = append(transferTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -1172,11 +1171,11 @@ func multiExchange(t *testing.T) {
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// From user2
 	transferInputHash = funding2Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract1
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
@@ -1413,7 +1412,7 @@ func oracleTransfer(t *testing.T) {
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -1558,11 +1557,11 @@ func oracleTransferBad(t *testing.T) {
 
 	// From issuer
 	transferInputHash := fundingTx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// From user
 	bitcoinInputHash := bitcoinFundingTx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&bitcoinInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(bitcoinInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
@@ -1667,7 +1666,7 @@ func permitted(t *testing.T) {
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -1778,10 +1777,10 @@ func permittedBad(t *testing.T) {
 
 	// From issuer
 	transferInputHash := fundingTx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 	// From user2
 	transfer2InputHash := funding2Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&transfer2InputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transfer2InputHash, 0), make([]byte, 130)))
 
 	// To contract
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))

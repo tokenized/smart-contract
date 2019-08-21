@@ -10,8 +10,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 var (
@@ -46,7 +44,7 @@ var (
 // Transaction represents an ITX (Inspector Transaction) containing
 // information about a transaction that is useful to the protocol.
 type Transaction struct {
-	Hash       chainhash.Hash
+	Hash       *bitcoin.Hash32
 	MsgTx      *wire.MsgTx
 	MsgProto   actions.Action
 	Inputs     []Input
@@ -113,7 +111,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	outputs := make([]Output, 0, len(itx.MsgTx.TxOut))
 
 	for n := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, n)
+		output, err := buildOutput(itx.Hash, itx.MsgTx, n)
 
 		if err != nil {
 			return err
@@ -130,7 +128,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 	return nil
 }
 
-func buildOutput(hash *chainhash.Hash, tx *wire.MsgTx, n int) (*Output, error) {
+func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
 	// Zero value output
@@ -183,7 +181,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 	return nil
 }
 
-func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32) (*Input, error) {
+func buildInput(hash *bitcoin.Hash32, tx *wire.MsgTx, n uint32) (*Input, error) {
 	utxo := NewUTXOFromHashWire(hash, tx, n)
 
 	address, err := utxo.Address()
@@ -204,8 +202,8 @@ func buildInput(hash *chainhash.Hash, tx *wire.MsgTx, n uint32) (*Input, error) 
 }
 
 // Returns all the input hashes
-func (itx *Transaction) InputHashes() []chainhash.Hash {
-	hashes := []chainhash.Hash{}
+func (itx *Transaction) InputHashes() []bitcoin.Hash32 {
+	hashes := []bitcoin.Hash32{}
 
 	for _, txin := range itx.MsgTx.TxIn {
 		hashes = append(hashes, txin.PreviousOutPoint.Hash)
@@ -344,7 +342,7 @@ func (itx *Transaction) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (itx *Transaction) Read(buf *bytes.Buffer, isTest bool) error {
+func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	version, err := buf.ReadByte() // Version
 	if err != nil {
 		return err
@@ -377,7 +375,7 @@ func (itx *Transaction) Read(buf *bytes.Buffer, isTest bool) error {
 	// Outputs
 	outputs := []Output{}
 	for i := range itx.MsgTx.TxOut {
-		output, err := buildOutput(&itx.Hash, itx.MsgTx, i)
+		output, err := buildOutput(itx.Hash, itx.MsgTx, i)
 
 		if err != nil {
 			return err

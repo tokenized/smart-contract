@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // Prior to running test, set the following environment variables.
@@ -30,7 +30,7 @@ func ManualTestNode(test *testing.T) {
 		test.Errorf("Failed to create node : %s", err.Error())
 	}
 
-	txid, err := chainhash.NewHashFromStr(os.Getenv("TX_ID"))
+	txid, err := bitcoin.NewHash32FromStr(os.Getenv("TX_ID"))
 	test.Logf("Get Tx : %s", txid.String())
 
 	if tx, err := node.GetTX(ctx, txid); err != nil {

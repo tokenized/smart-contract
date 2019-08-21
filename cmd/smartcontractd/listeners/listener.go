@@ -8,10 +8,9 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // Implement the SpyNode Listener interface.
@@ -39,7 +38,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	return true, nil
 }
 
-func (server *Server) removeFromReverted(ctx context.Context, txid *chainhash.Hash) bool {
+func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash32) bool {
 	for i, id := range server.revertedTxs {
 		if bytes.Equal(id[:], txid[:]) {
 			server.revertedTxs = append(server.revertedTxs[:i], server.revertedTxs[i+1:]...)
@@ -50,7 +49,7 @@ func (server *Server) removeFromReverted(ctx context.Context, txid *chainhash.Ha
 	return false
 }
 
-func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
@@ -155,8 +154,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			}
 
 			// Retrieve voteTx
-			var hash *chainhash.Hash
-			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
+			var hash *bitcoin.Hash32
+			hash, err = bitcoin.NewHash32(vt.VoteTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
@@ -186,8 +185,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		}
 		for _, pt := range transfers {
 			// Retrieve transferTx
-			var hash *chainhash.Hash
-			hash, err = chainhash.NewHash(pt.TransferTxId.Bytes())
+			var hash *bitcoin.Hash32
+			hash, err = bitcoin.NewHash32(pt.TransferTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil

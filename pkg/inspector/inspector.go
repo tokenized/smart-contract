@@ -7,11 +7,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -45,8 +45,8 @@ var (
 // of looking up transactions and parameters for its network
 type NodeInterface interface {
 	SaveTX(context.Context, *wire.MsgTx) error
-	GetTX(context.Context, *chainhash.Hash) (*wire.MsgTx, error)
-	GetTXs(context.Context, []*chainhash.Hash) ([]*wire.MsgTx, error)
+	GetTX(context.Context, *bitcoin.Hash32) (*wire.MsgTx, error)
+	GetTXs(context.Context, []*bitcoin.Hash32) ([]*wire.MsgTx, error)
 }
 
 // NewTransaction builds an ITX from a raw transaction.
@@ -70,7 +70,7 @@ func NewTransaction(ctx context.Context, raw string, isTest bool) (*Transaction,
 
 // NewTransactionFromHash builds an ITX from a transaction hash
 func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string, isTest bool) (*Transaction, error) {
-	h, err := chainhash.NewHashFromStr(hash)
+	h, err := bitcoin.NewHash32FromStr(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +86,11 @@ func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string
 // NewTransactionFromWire builds an ITX from a wire Msg Tx
 func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
 	hash := tx.TxHash()
-	return NewTransactionFromHashWire(ctx, &hash, tx, isTest)
+	return NewTransactionFromHashWire(ctx, hash, tx, isTest)
 }
 
 // NewTransactionFromWire builds an ITX from a wire Msg Tx
-func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
+func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
 	// Must have inputs
 	if len(tx.TxIn) == 0 {
 		return nil, errors.Wrap(ErrMissingInputs, "parsing transaction")
@@ -112,7 +112,7 @@ func NewTransactionFromHashWire(ctx context.Context, hash *chainhash.Hash, tx *w
 	}
 
 	return &Transaction{
-		Hash:     *hash,
+		Hash:     hash,
 		MsgTx:    tx,
 		MsgProto: msg,
 	}, nil
@@ -136,9 +136,9 @@ func NewUTXOFromWire(tx *wire.MsgTx, index uint32) UTXO {
 }
 
 // NewUTXOFromHashWire returns a new UTXO from a wire message.
-func NewUTXOFromHashWire(hash *chainhash.Hash, tx *wire.MsgTx, index uint32) UTXO {
+func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) UTXO {
 	return UTXO{
-		Hash:     *hash,
+		Hash:     hash,
 		Index:    index,
 		PkScript: tx.TxOut[index].PkScript,
 		Value:    tx.TxOut[index].Value,
