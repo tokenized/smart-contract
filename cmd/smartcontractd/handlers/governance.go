@@ -61,31 +61,31 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractFrozen)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExpired)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
 	// Verify first two outputs are to contract
 	if len(itx.Outputs) < 2 || !itx.Outputs[0].Address.Equal(rk.Address) ||
 		!itx.Outputs[1].Address.Equal(rk.Address) {
 		node.LogWarn(ctx, "Proposal failed to fund vote and result txs")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientTxFeeFunding)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientTxFeeFunding)
 	}
 
 	// Check if sender is allowed to make proposal
 	if msg.Initiator == 0 { // Administration Proposal
 		if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 			node.LogWarn(ctx, "Initiator is not administration or operator")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 		}
 	} else if msg.Initiator == 1 { // Holder Proposal
 		// Sender must hold balance of at least one asset
@@ -93,27 +93,27 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	} else {
 		node.LogWarn(ctx, "Invalid Initiator value : %02x", msg.Initiator)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if int(msg.VoteSystem) >= len(ct.VotingSystems) {
 		node.LogWarn(ctx, "Proposal vote system invalid")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if msg.Specific && ct.VotingSystems[msg.VoteSystem].VoteType == "P" {
 		node.LogWarn(ctx, "Plurality votes not allowed for specific votes")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteSystemNotPermitted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteSystemNotPermitted)
 	}
 
 	// Validate messages vote related values
 	if err := vote.ValidateProposal(msg, v.Now); err != nil {
 		node.LogWarn(ctx, "Proposal validation failed : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if msg.AssetSpecificVote {
@@ -121,18 +121,18 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			protocol.AssetCodeFromBytes(msg.AssetCode))
 		if err != nil {
 			node.LogWarn(ctx, "Asset not found : %x", msg.AssetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
 			node.LogWarn(ctx, "Proposal failed. Asset frozen : %x", msg.AssetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetFrozen)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetFrozen)
 		}
 
 		// Asset does not allow voting
 		if err := asset.ValidateVoting(ctx, as, msg.Initiator, ct.VotingSystems[msg.VoteSystem]); err != nil {
 			node.LogWarn(ctx, "Asset does not allow voting: %x : %s", msg.AssetCode, err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetAuthFlags)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 		}
 
 		// Check sender balance
@@ -147,7 +147,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Requestor is not a holder : %x %s", msg.AssetCode, address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 
 		if msg.Specific {
@@ -155,12 +155,12 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.ProposedAmendments,
 				true, msg.Initiator, msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetAuthFlags)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
 				node.LogWarn(ctx, "Single option AB votes are required for specific amendments")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
 			// Validate proposed amendments.
@@ -176,26 +176,26 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments); err != nil {
 				node.LogWarn(ctx, "Asset amendments failed : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 	} else {
 		// Contract does not allow voting
 		if err := contract.ValidateVoting(ctx, ct, msg.Initiator); err != nil {
 			node.LogWarn(ctx, "Contract does not allow voting : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAuthFlags)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 		}
 
 		if msg.Specific {
 			// Contract amendments vote. Validate permissions for fields being amended.
 			if err := checkContractAmendmentsPermissions(ct, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAuthFlags)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
 				node.LogWarn(ctx, "Single option AB votes are required for specific amendments")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
 			// Validate proposed amendments.
@@ -213,7 +213,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 			if err := applyContractAmendments(&cf, msg.ProposedAmendments); err != nil {
 				node.LogWarn(ctx, "Contract amendments failed : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
@@ -221,7 +221,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		if msg.Initiator > 0 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			node.LogWarn(ctx, "Requestor is not a holder : %x", msg.AssetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	}
 
@@ -253,7 +253,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 					if field.FieldIndex == otherField.FieldIndex {
 						// Reject because of conflicting field amendment on unapplied vote.
 						node.LogWarn(ctx, "Proposed amendment conflicts with unapplied vote")
-						return node.RespondReject(ctx, w, itx, rk, actions.RejectProposalConflicts)
+						return node.RespondReject(ctx, w, itx, rk, actions.RejectionsProposalConflicts)
 					}
 				}
 			}
@@ -415,14 +415,14 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	voteTxId := protocol.TxIdFromBytes(msg.VoteTxId)
 	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err == vote.ErrNotFound {
 		node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteNotFound)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 	} else if err != nil {
 		node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
 		return errors.Wrap(err, "Failed to retrieve vote")
@@ -430,7 +430,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	if vt.Expires.Nano() <= v.Now.Nano() {
 		node.LogWarn(ctx, "Vote expired : %s", voteTxId.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteClosed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteClosed)
 	}
 
 	// Get Proposal
@@ -438,24 +438,24 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
 		node.LogWarn(ctx, "Proposal not found for vote")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	proposal, ok := proposalTx.MsgProto.(*actions.Proposal)
 	if !ok {
 		node.LogWarn(ctx, "Proposal invalid for vote")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Validate vote
 	if len(msg.Vote) > int(proposal.VoteMax) {
 		node.LogWarn(ctx, "Ballot voted on too many options")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if len(msg.Vote) == 0 {
 		node.LogWarn(ctx, "Ballot did not vote any options")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Validate all chosen options are valid.
@@ -469,7 +469,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		}
 		if !found {
 			node.LogWarn(ctx, "Ballot chose an invalid option : %s", msg.Vote)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 	}
 
@@ -483,7 +483,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			protocol.AssetCodeFromBytes(proposal.AssetCode))
 		if err != nil {
 			node.LogWarn(ctx, "Asset not found : %s", proposal.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
 		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address,
@@ -503,13 +503,13 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 	}
 
 	// TODO Check issue where two ballots are sent simultaneously and the second received before the first response is processed.
 	if err := vote.CheckBallot(ctx, vt, itx.Inputs[0].Address); err != nil {
 		node.LogWarn(ctx, "Failed to check ballot : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectBallotAlreadyCounted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsBallotAlreadyCounted)
 	}
 
 	// Build Response

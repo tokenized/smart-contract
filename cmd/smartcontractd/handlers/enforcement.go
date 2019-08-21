@@ -54,39 +54,39 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExpired)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Requestor PKH is not administration or operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	// Validate enforcement authority public key and signature
 	if msg.AuthorityIncluded {
 		if msg.SignatureAlgorithm != 1 {
 			node.LogWarn(ctx, "Invalid authority sig algo : %02x", msg.SignatureAlgorithm)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		authorityPubKey, err := bitcoin.DecodePublicKeyBytes(msg.AuthorityPublicKey)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to parse authority pub key : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		authoritySig, err := bitcoin.DecodeSignatureBytes(msg.OrderSignature)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to parse authority signature : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		sigHash, err := protocol.OrderAuthoritySigHash(ctx, rk.Address, msg)
@@ -96,7 +96,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 
 		if !authoritySig.Verify(sigHash, authorityPubKey) {
 			node.LogWarn(ctx, "Authority Sig Verify Failed")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectInvalidSignature)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
 		}
 	}
 
@@ -137,7 +137,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	// Freeze <- Order
@@ -153,7 +153,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	full := false
 	if len(msg.TargetAddresses) == 0 {
 		node.LogWarn(ctx, "No freeze target addresses specified")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	} else if len(msg.TargetAddresses) == 1 && bytes.Equal(msg.TargetAddresses[0].Address, rk.Address.Bytes()) {
 		full = true
 		freeze.Quantities = append(freeze.Quantities, &actions.QuantityIndexField{Index: 0, Quantity: 0})
@@ -166,18 +166,18 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	if len(msg.AssetCode) == 0 {
 		if !full {
 			node.LogWarn(ctx, "Zero asset code in non-full freeze")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 	} else {
 		as, err := asset.Retrieve(ctx, e.MasterDB, rk.Address, protocol.AssetCodeFromBytes(msg.AssetCode))
 		if err != nil {
 			node.LogWarn(ctx, "Asset ID not found : %x : %s", msg.AssetCode, err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
 		if !as.EnforcementOrdersPermitted {
 			node.LogWarn(ctx, "Enforcement orders not permitted on asset : %x", msg.AssetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotPermitted)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotPermitted)
 		}
 
 		if !full {
@@ -197,14 +197,14 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 				if target.Quantity == 0 {
 					node.LogWarn(ctx, "Zero quantity order is invalid : %x %s", msg.AssetCode,
 						address.String())
-					return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 				}
 
 				_, exists := used[targetAddress]
 				if exists {
 					node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode,
 						address.String())
-					return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 				}
 
 				used[targetAddress] = true
@@ -256,7 +256,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	// Get Freeze Tx
@@ -275,12 +275,12 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	as, err := asset.Retrieve(ctx, e.MasterDB, rk.Address, protocol.AssetCodeFromBytes(freeze.AssetCode))
 	if err != nil {
 		node.LogWarn(ctx, "Asset not found: %x", freeze.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 	}
 
 	if !as.EnforcementOrdersPermitted {
 		node.LogWarn(ctx, "Enforcement orders not permitted on asset : %x", freeze.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotPermitted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotPermitted)
 	}
 
 	// Thaw <- Order
@@ -292,7 +292,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	full := false
 	if len(freeze.Quantities) == 0 {
 		node.LogWarn(ctx, "No freeze target addresses specified")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	} else if len(freeze.Quantities) == 1 &&
 		freezeTx.Outputs[freeze.Quantities[0].Index].Address.Equal(rk.Address) {
 		full = true
@@ -305,7 +305,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	if len(freeze.AssetCode) == 0 {
 		if !full {
 			node.LogWarn(ctx, "Zero asset code in non-full freeze")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 	} else {
 		if !full {
@@ -324,7 +324,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 				err = holdings.CheckFreeze(h, txid, quantity.Quantity)
 				if err != nil {
 					node.LogWarn(ctx, "Freeze holding status invalid : %s : %s", address.String(), err)
-					return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 				}
 
 				node.Log(ctx, "Thaw order request : %x %s", freeze.AssetCode, address.String())
@@ -365,18 +365,18 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	as, err := asset.Retrieve(ctx, e.MasterDB, rk.Address, protocol.AssetCodeFromBytes(msg.AssetCode))
 	if err != nil {
 		node.LogWarn(ctx, "Asset not found : %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 	}
 
 	if !as.EnforcementOrdersPermitted {
 		node.LogWarn(ctx, "Enforcement orders not permitted on asset : %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotPermitted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotPermitted)
 	}
 
 	hds := make(map[bitcoin.RawAddress]*state.Holding)
@@ -422,13 +422,13 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		if target.Quantity == 0 {
 			node.LogWarn(ctx, "Zero quantity confiscation order is invalid : %x %s",
 				msg.AssetCode, address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		_, exists := hds[targetAddress]
 		if exists {
 			node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode, address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, assetCode, targetAddress, v.Now)
@@ -441,9 +441,9 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 			node.LogWarn(ctx, "Failed confiscation for holding : %x %s : %s", msg.AssetCode,
 				address.String(), err)
 			if err == holdings.ErrInsufficientHoldings {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 			} else {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
@@ -465,7 +465,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		address := bitcoin.NewAddressFromRawAddress(depositAddress,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Deposit address already used : %x %s", msg.AssetCode, address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	depositHolding, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, assetCode,
@@ -479,7 +479,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Failed confiscation deposit : %x %s : %s", msg.AssetCode,
 			address.String(), err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 	hds[depositAddress] = depositHolding
 	confiscation.DepositQty = depositHolding.PendingBalance
@@ -532,18 +532,18 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	as, err := asset.Retrieve(ctx, e.MasterDB, rk.Address, protocol.AssetCodeFromBytes(msg.AssetCode))
 	if err != nil {
 		node.LogWarn(ctx, "Asset not found: %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 	}
 
 	if !as.EnforcementOrdersPermitted {
 		node.LogWarn(ctx, "Enforcement orders not permitted on asset : %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotPermitted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotPermitted)
 	}
 
 	// Reconciliation <- Order
@@ -578,13 +578,13 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 		if target.Quantity == 0 {
 			node.LogWarn(ctx, "Zero quantity reconciliation order is invalid : %x %s", msg.AssetCode, address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		_, exists := hds[targetAddress]
 		if exists {
 			node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode, address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, assetCode, targetAddress, v.Now)
@@ -597,9 +597,9 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 			node.LogWarn(ctx, "Failed reconciliation for holding : %x %s : %s", msg.AssetCode,
 				address.String(), err)
 			if err == holdings.ErrInsufficientHoldings {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 			} else {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
@@ -620,7 +620,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	for _, quantity := range msg.BitcoinDispersions {
 		if int(quantity.Index) >= len(msg.TargetAddresses) {
 			node.LogWarn(ctx, "Invalid bitcoin dispersion index : %x %d", msg.AssetCode, quantity.Index)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		outputs[addressOutputIndex[quantity.Index]].Value += quantity.Quantity

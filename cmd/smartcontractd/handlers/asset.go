@@ -59,23 +59,23 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen : %s", ct.FreezePeriod.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractFrozen)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExpired)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, asset.FieldCount,
 		len(ct.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid asset auth flags : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Verify administration is sender of tx.
@@ -83,7 +83,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotAdministration)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotAdministration)
 	}
 
 	// Generate Asset ID
@@ -94,7 +94,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	if err != asset.ErrNotFound {
 		if err == nil {
 			node.LogWarn(ctx, "Asset already exists : %s", assetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetCodeExists)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetCodeExists)
 		} else {
 			return errors.Wrap(err, "Failed to retrieve asset")
 		}
@@ -104,25 +104,25 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	if !contract.CanHaveMoreAssets(ctx, ct) {
 		address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(), assetCode.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractFixedQuantity)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFixedQuantity)
 	}
 
 	// Validate payload
 	payload := assets.NewAssetFromCode(msg.AssetType)
 	if payload == nil {
 		node.LogWarn(ctx, "Asset payload type unknown : %s", msg.AssetType)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	asset, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
 	if err != nil {
 		node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if err := asset.Validate(); err != nil {
 		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
@@ -182,13 +182,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %x %s", msg.AssetCode, address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	assetCode := protocol.AssetCodeFromBytes(msg.AssetCode)
@@ -200,13 +200,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	// Asset could not be found
 	if as == nil {
 		node.LogVerbose(ctx, "Asset ID not found: %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetNotFound)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
 		node.LogVerbose(ctx, "Asset Revision does not match current: %x", msg.AssetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetRevision)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetRevision)
 	}
 
 	// Check proposal if there was one
@@ -226,13 +226,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		// Retrieve the vote
@@ -240,7 +240,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		vt, err := vote.Retrieve(ctx, a.MasterDB, rk.Address, voteTxId)
 		if err == vote.ErrNotFound {
 			node.LogWarn(ctx, "Vote not found : %x", voteResult.VoteTxId)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 		} else if err != nil {
 			node.LogWarn(ctx, "Failed to retrieve vote : %x : %s", voteResult.VoteTxId, err)
 			return errors.Wrap(err, "Failed to retrieve vote")
@@ -248,35 +248,35 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		if vt.CompletedAt.Nano() == 0 {
 			node.LogWarn(ctx, "Vote not complete yet")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if vt.Result != "A" {
 			node.LogWarn(ctx, "Vote result not A(Accept)")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if !vt.Specific {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if !vt.AssetSpecificVote || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
 			node.LogWarn(ctx, "Vote was not for this asset code")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		// Verify proposal amendments match these amendments.
 		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
 			node.LogWarn(ctx, "%s : Proposal has different count of amendments : %d != %d",
 				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		for i, amendment := range voteResult.ProposedAmendments {
 			if !amendment.Equal(msg.Amendments[i]) {
 				node.LogWarn(ctx, "Proposal amendment %d doesn't match", i)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
@@ -287,7 +287,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.Amendments, proposed,
 		proposalInitiator, votingSystem); err != nil {
 		node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectAssetAuthFlags)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 	}
 
 	// Asset Creation <- Asset Modification
@@ -306,7 +306,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments); err != nil {
 		node.LogWarn(ctx, "Asset amendments failed : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	var h *state.Holding
@@ -326,7 +326,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
 				if err == holdings.ErrInsufficientHoldings {
-					return node.RespondReject(ctx, w, itx, rk, actions.RejectInsufficientQuantity)
+					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 				} else {
 					return errors.Wrap(err, "Failed to reduce holdings")
 				}

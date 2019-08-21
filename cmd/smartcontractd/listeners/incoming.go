@@ -59,7 +59,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *actions.Transfer:
 			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {
-				intx.Itx.RejectCode = actions.RejectInvalidSignature
+				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 				node.LogWarn(ctx, "Invalid oracle signature : %s", err)
 			}
 		}
@@ -133,7 +133,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 
 	intx.IsReady = true
-	intx.Itx.RejectCode = actions.RejectDoubleSpend
+	intx.Itx.RejectCode = actions.RejectionsDoubleSpend
 	for i, readyID := range server.readyTxs {
 		if *readyID == *txid {
 			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)

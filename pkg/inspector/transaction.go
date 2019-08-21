@@ -61,7 +61,7 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
 			if err := itx.MsgProto.Validate(); err != nil {
-				itx.RejectCode = actions.RejectMsgMalformed
+				itx.RejectCode = actions.RejectionsMsgMalformed
 				logger.Warn(ctx, "Protocol message is invalid : %s", err)
 				return nil
 			}
@@ -80,7 +80,7 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 
 	if err := itx.MsgProto.Validate(); err != nil {
 		logger.Warn(ctx, "Protocol message is invalid : %s", err)
-		itx.RejectCode = actions.RejectMsgMalformed
+		itx.RejectCode = actions.RejectionsMsgMalformed
 		return nil
 	}
 

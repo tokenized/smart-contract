@@ -1834,7 +1834,7 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to convert reject data", tests.Failed)
 	}
 
-	if reject.RejectionCode != actions.RejectAssetNotPermitted {
+	if reject.RejectionCode != actions.RejectionsAssetNotPermitted {
 		t.Fatalf("\t%s\tRejection code incorrect : %d", tests.Failed, reject.RejectionCode)
 	}
 

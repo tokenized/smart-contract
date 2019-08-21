@@ -50,7 +50,7 @@ func (err rejectError) Error() string {
 	if err.code == 0 {
 		return err.text
 	}
-	value := actions.RejectionData(err.code)
+	value := actions.RejectionsData(err.code)
 	if value == nil {
 		return err.text
 	}
@@ -103,13 +103,13 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if msg.OfferExpiry != 0 && v.Now.Nano() > msg.OfferExpiry {
 		node.LogWarn(ctx, "Transfer expired : %d", msg.OfferExpiry)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectTransferExpired, false)
+			actions.RejectionsTransferExpired, false)
 	}
 
 	if len(msg.Assets) == 0 {
 		node.LogWarn(ctx, "Transfer has no asset transfers")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectTransferExpired, false)
+			actions.RejectionsTransferExpired, false)
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
@@ -130,19 +130,19 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectContractMoved, false)
+			actions.RejectionsContractMoved, false)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectContractFrozen, false)
+			actions.RejectionsContractFrozen, false)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectContractExpired, false)
+			actions.RejectionsContractExpired, false)
 	}
 
 	// Transfer Outputs
@@ -168,7 +168,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		node.LogWarn(ctx, "Failed to build settlement tx : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectMsgMalformed, false)
+			actions.RejectionsMsgMalformed, false)
 	}
 
 	// Update outputs to pay bitcoin receivers.
@@ -176,7 +176,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		node.LogWarn(ctx, "Failed to add bitcoin settlements : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectMsgMalformed, false)
+			actions.RejectionsMsgMalformed, false)
 	}
 
 	// Create initial settlement data
@@ -214,7 +214,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
 			node.LogWarn(ctx, "Failed to sign settle tx : %s", err)
 			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-				actions.RejectInsufficientValue, false)
+				actions.RejectionsInsufficientValue, false)
 		}
 
 		err := node.Respond(ctx, w, settleTx.MsgTx)
@@ -310,7 +310,7 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	node.LogWarn(ctx, "Transfer timed out")
-	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, actions.RejectTimeout, true)
+	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, actions.RejectionsTimeout, true)
 }
 
 // firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the one
@@ -599,7 +599,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		return rejectError{code: actions.RejectContractFrozen}
+		return rejectError{code: actions.RejectionsContractFrozen}
 	}
 
 	// Generate public key hashes for all the outputs
@@ -655,7 +655,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
 			node.LogWarn(ctx, "Asset frozen until %s", as.FreezePeriod.String())
-			return rejectError{code: actions.RejectAssetFrozen}
+			return rejectError{code: actions.RejectionsAssetFrozen}
 		}
 
 		// Find contract input
@@ -723,7 +723,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					bitcoin.Network(config.ChainParams.Net))
 				node.LogWarn(ctx, "Duplicate sender entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectMsgMalformed}
+				return rejectError{code: actions.RejectionsMsgMalformed}
 			}
 
 			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
@@ -740,16 +740,16 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
-					return rejectError{code: actions.RejectInsufficientQuantity}
+					return rejectError{code: actions.RejectionsInsufficientQuantity}
 				}
 				if err == holdings.ErrHoldingsFrozen {
 					node.LogWarn(ctx, "Frozen funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
-					return rejectError{code: actions.RejectHoldingsFrozen}
+					return rejectError{code: actions.RejectionsHoldingsFrozen}
 				}
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectMsgMalformed}
+				return rejectError{code: actions.RejectionsMsgMalformed}
 			}
 
 			// Update total send balance
@@ -790,7 +790,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					bitcoin.Network(config.ChainParams.Net))
 				node.LogWarn(ctx, "Duplicate receiver entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectMsgMalformed}
+				return rejectError{code: actions.RejectionsMsgMalformed}
 			}
 
 			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode, receiverAddress, v.Now)
@@ -805,7 +805,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					bitcoin.Network(config.ChainParams.Net))
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectMsgMalformed}
+				return rejectError{code: actions.RejectionsMsgMalformed}
 			}
 
 			// Update asset balance
@@ -824,12 +824,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			if fromNonAdministration > toAdministration {
 				node.LogWarn(ctx, "Transfers not permitted. Sending tokens not all to administration : %d/%d",
 					fromNonAdministration, toAdministration)
-				return rejectError{code: actions.RejectAssetNotPermitted}
+				return rejectError{code: actions.RejectionsAssetNotPermitted}
 			}
 			if toNonAdministration > fromAdministration {
 				node.LogWarn(ctx, "Transfers not permitted. Receiving tokens not all from administration : %d/%d",
 					toNonAdministration, fromAdministration)
-				return rejectError{code: actions.RejectAssetNotPermitted}
+				return rejectError{code: actions.RejectionsAssetNotPermitted}
 			}
 		}
 

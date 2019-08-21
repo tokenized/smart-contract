@@ -129,7 +129,7 @@ func createContract(t *testing.T) {
 	if !ok {
 		t.Fatalf("\t%s\tFailed to convert response to rejection", tests.Failed)
 	}
-	if reject.RejectionCode != actions.RejectMsgMalformed {
+	if reject.RejectionCode != actions.RejectionsMsgMalformed {
 		t.Fatalf("\t%s\tWrong reject code for contract offer reject : %d", tests.Failed,
 			reject.RejectionCode)
 	}

@@ -48,7 +48,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 //   data to determine which inputs were to have funded sending bitcoins, and return the bitcoins
 //   to them.
 func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, code uint32) error {
-	rejectionCode := actions.RejectionData(code)
+	rejectionCode := actions.RejectionsData(code)
 	if rejectionCode == nil {
 		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
 		return ErrNoResponse
@@ -204,7 +204,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
-			return RespondReject(ctx, w, itx, wk, actions.RejectInsufficientTxFeeFunding)
+			return RespondReject(ctx, w, itx, wk, actions.RejectionsInsufficientTxFeeFunding)
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse

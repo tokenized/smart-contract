@@ -53,7 +53,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		if err == nil {
 			address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
 			node.LogWarn(ctx, "Contract already exists : %s", address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractExists)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExists)
 		} else {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
@@ -61,24 +61,24 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
 		node.LogWarn(ctx, "Contract body of agreement hash is incorrect length : %d", len(msg.BodyOfAgreement))
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if msg.ContractExpiration != 0 && msg.ContractExpiration < v.Now.Nano() {
 		node.LogWarn(ctx, "Expiration already passed : %d", msg.ContractExpiration)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, contract.FieldCount, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract auth flags : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
 		if err = vote.ValidateVotingSystem(votingSystem); err != nil {
 			node.LogWarn(ctx, "Invalid voting system : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 	}
 
@@ -139,19 +139,19 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractMoved)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectNotOperator)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	if ct.Revision != msg.ContractRevision {
 		node.LogWarn(ctx, "Incorrect contract revision (%s) : specified %d != current %d",
 			ct.ContractName, msg.ContractRevision, ct.Revision)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractRevision)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractRevision)
 	}
 
 	// Check proposal if there was one
@@ -171,13 +171,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		// Retrieve the vote
@@ -185,7 +185,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		vt, err := vote.Retrieve(ctx, c.MasterDB, rk.Address, voteTxId)
 		if err == vote.ErrNotFound {
 			node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectVoteNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 		} else if err != nil {
 			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
 			return errors.Wrap(err, "Failed to retrieve vote")
@@ -193,35 +193,35 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 		if vt.CompletedAt.Nano() == 0 {
 			node.LogWarn(ctx, "Vote not complete yet")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if vt.Result != "A" {
 			node.LogWarn(ctx, "Vote result not A(Accept) : %s", vt.Result)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if !vt.Specific {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		if vt.AssetSpecificVote {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		// Verify proposal amendments match these amendments.
 		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
 			node.LogWarn(ctx, "%s : Proposal has different count of amendments : %d != %d",
 				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
 		for i, amendment := range voteResult.ProposedAmendments {
 			if !amendment.Equal(msg.Amendments[i]) {
 				node.LogWarn(ctx, "Proposal amendment %d doesn't match", i)
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
@@ -233,26 +233,26 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// unlimited asset creation is permitted.
 	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
 		node.LogWarn(ctx, "Cannot reduce allowable assets below existing number")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAssetQtyReduction)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAssetQtyReduction)
 	}
 
 	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
 		if len(itx.Inputs) < 2 {
 			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractBothOperatorsRequired)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
 		}
 
 		if itx.Inputs[0].Address.Equal(itx.Inputs[1].Address) ||
 			!contract.IsOperator(ctx, ct, itx.Inputs[0].Address) ||
 			!contract.IsOperator(ctx, ct, itx.Inputs[1].Address) {
 			node.LogVerbose(ctx, "Both operators required for operator change")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectContractBothOperatorsRequired)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
 		}
 	}
 
 	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
 		node.LogWarn(ctx, "Contract amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectContractAuthFlags)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 	}
 
 	// Contract Formation <- Contract Amendment
@@ -270,7 +270,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
 		node.LogWarn(ctx, "Contract amendments failed : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Build outputs
@@ -283,7 +283,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	if msg.ChangeAdministrationAddress {
 		if len(itx.Inputs) < 2 {
 			node.LogWarn(ctx, "New administration specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 		}
 	}
 
@@ -295,7 +295,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 		if index >= len(itx.Inputs) {
 			node.LogWarn(ctx, "New operator specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 		}
 	}
 
@@ -407,7 +407,6 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
 			nc.OperatorAddress = bitcoin.NewJSONRawAddress(offerTx.Inputs[1].Address) // Second input of offer tx
 		}
-		fmt.Printf("New Contract Admin : %x\n", nc.AdministrationAddress.Bytes())
 
 		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err)
@@ -628,13 +627,13 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address change must be from master address : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}
 
 	newContractAddress, err := bitcoin.DecodeRawAddress(msg.NewContractAddress)
 	if err != nil {
 		node.LogWarn(ctx, "Invalid new contract address : %x", msg.NewContractAddress)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}
 
 	// Check that it is to the current contract address and the new contract address
@@ -651,7 +650,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 
 	if !toCurrent || !toNew {
 		node.LogWarn(ctx, "Contract address change must be to current and new PKH")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectTxMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}
 
 	// Perform move

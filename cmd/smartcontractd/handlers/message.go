@@ -82,7 +82,7 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter,
 
 	if err := messagePayload.Validate(); err != nil {
 		node.LogWarn(ctx, "Message %04d payload is invalid : %s", msg.MessageCode, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	switch payload := messagePayload.(type) {
@@ -344,7 +344,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectContractMoved)
+			actions.RejectionsContractMoved)
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -352,13 +352,13 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectContractFrozen)
+			actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectContractExpired)
+			actions.RejectionsContractExpired)
 	}
 
 	// Check Oracle Signature
@@ -498,7 +498,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 			bitcoin.Network(w.Config.ChainParams.Net))
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectContractMoved)
+			actions.RejectionsContractMoved)
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -506,13 +506,13 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectContractFrozen)
+			actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectContractExpired)
+			actions.RejectionsContractExpired)
 	}
 
 	// Verify all the data for this contract is correct.
@@ -721,7 +721,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectContractFrozen}
+				return rejectError{code: actions.RejectionsContractFrozen}
 			}
 
 			// Locate Asset
@@ -730,10 +730,10 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				return fmt.Errorf("Asset code not found : %x : %s", assetTransfer.AssetCode, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectAssetFrozen}
+				return rejectError{code: actions.RejectionsAssetFrozen}
 			}
 			if !as.TransfersPermitted {
-				return rejectError{code: actions.RejectAssetNotPermitted}
+				return rejectError{code: actions.RejectionsAssetNotPermitted}
 			}
 		}
 
@@ -792,7 +792,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						bitcoin.Network(config.ChainParams.Net))
 					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
 						address.String(), err)
-					return rejectError{code: actions.RejectMsgMalformed}
+					return rejectError{code: actions.RejectionsMsgMalformed}
 				}
 			}
 
@@ -841,7 +841,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						bitcoin.Network(config.ChainParams.Net))
 					node.LogWarn(ctx, "Receive invalid : %x %s : %s",
 						assetTransfer.AssetCode, address.String(), err)
-					return rejectError{code: actions.RejectMsgMalformed}
+					return rejectError{code: actions.RejectionsMsgMalformed}
 				}
 			}
 
