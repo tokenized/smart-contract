@@ -629,6 +629,6 @@ func BenchmarkDoubleHashH(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = bitcoin.NewHash32(bitcoin.DoubleSha256(txBytes))
+		_, _ = bitcoin.NewHash32(bitcoin.DoubleSha256(txBytes))
 	}
 }

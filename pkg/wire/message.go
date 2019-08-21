@@ -243,7 +243,7 @@ func WriteMessageN(w io.Writer, msg Message, pver uint32, btcnet BitcoinNet) (in
 	hdr.magic = btcnet
 	hdr.command = cmd
 	hdr.length = uint32(lenp)
-	copy(hdr.checksum[:], bitcoin.DoubleSh256(payload)[0:4])
+	copy(hdr.checksum[:], bitcoin.DoubleSha256(payload)[0:4])
 
 	// Encode the header for the message.  This is done to a buffer
 	// rather than directly to the writer since writeElements doesn't
