@@ -101,6 +101,7 @@ func (wallet *Wallet) AddUTXO(txid *bitcoin.Hash32, index uint32, script []byte,
 		OutPoint: wire.OutPoint{Hash: *txid, Index: index},
 		PkScript: script,
 		Value:    uint64(value),
+		SpentByTxId: &bitcoin.Hash32{},
 	}
 	wallet.outputs = append(wallet.outputs, newOutput)
 	return true

@@ -59,6 +59,12 @@ func (h *Hash20) String() string {
 
 // Equal returns true if the parameter has the same value.
 func (h *Hash20) Equal(o *Hash20) bool {
+	if h == nil {
+		return o == nil
+	}
+	if o == nil {
+		return false
+	}
 	return bytes.Equal(h[:], o[:])
 }
 
