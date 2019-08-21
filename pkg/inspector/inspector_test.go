@@ -7,7 +7,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -95,8 +94,4 @@ func (n *TestNode) GetTXs(context.Context, []*bitcoin.Hash32) ([]*wire.MsgTx, er
 
 func (n *TestNode) SaveTX(context.Context, *wire.MsgTx) error {
 	return nil
-}
-
-func (n *TestNode) GetChainParams() *chaincfg.Params {
-	return &chaincfg.MainNetParams
 }

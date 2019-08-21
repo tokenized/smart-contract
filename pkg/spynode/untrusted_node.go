@@ -207,7 +207,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.ChainParams.Net))
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
 			if ok {
@@ -351,7 +351,7 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 			node.sendLock.Unlock()
 			break
 		}
-		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
+		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
 			node.sendLock.Unlock()
 			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}

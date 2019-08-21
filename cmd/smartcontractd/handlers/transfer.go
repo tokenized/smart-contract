@@ -126,8 +126,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
 			actions.RejectionsContractMoved, false)
@@ -720,7 +719,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			// Check sender's available unfrozen balance
 			if hds[settleOutputIndex] != nil {
 				address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				node.LogWarn(ctx, "Duplicate sender entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
 				return rejectError{code: actions.RejectionsMsgMalformed}
@@ -736,7 +735,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			if err := holdings.AddDebit(h, txid, sender.Quantity, v.Now); err != nil {
 				address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
@@ -774,7 +773,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			if settleOutputIndex == uint32(0x0000ffff) {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
 					assetOffset, receiverOffset, address.String())
 			}
@@ -787,7 +786,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			if hds[settleOutputIndex] != nil {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				node.LogWarn(ctx, "Duplicate receiver entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
 				return rejectError{code: actions.RejectionsMsgMalformed}
@@ -802,7 +801,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			if err := holdings.AddDeposit(h, txid, receiver.Quantity, v.Now); err != nil {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
 				return rejectError{code: actions.RejectionsMsgMalformed}
@@ -1078,7 +1077,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -1123,7 +1122,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			err = holdings.FinalizeTx(h, txid, timestamp)
 			if err != nil {
 				address := bitcoin.NewAddressFromRawAddress(itx.Outputs[settlementQuantity.Index].Address,
-					bitcoin.Network(w.Config.ChainParams.Net))
+					w.Config.Net)
 				return fmt.Errorf("Failed settlement finalize for holding : %x %s : %s",
 					assetSettlement.AssetCode, address.String(), err)
 			}

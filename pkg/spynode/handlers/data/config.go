@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // Config holds all configuration for the running service.
 type Config struct {
-	ChainParams    *chaincfg.Params
+	Net            bitcoin.Network
 	NodeAddress    string         // IP address of trusted external full node
 	UserAgent      string         // User agent to send to external node
 	StartHash      bitcoin.Hash32 // Hash of first block to start processing on initial run
@@ -21,9 +20,9 @@ type Config struct {
 }
 
 // NewConfig returns a new Config populated from environment variables.
-func NewConfig(chainParams *chaincfg.Params, host, useragent, starthash string, untrustedNodes, safeDelay int) (Config, error) {
+func NewConfig(net bitcoin.Network, host, useragent, starthash string, untrustedNodes, safeDelay int) (Config, error) {
 	result := Config{
-		ChainParams:    chainParams,
+		Net:            net,
 		NodeAddress:    host,
 		UserAgent:      useragent,
 		UntrustedCount: untrustedNodes,

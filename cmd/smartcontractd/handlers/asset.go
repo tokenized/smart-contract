@@ -57,7 +57,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
@@ -81,7 +81,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Verify administration is sender of tx.
 	if !itx.Inputs[0].Address.Equal(ct.AdministrationAddress) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotAdministration)
 	}
@@ -102,7 +102,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
-		address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
 		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(), assetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFixedQuantity)
 	}
@@ -125,7 +125,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
+	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
 	node.Log(ctx, "Accepting asset creation request : %s %s", address.String(), assetCode.String())
 
 	// Asset Creation <- Asset Definition
@@ -180,13 +180,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %x %s", msg.AssetCode, address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -397,7 +397,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 

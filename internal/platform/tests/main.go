@@ -75,32 +75,32 @@ func New(logFileName string) *Test {
 		ContractProviderID: "TokenizedTest",
 		Version:            "TestVersion",
 		DustLimit:          256,
-		ChainParams:        bitcoin.NewChainParams("mainnet"),
+		Net:                bitcoin.MainNet,
 		FeeRate:            1.0,
 		RequestTimeout:     1000000000000,
 		IsTest:             true,
 	}
 
-	feeKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	feeKey, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate fee key : %v\n", err)
 		return nil
 	}
 
-	fee2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	fee2Key, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate fee 2 key : %v\n", err)
 		return nil
 	}
 
 	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()),
-		bitcoin.Network(nodeConfig.ChainParams.Net))
+		nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to create fee 2 address : %v\n", err)
 		return nil
 	}
 
-	rpcNode := newMockRpcNode(nodeConfig.ChainParams)
+	rpcNode := newMockRpcNode()
 
 	// ============================================================
 	// Database
@@ -124,13 +124,13 @@ func New(logFileName string) *Test {
 		return nil
 	}
 
-	masterKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	masterKey, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate master key : %v\n", err)
 		return nil
 	}
 
-	contractKey, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	contractKey, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate contract key : %v\n", err)
 		return nil
@@ -142,13 +142,13 @@ func New(logFileName string) *Test {
 		return nil
 	}
 
-	master2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	master2Key, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate master 2 key : %v\n", err)
 		return nil
 	}
 
-	contract2Key, err := GenerateKey(bitcoin.Network(nodeConfig.ChainParams.Net))
+	contract2Key, err := GenerateKey(nodeConfig.Net)
 	if err != nil {
 		fmt.Printf("main : Failed to generate contract 2 key : %v\n", err)
 		return nil

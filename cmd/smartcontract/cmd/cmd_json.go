@@ -6,10 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 var cmdJSON = &cobra.Command{
@@ -22,8 +21,6 @@ var cmdJSON = &cobra.Command{
 			return errors.New("Missing type of payload to create.")
 		}
 
-		params := networkParams()
-
 		messageType := strings.ToLower(args[0])
 
 		var b []byte
@@ -31,7 +28,7 @@ var cmdJSON = &cobra.Command{
 
 		switch messageType {
 		case "t1":
-			b, err = buildT1(c, args, params)
+			b, err = buildT1(c, args)
 		default:
 			err = fmt.Errorf("Message type not supported yet : %v", messageType)
 		}
@@ -47,8 +44,7 @@ var cmdJSON = &cobra.Command{
 }
 
 func buildT1(cmd *cobra.Command,
-	args []string,
-	params *chaincfg.Params) ([]byte, error) {
+	args []string) ([]byte, error) {
 
 	if (len(args) > 1 && args[1] == "help") || len(args) < 5 {
 		fmt.Printf("Usage:\n  smartcontract json messagetype asset_type asset_code recipient_address quantity\n\nExample:\n  smartcontract json T1 SHC 6259cbd4e0522d8c6539f0a291bfcf4cdad9a5275925571ba1ccbdbe5ac0188d 1GtQEoDE7us5udLWuNCmbngYuwjs12EnwP 90000")
@@ -88,7 +84,7 @@ func buildT1(cmd *cobra.Command,
 
 	// Get the address. Later we will convert it to a hex encoded
 	// representation for the JSON message
-	address, err := btcutil.DecodeAddress(recipient, params)
+	address, err := bitcoin.DecodeAddress(recipient)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +100,7 @@ func buildT1(cmd *cobra.Command,
 		},
 		Receivers: []receiver{
 			{
-				Address:  fmt.Sprintf("%x", address.ScriptAddress()),
+				Address:  fmt.Sprintf("%x", address.Bytes()),
 				Quantity: qty,
 			},
 		},

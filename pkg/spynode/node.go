@@ -558,7 +558,7 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 			break
 		}
 
-		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.ChainParams.Net)); err != nil {
+		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
 			logger.Warn(ctx, "Failed to send %s message : %s", msg.Command(), err)
 			node.restart(ctx)
 			break
@@ -644,7 +644,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		if node.isStopping() {
 			break
 		}
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.ChainParams.Net))
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
 			if ok {

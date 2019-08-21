@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -69,11 +70,11 @@ func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 
 func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	appConfig := &node.Config{
+		Net:                bitcoin.NetworkFromString(cfg.Bitcoin.Network),
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
 		FeeRate:            cfg.Contract.FeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
-		ChainParams:        bitcoin.NewChainParams(cfg.Bitcoin.Network),
 		RequestTimeout:     cfg.Contract.RequestTimeout,
 		PreprocessThreads:  cfg.Contract.PreprocessThreads,
 		IsTest:             cfg.Contract.IsTest,
@@ -83,7 +84,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	if err != nil {
 		logger.Fatal(ctx, "Invalid fee address : %s", err)
 	}
-	if !bitcoin.DecodeNetMatches(feeAddress.Network(), bitcoin.Network(appConfig.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(feeAddress.Network(), appConfig.Net) {
 		logger.Fatal(ctx, "Wrong fee address encoding network")
 	}
 	appConfig.FeeAddress = feeAddress
@@ -98,4 +99,8 @@ func LoadUTXOsFromDB(ctx context.Context, masterDB *db.DB) *utxos.UTXOs {
 	}
 
 	return utxos
+}
+
+func CreateHoldingsCacheChannel(ctx context.Context) *holdings.CacheChannel {
+	return &holdings.CacheChannel{}
 }

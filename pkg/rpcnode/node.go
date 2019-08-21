@@ -23,7 +23,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
@@ -36,10 +35,9 @@ const (
 )
 
 type RPCNode struct {
-	client      *rpcclient.Client
-	txCache     map[bitcoin.Hash32]*wire.MsgTx
-	chainParams *chaincfg.Params
-	lock        sync.Mutex
+	client  *rpcclient.Client
+	txCache map[bitcoin.Hash32]*wire.MsgTx
+	lock    sync.Mutex
 }
 
 // NewNode returns a new instance of an RPC node
@@ -58,17 +56,11 @@ func NewNode(config *Config) (*RPCNode, error) {
 	}
 
 	n := &RPCNode{
-		client:      client,
-		txCache:     make(map[bitcoin.Hash32]*wire.MsgTx),
-		chainParams: config.ChainParams,
+		client:  client,
+		txCache: make(map[bitcoin.Hash32]*wire.MsgTx),
 	}
 
 	return n, nil
-}
-
-// GetChainParams returns the bitcoin network parameters (mainnet/testnet)
-func (r *RPCNode) GetChainParams() *chaincfg.Params {
-	return r.chainParams
 }
 
 // GetTX requests a tx from the remote server.

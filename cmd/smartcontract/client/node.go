@@ -20,7 +20,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
 )
@@ -42,7 +41,7 @@ type Client struct {
 }
 
 type Config struct {
-	ChainParams *chaincfg.Params
+	Net         bitcoin.Network
 	Key         string  `envconfig:"CLIENT_WALLET_KEY"`
 	FeeRate     float32 `default:"1.1" envconfig:"CLIENT_FEE_RATE"`
 	DustLimit   uint64  `default:"546" envconfig:"CLIENT_DUST_LIMIT"`
@@ -92,11 +91,11 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 		return nil, err
 	}
 
-	client.Config.ChainParams = bitcoin.NewChainParams(network)
+	client.Config.Net = bitcoin.NetworkFromString(network)
 
 	// -------------------------------------------------------------------------
 	// Wallet
-	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), bitcoin.Network(client.Config.ChainParams.Net))
+	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), client.Config.Net)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
-	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), bitcoin.Network(client.Config.ChainParams.Net)) {
+	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), client.Config.Net) {
 		return nil, errors.Wrap(err, "Contract address encoded for wrong network")
 	}
 	logger.Info(ctx, "Contract address : %s", client.Config.Contract)
@@ -118,7 +117,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 func (client *Client) setupSpyNode(ctx context.Context) error {
 	spyStorage := storage.NewFilesystemStorage(storage.NewConfig("", "", "", "standalone", os.Getenv("CLIENT_PATH")))
 
-	spyConfig, err := data.NewConfig(client.Config.ChainParams, client.Config.SpyNode.Address,
+	spyConfig, err := data.NewConfig(client.Config.Net, client.Config.SpyNode.Address,
 		client.Config.SpyNode.UserAgent, client.Config.SpyNode.StartHash,
 		client.Config.SpyNode.UntrustedClients, client.Config.SpyNode.SafeTxDelay)
 	if err != nil {

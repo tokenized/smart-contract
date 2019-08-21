@@ -125,7 +125,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
@@ -239,7 +239,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	receivers := make([]*wallet.Key, 0, b.N)
 	transferAmount := uint64(1)
 	for i := 0; i < b.N; i++ {
-		senderKey, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
+		senderKey, err := tests.GenerateKey(test.NodeConfig.Net)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
 		}
@@ -250,7 +250,7 @@ func separateTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
 		}
 
-		receiverKey, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
+		receiverKey, err := tests.GenerateKey(test.NodeConfig.Net)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to generate key : %v", tests.Failed, err)
 		}
@@ -306,7 +306,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
@@ -507,7 +507,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
@@ -606,12 +606,12 @@ func oracleTransfersBenchmark(b *testing.B) {
 func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64) (*wire.MsgTx, *wallet.Key, *wallet.Key) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 30000+balance, sender.Address)
 
-	receiver1, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
+	receiver1, err := tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
 	}
 
-	receiver2, err := tests.GenerateKey(bitcoin.Network(test.NodeConfig.ChainParams.Net))
+	receiver2, err := tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to generate receiver : %v", tests.Failed, err)
 	}
@@ -746,7 +746,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	for _, walletKey := range walletKeys {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
-	txFilter := filters.NewTxFilter(test.NodeConfig.ChainParams, pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,

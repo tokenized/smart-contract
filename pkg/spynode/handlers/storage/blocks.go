@@ -110,8 +110,8 @@ func (repo *BlockRepository) Load(ctx context.Context) error {
 
 	if filesLoaded == 0 {
 		// Add genesis
-		logger.Verbose(ctx, "Adding %s genesis block", repo.config.ChainParams.Name)
-		if repo.config.ChainParams.Name == "mainnet" {
+		logger.Verbose(ctx, "Adding %s genesis block", bitcoin.NetworkName(repo.config.Net))
+		if repo.config.Net == bitcoin.MainNet {
 			// Hash "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
 			prevhash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 			if err != nil {

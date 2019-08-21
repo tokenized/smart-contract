@@ -8,26 +8,22 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
 
 // Filters for transactions with tokenized.com op return scripts.
 type TxFilter struct {
-	chainParams *chaincfg.Params
-	pubkeys     [][]byte
-	pkhs        [][]byte
-	tracer      *Tracer
-	isTest      bool
-	lock        sync.RWMutex
+	pubkeys [][]byte
+	pkhs    [][]byte
+	tracer  *Tracer
+	isTest  bool
+	lock    sync.RWMutex
 }
 
-func NewTxFilter(chainParams *chaincfg.Params, contractPubKeys [][]byte, tracer *Tracer, isTest bool) *TxFilter {
+func NewTxFilter(contractPubKeys [][]byte, tracer *Tracer, isTest bool) *TxFilter {
 	result := TxFilter{
-		chainParams: chainParams,
-		tracer:      tracer,
-		isTest:      isTest,
-		pubkeys:     contractPubKeys,
+		tracer:  tracer,
+		isTest:  isTest,
+		pubkeys: contractPubKeys,
 	}
 
 	result.pubkeys = make([][]byte, 0, len(contractPubKeys))

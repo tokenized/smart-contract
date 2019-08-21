@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
@@ -18,10 +17,9 @@ func ManualTestNode(test *testing.T) {
 	ctx := context.Background()
 
 	config := &Config{
-		Host:        os.Getenv("RPC_HOST"),
-		Username:    os.Getenv("RPC_USERNAME"),
-		Password:    os.Getenv("RPC_PASSWORD"),
-		ChainParams: &chaincfg.MainNetParams,
+		Host:     os.Getenv("RPC_HOST"),
+		Username: os.Getenv("RPC_USERNAME"),
+		Password: os.Getenv("RPC_PASSWORD"),
 	}
 	test.Logf("Connect to %s as %s password : %s", config.Host, config.Username, config.Password)
 

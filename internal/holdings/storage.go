@@ -155,6 +155,18 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 	return readResult, nil
 }
 
+// ProcessCacheItems waits for items on the cache channel and writes them to storage. It exits when
+//   the channel is closed.
+func ProcessCacheItems(ctx context.Context, dbConn *db.DB, ch *CacheChannel) error {
+	for ci := range ch.Channel {
+		if err := ci.Write(ctx, dbConn); err != nil && err != ErrNotInCache {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func copyHolding(h *state.Holding) *state.Holding {
 	result := *h
 	result.HoldingStatuses = make(map[protocol.TxId]*state.HoldingStatus)

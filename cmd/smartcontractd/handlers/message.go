@@ -341,7 +341,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
 			actions.RejectionsContractMoved)
@@ -495,7 +495,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
 			actions.RejectionsContractMoved)
@@ -789,7 +789,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				settlementQuantity, err = holdings.CheckDebit(h, txid, sender.Quantity)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-						bitcoin.Network(config.ChainParams.Net))
+						config.Net)
 					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
 						address.String(), err)
 					return rejectError{code: actions.RejectionsMsgMalformed}
@@ -821,7 +821,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 			if settleOutputIndex == uint32(0x0000ffff) {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					bitcoin.Network(config.ChainParams.Net))
+					config.Net)
 				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
 					assetOffset, receiverOffset, address.String())
 			}
@@ -838,7 +838,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				settlementQuantity, err = holdings.CheckDeposit(h, txid, receiver.Quantity)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-						bitcoin.Network(config.ChainParams.Net))
+						config.Net)
 					node.LogWarn(ctx, "Receive invalid : %x %s : %s",
 						assetTransfer.AssetCode, address.String(), err)
 					return rejectError{code: actions.RejectionsMsgMalformed}

@@ -90,8 +90,7 @@ func NewServer(
 	keys := wallet.ListAll()
 	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
 	for _, key := range keys {
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
-			bitcoin.Network(config.ChainParams.Net))
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()), config.Net)
 		if err != nil {
 			return nil
 		}
@@ -210,7 +209,7 @@ func (server *Server) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	if err := server.wallet.Save(ctx, server.MasterDB, bitcoin.Network(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 
@@ -334,7 +333,7 @@ func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 
 	node.Log(ctx, "Adding key : %x", bitcoin.Hash160(k.PublicKey().Bytes()))
 	server.wallet.Add(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, bitcoin.Network(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 	server.contractAddresses = append(server.contractAddresses, address)
@@ -364,10 +363,10 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 		return nil
 	}
 
-	stringAddress := bitcoin.NewAddressFromRawAddress(address, bitcoin.Network(server.Config.ChainParams.Net))
+	stringAddress := bitcoin.NewAddressFromRawAddress(address, server.Config.Net)
 	node.Log(ctx, "Removing key : %s", stringAddress.String())
 	server.wallet.Remove(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, bitcoin.Network(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 

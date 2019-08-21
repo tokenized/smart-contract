@@ -10,8 +10,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
 
 func TestBlocks(test *testing.T) {
@@ -25,7 +23,7 @@ func TestBlocks(test *testing.T) {
 
 	// Setup config
 	startHash, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
-	config, err := data.NewConfig(&chaincfg.MainNetParams, "test", "Tokenized Test", startHash.String(), 8, 2000)
+	config, err := data.NewConfig(bitcoin.MainNet, "test", "Tokenized Test", startHash.String(), 8, 2000)
 	if err != nil {
 		test.Errorf("Failed to create config : %v", err)
 	}

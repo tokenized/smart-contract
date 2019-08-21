@@ -59,7 +59,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
@@ -91,7 +91,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		// Sender must hold balance of at least one asset
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address) {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
@@ -145,7 +145,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Requestor is not a holder : %x %s", msg.AssetCode, address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
@@ -310,7 +310,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -413,7 +413,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
@@ -501,7 +501,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	if quantity == 0 {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 	}
@@ -534,7 +534,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Respond with a vote
 	address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-		bitcoin.Network(w.Config.ChainParams.Net))
+		w.Config.Net)
 	node.LogWarn(ctx, "Accepting ballot for %d from %s", quantity, address.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
@@ -556,7 +556,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Ballot counted not from contract : %s", address.String())
 	}
 
@@ -567,7 +567,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -624,7 +624,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -700,7 +700,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Vote result not from contract : %x", address.String())
 	}
 
@@ -711,7 +711,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 

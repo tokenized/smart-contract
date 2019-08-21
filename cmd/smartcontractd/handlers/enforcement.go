@@ -52,7 +52,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
@@ -65,7 +65,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogWarn(ctx, "Requestor PKH is not administration or operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -135,7 +135,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -191,7 +191,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 					return errors.Wrap(err, "Failed to read target address")
 				}
 				address := bitcoin.NewAddressFromRawAddress(targetAddress,
-					bitcoin.Network(w.Config.ChainParams.Net))
+					w.Config.Net)
 				node.Log(ctx, "Freeze order request : %x %s", msg.AssetCode, address.String())
 
 				if target.Quantity == 0 {
@@ -254,7 +254,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -314,7 +314,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 			txid := protocol.TxIdFromBytes(msg.FreezeTxId)
 			for _, quantity := range freeze.Quantities {
 				address := bitcoin.NewAddressFromRawAddress(freezeTx.Outputs[quantity.Index].Address,
-					bitcoin.Network(w.Config.ChainParams.Net))
+					w.Config.Net)
 				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address,
 					assetCode, freezeTx.Outputs[quantity.Index].Address, v.Now)
 				if err != nil {
@@ -363,7 +363,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -417,7 +417,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 		if err != nil {
 			return errors.Wrap(err, "Failed to read target address")
 		}
-		address := bitcoin.NewAddressFromRawAddress(targetAddress, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(targetAddress, w.Config.Net)
 
 		if target.Quantity == 0 {
 			node.LogWarn(ctx, "Zero quantity confiscation order is invalid : %x %s",
@@ -463,7 +463,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	_, exists := hds[depositAddress]
 	if exists {
 		address := bitcoin.NewAddressFromRawAddress(depositAddress,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Deposit address already used : %x %s", msg.AssetCode, address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
@@ -476,7 +476,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	err = holdings.AddDeposit(depositHolding, txid, depositAmount, v.Now)
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(depositAddress,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Failed confiscation deposit : %x %s : %s", msg.AssetCode,
 			address.String(), err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -530,7 +530,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -574,7 +574,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 		if err != nil {
 			return errors.Wrap(err, "Failed to read target address")
 		}
-		address := bitcoin.NewAddressFromRawAddress(targetAddress, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(targetAddress, w.Config.Net)
 
 		if target.Quantity == 0 {
 			node.LogWarn(ctx, "Zero quantity reconciliation order is invalid : %x %s", msg.AssetCode, address.String())
@@ -671,7 +671,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Freeze not from contract : %s", address.String())
 	}
 
@@ -682,7 +682,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -731,7 +731,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 				_, exists := hds[itx.Outputs[quantity.Index].Address]
 				if exists {
 					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						bitcoin.Network(w.Config.ChainParams.Net))
+						w.Config.Net)
 					node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode,
 						address.String())
 					return fmt.Errorf("Address used more than once : %x %s", msg.AssetCode,
@@ -747,7 +747,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 				err = holdings.AddFreeze(h, txid, quantity.Quantity, freezePeriod, timestamp)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						bitcoin.Network(w.Config.ChainParams.Net))
+						w.Config.Net)
 					node.LogWarn(ctx, "Failed to add freeze to holding : %x %s : %s",
 						msg.AssetCode, address.String(), err)
 					return fmt.Errorf("Failed to add freeze to holding : %x %s : %s",
@@ -795,7 +795,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Thaw not from contract : %s", address.String())
 	}
 
@@ -806,7 +806,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -868,7 +868,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 				_, exists := hds[itx.Outputs[quantity.Index].Address]
 				if exists {
 					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						bitcoin.Network(w.Config.ChainParams.Net))
+						w.Config.Net)
 					node.LogWarn(ctx, "Address used more than once : %x %s", freeze.AssetCode,
 						address.String())
 					return fmt.Errorf("Address used more than once : %x %s", freeze.AssetCode,
@@ -884,7 +884,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 				err = holdings.RevertStatus(h, freezeTxId)
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						bitcoin.Network(w.Config.ChainParams.Net))
+						w.Config.Net)
 					node.LogWarn(ctx, "Failed thaw for holding : %x %s : %s", freeze.AssetCode,
 						address.String(), err)
 					return fmt.Errorf("Failed thaw for holding : %x %s : %s", freeze.AssetCode,
@@ -930,7 +930,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	// Locate Asset
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Confiscation not from contract : %s", address.String())
 	}
 
@@ -941,7 +941,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -955,7 +955,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		_, exists := hds[itx.Outputs[quantity.Index].Address]
 		if exists {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode, address.String())
 			return fmt.Errorf("Address used more than once : %x %s", msg.AssetCode, address.String())
 		}
@@ -969,7 +969,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		err = holdings.FinalizeTx(h, txid, timestamp)
 		if err != nil {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Failed confiscation finalize for holding : %x %s : %s",
 				msg.AssetCode, address.String(), err)
 			return fmt.Errorf("Failed confiscation finalize for holding : %x %s : %s",
@@ -993,7 +993,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	err = holdings.FinalizeTx(h, txid, timestamp)
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(itx.Outputs[highestIndex+1].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		node.LogWarn(ctx, "Failed confiscation finalize for holding : %x %s : %s",
 			msg.AssetCode, address.String(), err)
 		return fmt.Errorf("Failed confiscation finalize for holding : %x %s : %s",
@@ -1035,7 +1035,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Reconciliation not from contract : %s", address.String())
 	}
 
@@ -1046,7 +1046,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 
 	if ct.MovedTo != nil {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			bitcoin.Network(w.Config.ChainParams.Net))
+			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -1058,7 +1058,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 		_, exists := hds[itx.Outputs[quantity.Index].Address]
 		if exists {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Address used more than once : %x %s", msg.AssetCode, address.String())
 			return fmt.Errorf("Address used more than once : %x %s", msg.AssetCode, address.String())
 		}
@@ -1072,7 +1072,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 		err = holdings.FinalizeTx(h, txid, timestamp)
 		if err != nil {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.LogWarn(ctx, "Failed reconciliation finalize for holding : %x %s : %s",
 				msg.AssetCode, address.String(), err)
 			return fmt.Errorf("Failed reconciliation finalize for holding : %x %s : %s",

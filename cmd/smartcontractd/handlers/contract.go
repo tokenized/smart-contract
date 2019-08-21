@@ -51,7 +51,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
 	if err != contract.ErrNotFound {
 		if err == nil {
-			address := bitcoin.NewAddressFromRawAddress(rk.Address, bitcoin.Network(w.Config.ChainParams.Net))
+			address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
 			node.LogWarn(ctx, "Contract already exists : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExists)
 		} else {
@@ -137,13 +137,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
@@ -340,7 +340,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if ct != nil && ct.MovedTo != nil {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
@@ -430,7 +430,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 			uc.AdministrationAddress = bitcoin.NewJSONRawAddress(request.Inputs[1].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
@@ -446,7 +446,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 			uc.OperatorAddress = bitcoin.NewJSONRawAddress(request.Inputs[index].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
-				bitcoin.Network(w.Config.ChainParams.Net))
+				w.Config.Net)
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
 		}
 
@@ -625,7 +625,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 
 	// Check that it is from the master PKH
 	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, bitcoin.Network(w.Config.ChainParams.Net))
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogWarn(ctx, "Contract address change must be from master address : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}

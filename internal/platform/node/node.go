@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -54,7 +53,7 @@ type Config struct {
 	Version            string
 	FeeAddress         bitcoin.RawAddress
 	DustLimit          uint64
-	ChainParams        *chaincfg.Params
+	Net                bitcoin.Network
 	FeeRate            float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 	PreprocessThreads  int

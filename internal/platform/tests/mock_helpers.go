@@ -9,8 +9,6 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
 
 // Generate a fake funding tx so inspector can build off of it.
@@ -25,15 +23,13 @@ func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address
 // RPC Node
 
 type mockRpcNode struct {
-	txs    map[bitcoin.Hash32]*wire.MsgTx
-	params *chaincfg.Params
-	lock   sync.Mutex
+	txs  map[bitcoin.Hash32]*wire.MsgTx
+	lock sync.Mutex
 }
 
-func newMockRpcNode(params *chaincfg.Params) *mockRpcNode {
+func newMockRpcNode() *mockRpcNode {
 	result := mockRpcNode{
-		txs:    make(map[bitcoin.Hash32]*wire.MsgTx),
-		params: params,
+		txs: make(map[bitcoin.Hash32]*wire.MsgTx),
 	}
 	return &result
 }
@@ -67,10 +63,6 @@ func (cache *mockRpcNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) (
 		result[i] = tx
 	}
 	return result, nil
-}
-
-func (cache *mockRpcNode) GetChainParams() *chaincfg.Params {
-	return cache.params
 }
 
 // ============================================================

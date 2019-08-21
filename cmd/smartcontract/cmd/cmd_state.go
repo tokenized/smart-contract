@@ -15,7 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/assets"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -33,8 +32,6 @@ var cmdState = &cobra.Command{
 
 		cfg := bootstrap.NewConfigFromEnv(ctx)
 
-		params := bitcoin.NewChainParams(cfg.Bitcoin.Network)
-
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err != nil {
 			return err
@@ -42,7 +39,8 @@ var cmdState = &cobra.Command{
 
 		masterDB := bootstrap.NewMasterDB(ctx, cfg)
 
-		return loadContract(ctx, c, masterDB, address, params)
+		return loadContract(ctx, c, masterDB, address,
+			bitcoin.NetworkFromString(cfg.Bitcoin.Network))
 	},
 }
 
@@ -50,7 +48,7 @@ func loadContract(ctx context.Context,
 	cmd *cobra.Command,
 	db *db.DB,
 	address bitcoin.Address,
-	params *chaincfg.Params) error {
+	net bitcoin.Network) error {
 
 	c, err := contract.Fetch(ctx, db, address)
 	if err != nil {
@@ -114,7 +112,7 @@ func loadContract(ctx context.Context,
 				return err
 			}
 
-			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, bitcoin.Network(params.Net))
+			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, net)
 			fmt.Printf("#### Holding for %s\n\n", ownerAddress.String())
 
 			if err := dumpHoldingJSON(h); err != nil {

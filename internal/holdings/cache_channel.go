@@ -73,15 +73,3 @@ func (c *CacheChannel) Close() error {
 	c.open = false
 	return nil
 }
-
-// ProcessCacheItems waits for items on the cache channel and writes them to storage. It exits when
-//   the channel is closed.
-func ProcessCacheItems(ctx context.Context, dbConn *db.DB, ch *CacheChannel) error {
-	for ci := range ch.Channel {
-		if err := ci.Write(ctx, dbConn); err != nil && err != ErrNotInCache {
-			return err
-		}
-	}
-
-	return nil
-}
