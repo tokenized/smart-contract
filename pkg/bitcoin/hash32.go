@@ -55,7 +55,9 @@ func (h *Hash32) SetBytes(b []byte) error {
 
 // String returns the hex for the hash.
 func (h *Hash32) String() string {
-	return fmt.Sprintf("%x", h[:])
+	var r [Hash32Size]byte
+	reverse32(r[:], h[:])
+	return fmt.Sprintf("%x", r[:])
 }
 
 // Equal returns true if the parameter has the same value.
@@ -88,7 +90,9 @@ func DeserializeHash32(r io.Reader) (*Hash32, error) {
 
 // MarshalJSON converts to json.
 func (h *Hash32) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%x\"", h[:])), nil
+	var r [Hash32Size]byte
+	reverse32(r[:], h[:])
+	return []byte(fmt.Sprintf("\"%x\"", r[:])), nil
 }
 
 // UnmarshalJSON converts from json.
