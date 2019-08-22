@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -23,7 +23,7 @@ type State struct {
 	headersRequested   *time.Time        // Time that headers were last requested
 	startHeight        int               // Height of start block (to start pulling full blocks)
 	blocksRequested    []*requestedBlock // Blocks that have been requested
-	blocksToRequest    []chainhash.Hash  // Blocks that need to be requested
+	blocksToRequest    []bitcoin.Hash32  // Blocks that need to be requested
 	pendingSync        bool              // The peer has notified us of all blocks. Now we just have to process to catch up.
 	restartCount       int               // Number of restarts since last clear
 	lock               sync.Mutex
@@ -44,7 +44,7 @@ func NewState() *State {
 		headersRequested:   nil,
 		startHeight:        -1,
 		blocksRequested:    make([]*requestedBlock, 0, maxRequestedBlocks),
-		blocksToRequest:    make([]chainhash.Hash, 0, 2000),
+		blocksToRequest:    make([]bitcoin.Hash32, 0, 2000),
 		pendingSync:        false,
 		restartCount:       0,
 	}

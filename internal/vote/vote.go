@@ -8,7 +8,9 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -21,12 +23,12 @@ var (
 )
 
 // Retrieve gets the specified vote from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, voteID *protocol.TxId) (*state.Vote, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *protocol.TxId) (*state.Vote, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Retrieve")
 	defer span.End()
 
 	// Find vote in storage
-	v, err := Fetch(ctx, dbConn, contractPKH, voteID)
+	v, err := Fetch(ctx, dbConn, contractAddress, voteID)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +37,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKe
 }
 
 // Create the vote
-func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, voteID *protocol.TxId, nv *NewVote,
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *protocol.TxId, nv *NewVote,
 	now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Create")
 	defer span.End()
@@ -52,17 +54,17 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	v.CreatedAt = now
 	v.UpdatedAt = now
 
-	return Save(ctx, dbConn, contractPKH, &v)
+	return Save(ctx, dbConn, contractAddress, &v)
 }
 
 // Update the vote
-func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	voteTxId *protocol.TxId, uv *UpdateVote, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Update")
 	defer span.End()
 
 	// Find vote
-	v, err := Fetch(ctx, dbConn, contractPKH, voteTxId)
+	v, err := Fetch(ctx, dbConn, contractAddress, voteTxId)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -82,7 +84,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		v.OptionTally = *uv.OptionTally
 	}
 	if uv.AppliedTxId != nil {
-		v.AppliedTxId = *uv.AppliedTxId
+		v.AppliedTxId = uv.AppliedTxId
 	}
 	if uv.NewBallot != nil {
 		v.Ballots = append(v.Ballots, uv.NewBallot)
@@ -90,30 +92,30 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 
 	v.UpdatedAt = now
 
-	return Save(ctx, dbConn, contractPKH, v)
+	return Save(ctx, dbConn, contractAddress, v)
 }
 
 // Mark the vote as applied
-func MarkApplied(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func MarkApplied(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	voteTxId *protocol.TxId, appliedTxID *protocol.TxId, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.MarkApplied")
 	defer span.End()
 
 	// Find vote
-	v, err := Fetch(ctx, dbConn, contractPKH, voteTxId)
+	v, err := Fetch(ctx, dbConn, contractAddress, voteTxId)
 	if err != nil {
 		return ErrNotFound
 	}
 
-	v.AppliedTxId = *appliedTxID
+	v.AppliedTxId = appliedTxID
 	v.UpdatedAt = now
 
-	return Save(ctx, dbConn, contractPKH, v)
+	return Save(ctx, dbConn, contractAddress, v)
 }
 
-func CheckBallot(ctx context.Context, vt *state.Vote, holderPKH *protocol.PublicKeyHash) error {
+func CheckBallot(ctx context.Context, vt *state.Vote, holderAddress bitcoin.RawAddress) error {
 	for _, bt := range vt.Ballots {
-		if bytes.Equal(bt.PKH.Bytes(), holderPKH.Bytes()) {
+		if bt.Address.Equal(holderAddress) {
 			return errors.New("Ballot already accepted for pkh")
 		}
 	}
@@ -121,17 +123,17 @@ func CheckBallot(ctx context.Context, vt *state.Vote, holderPKH *protocol.Public
 	return nil
 }
 
-func AddBallot(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash,
+func AddBallot(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	vt *state.Vote, ballot *state.Ballot, now protocol.Timestamp) error {
 	for _, bt := range vt.Ballots {
-		if bytes.Equal(bt.PKH.Bytes(), ballot.PKH.Bytes()) {
+		if bytes.Equal(bt.Address.Bytes(), ballot.Address.Bytes()) {
 			return errors.New("Ballot already accepted for pkh")
 		}
 	}
 
 	uv := UpdateVote{NewBallot: ballot}
 
-	if err := Update(ctx, dbConn, contractPKH, &vt.VoteTxId, &uv, now); err != nil {
+	if err := Update(ctx, dbConn, contractAddress, vt.VoteTxId, &uv, now); err != nil {
 		return errors.Wrap(err, "Failed to update vote")
 	}
 
@@ -140,7 +142,8 @@ func AddBallot(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicK
 }
 
 // CalculateResults calculates the result of a completed vote.
-func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Proposal, votingSystem *protocol.VotingSystem) ([]uint64, string, error) {
+func CalculateResults(ctx context.Context, vt *state.Vote, proposal *actions.Proposal,
+	votingSystem *actions.VotingSystemField) ([]uint64, string, error) {
 
 	floatTallys := make([]float32, len(proposal.VoteOptions))
 	votedQuantity := uint64(0)
@@ -185,17 +188,17 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Pr
 			}
 
 			switch votingSystem.VoteType {
-			case 'R': // Relative
+			case "R": // Relative
 				if floatTally/float32(votedQuantity) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
 					highestScore = floatTally
 				}
-			case 'A': // Absolute
+			case "A": // Absolute
 				if floatTally/float32(vt.TokenQty) >= float32(votingSystem.ThresholdPercentage)/100.0 {
 					highestIndex = i
 					highestScore = floatTally
 				}
-			case 'P': // Plurality
+			case "P": // Plurality
 				highestIndex = i
 				highestScore = floatTally
 			}
@@ -219,9 +222,9 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *protocol.Pr
 	return tallys, winners.String(), nil
 }
 
-func ValidateVotingSystem(system *protocol.VotingSystem) error {
-	if system.VoteType != 'R' && system.VoteType != 'A' && system.VoteType != 'P' {
-		return fmt.Errorf("Threshold Percentage out of range : %c", system.VoteType)
+func ValidateVotingSystem(system *actions.VotingSystemField) error {
+	if system.VoteType != "R" && system.VoteType != "A" && system.VoteType != "P" {
+		return fmt.Errorf("Threshold Percentage out of range : %s", system.VoteType)
 	}
 	if system.ThresholdPercentage == 0 || system.ThresholdPercentage >= 100 {
 		return fmt.Errorf("Threshold Percentage out of range : %d", system.ThresholdPercentage)

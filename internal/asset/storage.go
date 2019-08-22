@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -19,25 +20,31 @@ const storageSubKey = "assets"
 var cache map[protocol.AssetCode]*state.Asset
 
 // Put a single asset in storage
-func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, asset *state.Asset) error {
+func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	asset *state.Asset) error {
+
 	data, err := serializeAsset(asset)
 	if err != nil {
 		return errors.Wrap(err, "Failed to serialize asset")
 	}
 
-	if err := dbConn.Put(ctx, buildStoragePath(contractPKH, &asset.ID), data); err != nil {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return err
+	}
+	if err := dbConn.Put(ctx, buildStoragePath(contractHash, asset.Code), data); err != nil {
 		return err
 	}
 
 	if cache == nil {
 		cache = make(map[protocol.AssetCode]*state.Asset)
 	}
-	cache[asset.ID] = asset
+	cache[*asset.Code] = asset
 	return nil
 }
 
 // Fetch a single asset from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode) (*state.Asset, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode) (*state.Asset, error) {
 	if cache != nil {
 		result, exists := cache[*assetCode]
 		if exists {
@@ -45,7 +52,11 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 		}
 	}
 
-	key := buildStoragePath(contractPKH, assetCode)
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+	key := buildStoragePath(contractHash, assetCode)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -58,7 +69,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 
 	// Prepare the asset object
 	asset := state.Asset{}
-	if err := deserializeAsset(bytes.NewBuffer(b), &asset); err != nil {
+	if err := deserializeAsset(bytes.NewReader(b), &asset); err != nil {
 		return nil, errors.Wrap(err, "Failed to deserialize asset")
 	}
 
@@ -70,8 +81,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractPKH *protocol.PublicKeyHash, asset *protocol.AssetCode) string {
-	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractPKH.String(), storageSubKey, asset.String())
+func buildStoragePath(contractHash *bitcoin.Hash20, asset *protocol.AssetCode) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, asset.String())
 }
 
 func serializeAsset(as *state.Asset) ([]byte, error) {
@@ -82,11 +93,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := as.ID.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := as.Code.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
@@ -94,27 +101,15 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err = as.CreatedAt.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := as.CreatedAt.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
-	data, err = as.UpdatedAt.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := as.UpdatedAt.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
-	data, err = as.Timestamp.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := as.Timestamp.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
@@ -134,8 +129,10 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, uint32(len(as.TradeRestrictions))); err != nil {
 		return nil, err
 	}
+	var tr [3]byte
 	for _, rest := range as.TradeRestrictions {
-		if err := binary.Write(&buf, binary.LittleEndian, rest); err != nil {
+		copy(tr[:], []byte(rest))
+		if _, err := buf.Write(tr[:]); err != nil {
 			return nil, err
 		}
 	}
@@ -171,11 +168,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err = as.FreezePeriod.Serialize()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(data); err != nil {
+	if err := as.FreezePeriod.Serialize(&buf); err != nil {
 		return nil, err
 	}
 
@@ -192,7 +185,7 @@ func serializeString(buf *bytes.Buffer, v []byte) error {
 	return nil
 }
 
-func deserializeAsset(buf *bytes.Buffer, as *state.Asset) error {
+func deserializeAsset(buf *bytes.Reader, as *state.Asset) error {
 	// Version
 	var version uint8
 	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
@@ -201,19 +194,24 @@ func deserializeAsset(buf *bytes.Buffer, as *state.Asset) error {
 	if version != 0 {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
-	if err := as.ID.Write(buf); err != nil {
+	var err error
+	as.Code, err = protocol.DeserializeAssetCode(buf)
+	if err != nil {
 		return err
 	}
 	if err := binary.Read(buf, binary.LittleEndian, &as.Revision); err != nil {
 		return err
 	}
-	if err := as.CreatedAt.Write(buf); err != nil {
+	as.CreatedAt, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return err
 	}
-	if err := as.UpdatedAt.Write(buf); err != nil {
+	as.UpdatedAt, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return err
 	}
-	if err := as.Timestamp.Write(buf); err != nil {
+	as.Timestamp, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return err
 	}
 	data, err := deserializeString(buf)
@@ -241,7 +239,7 @@ func deserializeAsset(buf *bytes.Buffer, as *state.Asset) error {
 		if _, err := buf.Read(rest[:]); err != nil {
 			return err
 		}
-		as.TradeRestrictions = append(as.TradeRestrictions, rest)
+		as.TradeRestrictions = append(as.TradeRestrictions, string(rest[:]))
 	}
 
 	if err := binary.Read(buf, binary.LittleEndian, &as.EnforcementOrdersPermitted); err != nil {
@@ -275,14 +273,15 @@ func deserializeAsset(buf *bytes.Buffer, as *state.Asset) error {
 	if err != nil {
 		return err
 	}
-	if err := as.FreezePeriod.Write(buf); err != nil {
+	as.FreezePeriod, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func deserializeString(buf *bytes.Buffer) ([]byte, error) {
+func deserializeString(buf *bytes.Reader) ([]byte, error) {
 	var length uint32
 	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
 		return nil, err

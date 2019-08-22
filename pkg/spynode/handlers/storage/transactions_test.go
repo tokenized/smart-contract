@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/storage"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestTransactions(test *testing.T) {
@@ -16,14 +15,14 @@ func TestTransactions(test *testing.T) {
 	testBlockHeight := 500
 
 	// Generate block hashes
-	txs := make([]chainhash.Hash, 0, testTxCount)
+	txs := make([]bitcoin.Hash32, 0, testTxCount)
 	seed := rand.NewSource(time.Now().UnixNano())
 	randGen := rand.New(seed)
-	var newHash chainhash.Hash
-	bytes := make([]byte, chainhash.HashSize)
+	var newHash bitcoin.Hash32
+	bytes := make([]byte, bitcoin.Hash32Size)
 	for i := 0; i < testTxCount; i++ {
 		// Randomize bytes
-		for j := 0; j < chainhash.HashSize; j++ {
+		for j := 0; j < bitcoin.Hash32Size; j++ {
 			bytes[j] = byte(randGen.Intn(256))
 		}
 		newHash.SetBytes(bytes)

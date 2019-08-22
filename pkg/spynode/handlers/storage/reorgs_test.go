@@ -29,7 +29,7 @@ func TestReorgs(test *testing.T) {
 		header.Nonce = uint32(randGen.Int())
 		// repo.Add(ctx, &header)
 		reorg.Blocks = append(reorg.Blocks, ReorgBlock{Header: header})
-		header.PrevBlock = header.BlockHash()
+		header.PrevBlock = *header.BlockHash()
 		t += 600
 	}
 

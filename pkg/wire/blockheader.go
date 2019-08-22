@@ -9,13 +9,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // MaxBlockHeaderPayload is the maximum number of bytes a block header can be.
 // Version 4 bytes + Timestamp 4 bytes + Bits 4 bytes + Nonce 4 bytes +
 // PrevBlock and MerkleRoot hashes.
-const MaxBlockHeaderPayload = 16 + (chainhash.HashSize * 2)
+const MaxBlockHeaderPayload = 16 + (bitcoin.Hash32Size * 2)
 
 // BlockHeader defines information about a block and is used in the bitcoin
 // block (MsgBlock) and headers (MsgHeaders) messages.
@@ -24,10 +24,10 @@ type BlockHeader struct {
 	Version int32
 
 	// Hash of the previous block in the block chain.
-	PrevBlock chainhash.Hash
+	PrevBlock bitcoin.Hash32
 
 	// Merkle tree reference to hash of all transactions for the block.
-	MerkleRoot chainhash.Hash
+	MerkleRoot bitcoin.Hash32
 
 	// Time the block was created.  This is, unfortunately, encoded as a
 	// uint32 on the wire and therefore is limited to 2106.
@@ -45,7 +45,7 @@ type BlockHeader struct {
 const blockHeaderLen = 80
 
 // BlockHash computes the block identifier hash for the given block header.
-func (h *BlockHeader) BlockHash() chainhash.Hash {
+func (h *BlockHeader) BlockHash() *bitcoin.Hash32 {
 	// Encode the header and double sha256 everything prior to the number of
 	// transactions.  Ignore the error returns since there is no way the
 	// encode could fail except being out of memory which would cause a
@@ -53,7 +53,8 @@ func (h *BlockHeader) BlockHash() chainhash.Hash {
 	buf := bytes.NewBuffer(make([]byte, 0, MaxBlockHeaderPayload))
 	_ = writeBlockHeader(buf, 0, h)
 
-	return chainhash.DoubleHashH(buf.Bytes())
+	result, _ := bitcoin.NewHash32(bitcoin.DoubleSha256(buf.Bytes()))
+	return result
 }
 
 // BtcDecode decodes r using the bitcoin protocol encoding into the receiver.
@@ -95,7 +96,7 @@ func (h *BlockHeader) Serialize(w io.Writer) error {
 // NewBlockHeader returns a new BlockHeader using the provided version, previous
 // block hash, merkle root hash, difficulty bits, and nonce used to generate the
 // block with defaults for the remaining fields.
-func NewBlockHeader(version int32, prevHash, merkleRootHash *chainhash.Hash,
+func NewBlockHeader(version int32, prevHash, merkleRootHash *bitcoin.Hash32,
 	bits uint32, nonce uint32) *BlockHeader {
 
 	// Limit the timestamp to one second precision since the protocol

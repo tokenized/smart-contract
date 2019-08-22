@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -49,10 +49,10 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 
 	receivedHash := message.BlockHash()
 	logger.Debug(ctx, "Received block : %s", receivedHash)
-	if !handler.state.AddBlock(&receivedHash, message) {
+	if !handler.state.AddBlock(receivedHash, message) {
 		logger.Warn(ctx, "Block not requested : %s", receivedHash)
 		if message.Header.PrevBlock == *handler.blocks.LastHash() {
-			if !handler.state.AddNewBlock(&receivedHash, message) {
+			if !handler.state.AddNewBlock(receivedHash, message) {
 				return nil, nil
 			}
 		} else {
@@ -73,7 +73,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 
 		// If we already have this block, we don't need to ask for more
 		if handler.blocks.Contains(hash) {
-			height, _ := handler.blocks.Height(&hash)
+			height, _ := handler.blocks.Height(hash)
 			logger.Warn(ctx, "Already have block (%d) : %s", height, hash)
 			return nil, nil
 		}
@@ -105,7 +105,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// Get unconfirmed "relevant" txs
-		var unconfirmed []chainhash.Hash
+		var unconfirmed []bitcoin.Hash32
 		// This locks the tx repo so that propagated txs don't interfere while a block is being
 		//   processed.
 		unconfirmed, err = handler.txs.GetUnconfirmed(ctx)
@@ -116,13 +116,13 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		// Send block notification
 		var removed bool = false
 		height := handler.blocks.LastHeight()
-		blockMessage := BlockMessage{Hash: hash, Height: height}
+		blockMessage := BlockMessage{Hash: *hash, Height: height}
 		for _, listener := range handler.listeners {
 			listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage)
 		}
 
 		// Notify Tx for block and tx listeners
-		var hashes []chainhash.Hash
+		var hashes []*bitcoin.Hash32
 		hashes, err = block.TxHashes()
 		if err != nil {
 			handler.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
@@ -132,10 +132,10 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		logger.Debug(ctx, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
 		for i, txHash := range hashes {
 			// Remove from unconfirmed. Only matching are in unconfirmed.
-			removed, unconfirmed = removeHash(&txHash, unconfirmed)
+			removed, unconfirmed = removeHash(txHash, unconfirmed)
 			handler.txChannel.Add(&TxData{Msg: block.Transactions[i], ConfirmedHeight: height, Relevant: removed})
 
-			if handler.state.IsReady() && !handler.memPool.RemoveTransaction(&txHash) {
+			if handler.state.IsReady() && !handler.memPool.RemoveTransaction(txHash) {
 				// Transaction wasn't in the mempool.
 				// Check for transactions in the mempool with conflicting inputs (double spends).
 				if conflicting := handler.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
@@ -199,7 +199,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	return response, nil
 }
 
-func containsHash(hash *chainhash.Hash, list []chainhash.Hash) bool {
+func containsHash(hash *bitcoin.Hash32, list []bitcoin.Hash32) bool {
 	for _, listhash := range list {
 		if *hash == listhash {
 			return true
@@ -208,7 +208,7 @@ func containsHash(hash *chainhash.Hash, list []chainhash.Hash) bool {
 	return false
 }
 
-func removeHash(hash *chainhash.Hash, list []chainhash.Hash) (bool, []chainhash.Hash) {
+func removeHash(hash *bitcoin.Hash32, list []bitcoin.Hash32) (bool, []bitcoin.Hash32) {
 	for i, listhash := range list {
 		if *hash == listhash {
 			return true, append(list[:i], list[i+1:]...)
@@ -228,29 +228,29 @@ func validateMerkleHash(ctx context.Context, block *wire.MsgBlock) (bool, error)
 }
 
 // CalculateMerkleHash calculates a merkle tree root hash for a set of transactions
-func CalculateMerkleHash(ctx context.Context, txs []*wire.MsgTx) (*chainhash.Hash, error) {
+func CalculateMerkleHash(ctx context.Context, txs []*wire.MsgTx) (*bitcoin.Hash32, error) {
 	if len(txs) == 0 {
 		// Zero hash
-		result, err := chainhash.NewHashFromStr("0000000000000000000000000000000000000000000000000000000000000000")
+		result, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 		return result, err
 	}
 	if len(txs) == 1 {
 		// Hash of only tx
 		result := txs[0].TxHash()
-		return &result, nil
+		return result, nil
 	}
 
 	// Tree root hash
-	hashes := make([]*chainhash.Hash, 0, len(txs))
+	hashes := make([]*bitcoin.Hash32, 0, len(txs))
 	for _, tx := range txs {
 		hash := tx.TxHash()
-		hashes = append(hashes, &hash)
+		hashes = append(hashes, hash)
 	}
 	return CalculateMerkleLevel(ctx, hashes), nil
 }
 
 // CalculateMerkleLevel calculates one level of the merkle tree
-func CalculateMerkleLevel(ctx context.Context, txids []*chainhash.Hash) *chainhash.Hash {
+func CalculateMerkleLevel(ctx context.Context, txids []*bitcoin.Hash32) *bitcoin.Hash32 {
 	if len(txids) == 1 {
 		return combinedHash(ctx, txids[0], txids[0]) // Hash it with itself
 	}
@@ -261,8 +261,8 @@ func CalculateMerkleLevel(ctx context.Context, txids []*chainhash.Hash) *chainha
 
 	// More level calculations required (recursive)
 	// Combine every two hashes and put them in a list to process again.
-	nextLevel := make([]*chainhash.Hash, 0, (len(txids)/2)+1)
-	var tx1 *chainhash.Hash = nil
+	nextLevel := make([]*bitcoin.Hash32, 0, (len(txids)/2)+1)
+	var tx1 *bitcoin.Hash32 = nil
 	for _, txid := range txids {
 		if tx1 == nil {
 			tx1 = txid
@@ -281,10 +281,10 @@ func CalculateMerkleLevel(ctx context.Context, txids []*chainhash.Hash) *chainha
 }
 
 // combinedHash combines two hashes
-func combinedHash(ctx context.Context, hash1 *chainhash.Hash, hash2 *chainhash.Hash) *chainhash.Hash {
-	data := make([]byte, chainhash.HashSize*2)
-	copy(data[:chainhash.HashSize], hash1[:])
-	copy(data[chainhash.HashSize:], hash2[:])
-	result := chainhash.DoubleHashH(data)
-	return &result
+func combinedHash(ctx context.Context, hash1 *bitcoin.Hash32, hash2 *bitcoin.Hash32) *bitcoin.Hash32 {
+	data := make([]byte, bitcoin.Hash32Size*2)
+	copy(data[:bitcoin.Hash32Size], hash1[:])
+	copy(data[bitcoin.Hash32Size:], hash2[:])
+	result, _ := bitcoin.NewHash32(bitcoin.DoubleSha256(data))
+	return result
 }

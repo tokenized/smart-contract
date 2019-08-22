@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 const (
@@ -39,7 +40,7 @@ func Load(ctx context.Context, masterDb *db.DB) (*UTXOs, error) {
 		return nil, err
 	}
 
-	buf := bytes.NewBuffer(data)
+	buf := bytes.NewReader(data)
 
 	var count uint32
 	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
@@ -59,7 +60,7 @@ func Load(ctx context.Context, masterDb *db.DB) (*UTXOs, error) {
 }
 
 func (utxo *UTXO) Write(buf *bytes.Buffer) error {
-	if _, err := buf.Write(utxo.OutPoint.Hash[:]); err != nil {
+	if err := utxo.OutPoint.Hash.Serialize(buf); err != nil {
 		return err
 	}
 
@@ -80,17 +81,19 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if _, err := buf.Write(utxo.SpentBy[:]); err != nil {
+	if err := utxo.SpentBy.Serialize(buf); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (utxo *UTXO) Read(buf *bytes.Buffer) error {
-	if _, err := buf.Read(utxo.OutPoint.Hash[:]); err != nil {
+func (utxo *UTXO) Read(buf *bytes.Reader) error {
+	hash, err := bitcoin.DeserializeHash32(buf)
+	if err != nil {
 		return err
 	}
+	utxo.OutPoint.Hash = *hash
 
 	if err := binary.Read(buf, binary.LittleEndian, &utxo.OutPoint.Index); err != nil {
 		return err
@@ -110,7 +113,8 @@ func (utxo *UTXO) Read(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if _, err := buf.Read(utxo.SpentBy[:]); err != nil {
+	utxo.SpentBy, err = bitcoin.DeserializeHash32(buf)
+	if err != nil {
 		return err
 	}
 

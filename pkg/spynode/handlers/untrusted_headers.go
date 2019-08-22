@@ -54,7 +54,7 @@ func (handler *UntrustedHeadersHandler) Handle(ctx context.Context, m wire.Messa
 
 	// Verify the first header is within 1 - UntrustedHeaderDelta of the top
 	hash := message.Headers[0].BlockHash()
-	height, exists := handler.blocks.Height(&hash)
+	height, exists := handler.blocks.Height(hash)
 	if !exists {
 		// This can happen if this node is ahead of our trusted node, but still can't be trusted.
 		return nil, errors.New("Returned unknown header")
@@ -69,7 +69,7 @@ func (handler *UntrustedHeadersHandler) Handle(ctx context.Context, m wire.Messa
 	// Note: POW check might be nice here
 	previousHash := hash
 	for _, header := range message.Headers[1:] {
-		if header.PrevBlock != previousHash {
+		if !header.PrevBlock.Equal(previousHash) {
 			return nil, errors.New("Returned unlinked headers")
 		}
 

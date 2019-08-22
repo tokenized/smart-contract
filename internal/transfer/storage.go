@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -20,8 +21,12 @@ var (
 )
 
 // Put a single pending transfer in storage
-func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, t *state.PendingTransfer) error {
-	key := buildStoragePath(contractPKH, &t.TransferTxId)
+func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, t *state.PendingTransfer) error {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return err
+	}
+	key := buildStoragePath(contractHash, t.TransferTxId)
 
 	// Save the contract
 	data, err := json.Marshal(t)
@@ -33,8 +38,14 @@ func Save(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 }
 
 // Fetch a single pending transfer from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, transferTxId *protocol.TxId) (*state.PendingTransfer, error) {
-	key := buildStoragePath(contractPKH, transferTxId)
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	transferTxId *protocol.TxId) (*state.PendingTransfer, error) {
+
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+	key := buildStoragePath(contractHash, transferTxId)
 
 	data, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -54,8 +65,14 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHa
 	return &result, nil
 }
 
-func Remove(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, transferTxId *protocol.TxId) error {
-	err := dbConn.Remove(ctx, buildStoragePath(contractPKH, transferTxId))
+func Remove(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	transferTxId *protocol.TxId) error {
+
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return err
+	}
+	err = dbConn.Remove(ctx, buildStoragePath(contractHash, transferTxId))
 	if err != nil {
 		if err == db.ErrNotFound {
 			return ErrNotFound
@@ -66,10 +83,16 @@ func Remove(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 }
 
 // List all pending transfer for a specified contract.
-func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) ([]*state.PendingTransfer, error) {
+func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) ([]*state.PendingTransfer, error) {
+
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: This should probably use dbConn.List for greater efficiency
-	data, err := dbConn.Search(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractPKH.String(), storageSubKey))
+	data, err := dbConn.Search(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractHash.String(),
+		storageSubKey))
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +112,6 @@ func List(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractPKH *protocol.PublicKeyHash, txid *protocol.TxId) string {
-	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractPKH.String(), storageSubKey, txid.String())
+func buildStoragePath(contractHash *bitcoin.Hash20, txid *protocol.TxId) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, txid.String())
 }

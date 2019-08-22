@@ -3,16 +3,16 @@ package bitcoin
 import (
 	"fmt"
 
-	"github.com/tokenized/smart-contract/pkg/wire"
-
 	"github.com/btcsuite/btcd/chaincfg"
 	btcdwire "github.com/btcsuite/btcd/wire"
 )
 
+type Network uint32
+
 const (
-	MainNet       wire.BitcoinNet = 0xe8f3e1e3
-	TestNet       wire.BitcoinNet = 0xf4f3e5f4
-	StressTestNet wire.BitcoinNet = 0xfbcec4f9
+	MainNet       Network = 0xe8f3e1e3
+	TestNet       Network = 0xf4f3e5f4
+	StressTestNet Network = 0xfbcec4f9
 )
 
 var (
@@ -25,6 +25,32 @@ var (
 	// StressTestNetParams defines the network parameters for the BSV Stress Test Network.
 	StressTestNetParams chaincfg.Params
 )
+
+func NetworkFromString(name string) Network {
+	switch name {
+	case "mainnet":
+		return MainNet
+	case "testnet":
+		return TestNet
+	case "stn":
+		return StressTestNet
+	}
+
+	return TestNet
+}
+
+func NetworkName(net Network) string {
+	switch net {
+	case MainNet:
+		return "mainnet"
+	case TestNet:
+		return "testnet"
+	case StressTestNet:
+		return "stn"
+	}
+
+	return "testnet"
+}
 
 func NewChainParams(network string) *chaincfg.Params {
 	switch network {

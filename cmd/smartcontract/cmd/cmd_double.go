@@ -12,9 +12,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -44,19 +44,13 @@ var cmdDoubleSpend = &cobra.Command{
 			return nil
 		}
 
-		receiver, err := btcutil.DecodeAddress(args[1], theClient.Config.ChainParams)
-		if err != nil {
-			logger.Warn(ctx, "Invalid address : %s", err)
-			return nil
-		}
-		receiverPKH = receiver.ScriptAddress()
+		// receiverAddress, err := bitcoin.DecodeAddress(args[1])
+		// if err != nil {
+		// 	logger.Warn(ctx, "Invalid address : %s", err)
+		// 	return nil
+		// }
 
-		addressPKH, ok := bitcoin.PKH(theClient.ContractAddress)
-		if !ok {
-			logger.Warn(ctx, "Contract address not PKH : %s", err)
-			return nil
-		}
-		assetCode = protocol.AssetCodeFromContract(addressPKH, 0)
+		assetCode = protocol.AssetCodeFromContract(theClient.ContractAddress, 0)
 		fundingAmount := uint64(2000)
 		utxoAmount := uint64(fundingAmount + 500)
 		requiredBalance := utxoAmount * 2             // Create contract and asset
@@ -137,7 +131,7 @@ var cmdDoubleSpend = &cobra.Command{
 		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
@@ -182,7 +176,7 @@ var cmdDoubleSpend = &cobra.Command{
 		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 			theClient.Config.FeeRate)
 
-		if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
@@ -231,7 +225,7 @@ var cmdDoubleSpend = &cobra.Command{
 			tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
 				theClient.Config.FeeRate)
 
-			if err := tx.AddInput(wire.OutPoint{Hash: utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
 				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
@@ -311,16 +305,16 @@ var cmdDoubleSpend = &cobra.Command{
 			return nil
 		}
 
-		if response.Type() == protocol.CodeContractFormation {
+		if response.Code() == actions.CodeContractFormation {
 			logger.Info(ctx, "Contract formed")
-		} else if response.Type() == protocol.CodeRejection {
-			reject, _ := response.(*protocol.Rejection)
+		} else if response.Code() == actions.CodeRejection {
+			reject, _ := response.(*actions.Rejection)
 			logger.Warn(ctx, "Contract rejected : %s", reject.Message)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		} else {
-			logger.Warn(ctx, "Unknown contract response type : %s", response.Type())
+			logger.Warn(ctx, "Unknown contract response type : %s", response.Code())
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
@@ -342,17 +336,17 @@ var cmdDoubleSpend = &cobra.Command{
 			return nil
 		}
 
-		if response.Type() == protocol.CodeAssetCreation {
-			assetCreation, _ := response.(*protocol.AssetCreation)
-			logger.Info(ctx, "Asset created : %s", assetCreation.AssetCode.String())
-		} else if response.Type() == protocol.CodeRejection {
-			reject, _ := response.(*protocol.Rejection)
+		if response.Code() == actions.CodeAssetCreation {
+			assetCreation, _ := response.(*actions.AssetCreation)
+			logger.Info(ctx, "Asset created : %x", assetCreation.AssetCode)
+		} else if response.Code() == actions.CodeRejection {
+			reject, _ := response.(*actions.Rejection)
 			logger.Warn(ctx, "Asset rejected : %s", reject.Message)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		} else {
-			logger.Warn(ctx, "Unknown asset response type : %s", response.Type())
+			logger.Warn(ctx, "Unknown asset response type : %s", response.Code())
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
@@ -382,16 +376,16 @@ var cmdDoubleSpend = &cobra.Command{
 
 			times = append(times, uint64(end.UnixNano()-start.UnixNano()))
 
-			if response.Type() == protocol.CodeSettlement {
+			if response.Code() == actions.CodeSettlement {
 				logger.Info(ctx, "Transfer %d accepted in %d ns", i, end.UnixNano()-start.UnixNano())
-			} else if response.Type() == protocol.CodeRejection {
-				reject, _ := response.(*protocol.Rejection)
+			} else if response.Code() == actions.CodeRejection {
+				reject, _ := response.(*actions.Rejection)
 				logger.Warn(ctx, "Transfer %d rejected : %s", i, reject.Message)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
 				return nil
 			} else {
-				logger.Warn(ctx, "Unknown transfer %d response type : %s", i, response.Type())
+				logger.Warn(ctx, "Unknown transfer %d response type : %s", i, response.Code())
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
 				return nil
@@ -425,7 +419,7 @@ func sendDoubleRequests(ctx context.Context, client *client.Client, tx *wire.Msg
 	hash := tx.TxHash()
 	for incomingTx := range client.IncomingTx.Channel {
 		for _, input := range incomingTx.TxIn {
-			if input.PreviousOutPoint.Hash == hash {
+			if input.PreviousOutPoint.Hash.Equal(hash) {
 				return incomingTx
 			}
 		}

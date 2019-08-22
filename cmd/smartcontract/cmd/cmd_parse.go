@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -55,7 +56,7 @@ func parseMessage(c *cobra.Command, rawtx string, isTest bool) error {
 		return nil
 	}
 
-	fmt.Printf("type : %v\n\n", m.Type())
+	fmt.Printf("type : %v\n\n", m.Code())
 
 	if err := dumpJSON(m); err != nil {
 		return err
@@ -64,7 +65,7 @@ func parseMessage(c *cobra.Command, rawtx string, isTest bool) error {
 	return nil
 }
 
-func loadMessageFromTX(tx wire.MsgTx, isTest bool) protocol.OpReturnMessage {
+func loadMessageFromTX(tx wire.MsgTx, isTest bool) actions.Action {
 	for _, txOut := range tx.TxOut {
 		m, err := protocol.Deserialize(txOut.PkScript, isTest)
 		if err != nil {

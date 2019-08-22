@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcutil"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/protocol"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 var cmdSign = &cobra.Command{
@@ -31,16 +31,10 @@ var cmdSign = &cobra.Command{
 }
 
 func transferSign(c *cobra.Command, args []string) error {
-	network := network(c)
-	if len(network) == 0 {
-		return nil
-	}
-	params := bitcoin.NewChainParams(network)
-
 	// Create struct
-	opReturn := protocol.TypeMapping(protocol.CodeTransfer)
-	if opReturn == nil {
-		fmt.Printf("Unsupported action type : %s\n", protocol.CodeTransfer)
+	action := actions.NewActionFromCode(actions.CodeTransfer)
+	if action == nil {
+		fmt.Printf("Unsupported action type : %s\n", actions.CodeTransfer)
 		return nil
 	}
 
@@ -52,20 +46,19 @@ func transferSign(c *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Put json data into opReturn struct
-	if err := json.Unmarshal(data, opReturn); err != nil {
-		fmt.Printf("Failed to unmarshal %s json file : %s\n", protocol.CodeTransfer, err)
+	// Put json data into action struct
+	if err := json.Unmarshal(data, action); err != nil {
+		fmt.Printf("Failed to unmarshal %s json file : %s\n", actions.CodeTransfer, err)
 		return nil
 	}
 
 	// Contract key
 	hash := make([]byte, 20)
-	contractAddress, err := btcutil.DecodeAddress(args[1], params)
+	contractAddress, err := bitcoin.DecodeAddress(args[1])
 	if err != nil {
 		fmt.Printf("Invalid contract address : %s\n", err)
 		return nil
 	}
-	contractPKH := protocol.PublicKeyHashFromBytes(contractAddress.ScriptAddress())
 
 	receiverIndex, err := strconv.Atoi(args[2])
 	if err != nil {
@@ -89,19 +82,19 @@ func transferSign(c *cobra.Command, args []string) error {
 	for i, b := range hash {
 		reverseHash[31-i] = b
 	}
-	blockHash, err := chainhash.NewHash(reverseHash)
+	blockHash, err := bitcoin.NewHash32(reverseHash)
 	if err != nil {
 		fmt.Printf("Invalid block hash : %s\n", err)
 		return nil
 	}
 
-	wif, err := btcutil.DecodeWIF(args[4])
+	key, err := bitcoin.DecodeKeyString(args[4])
 	if err != nil {
-		fmt.Printf("Invalid WIF key : %s\n", err)
+		fmt.Printf("Invalid key : %s\n", err)
 		return nil
 	}
 
-	transfer, ok := opReturn.(*protocol.Transfer)
+	transfer, ok := action.(*actions.Transfer)
 	if !ok {
 		fmt.Printf("Not a transfer\n")
 		return nil
@@ -111,23 +104,29 @@ func transferSign(c *cobra.Command, args []string) error {
 	for _, asset := range transfer.Assets {
 		for _, receiver := range asset.AssetReceivers {
 			if index == receiverIndex {
-				fmt.Printf("Signing for PKH quantity %d : %s\n", receiver.Quantity, receiver.Address.String())
-				hash, err := protocol.TransferOracleSigHash(context.Background(), contractPKH, &asset.AssetCode,
-					&receiver.Address, receiver.Quantity, blockHash)
+				receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
+				if err != nil {
+					fmt.Printf("Failed to decode address : %s\n", err)
+					return nil
+				}
+				fmt.Printf("Signing for address quantity %d : %x\n", receiver.Quantity,
+					receiverAddress.Bytes())
+				hash, err := protocol.TransferOracleSigHash(context.Background(), contractAddress,
+					asset.AssetCode, receiverAddress, receiver.Quantity, blockHash)
 				if err != nil {
 					fmt.Printf("Failed to generate sig hash : %s\n", err)
 					return nil
 				}
 				fmt.Printf("Hash : %x\n", hash)
 
-				signature, err := wif.PrivKey.Sign(hash)
+				signature, err := key.Sign(hash)
 				if err != nil {
 					fmt.Printf("Failed to sign sig hash : %s\n", err)
 					return nil
 				}
 
-				fmt.Printf("Signature : %x\n", signature.Serialize())
-				fmt.Printf("Signature b64 : %s\n", base64.StdEncoding.EncodeToString(signature.Serialize()))
+				fmt.Printf("Signature : %x\n", signature)
+				fmt.Printf("Signature b64 : %s\n", base64.StdEncoding.EncodeToString(signature.Bytes()))
 				return nil
 			}
 

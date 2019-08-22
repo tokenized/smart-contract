@@ -1,9 +1,7 @@
 package bitcoin
 
-import "github.com/tokenized/smart-contract/pkg/wire"
-
 // AddressFromLockingScript returns the address associated with the specified locking script.
-func AddressFromLockingScript(lockingScript []byte, net wire.BitcoinNet) (Address, error) {
+func AddressFromLockingScript(lockingScript []byte, net Network) (Address, error) {
 	st, err := RawAddressFromLockingScript(lockingScript)
 	if err != nil {
 		return nil, err

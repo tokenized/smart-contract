@@ -5,8 +5,6 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func TestTxBuilder(t *testing.T) {
@@ -40,7 +38,7 @@ func TestTxBuilder(t *testing.T) {
 
 	tx := NewTxBuilder(address, 500, 1.0)
 
-	err = tx.AddInput(wire.OutPoint{Hash: inputTx.MsgTx.TxHash(), Index: 0},
+	err = tx.AddInput(wire.OutPoint{Hash: *inputTx.MsgTx.TxHash(), Index: 0},
 		inputTx.MsgTx.TxOut[0].PkScript, uint64(inputTx.MsgTx.TxOut[0].Value))
 	if err != nil {
 		t.Errorf("Failed to add input : %s", err)
@@ -83,7 +81,7 @@ func TestTxBuilder(t *testing.T) {
 
 	// Test bad PkScript
 	txMalformed := NewTxBuilder(address, 500, 1.0)
-	err = txMalformed.AddInput(wire.OutPoint{Hash: inputTx.MsgTx.TxHash(), Index: 0},
+	err = txMalformed.AddInput(wire.OutPoint{Hash: *inputTx.MsgTx.TxHash(), Index: 0},
 		append(inputTx.MsgTx.TxOut[0].PkScript, 5), uint64(inputTx.MsgTx.TxOut[0].Value))
 	if IsErrorCode(err, ErrorCodeWrongScriptTemplate) {
 		if err != nil {
@@ -112,7 +110,7 @@ func TestTxBuilderSample(t *testing.T) {
 
 	// Add an input
 	// To spend an input you need the txid, output index, and the locking script and value from that output.
-	hash, _ := chainhash.NewHashFromStr("c762a29a4beb4821ad843590c3f11ffaed38b7eadc74557bdf36da3539921531")
+	hash, _ := bitcoin.NewHash32FromStr("c762a29a4beb4821ad843590c3f11ffaed38b7eadc74557bdf36da3539921531")
 	index := uint32(0)
 	value := uint64(2000)
 	spendAddress, _ := bitcoin.DecodeAddress("mupiWN44gq3NZmvZuMMyx8KbRwism69Gbw")

@@ -10,6 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -30,15 +31,15 @@ func createContract(t *testing.T) {
 	}
 
 	// New Contract Offer
-	offerData := protocol.ContractOffer{
+	offerData := actions.ContractOffer{
 		ContractName:        "Test Name",
 		BodyOfAgreementType: 0,
 		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
-		Issuer: protocol.Entity{
-			Type:           'I',
-			Administration: []protocol.Administrator{protocol.Administrator{Type: 1, Name: "John Smith"}},
+		Issuer: &actions.EntityField{
+			Type:           "I",
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
 		},
-		VotingSystems:  []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000}},
+		VotingSystems:  []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 		HolderProposal: true,
 	}
 
@@ -68,10 +69,10 @@ func createContract(t *testing.T) {
 	offerInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
-	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&offerInputHash, 0), make([]byte, 130)))
+	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, test.ContractKey.Address.LockingScript()))
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(1000, test.ContractKey.Address.LockingScript()))
 
 	// Data output
 	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
@@ -109,7 +110,7 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tHandle contract offer created no reject response", tests.Failed)
 	}
 
-	var responseMsg protocol.OpReturnMessage
+	var responseMsg actions.Action
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
@@ -121,15 +122,16 @@ func createContract(t *testing.T) {
 	if responseMsg == nil {
 		t.Fatalf("\t%s\tContract offer response doesn't contain tokenized op return", tests.Failed)
 	}
-	if responseMsg.Type() != "M2" {
-		t.Fatalf("\t%s\tContract offer response not a reject : %s", tests.Failed, responseMsg.Type())
+	if responseMsg.Code() != "M2" {
+		t.Fatalf("\t%s\tContract offer response not a reject : %s", tests.Failed, responseMsg.Code())
 	}
-	reject, ok := responseMsg.(*protocol.Rejection)
+	reject, ok := responseMsg.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tFailed to convert response to rejection", tests.Failed)
 	}
-	if reject.RejectionCode != protocol.RejectMsgMalformed {
-		t.Fatalf("\t%s\tWrong reject code for contract offer reject", tests.Failed)
+	if reject.RejectionCode != actions.RejectionsMsgMalformed {
+		t.Fatalf("\t%s\tWrong reject code for contract offer reject : %d", tests.Failed,
+			reject.RejectionCode)
 	}
 
 	t.Logf("\t%s\tInvalid Contract offer rejection : (%d) %s", tests.Success, reject.RejectionCode,
@@ -175,14 +177,14 @@ func createContract(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Verify data
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
 	if ct.ContractName != offerData.ContractName {
-		t.Fatalf("\t%s\tContract name incorrect : \"%s\" != \"%s\"", tests.Failed, ct.ContractName, offerData.ContractName)
+		t.Fatalf("\t%s\tContract name incorrect : \"%s\" != \"%s\"", tests.Failed, ct.ContractName,
+			offerData.ContractName)
 	}
 
 	t.Logf("\t%s\tVerified contract name : %s", tests.Success, ct.ContractName)
@@ -218,18 +220,18 @@ func contractAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, true, false, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address)
 
-	amendmentData := protocol.ContractAmendment{
+	amendmentData := actions.ContractAmendment{
 		ContractRevision: 0,
 	}
 
-	amendmentData.Amendments = append(amendmentData.Amendments, protocol.Amendment{
+	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndex: 0, // ContractName
 		Data:       []byte("Test Contract 2"),
 	})
@@ -240,7 +242,7 @@ func contractAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -275,8 +277,7 @@ func contractAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract name
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -294,12 +295,12 @@ func contractProposalAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", 'I', 1, "John Bitcoin", true, true, false, true, false)
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, true, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 
-	assetAmendment := protocol.Amendment{
+	assetAmendment := actions.AmendmentField{
 		FieldIndex: 3, // ContractType
 		Data:       []byte("New Type"),
 	}
@@ -315,12 +316,12 @@ func contractProposalAmendment(t *testing.T) {
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000015, issuerKey.Address)
 
-	amendmentData := protocol.ContractAmendment{
+	amendmentData := actions.ContractAmendment{
 		ContractRevision: 0,
-		RefTxID:          testVoteResultTxId,
+		RefTxID:          testVoteResultTxId.Bytes(),
 	}
 
-	amendmentData.Amendments = append(amendmentData.Amendments, assetAmendment)
+	amendmentData.Amendments = append(amendmentData.Amendments, &assetAmendment)
 
 	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(2)
@@ -328,7 +329,7 @@ func contractProposalAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(&amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
@@ -363,8 +364,7 @@ func contractProposalAmendment(t *testing.T) {
 	checkResponse(t, "C2")
 
 	// Check contract type
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, test.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -376,28 +376,27 @@ func contractProposalAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified contract type : %s", tests.Success, ct.ContractType)
 }
 
-func mockUpContract(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string,
+func mockUpContract(ctx context.Context, name, agreement string, issuerType string, issuerRole uint32, issuerName string,
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes())),
+		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
-		Issuer: protocol.Entity{
+		Issuer: &actions.EntityField{
 			Type:           issuerType,
-			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
 		},
-		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
-			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000}},
 		AdministrationProposal: issuerProposal,
 		HolderProposal:         holderProposal,
 		ContractFee:            1000,
-
-		CreatedAt:         protocol.CurrentTimestamp(),
-		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.MasterKey.Key.PublicKey().Bytes())),
+		CreatedAt:              protocol.CurrentTimestamp(),
+		UpdatedAt:              protocol.CurrentTimestamp(),
+		AdministrationAddress:  bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:          bitcoin.NewJSONRawAddress(test.MasterKey.Address),
 	}
 
 	// Define permissions for asset fields
@@ -420,28 +419,28 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType byte
 	return contract.Save(ctx, test.MasterDB, &contractData)
 }
 
-func mockUpContract2(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string,
+func mockUpContract2(ctx context.Context, name, agreement string, issuerType string, issuerRole uint32, issuerName string,
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Contract2Key.Key.PublicKey().Bytes())),
+		Address:             bitcoin.NewJSONRawAddress(test.Contract2Key.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
-		Issuer: protocol.Entity{
+		Issuer: &actions.EntityField{
 			Type:           issuerType,
-			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
 		},
-		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
-			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000}},
 		AdministrationProposal: issuerProposal,
 		HolderProposal:         holderProposal,
 		ContractFee:            1000,
 
-		CreatedAt:         protocol.CurrentTimestamp(),
-		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.Master2Key.Key.PublicKey().Bytes())),
+		CreatedAt:             protocol.CurrentTimestamp(),
+		UpdatedAt:             protocol.CurrentTimestamp(),
+		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewJSONRawAddress(test.Master2Key.Address),
 	}
 
 	// Define permissions for asset fields
@@ -464,27 +463,28 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType byt
 	return contract.Save(ctx, test.MasterDB, &contractData)
 }
 
-func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType byte, issuerRole uint8, issuerName string) error {
+func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType string,
+	issuerRole uint32, issuerName string) error {
 	var contractData = state.Contract{
-		ID:                  *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes())),
+		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
-		Issuer: protocol.Entity{
+		Issuer: &actions.EntityField{
 			Type:           issuerType,
-			Administration: []protocol.Administrator{protocol.Administrator{Type: issuerRole, Name: issuerName}},
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
 		},
-		VotingSystems: []protocol.VotingSystem{protocol.VotingSystem{Name: "Relative 50", VoteType: 'R', ThresholdPercentage: 50, HolderProposalFee: 50000},
-			protocol.VotingSystem{Name: "Absolute 75", VoteType: 'A', ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000}},
 		AdministrationProposal: false,
 		HolderProposal:         false,
 		ContractFee:            1000,
 
-		CreatedAt:         protocol.CurrentTimestamp(),
-		UpdatedAt:         protocol.CurrentTimestamp(),
-		AdministrationPKH: *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(issuerKey.Key.PublicKey().Bytes())),
-		MasterPKH:         *protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.MasterKey.Key.PublicKey().Bytes())),
-		Oracles:           []protocol.Oracle{protocol.Oracle{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
+		CreatedAt:             protocol.CurrentTimestamp(),
+		UpdatedAt:             protocol.CurrentTimestamp(),
+		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewJSONRawAddress(test.MasterKey.Address),
+		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
 	// Define permissions for asset fields

@@ -6,30 +6,31 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // CacheItem is a reference to an item in the cache that needs to be written to storage.
 type CacheItem struct {
-	contract *protocol.PublicKeyHash
-	asset    *protocol.AssetCode
-	pkh      *protocol.PublicKeyHash
+	contractHash *bitcoin.Hash20
+	asset        *protocol.AssetCode
+	addressHash  *bitcoin.Hash20
 }
 
 // NewCacheItem creates a new CacheItem.
-func NewCacheItem(contract *protocol.PublicKeyHash, asset *protocol.AssetCode,
-	pkh *protocol.PublicKeyHash) *CacheItem {
+func NewCacheItem(contractHash *bitcoin.Hash20, asset *protocol.AssetCode,
+	addressHash *bitcoin.Hash20) *CacheItem {
 	result := CacheItem{
-		contract: contract,
-		asset:    asset,
-		pkh:      pkh,
+		contractHash: contractHash,
+		asset:        asset,
+		addressHash:  addressHash,
 	}
 	return &result
 }
 
 // Write writes a cache item to storage.
 func (ci *CacheItem) Write(ctx context.Context, dbConn *db.DB) error {
-	return WriteCacheUpdate(ctx, dbConn, ci.contract, ci.asset, ci.pkh)
+	return WriteCacheUpdate(ctx, dbConn, ci.contractHash, ci.asset, ci.addressHash)
 }
 
 // CacheChannel is a channel of items in cache waiting to be written to storage.
@@ -70,17 +71,5 @@ func (c *CacheChannel) Close() error {
 
 	close(c.Channel)
 	c.open = false
-	return nil
-}
-
-// ProcessCacheItems waits for items on the cache channel and writes them to storage. It exits when
-//   the channel is closed.
-func ProcessCacheItems(ctx context.Context, dbConn *db.DB, ch *CacheChannel) error {
-	for ci := range ch.Channel {
-		if err := ci.Write(ctx, dbConn); err != nil && err != ErrNotInCache {
-			return err
-		}
-	}
-
 	return nil
 }

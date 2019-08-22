@@ -19,9 +19,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -38,9 +38,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ProposalRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.Proposal)
+	msg, ok := itx.MsgProto.(*actions.Proposal)
 	if !ok {
-		return errors.New("Could not assert as *protocol.Initiative")
+		return errors.New("Could not assert as *actions.Initiative")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -52,118 +52,119 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Locate Contract
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if !ct.MovedTo.IsZero() {
-		node.LogWarn(ctx, "Contract address changed : %s", ct.MovedTo.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		node.LogWarn(ctx, "Contract frozen : %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractFrozen)
+		node.LogWarn(ctx, "Contract frozen")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractExpired)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
 	// Verify first two outputs are to contract
 	if len(itx.Outputs) < 2 || !itx.Outputs[0].Address.Equal(rk.Address) ||
 		!itx.Outputs[1].Address.Equal(rk.Address) {
 		node.LogWarn(ctx, "Proposal failed to fund vote and result txs")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientTxFeeFunding)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientTxFeeFunding)
 	}
-
-	senderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
-	if !ok {
-		node.LogWarn(ctx, "Sender not PKH")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
-	senderPKH := protocol.PublicKeyHashFromBytes(senderAddressPKH.PKH())
 
 	// Check if sender is allowed to make proposal
 	if msg.Initiator == 0 { // Administration Proposal
-		if !contract.IsOperator(ctx, ct, senderPKH) {
-			node.LogWarn(ctx, "Initiator PKH is not administration or operator")
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectNotOperator)
+		if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
+			node.LogWarn(ctx, "Initiator is not administration or operator")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 		}
 	} else if msg.Initiator == 1 { // Holder Proposal
 		// Sender must hold balance of at least one asset
-		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, senderPKH) {
-			node.LogWarn(ctx, "Sender holds no assets : %s", senderPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
+		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address) {
+			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+				w.Config.Net)
+			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	} else {
 		node.LogWarn(ctx, "Invalid Initiator value : %02x", msg.Initiator)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if int(msg.VoteSystem) >= len(ct.VotingSystems) {
 		node.LogWarn(ctx, "Proposal vote system invalid")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if msg.Specific && ct.VotingSystems[msg.VoteSystem].VoteType == byte('P') {
+	if msg.Specific && ct.VotingSystems[msg.VoteSystem].VoteType == "P" {
 		node.LogWarn(ctx, "Plurality votes not allowed for specific votes")
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteSystemNotPermitted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteSystemNotPermitted)
 	}
 
 	// Validate messages vote related values
 	if err := vote.ValidateProposal(msg, v.Now); err != nil {
 		node.LogWarn(ctx, "Proposal validation failed : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if msg.AssetSpecificVote {
-		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &msg.AssetCode)
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(msg.AssetCode))
 		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %s", msg.AssetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+			node.LogWarn(ctx, "Asset not found : %x", msg.AssetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
-			node.LogWarn(ctx, "Proposal failed. Asset frozen : %s", msg.AssetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetFrozen)
+			node.LogWarn(ctx, "Proposal failed. Asset frozen : %x", msg.AssetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetFrozen)
 		}
 
 		// Asset does not allow voting
-		if err := asset.ValidateVoting(ctx, as, msg.Initiator, &ct.VotingSystems[msg.VoteSystem]); err != nil {
-			node.LogWarn(ctx, "Asset does not allow voting: %s : %s", msg.AssetCode.String(), err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
+		if err := asset.ValidateVoting(ctx, as, msg.Initiator, ct.VotingSystems[msg.VoteSystem]); err != nil {
+			node.LogWarn(ctx, "Asset does not allow voting: %x : %s", msg.AssetCode, err)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 		}
 
 		// Check sender balance
-		h, err := holdings.GetHolding(ctx, g.MasterDB, contractPKH, &msg.AssetCode, senderPKH, v.Now)
+		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(msg.AssetCode), itx.Inputs[0].Address, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
 		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			node.LogWarn(ctx, "Requestor is not a holder : %s %s", msg.AssetCode.String(), senderPKH.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
+			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+				w.Config.Net)
+			node.LogWarn(ctx, "Requestor is not a holder : %x %s", msg.AssetCode, address.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 
 		if msg.Specific {
 			// Asset amendments vote. Validate permissions for fields being amended.
-			if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
+			if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.ProposedAmendments,
+				true, msg.Initiator, msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetAuthFlags)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
 				node.LogWarn(ctx, "Single option AB votes are required for specific amendments")
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
 			// Validate proposed amendments.
-			ac := protocol.AssetCreation{}
+			ac := actions.AssetCreation{}
 
 			err = node.Convert(ctx, &as, &ac)
 			if err != nil {
@@ -171,34 +172,34 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			}
 
 			ac.AssetRevision = as.Revision + 1
-			ac.Timestamp = v.Now
+			ac.Timestamp = v.Now.Nano()
 
 			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments); err != nil {
 				node.LogWarn(ctx, "Asset amendments failed : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 	} else {
 		// Contract does not allow voting
 		if err := contract.ValidateVoting(ctx, ct, msg.Initiator); err != nil {
-			node.LogWarn(ctx, "Contract does not allow voting: %s : %s", contractPKH.String(), err)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+			node.LogWarn(ctx, "Contract does not allow voting : %s", err)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 		}
 
 		if msg.Specific {
 			// Contract amendments vote. Validate permissions for fields being amended.
 			if err := checkContractAmendmentsPermissions(ct, msg.ProposedAmendments, true, msg.Initiator, msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractAuthFlags)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 			}
 
 			if msg.VoteOptions != "AB" || msg.VoteMax != 1 {
 				node.LogWarn(ctx, "Single option AB votes are required for specific amendments")
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
 			// Validate proposed amendments.
-			cf := protocol.ContractFormation{}
+			cf := actions.ContractFormation{}
 
 			// Get current state
 			err = node.Convert(ctx, &ct, &cf)
@@ -208,24 +209,25 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 			// Apply modifications
 			cf.ContractRevision = ct.Revision + 1 // Bump the revision
-			cf.Timestamp = v.Now
+			cf.Timestamp = v.Now.Nano()
 
 			if err := applyContractAmendments(&cf, msg.ProposedAmendments); err != nil {
 				node.LogWarn(ctx, "Contract amendments failed : %s", err)
-				return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 		}
 
 		// Sender does not have any balance of the asset
-		if msg.Initiator > 0 && contract.GetVotingBalance(ctx, g.MasterDB, ct, senderPKH, ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			node.LogWarn(ctx, "Requestor is not a holder : %s", msg.AssetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
+		if msg.Initiator > 0 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
+			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
+			node.LogWarn(ctx, "Requestor is not a holder : %x", msg.AssetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	}
 
 	if msg.Specific {
 		// Check existing votes that have not been applied yet for conflicting fields.
-		votes, err := vote.List(ctx, g.MasterDB, contractPKH)
+		votes, err := vote.List(ctx, g.MasterDB, rk.Address)
 		if err != nil {
 			return errors.Wrap(err, "Failed to list votes")
 		}
@@ -235,7 +237,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			}
 
 			if msg.AssetSpecificVote {
-				if !vt.AssetSpecificVote || msg.AssetType != vt.AssetType || !bytes.Equal(msg.AssetCode.Bytes(), vt.AssetCode.Bytes()) {
+				if !vt.AssetSpecificVote || msg.AssetType != vt.AssetType ||
+					!bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
 					continue // Not an asset amendment
 				}
 			} else {
@@ -250,7 +253,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 					if field.FieldIndex == otherField.FieldIndex {
 						// Reject because of conflicting field amendment on unapplied vote.
 						node.LogWarn(ctx, "Proposed amendment conflicts with unapplied vote")
-						return node.RespondReject(ctx, w, itx, rk, protocol.RejectProposalConflicts)
+						return node.RespondReject(ctx, w, itx, rk, actions.RejectionsProposalConflicts)
 					}
 				}
 			}
@@ -258,13 +261,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Build Response
-	vote := protocol.Vote{Timestamp: v.Now}
-
-	// Convert to bitcoin.RawAddress
-	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
-	if err != nil {
-		return err
-	}
+	vote := actions.Vote{Timestamp: v.Now.Nano()}
 
 	// Fund with first output of proposal tx. Second is reserved for vote result tx.
 	w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[0].UTXO})
@@ -272,7 +269,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract/Proposal Fee (change)
-	w.AddOutput(ctx, contractAddress, 0)
+	w.AddOutput(ctx, rk.Address, 0)
 
 	feeAmount := ct.ContractFee
 	if msg.Initiator > 0 {
@@ -295,9 +292,9 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.VoteResponse")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.Vote)
+	msg, ok := itx.MsgProto.(*actions.Vote)
 	if !ok {
-		return errors.New("Could not assert as *protocol.Vote")
+		return errors.New("Could not assert as *actions.Vote")
 	}
 
 	if itx.RejectCode != 0 {
@@ -306,15 +303,15 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return err
 	}
 
-	if !ct.MovedTo.IsZero() {
-		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
 	// Verify input is from contract
@@ -323,19 +320,19 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve Proposal
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return errors.New("Proposal not found for vote")
 	}
 
-	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
+	proposal, ok := proposalTx.MsgProto.(*actions.Proposal)
 	if !ok {
 		return errors.New("Proposal invalid for vote")
 	}
 
 	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
 
-	_, err = vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
+	_, err = vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err != vote.ErrNotFound {
 		if err != nil {
 			return fmt.Errorf("Failed to retrieve vote : %s : %s", voteTxId.String(), err)
@@ -352,32 +349,36 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	nv.VoteTxId = *voteTxId
 	nv.ProposalTxId = *protocol.TxIdFromBytes(proposalTx.Hash[:])
-	nv.Expires = proposal.VoteCutOffTimestamp
-	nv.Timestamp = msg.Timestamp
+	nv.Expires = protocol.NewTimestamp(proposal.VoteCutOffTimestamp)
+	nv.Timestamp = protocol.NewTimestamp(msg.Timestamp)
 
 	if proposal.AssetSpecificVote {
-		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode))
 		if err != nil {
-			return fmt.Errorf("Asset not found : %s", proposal.AssetCode.String())
+			return fmt.Errorf("Asset not found : %x", proposal.AssetCode)
 		}
 
 		if as.AssetModificationGovernance == 1 { // Contract wide asset governance
 			nv.ContractWideVote = true
-			nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
+			nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
+				ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
 		} else if ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted {
 			nv.TokenQty = as.TokenQty * uint64(as.VoteMultiplier)
 		} else {
 			nv.TokenQty = as.TokenQty
 		}
 	} else {
-		nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
+		nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
 	}
 
-	if err := vote.Create(ctx, g.MasterDB, contractPKH, voteTxId, &nv, v.Now); err != nil {
+	if err := vote.Create(ctx, g.MasterDB, rk.Address, voteTxId, &nv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to save vote")
 	}
 
-	if err := g.Scheduler.ScheduleJob(ctx, listeners.NewVoteFinalizer(g.handler, itx, proposal.VoteCutOffTimestamp)); err != nil {
+	if err := g.Scheduler.ScheduleJob(ctx, listeners.NewVoteFinalizer(g.handler, itx,
+		protocol.NewTimestamp(proposal.VoteCutOffTimestamp))); err != nil {
 		return errors.Wrap(err, "Failed to schedule vote finalizer")
 	}
 
@@ -386,13 +387,15 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 }
 
 // BallotCastRequest handles an incoming BallotCast request and prepares a BallotCounted response
-func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
+
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.BallotCastRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.BallotCast)
+	msg, ok := itx.MsgProto.(*actions.BallotCast)
 	if !ok {
-		return errors.New("Could not assert as *protocol.BallotCast")
+		return errors.New("Could not assert as *actions.BallotCast")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -403,55 +406,56 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return err
 	}
 
-	if !ct.MovedTo.IsZero() {
-		node.LogWarn(ctx, "Contract address changed : %s", ct.MovedTo.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectContractMoved)
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
-	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &msg.VoteTxId)
+	voteTxId := protocol.TxIdFromBytes(msg.VoteTxId)
+	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err == vote.ErrNotFound {
-		node.LogWarn(ctx, "Vote not found : %s", msg.VoteTxId.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteNotFound)
+		node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 	} else if err != nil {
-		node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", msg.VoteTxId.String(), err)
+		node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
 		return errors.Wrap(err, "Failed to retrieve vote")
 	}
 
 	if vt.Expires.Nano() <= v.Now.Nano() {
-		node.LogWarn(ctx, "Vote expired : %s", msg.VoteTxId.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectVoteClosed)
+		node.LogWarn(ctx, "Vote expired : %s", voteTxId.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteClosed)
 	}
 
 	// Get Proposal
-	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	hash, err := bitcoin.NewHash32(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
-		node.LogWarn(ctx, "Proposal not found for vote : %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		node.LogWarn(ctx, "Proposal not found for vote")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
+	proposal, ok := proposalTx.MsgProto.(*actions.Proposal)
 	if !ok {
-		node.LogWarn(ctx, "Proposal invalid for vote : %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		node.LogWarn(ctx, "Proposal invalid for vote")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Validate vote
 	if len(msg.Vote) > int(proposal.VoteMax) {
-		node.LogWarn(ctx, "Ballot voted on too many options : %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		node.LogWarn(ctx, "Ballot voted on too many options")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if len(msg.Vote) == 0 {
-		node.LogWarn(ctx, "Ballot did not vote any options : %s", contractPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+		node.LogWarn(ctx, "Ballot did not vote any options")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Validate all chosen options are valid.
@@ -465,69 +469,62 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		}
 		if !found {
 			node.LogWarn(ctx, "Ballot chose an invalid option : %s", msg.Vote)
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 	}
 
 	// TODO Handle transfers during vote time to ensure they don't vote the same tokens more than once.
 
-	holderAddressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
-	if !ok {
-		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
-	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
 	quantity := uint64(0)
 
 	// Add applicable holdings
 	if proposal.AssetSpecificVote && !vt.ContractWideVote {
-		as, err := asset.Retrieve(ctx, g.MasterDB, contractPKH, &proposal.AssetCode)
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode))
 		if err != nil {
 			node.LogWarn(ctx, "Asset not found : %s", proposal.String())
-			return node.RespondReject(ctx, w, itx, rk, protocol.RejectAssetNotFound)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
-		h, err := holdings.GetHolding(ctx, g.MasterDB, contractPKH, &proposal.AssetCode, holderPKH, v.Now)
+		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode), itx.Inputs[0].Address, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		quantity = holdings.VotingBalance(as, h, ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		quantity = holdings.VotingBalance(as, h,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	} else {
-		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, holderPKH,
+		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
 			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	}
 
 	if quantity == 0 {
-		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", holderPKH.String())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectInsufficientQuantity)
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+			w.Config.Net)
+		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", address.String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 	}
 
 	// TODO Check issue where two ballots are sent simultaneously and the second received before the first response is processed.
-	if err := vote.CheckBallot(ctx, vt, holderPKH); err != nil {
+	if err := vote.CheckBallot(ctx, vt, itx.Inputs[0].Address); err != nil {
 		node.LogWarn(ctx, "Failed to check ballot : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectBallotAlreadyCounted)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsBallotAlreadyCounted)
 	}
 
 	// Build Response
-	ballotCounted := protocol.BallotCounted{}
+	ballotCounted := actions.BallotCounted{}
 	err = node.Convert(ctx, msg, &ballotCounted)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert ballot cast to counted")
 	}
 	ballotCounted.Quantity = quantity
-	ballotCounted.Timestamp = v.Now
-
-	// Convert to bitcoin.RawAddress
-	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
-	if err != nil {
-		return err
-	}
+	ballotCounted.Timestamp = v.Now.Nano()
 
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, contractAddress, 0)
+	w.AddOutput(ctx, rk.Address, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.
@@ -536,7 +533,9 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Respond with a vote
-	node.LogWarn(ctx, "Accepting ballot for %d from %s", quantity, holderPKH.String())
+	address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+		w.Config.Net)
+	node.LogWarn(ctx, "Accepting ballot for %d from %s", quantity, address.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
 
@@ -545,9 +544,9 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.BallotCountedResponse")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.BallotCounted)
+	msg, ok := itx.MsgProto.(*actions.BallotCounted)
 	if !ok {
-		return errors.New("Could not assert as *protocol.BallotCounted")
+		return errors.New("Could not assert as *actions.BallotCounted")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -555,51 +554,48 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.New("Ballot counted response invalid")
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Ballot counted not from contract : %x", itx.Inputs[0].Address.Bytes())
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+			w.Config.Net)
+		return fmt.Errorf("Ballot counted not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if !ct.MovedTo.IsZero() {
-		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
-		return fmt.Errorf("Ballot cast not found for ballot counted msg : %s", contractPKH.String())
+		return fmt.Errorf("Ballot cast not found for ballot counted msg")
 	}
 
-	cast, ok := castTx.MsgProto.(*protocol.BallotCast)
+	cast, ok := castTx.MsgProto.(*actions.BallotCast)
 	if !ok {
-		return fmt.Errorf("Ballot cast invalid for ballot counted : %s", contractPKH.String())
+		return fmt.Errorf("Ballot cast invalid for ballot counted")
 	}
 
-	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, &cast.VoteTxId)
+	voteTxId := protocol.TxIdFromBytes(cast.VoteTxId)
+	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
 
-	holderAddressPKH, ok := castTx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
-	if !ok {
-		node.LogWarn(ctx, "Holder not PKH : %x", itx.Inputs[0].Address.Bytes())
-		return node.RespondReject(ctx, w, itx, rk, protocol.RejectMsgMalformed)
-	}
-	holderPKH := protocol.PublicKeyHashFromBytes(holderAddressPKH.PKH())
-
 	ballot := state.Ballot{
-		PKH:       *holderPKH,
+		Address:   bitcoin.NewJSONRawAddress(castTx.Inputs[0].Address),
 		Vote:      cast.Vote,
-		Timestamp: msg.Timestamp,
+		Timestamp: protocol.NewTimestamp(msg.Timestamp),
 		Quantity:  msg.Quantity,
 	}
 
 	// Add to vote results
-	if err := vote.AddBallot(ctx, g.MasterDB, contractPKH, vt, &ballot, v.Now); err != nil {
+	if err := vote.AddBallot(ctx, g.MasterDB, rk.Address, vt, &ballot, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to add ballot")
 	}
 
@@ -611,66 +607,61 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.FinalizeVote")
 	defer span.End()
 
-	_, ok := itx.MsgProto.(*protocol.Vote)
+	_, ok := itx.MsgProto.(*actions.Vote)
 	if !ok {
-		return errors.New("Could not assert as *protocol.Vote")
+		return errors.New("Could not assert as *actions.Vote")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	node.LogVerbose(ctx, "Finalizing vote : %s", itx.Hash.String())
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
-
 	// Retrieve contract
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return err
 	}
 
-	if !ct.MovedTo.IsZero() {
-		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
 	// Retrieve vote
 	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
-	vt, err := vote.Retrieve(ctx, g.MasterDB, contractPKH, voteTxId)
+	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
 
 	// Get Proposal
-	hash, err := chainhash.NewHash(vt.ProposalTxId.Bytes())
+	hash, err := bitcoin.NewHash32(vt.ProposalTxId.Bytes())
 	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, hash, g.Config.IsTest)
 	if err != nil {
-		return fmt.Errorf("Proposal not found for vote : %s", contractPKH.String())
+		return fmt.Errorf("Proposal not found for vote")
 	}
 
-	proposal, ok := proposalTx.MsgProto.(*protocol.Proposal)
+	proposal, ok := proposalTx.MsgProto.(*actions.Proposal)
 	if !ok {
-		return fmt.Errorf("Proposal invalid for vote : %s", contractPKH.String())
+		return fmt.Errorf("Proposal invalid for vote")
 	}
 
 	// Build Response
-	voteResult := protocol.Result{}
+	voteResult := actions.Result{}
 	err = node.Convert(ctx, proposal, &voteResult)
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert vote proposal to result")
 	}
 
-	voteResult.VoteTxId = *voteTxId
-	voteResult.Timestamp = v.Now
+	voteResult.VoteTxId = voteTxId.Bytes()
+	voteResult.Timestamp = v.Now.Nano()
 
 	// Calculate Results
-	voteResult.OptionTally, voteResult.Result, err = vote.CalculateResults(ctx, vt, proposal, &ct.VotingSystems[proposal.VoteSystem])
+	voteResult.OptionTally, voteResult.Result, err = vote.CalculateResults(ctx, vt, proposal,
+		ct.VotingSystems[proposal.VoteSystem])
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate vote results")
-	}
-
-	// Convert to bitcoin.RawAddress
-	contractAddress, err := bitcoin.NewRawAddressPKH(contractPKH.Bytes())
-	if err != nil {
-		return err
 	}
 
 	// Fund with second output of proposal tx.
@@ -679,7 +670,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, contractAddress, 0)
+	w.AddOutput(ctx, rk.Address, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx for response.
@@ -696,9 +687,9 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ResultResponse")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*protocol.Result)
+	msg, ok := itx.MsgProto.(*actions.Result)
 	if !ok {
-		return errors.New("Could not assert as *protocol.Result")
+		return errors.New("Could not assert as *actions.Result")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -707,18 +698,21 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Result reponse invalid")
 	}
 
-	contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(rk.Key.PublicKey().Bytes()))
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Vote result not from contract : %x", itx.Inputs[0].Address.Bytes())
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
+			w.Config.Net)
+		return fmt.Errorf("Vote result not from contract : %x", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, contractPKH)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if !ct.MovedTo.IsZero() {
-		return fmt.Errorf("Contract address changed : %s", ct.MovedTo.String())
+	if ct.MovedTo != nil {
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
+			w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
 	uv := vote.UpdateVote{}
@@ -727,9 +721,11 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to convert result message to update vote")
 	}
 
-	uv.CompletedAt = &msg.Timestamp
+	ts := protocol.NewTimestamp(msg.Timestamp)
+	uv.CompletedAt = &ts
 
-	if err := vote.Update(ctx, g.MasterDB, contractPKH, &msg.VoteTxId, &uv, v.Now); err != nil {
+	voteTxId := protocol.TxIdFromBytes(msg.VoteTxId)
+	if err := vote.Update(ctx, g.MasterDB, rk.Address, voteTxId, &uv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to update vote")
 	}
 

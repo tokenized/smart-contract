@@ -14,7 +14,6 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type WalletInterface interface {
@@ -23,8 +22,8 @@ type WalletInterface interface {
 	ListAll() []*Key
 	Add(*Key) error
 	Remove(*Key) error
-	Load(context.Context, *db.DB, wire.BitcoinNet) error
-	Save(context.Context, *db.DB, wire.BitcoinNet) error
+	Load(context.Context, *db.DB, bitcoin.Network) error
+	Save(context.Context, *db.DB, bitcoin.Network) error
 }
 
 type Wallet struct {
@@ -53,7 +52,7 @@ func (w Wallet) Remove(key *Key) error {
 }
 
 // Register a private key with the wallet
-func (w Wallet) Register(wif string, net wire.BitcoinNet) error {
+func (w Wallet) Register(wif string, net bitcoin.Network) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -107,14 +106,14 @@ func (w Wallet) Get(address bitcoin.RawAddress) (*Key, error) {
 	return w.KeyStore.Get(address)
 }
 
-func (w Wallet) Load(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
+func (w Wallet) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
 	return w.KeyStore.Load(ctx, masterDB, net)
 }
 
-func (w Wallet) Save(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
+func (w Wallet) Save(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 

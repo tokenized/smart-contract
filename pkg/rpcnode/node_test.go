@@ -5,8 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // Prior to running test, set the following environment variables.
@@ -18,10 +17,9 @@ func ManualTestNode(test *testing.T) {
 	ctx := context.Background()
 
 	config := &Config{
-		Host:        os.Getenv("RPC_HOST"),
-		Username:    os.Getenv("RPC_USERNAME"),
-		Password:    os.Getenv("RPC_PASSWORD"),
-		ChainParams: &chaincfg.MainNetParams,
+		Host:     os.Getenv("RPC_HOST"),
+		Username: os.Getenv("RPC_USERNAME"),
+		Password: os.Getenv("RPC_PASSWORD"),
 	}
 	test.Logf("Connect to %s as %s password : %s", config.Host, config.Username, config.Password)
 
@@ -30,7 +28,7 @@ func ManualTestNode(test *testing.T) {
 		test.Errorf("Failed to create node : %s", err.Error())
 	}
 
-	txid, err := chainhash.NewHashFromStr(os.Getenv("TX_ID"))
+	txid, err := bitcoin.NewHash32FromStr(os.Getenv("TX_ID"))
 	test.Logf("Get Tx : %s", txid.String())
 
 	if tx, err := node.GetTX(ctx, txid); err != nil {

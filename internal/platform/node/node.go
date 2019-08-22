@@ -3,8 +3,6 @@ package node
 import (
 	"context"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -32,7 +30,7 @@ type Values struct {
 //   longest chain.
 type BitcoinHeaders interface {
 	LastHeight(ctx context.Context) int
-	Hash(ctx context.Context, height int) (*chainhash.Hash, error)
+	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 	Time(ctx context.Context, height int) (uint32, error)
 }
 
@@ -55,7 +53,7 @@ type Config struct {
 	Version            string
 	FeeAddress         bitcoin.RawAddress
 	DustLimit          uint64
-	ChainParams        *chaincfg.Params
+	Net                bitcoin.Network
 	FeeRate            float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 	PreprocessThreads  int

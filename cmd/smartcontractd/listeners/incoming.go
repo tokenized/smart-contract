@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -13,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -29,12 +29,12 @@ func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
 
 	server.pendingLock.Lock()
 
-	_, exists := server.pendingTxs[intx.Itx.Hash]
+	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
 		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash.String())
 	}
-	server.pendingTxs[intx.Itx.Hash] = intx
+	server.pendingTxs[*intx.Itx.Hash] = intx
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
@@ -57,19 +57,19 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		}
 
 		switch msg := intx.Itx.MsgProto.(type) {
-		case *protocol.Transfer:
+		case *actions.Transfer:
 			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {
-				intx.Itx.RejectCode = protocol.RejectInvalidSignature
+				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 				node.LogWarn(ctx, "Invalid oracle signature : %s", err)
 			}
 		}
 
-		server.markPreprocessed(ctx, &intx.Itx.Hash)
+		server.markPreprocessed(ctx, intx.Itx.Hash)
 	}
 	return nil
 }
 
-func (server *Server) markPreprocessed(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -93,7 +93,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 			toRemove++
 		} else if intx.IsPreprocessed && intx.IsReady {
 			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
-			delete(server.pendingTxs, intx.Itx.Hash)
+			delete(server.pendingTxs, *intx.Itx.Hash)
 			toRemove++
 		} else {
 			break
@@ -106,7 +106,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 	}
 }
 
-func (server *Server) MarkSafe(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -118,12 +118,12 @@ func (server *Server) MarkSafe(ctx context.Context, txid *chainhash.Hash) {
 	intx.IsReady = true
 	if !intx.InReady {
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 }
 
-func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -133,7 +133,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
 	}
 
 	intx.IsReady = true
-	intx.Itx.RejectCode = protocol.RejectDoubleSpend
+	intx.Itx.RejectCode = actions.RejectionsDoubleSpend
 	for i, readyID := range server.readyTxs {
 		if *readyID == *txid {
 			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
@@ -142,7 +142,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *chainhash.Hash) {
 	}
 }
 
-func (server *Server) CancelPendingTx(ctx context.Context, txid *chainhash.Hash) bool {
+func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32) bool {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -163,7 +163,7 @@ func (server *Server) CancelPendingTx(ctx context.Context, txid *chainhash.Hash)
 	return true
 }
 
-func (server *Server) MarkConfirmed(ctx context.Context, txid *chainhash.Hash) {
+func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -175,7 +175,7 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *chainhash.Hash) {
 	intx.IsReady = true
 	if !intx.InReady {
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 }
@@ -239,10 +239,10 @@ func (c *IncomingTxChannel) Close() error {
 
 // validateOracles verifies all oracle signatures related to this tx.
 func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transaction,
-	transfer *protocol.Transfer, headers node.BitcoinHeaders) error {
+	transfer *actions.Transfer, headers node.BitcoinHeaders) error {
 
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode.IsZero() {
+		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode == nil {
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 
@@ -250,16 +250,7 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 			continue
 		}
 
-		addressPKH, ok := bitcoin.PKH(itx.Outputs[assetTransfer.ContractIndex].Address)
-		if !ok {
-			continue
-		}
-		contractOutputPKH := protocol.PublicKeyHashFromBytes(addressPKH)
-		if contractOutputPKH == nil {
-			continue // Invalid contract index
-		}
-
-		ct, err := contract.Retrieve(ctx, masterDB, contractOutputPKH)
+		ct, err := contract.Retrieve(ctx, masterDB, itx.Outputs[assetTransfer.ContractIndex].Address)
 		if err == contract.ErrNotFound {
 			continue // Not associated with one of our contracts
 		}
@@ -270,8 +261,8 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 		// Process receivers
 		for _, receiver := range assetTransfer.AssetReceivers {
 			// Check Oracle Signature
-			if err := validateOracle(ctx, contractOutputPKH, ct, &assetTransfer.AssetCode, &receiver,
-				headers); err != nil {
+			if err := validateOracle(ctx, itx.Outputs[assetTransfer.ContractIndex].Address,
+				ct, assetTransfer.AssetCode, receiver, headers); err != nil {
 				return err
 			}
 		}
@@ -280,8 +271,8 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 	return nil
 }
 
-func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct *state.Contract,
-	assetCode *protocol.AssetCode, assetReceiver *protocol.AssetReceiver, headers node.BitcoinHeaders) error {
+func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct *state.Contract,
+	assetCode []byte, assetReceiver *actions.AssetReceiverField, headers node.BitcoinHeaders) error {
 
 	if assetReceiver.OracleSigAlgorithm == 0 {
 		if len(ct.Oracles) > 0 {
@@ -320,10 +311,16 @@ func validateOracle(ctx context.Context, contractPKH *protocol.PublicKeyHash, ct
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
 			assetReceiver.OracleSigBlockHeight))
 	}
+
+	receiverAddress, err := bitcoin.DecodeRawAddress(assetReceiver.Address)
+	if err != nil {
+		return errors.Wrap(err, "Failed to read receiver address")
+	}
+
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
 		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractPKH, assetCode,
-		&assetReceiver.Address, assetReceiver.Quantity, hash)
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
+		receiverAddress, assetReceiver.Quantity, hash)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}

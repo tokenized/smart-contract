@@ -12,7 +12,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -27,18 +26,19 @@ type Output struct {
 	OutPoint    wire.OutPoint
 	PkScript    []byte
 	Value       uint64
-	SpentByTxId chainhash.Hash
+	SpentByTxId *bitcoin.Hash32
 }
 
 func BitcoinsFromSatoshis(satoshis uint64) float32 {
 	return float32(satoshis) / 100000000.0
 }
 
+var emptyHash bitcoin.Hash32
+
 func (wallet *Wallet) Balance() uint64 {
-	var emptyHash chainhash.Hash
 	result := uint64(0)
 	for _, output := range wallet.outputs {
-		if output.SpentByTxId == emptyHash {
+		if emptyHash.Equal(output.SpentByTxId) {
 			result += output.Value
 		}
 	}
@@ -46,25 +46,23 @@ func (wallet *Wallet) Balance() uint64 {
 }
 
 func (wallet *Wallet) UnspentOutputs() []*Output {
-	var emptyHash chainhash.Hash
 	result := make([]*Output, 0, len(wallet.outputs))
 	for i, output := range wallet.outputs {
-		if output.SpentByTxId == emptyHash {
+		if emptyHash.Equal(output.SpentByTxId) {
 			result = append(result, &wallet.outputs[i])
 		}
 	}
 	return result
 }
 
-func (wallet *Wallet) Spend(outpoint *wire.OutPoint, spentByTxId chainhash.Hash) (uint64, bool) {
-	var emptyHash chainhash.Hash
+func (wallet *Wallet) Spend(outpoint *wire.OutPoint, spentByTxId *bitcoin.Hash32) (uint64, bool) {
 	for i, output := range wallet.outputs {
 		if !bytes.Equal(output.OutPoint.Hash[:], outpoint.Hash[:]) ||
 			output.OutPoint.Index != outpoint.Index {
 			continue
 		}
 
-		if output.SpentByTxId != emptyHash {
+		if !emptyHash.Equal(output.SpentByTxId) {
 			return output.Value, false // Already spent
 		}
 
@@ -74,44 +72,44 @@ func (wallet *Wallet) Spend(outpoint *wire.OutPoint, spentByTxId chainhash.Hash)
 	return 0, false
 }
 
-func (wallet *Wallet) Unspend(outpoint *wire.OutPoint, spentByTxId chainhash.Hash) (uint64, bool) {
-	var emptyHash chainhash.Hash
+func (wallet *Wallet) Unspend(outpoint *wire.OutPoint, spentByTxId *bitcoin.Hash32) (uint64, bool) {
 	for i, output := range wallet.outputs {
 		if !bytes.Equal(output.OutPoint.Hash[:], outpoint.Hash[:]) ||
 			output.OutPoint.Index != outpoint.Index {
 			continue
 		}
 
-		if output.SpentByTxId == emptyHash {
+		if emptyHash.Equal(output.SpentByTxId) {
 			return output.Value, false // Not spent
 		}
 
-		wallet.outputs[i].SpentByTxId = emptyHash
+		wallet.outputs[i].SpentByTxId = &emptyHash
 		return output.Value, true
 	}
 	return 0, false
 }
 
-func (wallet *Wallet) AddUTXO(txId chainhash.Hash, index uint32, script []byte, value uint64) bool {
+func (wallet *Wallet) AddUTXO(txid *bitcoin.Hash32, index uint32, script []byte, value uint64) bool {
 	for _, output := range wallet.outputs {
-		if bytes.Equal(txId[:], output.OutPoint.Hash[:]) &&
+		if bytes.Equal(txid[:], output.OutPoint.Hash[:]) &&
 			index == output.OutPoint.Index {
 			return false
 		}
 	}
 
 	newOutput := Output{
-		OutPoint: wire.OutPoint{Hash: txId, Index: index},
-		PkScript: script,
-		Value:    uint64(value),
+		OutPoint:    wire.OutPoint{Hash: *txid, Index: index},
+		PkScript:    script,
+		Value:       uint64(value),
+		SpentByTxId: &bitcoin.Hash32{},
 	}
 	wallet.outputs = append(wallet.outputs, newOutput)
 	return true
 }
 
-func (wallet *Wallet) RemoveUTXO(txId chainhash.Hash, index uint32, script []byte, value uint64) bool {
+func (wallet *Wallet) RemoveUTXO(txid *bitcoin.Hash32, index uint32, script []byte, value uint64) bool {
 	for i, output := range wallet.outputs {
-		if bytes.Equal(txId[:], output.OutPoint.Hash[:]) &&
+		if txid.Equal(&output.OutPoint.Hash) &&
 			index == output.OutPoint.Index {
 			wallet.outputs = append(wallet.outputs[:i], wallet.outputs[i+1:]...)
 			return true
@@ -121,7 +119,7 @@ func (wallet *Wallet) RemoveUTXO(txId chainhash.Hash, index uint32, script []byt
 	return false
 }
 
-func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.BitcoinNet) error {
+func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin.Network) error {
 	// Private Key
 	var err error
 	wallet.Key, err = bitcoin.DecodeKeyString(wifKey)
@@ -137,7 +135,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 
 	// Load Outputs
 	wallet.path = path
-	utxoFilePath := filepath.FromSlash(path + "/outputs.json")
+	utxoFilePath := filepath.Join(filepath.FromSlash(path), "outputs.json")
 	data, err := ioutil.ReadFile(utxoFilePath)
 	if err == nil {
 		if err := json.Unmarshal(data, &wallet.outputs); err != nil {
@@ -148,12 +146,11 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 		return errors.Wrap(err, "Failed to read wallet outputs")
 	}
 
-	var emptyHash chainhash.Hash
 	unspentCount := 0
 	for _, output := range wallet.outputs {
-		if output.SpentByTxId == emptyHash {
-			logger.Info(ctx, "Loaded unspent UTXO %.08f : %d of %s", BitcoinsFromSatoshis(output.Value),
-				output.OutPoint.Index, output.OutPoint.Hash)
+		if emptyHash.Equal(output.SpentByTxId) {
+			logger.Info(ctx, "Loaded unspent output %.08f : %s", BitcoinsFromSatoshis(output.Value),
+				output.OutPoint.String())
 			unspentCount++
 		}
 	}
@@ -166,7 +163,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net wire.Bi
 }
 
 func (wallet *Wallet) Save(ctx context.Context) error {
-	utxoFilePath := filepath.FromSlash(wallet.path + "/outputs.json")
+	utxoFilePath := filepath.Join(filepath.FromSlash(wallet.path), "outputs.json")
 	data, err := json.Marshal(&wallet.outputs)
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal wallet outputs")

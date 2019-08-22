@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // TestGetBlocks tests the MsgGetBlocks API.
@@ -20,21 +20,21 @@ func TestGetBlocks(t *testing.T) {
 
 	// Block 99500 hash.
 	hashStr := "000000000002e7ad7b9eef9479e4aabc65cb831269cc20d2632c13684406dee0"
-	locatorHash, err := chainhash.NewHashFromStr(hashStr)
+	locatorHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Block 100000 hash.
-	hashStr = "3ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
-	hashStop, err := chainhash.NewHashFromStr(hashStr)
+	hashStr = "000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
+	hashStop, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Ensure we get the same data back out.
 	msg := NewMsgGetBlocks(hashStop)
-	if !msg.HashStop.IsEqual(hashStop) {
+	if !msg.HashStop.Equal(hashStop) {
 		t.Errorf("NewMsgGetBlocks: wrong stop hash - got %v, want %v",
 			msg.HashStop, hashStop)
 	}
@@ -87,28 +87,28 @@ func TestGetBlocksWire(t *testing.T) {
 	pver := uint32(60002)
 
 	// Block 99499 hash.
-	hashStr := "2710f40c87ec93d010a6fd95f42c59a2cbacc60b18cf6b7957535"
-	hashLocator, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "000000000002710f40c87ec93d010a6fd95f42c59a2cbacc60b18cf6b7957535"
+	hashLocator, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Block 99500 hash.
-	hashStr = "2e7ad7b9eef9479e4aabc65cb831269cc20d2632c13684406dee0"
-	hashLocator2, err := chainhash.NewHashFromStr(hashStr)
+	hashStr = "000000000002e7ad7b9eef9479e4aabc65cb831269cc20d2632c13684406dee0"
+	hashLocator2, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Block 100000 hash.
-	hashStr = "3ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
-	hashStop, err := chainhash.NewHashFromStr(hashStr)
+	hashStr = "000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
+	hashStop, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// MsgGetBlocks message with no block locators or stop hash.
-	noLocators := NewMsgGetBlocks(&chainhash.Hash{})
+	noLocators := NewMsgGetBlocks(&bitcoin.Hash32{})
 	noLocators.ProtocolVersion = pver
 	noLocatorsEncoded := []byte{
 		0x62, 0xea, 0x00, 0x00, // Protocol version 60002
@@ -269,22 +269,22 @@ func TestGetBlocksWireErrors(t *testing.T) {
 	wireErr := &MessageError{}
 
 	// Block 99499 hash.
-	hashStr := "2710f40c87ec93d010a6fd95f42c59a2cbacc60b18cf6b7957535"
-	hashLocator, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "000000000002710f40c87ec93d010a6fd95f42c59a2cbacc60b18cf6b7957535"
+	hashLocator, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Block 99500 hash.
-	hashStr = "2e7ad7b9eef9479e4aabc65cb831269cc20d2632c13684406dee0"
-	hashLocator2, err := chainhash.NewHashFromStr(hashStr)
+	hashStr = "000000000002e7ad7b9eef9479e4aabc65cb831269cc20d2632c13684406dee0"
+	hashLocator2, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Block 100000 hash.
-	hashStr = "3ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
-	hashStop, err := chainhash.NewHashFromStr(hashStr)
+	hashStr = "000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506"
+	hashStop, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}

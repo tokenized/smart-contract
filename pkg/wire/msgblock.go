@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // defaultTransactionAlloc is the default size used for the backing array
@@ -227,13 +227,13 @@ func (msg *MsgBlock) MaxPayloadLength(pver uint32) uint32 {
 }
 
 // BlockHash computes the block identifier hash for this block.
-func (msg *MsgBlock) BlockHash() chainhash.Hash {
+func (msg *MsgBlock) BlockHash() *bitcoin.Hash32 {
 	return msg.Header.BlockHash()
 }
 
 // TxHashes returns a slice of hashes of all of transactions in this block.
-func (msg *MsgBlock) TxHashes() ([]chainhash.Hash, error) {
-	hashList := make([]chainhash.Hash, 0, len(msg.Transactions))
+func (msg *MsgBlock) TxHashes() ([]*bitcoin.Hash32, error) {
+	hashList := make([]*bitcoin.Hash32, 0, len(msg.Transactions))
 	for _, tx := range msg.Transactions {
 		hashList = append(hashList, tx.TxHash())
 	}

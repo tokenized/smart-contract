@@ -8,7 +8,6 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 const (
@@ -77,7 +76,7 @@ func (k KeyStore) GetAll() []*Key {
 	return result
 }
 
-func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net wire.BitcoinNet) error {
+func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
 	k.Keys = make(map[[20]byte]*Key)
 
 	data, err := masterDB.Fetch(ctx, walletKey)
