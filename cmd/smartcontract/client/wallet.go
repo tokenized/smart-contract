@@ -98,9 +98,9 @@ func (wallet *Wallet) AddUTXO(txid *bitcoin.Hash32, index uint32, script []byte,
 	}
 
 	newOutput := Output{
-		OutPoint: wire.OutPoint{Hash: *txid, Index: index},
-		PkScript: script,
-		Value:    uint64(value),
+		OutPoint:    wire.OutPoint{Hash: *txid, Index: index},
+		PkScript:    script,
+		Value:       uint64(value),
 		SpentByTxId: &bitcoin.Hash32{},
 	}
 	wallet.outputs = append(wallet.outputs, newOutput)
@@ -135,7 +135,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 
 	// Load Outputs
 	wallet.path = path
-	utxoFilePath := filepath.FromSlash(path + "/outputs.json")
+	utxoFilePath := filepath.Join(filepath.FromSlash(path), "outputs.json")
 	data, err := ioutil.ReadFile(utxoFilePath)
 	if err == nil {
 		if err := json.Unmarshal(data, &wallet.outputs); err != nil {
@@ -149,8 +149,8 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 	unspentCount := 0
 	for _, output := range wallet.outputs {
 		if emptyHash.Equal(output.SpentByTxId) {
-			logger.Info(ctx, "Loaded unspent UTXO %.08f : %d of %s", BitcoinsFromSatoshis(output.Value),
-				output.OutPoint.Index, output.OutPoint.Hash)
+			logger.Info(ctx, "Loaded unspent output %.08f : %s", BitcoinsFromSatoshis(output.Value),
+				output.OutPoint.String())
 			unspentCount++
 		}
 	}
@@ -163,7 +163,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 }
 
 func (wallet *Wallet) Save(ctx context.Context) error {
-	utxoFilePath := filepath.FromSlash(wallet.path + "/outputs.json")
+	utxoFilePath := filepath.Join(filepath.FromSlash(wallet.path), "outputs.json")
 	data, err := json.Marshal(&wallet.outputs)
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal wallet outputs")
