@@ -87,9 +87,14 @@ func List(ctx context.Context,
 	contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode) ([]string, error) {
 
-	path := fmt.Sprintf("%s/%x/%s/%s",
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	path := fmt.Sprintf("%s/%s/%s/%s",
 		storageKey,
-		contractAddress.Bytes(),
+		contractHash.String(),
 		storageSubKey,
 		assetCode.String())
 
@@ -266,8 +271,8 @@ func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) string {
-	return fmt.Sprintf("%s/%x/%s/%s/%x", storageKey, contractHash, storageSubKey,
-		assetCode.String(), addressHash)
+	return fmt.Sprintf("%s/%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey,
+		assetCode.String(), addressHash.String())
 }
 
 func serializeHolding(h *state.Holding) ([]byte, error) {

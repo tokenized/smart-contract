@@ -16,7 +16,11 @@ const storageSubKey = "votes"
 
 // Put a single vote in storage
 func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, v *state.Vote) error {
-	key := buildStoragePath(contractAddress, v.VoteTxId)
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return err
+	}
+	key := buildStoragePath(contractHash, v.VoteTxId)
 
 	// Save the contract
 	data, err := json.Marshal(v)
@@ -28,8 +32,14 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 }
 
 // Fetch a single vote from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteTxId *protocol.TxId) (*state.Vote, error) {
-	key := buildStoragePath(contractAddress, voteTxId)
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	voteTxId *protocol.TxId) (*state.Vote, error) {
+
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+	key := buildStoragePath(contractHash, voteTxId)
 
 	data, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -51,9 +61,14 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 
 // List all votes for a specified contract.
 func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) ([]*state.Vote, error) {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: This should probably use dbConn.List for greater efficiency
-	data, err := dbConn.Search(ctx, fmt.Sprintf("%s/%x/%s", storageKey, contractAddress.Bytes(), storageSubKey))
+	data, err := dbConn.Search(ctx, fmt.Sprintf("%s/%s/%s", storageKey, contractHash.String(),
+		storageSubKey))
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +88,6 @@ func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractAddress bitcoin.RawAddress, txid *protocol.TxId) string {
-	return fmt.Sprintf("%s/%x/%s/%s", storageKey, contractAddress.Bytes(), storageSubKey, txid.String())
+func buildStoragePath(contractHash *bitcoin.Hash20, txid *protocol.TxId) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, txid.String())
 }

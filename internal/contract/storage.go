@@ -83,7 +83,7 @@ func Reset(ctx context.Context) {
 
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractHash *bitcoin.Hash20) string {
-	return fmt.Sprintf("%s/%x/contract", storageKey, contractHash)
+	return fmt.Sprintf("%s/%s/contract", storageKey, contractHash.String())
 }
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {

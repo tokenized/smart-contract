@@ -20,13 +20,19 @@ const storageSubKey = "assets"
 var cache map[protocol.AssetCode]*state.Asset
 
 // Put a single asset in storage
-func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, asset *state.Asset) error {
+func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	asset *state.Asset) error {
+
 	data, err := serializeAsset(asset)
 	if err != nil {
 		return errors.Wrap(err, "Failed to serialize asset")
 	}
 
-	if err := dbConn.Put(ctx, buildStoragePath(contractAddress, asset.Code), data); err != nil {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return err
+	}
+	if err := dbConn.Put(ctx, buildStoragePath(contractHash, asset.Code), data); err != nil {
 		return err
 	}
 
@@ -46,7 +52,11 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		}
 	}
 
-	key := buildStoragePath(contractAddress, assetCode)
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+	key := buildStoragePath(contractHash, assetCode)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -71,8 +81,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractAddress bitcoin.RawAddress, asset *protocol.AssetCode) string {
-	return fmt.Sprintf("%s/%x/%s/%s", storageKey, contractAddress.Bytes(), storageSubKey, asset.String())
+func buildStoragePath(contractHash *bitcoin.Hash20, asset *protocol.AssetCode) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, asset.String())
 }
 
 func serializeAsset(as *state.Asset) ([]byte, error) {
