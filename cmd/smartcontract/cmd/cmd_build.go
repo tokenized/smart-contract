@@ -305,24 +305,18 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		payload := assets.NewAssetFromCode(assetDef.AssetType)
-		if payload == nil {
-			fmt.Printf("Invalid asset type : %s\n", assetDef.AssetType)
-			return nil
-		}
-
-		assetDef.AssetPayload, err = payload.Bytes()
+		asset, err := assets.Deserialize([]byte(assetDef.AssetType), assetDef.AssetPayload)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetDef.AssetType))
 		}
 
 		fmt.Printf("Payload : %s\n", assetDef.AssetType)
 		if hexFormat {
-			fmt.Printf("%x\n", payload)
+			fmt.Printf("%x\n", assetDef.AssetPayload)
 		} else if b64Format {
 			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetDef.AssetPayload))
 		} else {
-			data, err = json.MarshalIndent(payload, "", "  ")
+			data, err = json.MarshalIndent(asset, "", "  ")
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetDef.AssetType))
 			}
