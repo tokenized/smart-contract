@@ -101,6 +101,51 @@ func List(ctx context.Context,
 	return dbConn.List(ctx, path)
 }
 
+// FetchAll fetches a single holding from storage for a specified asset.
+func FetchAll(ctx context.Context,
+	dbConn *db.DB,
+	contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode) ([]*state.Holding, error) {
+
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	path := fmt.Sprintf("%s/%s/%s/%s",
+		storageKey,
+		contractHash.String(),
+		storageSubKey,
+		assetCode.String())
+
+	keys, err := dbConn.List(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]*state.Holding, 0, len(keys))
+	for _, key := range keys {
+		b, err := dbConn.Fetch(ctx, key)
+		if err != nil {
+			if err == db.ErrNotFound {
+				return nil, ErrNotFound
+			}
+
+			return nil, errors.Wrap(err, "Failed to fetch holding")
+		}
+
+		// Prepare the asset object
+		readResult, err := deserializeHolding(bytes.NewReader(b))
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to deserialize holding")
+		}
+
+		results = append(results, readResult)
+	}
+
+	return results, nil
+}
+
 // Fetch fetches a single holding from storage and places it in the cache.
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, address bitcoin.RawAddress) (*state.Holding, error) {

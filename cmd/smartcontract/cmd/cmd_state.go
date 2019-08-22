@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"strings"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -87,53 +85,22 @@ func loadContract(ctx context.Context,
 		fmt.Printf("### Holdings\n\n")
 
 		// get the PKH's inside the holders/asset_code directory
-		keys, err := holdings.List(ctx, db, address, assetCode)
+		holdings, err := holdings.FetchAll(ctx, db, address, assetCode)
 		if err != nil {
 			return nil
 		}
 
-		for _, key := range keys {
-			// split the key into parts.
-			parts := strings.Split(key, "/")
+		for _, holding := range holdings {
+			address = bitcoin.NewAddressFromRawAddress(holding.Address, net)
+			fmt.Printf("#### Holding for %s\n\n", address.String())
 
-			// the last part of the key is the raw address of the owner, in hex format.
-			owner := parts[len(parts)-1]
-
-			// Convert the hex representation to an Address, which is used
-			// for display purposes.
-			ownerRawAddress, err := addressFromHex(owner)
-			if err != nil {
-				return err
-			}
-
-			// we can get the holding for this owner now
-			h, err := holdings.Fetch(ctx, db, address, assetCode, ownerRawAddress)
-			if err != nil {
-				return err
-			}
-
-			ownerAddress := bitcoin.NewAddressFromRawAddress(ownerRawAddress, net)
-			fmt.Printf("#### Holding for %s\n\n", ownerAddress.String())
-
-			if err := dumpHoldingJSON(h); err != nil {
+			if err := dumpHoldingJSON(holding); err != nil {
 				return err
 			}
 		}
 	}
 
 	return nil
-}
-
-// addressFromHex returns a decoded Address from a the hex representation of
-// a PKH.
-func addressFromHex(s string) (bitcoin.RawAddress, error) {
-
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		return nil, err
-	}
-
-	return bitcoin.DecodeRawAddress(b)
 }
 
 // dumpHoldingJSON dumps a Holding to JSON.
