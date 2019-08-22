@@ -155,10 +155,11 @@ func freezeAuthorityOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed generate authority signature hash : %v", tests.Failed, err)
 	}
 
-	orderData.OrderSignature, err = authorityKey.Key.Sign(sigHash)
+	sig, err := authorityKey.Key.Sign(sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to sign authority sig hash : %v", tests.Failed, err)
 	}
+	orderData.OrderSignature = sig.Bytes()
 
 	// Build order transaction
 	orderTx := wire.NewMsgTx(2)

@@ -126,7 +126,7 @@ func transferSign(c *cobra.Command, args []string) error {
 				}
 
 				fmt.Printf("Signature : %x\n", signature)
-				fmt.Printf("Signature b64 : %s\n", base64.StdEncoding.EncodeToString(signature))
+				fmt.Printf("Signature b64 : %s\n", base64.StdEncoding.EncodeToString(signature.Bytes()))
 				return nil
 			}
 

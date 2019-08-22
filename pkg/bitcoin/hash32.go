@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 )
 
 const Hash32Size = 32
@@ -68,16 +69,16 @@ func (h *Hash32) Equal(o *Hash32) bool {
 	return bytes.Equal(h[:], o[:])
 }
 
-// Serialize writes the hash into a buffer.
-func (h *Hash32) Serialize(buf *bytes.Buffer) error {
-	_, err := buf.Write(h[:])
+// Serialize writes the hash into a writer.
+func (h *Hash32) Serialize(w io.Writer) error {
+	_, err := w.Write(h[:])
 	return err
 }
 
-// Deserialize reads a hash from a buffer.
-func DeserializeHash32(buf *bytes.Reader) (*Hash32, error) {
+// Deserialize reads a hash from a reader.
+func DeserializeHash32(r io.Reader) (*Hash32, error) {
 	result := Hash32{}
-	_, err := buf.Read(result[:])
+	_, err := r.Read(result[:])
 	if err != nil {
 		return nil, err
 	}

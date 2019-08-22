@@ -6,11 +6,9 @@ package wire
 
 import (
 	"bytes"
-	"compress/bzip2"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"testing"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -192,15 +190,15 @@ func BenchmarkReadOutPoint(b *testing.B) {
 	}
 }
 
-// BenchmarkWriteOutPoint performs a benchmark on how long it takes to write a
+// BenchmarkOutPointSerialize performs a benchmark on how long it takes to write a
 // transaction output point.
-func BenchmarkWriteOutPoint(b *testing.B) {
+func BenchmarkOutPointSerialize(b *testing.B) {
 	op := &OutPoint{
 		Hash:  bitcoin.Hash32{},
 		Index: 0,
 	}
 	for i := 0; i < b.N; i++ {
-		writeOutPoint(ioutil.Discard, 0, 0, op)
+		op.Serialize(ioutil.Discard)
 	}
 }
 
@@ -310,29 +308,6 @@ func BenchmarkDeserializeTxSmall(b *testing.B) {
 	}
 }
 
-// BenchmarkDeserializeTxLarge performs a benchmark on how long it takes to
-// deserialize a very large transaction.
-func BenchmarkDeserializeTxLarge(b *testing.B) {
-	// tx bb41a757f405890fb0f5856228e23b715702d714d59bf2b1feb70d8b2b4e3e08
-	// from the main block chain.
-	fi, err := os.Open("testdata/megatx.bin.bz2")
-	if err != nil {
-		b.Fatalf("Failed to read transaction data: %v", err)
-	}
-	defer fi.Close()
-	buf, err := ioutil.ReadAll(bzip2.NewReader(fi))
-	if err != nil {
-		b.Fatalf("Failed to read transaction data: %v", err)
-	}
-
-	r := bytes.NewReader(buf)
-	var tx MsgTx
-	for i := 0; i < b.N; i++ {
-		r.Seek(0, 0)
-		tx.Deserialize(r)
-	}
-}
-
 // BenchmarkSerializeTx performs a benchmark on how long it takes to serialize
 // a transaction.
 func BenchmarkSerializeTx(b *testing.B) {
@@ -385,7 +360,7 @@ func BenchmarkDecodeGetHeaders(b *testing.B) {
 	pver := ProtocolVersion
 	var m MsgGetHeaders
 	for i := 0; i < MaxBlockLocatorsPerMsg; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}
@@ -415,7 +390,7 @@ func BenchmarkDecodeHeaders(b *testing.B) {
 	pver := ProtocolVersion
 	var m MsgHeaders
 	for i := 0; i < MaxBlockHeadersPerMsg; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}
@@ -445,7 +420,7 @@ func BenchmarkDecodeGetBlocks(b *testing.B) {
 	pver := ProtocolVersion
 	var m MsgGetBlocks
 	for i := 0; i < MaxBlockLocatorsPerMsg; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}
@@ -502,7 +477,7 @@ func BenchmarkDecodeInv(b *testing.B) {
 	pver := ProtocolVersion
 	var m MsgInv
 	for i := 0; i < MaxInvPerMsg; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}
@@ -532,7 +507,7 @@ func BenchmarkDecodeNotFound(b *testing.B) {
 	pver := ProtocolVersion
 	var m MsgNotFound
 	for i := 0; i < MaxInvPerMsg; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}
@@ -561,13 +536,13 @@ func BenchmarkDecodeMerkleBlock(b *testing.B) {
 	// Create a message with random data.
 	pver := ProtocolVersion
 	var m MsgMerkleBlock
-	hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", 10000))
+	hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", 10000))))
 	if err != nil {
 		b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 	}
 	m.Header = *NewBlockHeader(1, hash, hash, 0, uint32(10000))
 	for i := 0; i < 105; i++ {
-		hash, err := bitcoin.NewHash32FromStr(fmt.Sprintf("%x", i))
+		hash, err := bitcoin.NewHash32(bitcoin.Sha256([]byte(fmt.Sprintf("%x", i))))
 		if err != nil {
 			b.Fatalf("NewHashFromStr: unexpected error: %v", err)
 		}

@@ -36,7 +36,7 @@ type Key interface {
 	PublicKey() PublicKey
 
 	// Sign creates a signature from a hash.
-	Sign([]byte) ([]byte, error)
+	Sign([]byte) (Signature, error)
 }
 
 // DecodeKeyString converts WIF (Wallet Import Format) key text to a key.
@@ -140,10 +140,10 @@ func (k *KeyS256) PublicKey() PublicKey {
 }
 
 // Sign returns the serialized signature of the hash for the private key.
-func (k *KeyS256) Sign(hash []byte) ([]byte, error) {
+func (k *KeyS256) Sign(hash []byte) (Signature, error) {
 	signature, err := k.key.Sign(hash)
 	if err != nil {
 		return nil, err
 	}
-	return signature.Serialize(), nil
+	return SignatureS256FromBTCEC(signature), nil
 }

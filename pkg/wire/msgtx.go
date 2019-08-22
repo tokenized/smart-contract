@@ -193,6 +193,16 @@ func (op OutPoint) OutpointHash() *bitcoin.Hash32 {
 	return result
 }
 
+// Serialize encodes op to the bitcoin protocol encoding for an OutPoint to w.
+func (op *OutPoint) Serialize(w io.Writer) error {
+	err := op.Hash.Serialize(w)
+	if err != nil {
+		return err
+	}
+
+	return binary.Write(w, endian, uint32(op.Index))
+}
+
 // TxIn defines a bitcoin transaction input.
 type TxIn struct {
 	PreviousOutPoint OutPoint
@@ -687,17 +697,6 @@ func readOutPoint(r io.Reader, pver uint32, version int32, op *OutPoint) error {
 	return err
 }
 
-// writeOutPoint encodes op to the bitcoin protocol encoding for an OutPoint
-// to w.
-func writeOutPoint(w io.Writer, pver uint32, version int32, op *OutPoint) error {
-	_, err := w.Write(op.Hash[:])
-	if err != nil {
-		return err
-	}
-
-	return binary.Write(w, endian, uint32(op.Index))
-}
-
 // readScript reads a variable length byte array that represents a transaction
 // script.  It is encoded as a varInt containing the length of the array
 // followed by the bytes themselves.  An error is returned if the length is
@@ -749,7 +748,7 @@ func readTxIn(r io.Reader, pver uint32, version int32, ti *TxIn) error {
 // writeTxIn encodes ti to the bitcoin protocol encoding for a transaction
 // input (TxIn) to w.
 func writeTxIn(w io.Writer, pver uint32, version int32, ti *TxIn) error {
-	err := writeOutPoint(w, pver, version, &ti.PreviousOutPoint)
+	err := ti.PreviousOutPoint.Serialize(w)
 	if err != nil {
 		return err
 	}

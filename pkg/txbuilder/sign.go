@@ -202,5 +202,5 @@ func InputSignature(key bitcoin.Key, tx *wire.MsgTx, index int, lockScript []byt
 		return nil, fmt.Errorf("cannot sign tx input: %s", err)
 	}
 
-	return append(sig, byte(hashType)), nil
+	return append(sig.Bytes(), byte(hashType)), nil
 }

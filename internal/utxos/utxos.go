@@ -23,7 +23,7 @@ type UTXO struct {
 // Add adds/spends UTXOs based on the tx.
 func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 	txHash := tx.TxHash()
-	
+
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
 		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)

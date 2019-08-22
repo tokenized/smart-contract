@@ -468,7 +468,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			Address:               userKey.Address.Bytes(),
 			Quantity:              transferAmount,
 			OracleSigAlgorithm:    1,
-			OracleConfirmationSig: oracleSig,
+			OracleConfirmationSig: oracleSig.Bytes(),
 			OracleSigBlockHeight:  uint32(blockHeight),
 		}
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
@@ -1399,7 +1399,7 @@ func oracleTransfer(t *testing.T) {
 		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
-		OracleConfirmationSig: oracleSig,
+		OracleConfirmationSig: oracleSig.Bytes(),
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
@@ -1528,7 +1528,7 @@ func oracleTransferBad(t *testing.T) {
 		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
-		OracleConfirmationSig: oracleSig,
+		OracleConfirmationSig: oracleSig.Bytes(),
 		OracleSigBlockHeight:  uint32(blockHeight),
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
