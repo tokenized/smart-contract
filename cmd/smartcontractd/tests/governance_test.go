@@ -257,7 +257,7 @@ func voteResult(t *testing.T) {
 	}
 
 	// Wait for vote expiration
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()

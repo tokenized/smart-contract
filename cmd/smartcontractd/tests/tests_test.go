@@ -31,6 +31,7 @@ var responseLock sync.Mutex
 var userKey *wallet.Key
 var user2Key *wallet.Key
 var issuerKey *wallet.Key
+var issuer2Key *wallet.Key
 var oracleKey *wallet.Key
 var authorityKey *wallet.Key
 
@@ -104,6 +105,11 @@ func testMain(m *testing.M) int {
 		panic(err)
 	}
 
+	issuer2Key, err = tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		panic(err)
+	}
+
 	oracleKey, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
@@ -157,7 +163,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 
 	responseLock.Lock()
 
-	if len(responses) != 1 {
+	if len(responses) == 0 {
 		responseLock.Unlock()
 		t.Fatalf("\t%s\t%s Response not created", tests.Failed, responseCode)
 	}
@@ -245,5 +251,7 @@ func resetTest(ctx context.Context) error {
 	asset.Reset(ctx)
 	contract.Reset(ctx)
 	holdings.Reset(ctx)
+	a.SetResponder(respondTx)
+	a.SetReprocessor(reprocessTx)
 	return test.Reset(ctx)
 }

@@ -70,7 +70,7 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 12)
+	permissions := make([]protocol.Permission, actions.AssetFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = true               // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
@@ -193,7 +193,7 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 12)
+	permissions := make([]protocol.Permission, actions.AssetFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = true               // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
@@ -562,7 +562,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 12)
+	permissions := make([]protocol.Permission, actions.AssetFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
@@ -631,7 +631,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 12)
+	permissions := make([]protocol.Permission, actions.AssetFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal

@@ -340,7 +340,16 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 
 // IsOperator will check if the supplied pkh has operator permission (Administration or operator)
 func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
-	return ct.AdministrationAddress.Equal(address) || ct.OperatorAddress.Equal(address)
+	if address == nil {
+		return false
+	}
+	if ct.AdministrationAddress != nil && ct.AdministrationAddress.Equal(address) {
+		return true
+	}
+	if ct.OperatorAddress != nil && ct.OperatorAddress.Equal(address) {
+		return true
+	}
+	return false
 }
 
 // ValidateVoting returns an error if voting is not allowed.

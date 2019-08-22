@@ -33,6 +33,7 @@ func API(
 	c := Contract{
 		MasterDB: masterDB,
 		Config:   config,
+		Headers:  headers,
 	}
 
 	app.Handle("SEE", actions.CodeContractOffer, c.OfferRequest)
