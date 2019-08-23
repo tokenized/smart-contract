@@ -112,7 +112,7 @@ func transferSign(c *cobra.Command, args []string) error {
 				fmt.Printf("Signing for address quantity %d : %x\n", receiver.Quantity,
 					receiverAddress.Bytes())
 				hash, err := protocol.TransferOracleSigHash(context.Background(), contractAddress,
-					asset.AssetCode, receiverAddress, receiver.Quantity, blockHash)
+					asset.AssetCode, receiverAddress, receiver.Quantity, blockHash, 1)
 				if err != nil {
 					fmt.Printf("Failed to generate sig hash : %s\n", err)
 					return nil

@@ -455,7 +455,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-			testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash)
+			testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash, 1)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1386,7 +1386,7 @@ func oracleTransfer(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash)
+		testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1515,7 +1515,7 @@ func oracleTransferBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCode.Bytes(), userKey.Address, transferAmount+1, blockHash)
+		testAssetCode.Bytes(), userKey.Address, transferAmount+1, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)

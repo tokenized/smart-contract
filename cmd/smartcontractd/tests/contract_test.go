@@ -1,14 +1,23 @@
 package tests
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
+	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/scheduler"
+	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -19,7 +28,9 @@ func TestContracts(t *testing.T) {
 	defer tests.Recover(t)
 
 	t.Run("create", createContract)
+	t.Run("oracle", oracleContract)
 	t.Run("amendment", contractAmendment)
+	t.Run("oracleAmendment", contractOracleAmendment)
 	t.Run("proposalAmendment", contractProposalAmendment)
 }
 
@@ -44,7 +55,7 @@ func createContract(t *testing.T) {
 	}
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, 20)
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = false              // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
@@ -214,6 +225,224 @@ func createContract(t *testing.T) {
 	t.Logf("\t%s\tVerified issuer proposal", tests.Success)
 }
 
+func oracleContract(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	if err := test.Headers.Populate(ctx, 50000, 12); err != nil {
+		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
+	}
+
+	// New Contract Offer
+	offerData := actions.ContractOffer{
+		ContractName:        "Test Name",
+		BodyOfAgreementType: 2,
+		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
+		Issuer: &actions.EntityField{
+			Type:           "I",
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
+		},
+		AdminOracle: &actions.OracleField{
+			Name:      "KYC, Inc.",
+			URL:       "bsv.kyc.com",
+			PublicKey: oracleKey.Key.PublicKey().Bytes()},
+		AdminOracleSigBlockHeight: uint32(test.Headers.LastHeight(ctx) - 5),
+		VotingSystems: []*actions.VotingSystemField{
+			&actions.VotingSystemField{
+				Name:                "Relative 50",
+				VoteType:            "R",
+				ThresholdPercentage: 50,
+				HolderProposalFee:   50000,
+			},
+		},
+		HolderProposal: true,
+	}
+
+	blockHash, err := test.Headers.Hash(ctx, int(offerData.AdminOracleSigBlockHeight))
+	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
+		[]*actions.EntityField{offerData.Issuer}, blockHash, 0)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
+	}
+	sig, err := oracleKey.Key.Sign(sigHash)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
+	}
+	offerData.AdminOracleSignature = sig.Bytes()
+
+	// Define permissions for contract fields
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
+	for i, _ := range permissions {
+		permissions[i].Permitted = false              // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	offerData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize contract auth flags : %v", tests.Failed, err)
+	}
+
+	// Create funding tx
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
+
+	// Build offer transaction
+	offerTx := wire.NewMsgTx(2)
+
+	offerInputHash := fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerInputHash, 0),
+		make([]byte, 130)))
+
+	// To contract
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000,
+		test.ContractKey.Address.LockingScript()))
+
+	// Data output
+	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(0, script))
+
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := filters.NewTracer()
+	walletKeys := test.Wallet.ListAll()
+	pubKeys := make([][]byte, 0, len(walletKeys))
+	holdingsChannel := &holdings.CacheChannel{}
+	for _, walletKey := range walletKeys {
+		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
+	}
+	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		holdingsChannel)
+
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			t.Logf("Server failed : %s", err)
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	if _, err := server.HandleTx(ctx, offerTx); err != nil {
+		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
+	}
+
+	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
+		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
+	}
+
+	var response *wire.MsgTx
+	for {
+		response = getResponse()
+		if response != nil {
+			break
+		}
+
+		time.Sleep(time.Millisecond)
+	}
+
+	var responseMsg actions.Action
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Fatalf("\t%s\tContract offer response doesn't contain tokenized op return", tests.Failed)
+	}
+	if responseMsg.Code() != "M2" {
+		t.Fatalf("\t%s\tContract offer response not a reject : %s", tests.Failed, responseMsg.Code())
+	}
+	reject, ok := responseMsg.(*actions.Rejection)
+	if !ok {
+		t.Fatalf("\t%s\tFailed to convert response to rejection", tests.Failed)
+	}
+	if reject.RejectionCode != actions.RejectionsInvalidSignature {
+		t.Fatalf("\t%s\tWrong reject code for contract offer reject", tests.Failed)
+	}
+
+	t.Logf("\t%s\tContract offer with invalid signature rejection : (%d) %s", tests.Success,
+		reject.RejectionCode, reject.Message)
+
+	// Fix signature and retry
+	sigHash, err = protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
+		[]*actions.EntityField{offerData.Issuer}, blockHash, 1)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
+	}
+	sig, err = oracleKey.Key.Sign(sigHash)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
+	}
+	offerData.AdminOracleSignature = sig.Bytes()
+
+	// Update Data output
+	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
+	offerTx.TxOut[len(offerTx.TxOut)-1] = wire.NewTxOut(0, script)
+
+	if _, err := server.HandleTx(ctx, offerTx); err != nil {
+		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
+	}
+
+	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
+		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
+	}
+
+	for {
+		response = getResponse()
+		if response != nil {
+			break
+		}
+
+		time.Sleep(time.Millisecond)
+	}
+
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Fatalf("\t%s\tContract offer response doesn't contain tokenized op return", tests.Failed)
+	}
+	if responseMsg.Code() != "C2" {
+		t.Fatalf("\t%s\tContract offer response not a formation : %s", tests.Failed,
+			responseMsg.Code())
+	}
+	_, ok = responseMsg.(*actions.ContractFormation)
+	if !ok {
+		t.Fatalf("\t%s\tFailed to convert response to formation", tests.Failed)
+	}
+
+	t.Logf("\t%s\tContract offer with valid signature accepted", tests.Success)
+
+	server.Stop(ctx)
+	wg.Wait()
+}
+
 func contractAmendment(t *testing.T) {
 	ctx := test.Context
 
@@ -287,6 +516,108 @@ func contractAmendment(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified contract name : %s", tests.Success, ct.ContractName)
+}
+
+func contractOracleAmendment(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	if err := test.Headers.Populate(ctx, 50000, 12); err != nil {
+		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
+	}
+
+	ct, err := mockUpContractWithAdminOracle(ctx, "Test Contract",
+		"This is a mock contract and means nothing.", "I", 1, "John Bitcoin")
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	blockHeight := uint32(test.Headers.LastHeight(ctx) - 4)
+	blockHash, err := test.Headers.Hash(ctx, int(blockHeight))
+	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuer2Key.Address},
+		[]*actions.EntityField{ct.Issuer}, blockHash, 1)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
+	}
+	signature, err := oracleKey.Key.Sign(sigHash)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
+	}
+
+	amendmentData := actions.ContractAmendment{
+		ContractRevision:            0,
+		ChangeAdministrationAddress: true,
+	}
+
+	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
+		FieldIndex: actions.ContractFieldAdminOracleSignature,
+		Data:       signature.Bytes(),
+	})
+
+	var blockHeightBuf bytes.Buffer
+	binary.Write(&blockHeightBuf, binary.LittleEndian, &blockHeight)
+	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
+		FieldIndex: actions.ContractFieldAdminOracleSigBlockHeight,
+		Data:       blockHeightBuf.Bytes(),
+	})
+
+	// Build amendment transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	// From issuer
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address)
+	amendmentInputHash := fundingTx.TxHash()
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+
+	// From issuer 2
+	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100016, issuer2Key.Address)
+	amendmentInputHash = fundingTx.TxHash()
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+
+	// Data output
+	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, amendmentTx)
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept contract amendment : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tContract Amendment accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "C2")
+
+	// Check contract name
+	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if !ct.AdministrationAddress.Equal(issuer2Key.Address) {
+		t.Fatalf("\t%s\tContract admin incorrect : \"%x\" != \"%x\"", tests.Failed,
+			ct.AdministrationAddress.Bytes(), issuer2Key.Address.Bytes())
+	}
 }
 
 func contractProposalAmendment(t *testing.T) {
@@ -399,8 +730,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 		MasterAddress:          bitcoin.NewJSONRawAddress(test.MasterKey.Address),
 	}
 
-	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 20)
+	// Define permissions for contact fields
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
@@ -443,8 +774,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 		MasterAddress:         bitcoin.NewJSONRawAddress(test.Master2Key.Address),
 	}
 
-	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 20)
+	// Define permissions for contract fields
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = permitted           // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
@@ -487,8 +818,8 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
-	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, 20)
+	// Define permissions for contract fields
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
 	for i, _ := range permissions {
 		permissions[i].Permitted = false              // Issuer can update field without proposal
 		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
@@ -509,4 +840,71 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 	}
 
 	return contract.Save(ctx, test.MasterDB, &contractData)
+}
+
+func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, issuerType string,
+	issuerRole uint32, issuerName string) (*state.Contract, error) {
+
+	var contractData = state.Contract{
+		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
+		Issuer: &actions.EntityField{
+			Type:           issuerType,
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+		},
+		AdminOracle: &actions.OracleField{
+			Name:      "KYC, Inc.",
+			URL:       "bsv.kyc.com",
+			PublicKey: oracleKey.Key.PublicKey().Bytes()},
+		AdminOracleSigBlockHeight: uint32(test.Headers.LastHeight(ctx) - 5),
+		VotingSystems: []*actions.VotingSystemField{
+			&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000},
+		},
+		AdministrationProposal: false,
+		HolderProposal:         false,
+		ContractFee:            1000,
+
+		CreatedAt:             protocol.CurrentTimestamp(),
+		UpdatedAt:             protocol.CurrentTimestamp(),
+		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewJSONRawAddress(test.MasterKey.Address),
+		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
+	}
+
+	blockHash, err := test.Headers.Hash(ctx, int(contractData.AdminOracleSigBlockHeight))
+	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
+		[]*actions.EntityField{contractData.Issuer}, blockHash, 0)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := oracleKey.Key.Sign(sigHash)
+	if err != nil {
+		return nil, err
+	}
+	contractData.AdminOracleSignature = sig.Bytes()
+
+	// Define permissions for contract fields
+	permissions := make([]protocol.Permission, actions.ContractFieldCount)
+	for i, _ := range permissions {
+		permissions[i].Permitted = true               // Issuer can update field without proposal
+		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
+		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
+
+		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	}
+
+	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := contract.ExpandOracles(ctx, &contractData); err != nil {
+		return nil, err
+	}
+
+	return &contractData, contract.Save(ctx, test.MasterDB, &contractData)
 }

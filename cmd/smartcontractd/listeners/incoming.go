@@ -60,7 +60,12 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		case *actions.Transfer:
 			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {
 				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
-				node.LogWarn(ctx, "Invalid oracle signature : %s", err)
+				node.LogWarn(ctx, "Invalid receiver oracle signature : %s", err)
+			}
+		case *actions.ContractOffer:
+			if err := validateContractOracleSig(ctx, intx.Itx, msg, headers); err != nil {
+				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
+				node.LogWarn(ctx, "Invalid contract oracle signature : %s", err)
 			}
 		}
 
@@ -320,7 +325,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
 		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
-		receiverAddress, assetReceiver.Quantity, hash)
+		receiverAddress, assetReceiver.Quantity, hash, 1)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
@@ -330,4 +335,50 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	return fmt.Errorf("Valid signature not found")
+}
+
+func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
+	contractOffer *actions.ContractOffer, headers node.BitcoinHeaders) error {
+	if contractOffer.AdminOracle == nil {
+		return nil
+	}
+
+	oracle, err := bitcoin.DecodePublicKeyBytes(contractOffer.AdminOracle.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	// Parse signature
+	oracleSig, err := bitcoin.DecodeSignatureBytes(contractOffer.AdminOracleSignature)
+	if err != nil {
+		return errors.Wrap(err, "Failed to parse oracle signature")
+	}
+
+	hash, err := headers.Hash(ctx, int(contractOffer.AdminOracleSigBlockHeight))
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
+			contractOffer.AdminOracleSigBlockHeight))
+	}
+
+	addresses := make([]bitcoin.RawAddress, 0, 2)
+	entities := make([]*actions.EntityField, 0, 2)
+
+	addresses = append(addresses, itx.Inputs[0].Address)
+	entities = append(entities, contractOffer.Issuer)
+
+	if contractOffer.ContractOperator != nil {
+		addresses = append(addresses, itx.Inputs[1].Address)
+		entities = append(entities, contractOffer.ContractOperator)
+	}
+
+	sigHash, err := protocol.ContractOracleSigHash(ctx, addresses, entities, hash, 1)
+	if err != nil {
+		return err
+	}
+
+	if oracleSig.Verify(sigHash, oracle) {
+		return nil // Valid signature found
+	}
+
+	return fmt.Errorf("Contract signature invalid")
 }

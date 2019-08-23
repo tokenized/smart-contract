@@ -414,7 +414,7 @@ func contractOpReturn() ([]byte, error) {
 	}
 
 	var err error
-	contract.ContractAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, 21))
+	contract.ContractAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, actions.ContractFieldCount))
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +435,7 @@ func assetOpReturn() ([]byte, error) {
 		AssetPayload:       payloadData,
 	}
 
-	asset.AssetAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, 12))
+	asset.AssetAuthFlags, err = protocol.WriteAuthFlags(make([]protocol.Permission, actions.AssetFieldCount))
 	if err != nil {
 		return nil, err
 	}

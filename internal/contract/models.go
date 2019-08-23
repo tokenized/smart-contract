@@ -14,25 +14,28 @@ type NewContract struct {
 	OperatorAddress       *bitcoin.JSONRawAddress `json:"OperatorAddress,omitempty"`
 	MasterAddress         *bitcoin.JSONRawAddress `json:"MasterAddress,omitempty"`
 
-	ContractName           string                       `json:"ContractName,omitempty"`
-	BodyOfAgreementType    uint32                       `json:"BodyOfAgreementType,omitempty"`
-	BodyOfAgreement        []byte                       `json:"BodyOfAgreement,omitempty"`
-	ContractType           string                       `json:"ContractType,omitempty"`
-	SupportingDocs         []*actions.DocumentField     `json:"SupportingDocs,omitempty"`
-	GoverningLaw           string                       `json:"GoverningLaw,omitempty"`
-	Jurisdiction           string                       `json:"Jurisdiction,omitempty"`
-	ContractExpiration     protocol.Timestamp           `json:"ContractExpiration,omitempty"`
-	ContractURI            string                       `json:"ContractURI,omitempty"`
-	Issuer                 actions.EntityField          `json:"Issuer,omitempty"`
-	IssuerLogoURL          string                       `json:"IssuerLogoURL,omitempty"`
-	ContractOperator       actions.EntityField          `json:"ContractOperator,omitempty"`
-	ContractAuthFlags      []byte                       `json:"ContractAuthFlags,omitempty"`
-	ContractFee            uint64                       `json:"ContractFee,omitempty"`
-	VotingSystems          []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
-	RestrictedQtyAssets    uint64                       `json:"RestrictedQtyAssets,omitempty"`
-	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
-	HolderProposal         bool                         `json:"HolderProposal,omitempty"`
-	Oracle                 []*actions.OracleField       `json:"Oracle,omitempty"`
+	ContractName              string                       `json:"ContractName,omitempty"`
+	BodyOfAgreementType       uint32                       `json:"BodyOfAgreementType,omitempty"`
+	BodyOfAgreement           []byte                       `json:"BodyOfAgreement,omitempty"`
+	ContractType              string                       `json:"ContractType,omitempty"`
+	SupportingDocs            []*actions.DocumentField     `json:"SupportingDocs,omitempty"`
+	GoverningLaw              string                       `json:"GoverningLaw,omitempty"`
+	Jurisdiction              string                       `json:"Jurisdiction,omitempty"`
+	ContractExpiration        protocol.Timestamp           `json:"ContractExpiration,omitempty"`
+	ContractURI               string                       `json:"ContractURI,omitempty"`
+	Issuer                    *actions.EntityField         `json:"Issuer,omitempty"`
+	IssuerLogoURL             string                       `json:"IssuerLogoURL,omitempty"`
+	ContractOperator          *actions.EntityField         `json:"ContractOperator,omitempty"`
+	AdminOracle               *actions.OracleField         `json:"AdminOracle,omitempty"`
+	AdminOracleSignature      []byte                       `json:"AdminOracleSignature,omitempty"`
+	AdminOracleSigBlockHeight uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
+	ContractAuthFlags         []byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractFee               uint64                       `json:"ContractFee,omitempty"`
+	VotingSystems             []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
+	RestrictedQtyAssets       uint64                       `json:"RestrictedQtyAssets,omitempty"`
+	AdministrationProposal    bool                         `json:"AdministrationProposal,omitempty"`
+	HolderProposal            bool                         `json:"HolderProposal,omitempty"`
+	Oracle                    []*actions.OracleField       `json:"Oracle,omitempty"`
 }
 
 // UpdateContract defines what information may be provided to modify an existing
@@ -48,25 +51,28 @@ type UpdateContract struct {
 	AdministrationAddress *bitcoin.JSONRawAddress `json:"AdministrationAddress,omitempty"`
 	OperatorAddress       *bitcoin.JSONRawAddress `json:"OperatorAddress,omitempty"`
 
-	ContractName           *string                       `json:"ContractName,omitempty"`
-	BodyOfAgreementType    *uint32                       `json:"BodyOfAgreementType,omitempty"`
-	BodyOfAgreement        *[]byte                       `json:"BodyOfAgreement,omitempty"`
-	ContractType           *string                       `json:"ContractType,omitempty"`
-	SupportingDocs         *[]*actions.DocumentField     `json:"SupportingDocs,omitempty"`
-	GoverningLaw           *string                       `json:"GoverningLaw,omitempty"`
-	Jurisdiction           *string                       `json:"Jurisdiction,omitempty"`
-	ContractExpiration     *protocol.Timestamp           `json:"ContractExpiration,omitempty"`
-	ContractURI            *string                       `json:"ContractURI,omitempty"`
-	Issuer                 *actions.EntityField          `json:"Issuer,omitempty"`
-	IssuerLogoURL          *string                       `json:"IssuerLogoURL,omitempty"`
-	ContractOperator       *actions.EntityField          `json:"ContractOperator,omitempty"`
-	ContractAuthFlags      *[]byte                       `json:"ContractAuthFlags,omitempty"`
-	ContractFee            *uint64                       `json:"ContractFee,omitempty"`
-	VotingSystems          *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
-	RestrictedQtyAssets    *uint64                       `json:"RestrictedQtyAssets,omitempty"`
-	AdministrationProposal *bool                         `json:"AdministrationProposal,omitempty"`
-	HolderProposal         *bool                         `json:"HolderProposal,omitempty"`
-	Oracles                *[]*actions.OracleField       `json:"Oracles,omitempty"`
+	ContractName              *string                       `json:"ContractName,omitempty"`
+	BodyOfAgreementType       *uint32                       `json:"BodyOfAgreementType,omitempty"`
+	BodyOfAgreement           *[]byte                       `json:"BodyOfAgreement,omitempty"`
+	ContractType              *string                       `json:"ContractType,omitempty"`
+	SupportingDocs            *[]*actions.DocumentField     `json:"SupportingDocs,omitempty"`
+	GoverningLaw              *string                       `json:"GoverningLaw,omitempty"`
+	Jurisdiction              *string                       `json:"Jurisdiction,omitempty"`
+	ContractExpiration        *protocol.Timestamp           `json:"ContractExpiration,omitempty"`
+	ContractURI               *string                       `json:"ContractURI,omitempty"`
+	Issuer                    *actions.EntityField          `json:"Issuer,omitempty"`
+	IssuerLogoURL             *string                       `json:"IssuerLogoURL,omitempty"`
+	ContractOperator          *actions.EntityField          `json:"ContractOperator,omitempty"`
+	AdminOracle               *actions.OracleField          `json:"AdminOracle,omitempty"`
+	AdminOracleSignature      *[]byte                       `json:"AdminOracleSignature,omitempty"`
+	AdminOracleSigBlockHeight *uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
+	ContractAuthFlags         *[]byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractFee               *uint64                       `json:"ContractFee,omitempty"`
+	VotingSystems             *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
+	RestrictedQtyAssets       *uint64                       `json:"RestrictedQtyAssets,omitempty"`
+	AdministrationProposal    *bool                         `json:"AdministrationProposal,omitempty"`
+	HolderProposal            *bool                         `json:"HolderProposal,omitempty"`
+	Oracles                   *[]*actions.OracleField       `json:"Oracles,omitempty"`
 
 	FreezePeriod *protocol.Timestamp `json:"FreezePeriod,omitempty"`
 }

@@ -185,6 +185,8 @@ func (server *Server) Run(ctx context.Context) error {
 				server.SpyNode.Stop(ctx)
 			}
 			server.incomingTxs.Close()
+			server.processingTxs.Close()
+			server.holdingsChannel.Close()
 		}
 		node.LogVerbose(ctx, "Process thread finished")
 	}()
