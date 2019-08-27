@@ -20,7 +20,7 @@ func TestGetQuantity(t *testing.T) {
 
 	testArr := []struct {
 		name    string
-		message *actions.Action
+		message actions.Action
 		tx      *Transaction
 		address bitcoin.Address
 		want    Balance

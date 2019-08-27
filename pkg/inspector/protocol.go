@@ -10,7 +10,7 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m *actions.Action, address bitcoin.RawAddress) Balance {
+func GetProtocolQuantity(itx *Transaction, m actions.Action, address bitcoin.RawAddress) Balance {
 
 	return Balance{
 		Qty:    0,
