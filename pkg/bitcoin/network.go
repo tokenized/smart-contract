@@ -12,7 +12,7 @@ type Network uint32
 const (
 	MainNet       Network = 0xe8f3e1e3
 	TestNet       Network = 0xf4f3e5f4
-	StressTestNet Network = 0xfbcec4f9
+	StressTestNet Network = 0xf9c4cefb
 )
 
 var (
