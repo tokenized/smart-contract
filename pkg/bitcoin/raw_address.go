@@ -2,8 +2,8 @@ package bitcoin
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 )
@@ -431,7 +431,7 @@ func (a *JSONRawAddress) MarshalJSON() ([]byte, error) {
 	if a.ra == nil {
 		return []byte("\"\""), nil
 	}
-	return []byte(fmt.Sprintf("\"%x\"", a.ra.Bytes())), nil
+	return []byte("\"" + base64.StdEncoding.EncodeToString(a.ra.Bytes()) + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
@@ -445,8 +445,7 @@ func (a *JSONRawAddress) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	raw := make([]byte, (len(data)-2)/2)
-	_, err := hex.Decode(raw, data[1:len(data)-1])
+	raw, err := base64.StdEncoding.DecodeString(string(data[1 : len(data)-1]))
 	if err != nil {
 		return err
 	}
