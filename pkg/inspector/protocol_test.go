@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/specification/dist/golang/actions"
 )
 
 const (
@@ -20,7 +20,7 @@ func TestGetQuantity(t *testing.T) {
 
 	testArr := []struct {
 		name    string
-		message protocol.OpReturnMessage
+		message actions.Action
 		tx      *Transaction
 		address bitcoin.Address
 		want    Balance

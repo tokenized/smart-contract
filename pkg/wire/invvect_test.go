@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // TestInvVectStringer tests the stringized output for inventory vector types.
@@ -40,7 +40,7 @@ func TestInvTypeStringer(t *testing.T) {
 // TestInvVect tests the InvVect API.
 func TestInvVect(t *testing.T) {
 	ivType := InvTypeBlock
-	hash := chainhash.Hash{}
+	hash := bitcoin.Hash32{}
 
 	// Ensure we get the same payload and signature back out.
 	iv := NewInvVect(ivType, &hash)
@@ -48,7 +48,7 @@ func TestInvVect(t *testing.T) {
 		t.Errorf("NewInvVect: wrong type - got %v, want %v",
 			iv.Type, ivType)
 	}
-	if !iv.Hash.IsEqual(&hash) {
+	if !iv.Hash.Equal(&hash) {
 		t.Errorf("NewInvVect: wrong hash - got %v, want %v",
 			spew.Sdump(iv.Hash), spew.Sdump(hash))
 	}
@@ -59,8 +59,8 @@ func TestInvVect(t *testing.T) {
 // protocol versions and supported inventory vector types.
 func TestInvVectWire(t *testing.T) {
 	// Block 203707 hash.
-	hashStr := "3264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
-	baseHash, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "00000000000003264bc2ac36a60840790ba1d475d01367e7c723da941069e9dc"
+	baseHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestInvVectWire(t *testing.T) {
 	// errInvVect is an inventory vector with an error.
 	errInvVect := InvVect{
 		Type: InvTypeError,
-		Hash: chainhash.Hash{},
+		Hash: bitcoin.Hash32{},
 	}
 
 	// errInvVectEncoded is the wire encoded bytes of errInvVect.

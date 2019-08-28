@@ -11,9 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // Implement the SpyNode Listener interface.
@@ -41,7 +38,7 @@ func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error
 	return true, nil
 }
 
-func (server *Server) removeFromReverted(ctx context.Context, txid *chainhash.Hash) bool {
+func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash32) bool {
 	for i, id := range server.revertedTxs {
 		if bytes.Equal(id[:], txid[:]) {
 			server.revertedTxs = append(server.revertedTxs[:i], server.revertedTxs[i+1:]...)
@@ -52,7 +49,7 @@ func (server *Server) removeFromReverted(ctx context.Context, txid *chainhash.Ha
 	return false
 }
 
-func (server *Server) HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error {
+func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
@@ -146,8 +143,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Iterate through votes for each contract and if they aren't complete schedule a finalizer.
 	keys := server.wallet.ListAll()
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		votes, err := vote.List(ctx, server.MasterDB, contractPKH)
+		votes, err := vote.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list votes : %s", err)
 			return nil
@@ -158,8 +154,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			}
 
 			// Retrieve voteTx
-			var hash *chainhash.Hash
-			hash, err = chainhash.NewHash(vt.VoteTxId.Bytes())
+			var hash *bitcoin.Hash32
+			hash, err = bitcoin.NewHash32(vt.VoteTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil
@@ -182,16 +178,15 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	// Schedule pending transfer timeouts
 	// Iterate through pending transfers for each contract and if they aren't complete schedule a timeout.
 	for _, key := range keys {
-		contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		transfers, err := transfer.List(ctx, server.MasterDB, contractPKH)
+		transfers, err := transfer.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list transfers : %s", err)
 			return nil
 		}
 		for _, pt := range transfers {
 			// Retrieve transferTx
-			var hash *chainhash.Hash
-			hash, err = chainhash.NewHash(pt.TransferTxId.Bytes())
+			var hash *bitcoin.Hash32
+			hash, err = bitcoin.NewHash32(pt.TransferTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return nil

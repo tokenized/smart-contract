@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/btcsuite/btcutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -22,11 +21,11 @@ var cmdConvert = &cobra.Command{
 		if len(network) == 0 {
 			return nil
 		}
-		params := bitcoin.NewChainParams(network)
+		net := bitcoin.NetworkFromString(network)
 
-		address, err := btcutil.DecodeAddress(args[0], params)
+		address, err := bitcoin.DecodeAddress(args[0])
 		if err == nil {
-			fmt.Printf("Hash : %x\n", address.ScriptAddress())
+			fmt.Printf("Hex : %x\n", address.Bytes())
 			return nil
 		}
 
@@ -41,7 +40,7 @@ var cmdConvert = &cobra.Command{
 			return nil
 		}
 
-		address, err = btcutil.NewAddressPubKeyHash(hash, params)
+		address, err = bitcoin.NewAddressPKH(hash, net)
 		if err != nil {
 			fmt.Printf("Invalid hash : %s\n", err)
 			return nil

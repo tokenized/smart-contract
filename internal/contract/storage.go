@@ -8,45 +8,53 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 )
 
 const storageKey = "contracts"
 
-var cache map[protocol.PublicKeyHash]*state.Contract
+var cache map[bitcoin.Hash20]*state.Contract
 
 // Put a single contract in storage
 func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
+	contractHash, err := contract.Address.Hash()
+	if err != nil {
+		return err
+	}
+
 	b, err := json.Marshal(contract)
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal contract")
 	}
 
-	key := buildStoragePath(&contract.ID)
+	key := buildStoragePath(contractHash)
 
 	if err := dbConn.Put(ctx, key, b); err != nil {
 		return err
 	}
 
 	if cache == nil {
-		cache = make(map[protocol.PublicKeyHash]*state.Contract)
+		cache = make(map[bitcoin.Hash20]*state.Contract)
 	}
-	cache[contract.ID] = contract
+	cache[*contractHash] = contract
 	return nil
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
+	contractHash, err := contractAddress.Hash()
+	if err != nil {
+		return nil, err
+	}
 	if cache != nil {
-		result, exists := cache[*contractPKH]
+		result, exists := cache[*contractHash]
 		if exists {
 			return result, nil
 		}
 	}
 
-	key := buildStoragePath(contractPKH)
+	key := buildStoragePath(contractHash)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -74,8 +82,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractPKH *protocol.PublicKeyHash) string {
-	return fmt.Sprintf("%s/%s/contract", storageKey, contractPKH.String())
+func buildStoragePath(contractHash *bitcoin.Hash20) string {
+	return fmt.Sprintf("%s/%s/contract", storageKey, contractHash.String())
 }
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {

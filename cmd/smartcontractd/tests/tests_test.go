@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -30,6 +31,7 @@ var responseLock sync.Mutex
 var userKey *wallet.Key
 var user2Key *wallet.Key
 var issuerKey *wallet.Key
+var issuer2Key *wallet.Key
 var oracleKey *wallet.Key
 var authorityKey *wallet.Key
 
@@ -48,7 +50,7 @@ func TestMain(m *testing.M) {
 }
 
 func testMain(m *testing.M) int {
-	test = tests.New("")
+	test = tests.New("./test.log")
 	if test == nil {
 		fmt.Printf("Failed to create test environment\n")
 		return 1
@@ -88,27 +90,32 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// Keys
 
-	userKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	userKey, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
 
-	user2Key, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	user2Key, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
 
-	issuerKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	issuerKey, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
 
-	oracleKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	issuer2Key, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
 
-	authorityKey, err = tests.GenerateKey(wire.BitcoinNet(test.NodeConfig.ChainParams.Net))
+	oracleKey, err = tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		panic(err)
+	}
+
+	authorityKey, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
@@ -144,7 +151,7 @@ func responseType(tx *wire.MsgTx) string {
 	for _, output := range tx.TxOut {
 		msg, err := protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
 		if err == nil {
-			return msg.Type()
+			return msg.Code()
 		}
 	}
 	return ""
@@ -156,7 +163,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 
 	responseLock.Lock()
 
-	if len(responses) != 1 {
+	if len(responses) == 0 {
 		responseLock.Unlock()
 		t.Fatalf("\t%s\t%s Response not created", tests.Failed, responseCode)
 	}
@@ -165,7 +172,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	responses = nil
 	responseLock.Unlock()
 
-	var responseMsg protocol.OpReturnMessage
+	var responseMsg actions.Action
 	var err error
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
@@ -176,8 +183,8 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	if responseMsg == nil {
 		t.Fatalf("\t%s\t%s Response doesn't contain tokenized op return", tests.Failed, responseCode)
 	}
-	if responseMsg.Type() != responseCode {
-		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Type(), responseCode)
+	if responseMsg.Code() != responseCode {
+		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Code(), responseCode)
 	}
 
 	// Submit response
@@ -211,7 +218,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 
 // checkResponses fails the test if all responses are not of the specified type
 func checkResponses(t testing.TB, responseCode string) {
-	var responseMsg protocol.OpReturnMessage
+	var responseMsg actions.Action
 	var err error
 
 	responseLock.Lock()
@@ -227,10 +234,12 @@ func checkResponses(t testing.TB, responseCode string) {
 			}
 		}
 		if responseMsg == nil {
-			t.Fatalf("\t%s\t%s Response %d doesn't contain tokenized op return", tests.Failed, responseCode, i)
+			t.Fatalf("\t%s\t%s Response %d doesn't contain tokenized op return", tests.Failed,
+				responseCode, i)
 		}
-		if responseMsg.Type() != responseCode {
-			t.Fatalf("\t%s\tResponse %d is the wrong type : %s != %s", tests.Failed, i, responseMsg.Type(), responseCode)
+		if responseMsg.Code() != responseCode {
+			t.Fatalf("\t%s\tResponse %d is the wrong type : %s != %s", tests.Failed, i,
+				responseMsg.Code(), responseCode)
 		}
 	}
 }
@@ -242,5 +251,7 @@ func resetTest(ctx context.Context) error {
 	asset.Reset(ctx)
 	contract.Reset(ctx)
 	holdings.Reset(ctx)
+	a.SetResponder(respondTx)
+	a.SetReprocessor(reprocessTx)
 	return test.Reset(ctx)
 }

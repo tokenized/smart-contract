@@ -123,7 +123,7 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 	}
 
 	// Locate the handlers from the group
-	txAction := itx.MsgProto.Type()
+	txAction := itx.MsgProto.Code()
 	handlers, exists := group[txAction]
 
 	if !exists {

@@ -10,8 +10,10 @@ import (
 
 const (
 	OP_FALSE              = 0x00
+	OP_1NEGATE            = 0x4f
 	OP_1                  = 0x51
 	OP_3                  = 0x53
+	OP_16                 = 0x60
 	OP_RETURN             = 0x6a
 	OP_DUP                = 0x76
 	OP_HASH160            = 0xa9
@@ -54,10 +56,12 @@ const (
 
 var (
 	endian = binary.LittleEndian
+
+	ErrNotP2PKH = errors.New("Not P2PKH")
 )
 
-// PushDataScript prepares a push data script based on the given size
-func PushDataScript(size uint64) []byte {
+// PushDataScriptSize returns the encoded push data script size op codes.
+func PushDataScriptSize(size uint64) []byte {
 	if size <= uint64(OP_MAX_SINGLE_BYTE_PUSH_DATA) {
 		return []byte{byte(size)} // Single byte push
 	} else if size < OP_PUSH_DATA_1_MAX {
@@ -75,8 +79,37 @@ func PushDataScript(size uint64) []byte {
 	return buf.Bytes()
 }
 
-// ParsePushDataScript will parse a push data script and return its size
-func ParsePushDataScript(buf io.Reader) (uint64, error) {
+// PushDataScript writes a push data bitcoin script including the encoded size preceding it.
+func WritePushDataScript(buf *bytes.Buffer, data []byte) error {
+	size := len(data)
+	var err error
+	if size <= int(OP_MAX_SINGLE_BYTE_PUSH_DATA) {
+		_, err = buf.Write([]byte{byte(size)}) // Single byte push
+	} else if size < int(OP_PUSH_DATA_1_MAX) {
+		_, err = buf.Write([]byte{OP_PUSH_DATA_1, byte(size)})
+	} else if size < int(OP_PUSH_DATA_2_MAX) {
+		_, err = buf.Write([]byte{OP_PUSH_DATA_2})
+		if err != nil {
+			return err
+		}
+		err = binary.Write(buf, endian, uint16(size))
+	} else {
+		_, err = buf.Write([]byte{OP_PUSH_DATA_4})
+		if err != nil {
+			return err
+		}
+		err = binary.Write(buf, endian, uint32(size))
+	}
+	if err != nil {
+		return err
+	}
+
+	_, err = buf.Write(data)
+	return err
+}
+
+// ParsePushDataScriptSize will parse a push data script and return its size.
+func ParsePushDataScriptSize(buf io.Reader) (uint64, error) {
 	var opCode byte
 	err := binary.Read(buf, endian, &opCode)
 	if err != nil {
@@ -112,6 +145,66 @@ func ParsePushDataScript(buf io.Reader) (uint64, error) {
 	default:
 		return 0, fmt.Errorf("Invalid push data op code : 0x%02x", opCode)
 	}
+}
+
+// ParsePushDataScript will parse a bitcoin script for the next "object". It will return the next
+//   op code, and if that op code is a push data op code, it will return the data.
+// A bytes.Reader object is needed to check the size against the remaining length before allocating
+//   the memory to store the push.
+func ParsePushDataScript(buf *bytes.Reader) (uint8, []byte, error) {
+	var opCode byte
+	dataSize := uint64(0)
+	err := binary.Read(buf, endian, &opCode)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if opCode <= OP_MAX_SINGLE_BYTE_PUSH_DATA {
+		dataSize = uint64(opCode)
+	} else if opCode >= OP_1 && opCode <= OP_16 {
+		return opCode, []byte{opCode - OP_1 + 1}, nil
+	} else if opCode == OP_1NEGATE {
+		return opCode, []byte{0xff}, nil
+	} else {
+		switch opCode {
+		case OP_PUSH_DATA_1:
+			var size uint8
+			err := binary.Read(buf, endian, &size)
+			if err != nil {
+				return 0, nil, err
+			}
+			dataSize = uint64(size)
+		case OP_PUSH_DATA_2:
+			var size uint16
+			err := binary.Read(buf, endian, &size)
+			if err != nil {
+				return 0, nil, err
+			}
+			dataSize = uint64(size)
+		case OP_PUSH_DATA_4:
+			var size uint32
+			err := binary.Read(buf, endian, &size)
+			if err != nil {
+				return 0, nil, err
+			}
+			dataSize = uint64(size)
+		}
+	}
+
+	if dataSize == 0 {
+		return opCode, nil, nil
+	}
+
+	if dataSize > uint64(buf.Len()) {
+		return 0, nil, fmt.Errorf("Push data size past end of script : %d/%d", dataSize, buf.Len())
+	}
+
+	data := make([]byte, dataSize)
+	_, err = buf.Read(data)
+	if err != nil {
+		return 0, nil, err
+	}
+	return opCode, data, nil
 }
 
 // PushNumberScript returns a section of script that will push the specified number onto the stack.
@@ -231,30 +324,24 @@ func ParsePushNumberScript(b []byte) (int64, int, error) {
 }
 
 func PubKeyFromP2PKHSigScript(script []byte) ([]byte, error) {
-	buf := bytes.NewBuffer(script)
+	buf := bytes.NewReader(script)
 
 	// Signature
-	size, err := ParsePushDataScript(buf)
+	_, signature, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
-
-	signature := make([]byte, size)
-	_, err = buf.Read(signature)
-	if err != nil {
-		return nil, err
+	if len(signature) == 0 {
+		return nil, ErrNotP2PKH
 	}
 
 	// Public Key
-	size, err = ParsePushDataScript(buf)
+	_, publicKey, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
-
-	publicKey := make([]byte, size)
-	_, err = buf.Read(publicKey)
-	if err != nil {
-		return nil, err
+	if len(publicKey) == 0 {
+		return nil, ErrNotP2PKH
 	}
 
 	return publicKey, nil

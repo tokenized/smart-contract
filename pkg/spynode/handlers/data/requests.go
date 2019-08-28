@@ -3,7 +3,7 @@ package data
 import (
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -13,12 +13,12 @@ const (
 )
 
 type requestedBlock struct {
-	hash  chainhash.Hash
+	hash  bitcoin.Hash32
 	time  time.Time // Time request was sent
 	block *wire.MsgBlock
 }
 
-func (state *State) BlockIsRequested(hash *chainhash.Hash) bool {
+func (state *State) BlockIsRequested(hash *bitcoin.Hash32) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -30,7 +30,7 @@ func (state *State) BlockIsRequested(hash *chainhash.Hash) bool {
 	return false
 }
 
-func (state *State) BlockIsToBeRequested(hash *chainhash.Hash) bool {
+func (state *State) BlockIsToBeRequested(hash *bitcoin.Hash32) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -45,7 +45,7 @@ func (state *State) BlockIsToBeRequested(hash *chainhash.Hash) bool {
 // AddBlockRequest adds a block request to the queue.
 // Returns true if the request should be made now.
 // Returns false if the request is queued for later.
-func (state *State) AddBlockRequest(hash *chainhash.Hash) bool {
+func (state *State) AddBlockRequest(hash *bitcoin.Hash32) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -65,7 +65,7 @@ func (state *State) AddBlockRequest(hash *chainhash.Hash) bool {
 }
 
 // AddBlock adds the block message to the queued block request for later processing.
-func (state *State) AddBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
+func (state *State) AddBlock(hash *bitcoin.Hash32, block *wire.MsgBlock) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -80,7 +80,7 @@ func (state *State) AddBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
 }
 
 // AddNewBlock adds a new request with a block that was not requested.
-func (state *State) AddNewBlock(hash *chainhash.Hash, block *wire.MsgBlock) bool {
+func (state *State) AddNewBlock(hash *bitcoin.Hash32, block *wire.MsgBlock) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -111,7 +111,7 @@ func (state *State) NextBlock() *wire.MsgBlock {
 	return result
 }
 
-func (state *State) GetNextBlockToRequest() (*chainhash.Hash, int) {
+func (state *State) GetNextBlockToRequest() (*bitcoin.Hash32, int) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -130,7 +130,7 @@ func (state *State) GetNextBlockToRequest() (*chainhash.Hash, int) {
 	return &newRequest.hash, len(state.blocksRequested)
 }
 
-func (state *State) RemoveBlockRequest(hash *chainhash.Hash) {
+func (state *State) RemoveBlockRequest(hash *bitcoin.Hash32) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -171,7 +171,7 @@ func (state *State) BlockRequestsEmpty() bool {
 	return len(state.blocksToRequest) == 0 && len(state.blocksRequested) == 0
 }
 
-func (state *State) LastHash() *chainhash.Hash {
+func (state *State) LastHash() *bitcoin.Hash32 {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 

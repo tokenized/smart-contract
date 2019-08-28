@@ -11,7 +11,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 const (
@@ -57,7 +57,7 @@ const (
 	// minTxInPayload is the minimum payload size for a transaction input.
 	// PreviousOutPoint.Hash + PreviousOutPoint.Index 4 bytes + Varint for
 	// SignatureScript length 1 byte + Sequence 4 bytes.
-	minTxInPayload = 9 + chainhash.HashSize
+	minTxInPayload = 9 + bitcoin.Hash32Size
 
 	// maxTxInPerMessage is the maximum number of transactions inputs that
 	// a transaction which fits into a message could possibly have.
@@ -156,13 +156,13 @@ var scriptPool scriptFreeList = make(chan []byte, freeListMaxItems)
 // OutPoint defines a bitcoin data type that is used to track previous
 // transaction outputs.
 type OutPoint struct {
-	Hash  chainhash.Hash
+	Hash  bitcoin.Hash32
 	Index uint32
 }
 
 // NewOutPoint returns a new bitcoin transaction outpoint point with the
 // provided hash and index.
-func NewOutPoint(hash *chainhash.Hash, index uint32) *OutPoint {
+func NewOutPoint(hash *bitcoin.Hash32, index uint32) *OutPoint {
 	return &OutPoint{
 		Hash:  *hash,
 		Index: index,
@@ -177,19 +177,30 @@ func (o OutPoint) String() string {
 	// maximum message payload may increase in the future and this
 	// optimization may go unnoticed, so allocate space for 10 decimal
 	// digits, which will fit any uint32.
-	buf := make([]byte, 2*chainhash.HashSize+1, 2*chainhash.HashSize+1+10)
+	buf := make([]byte, 2*bitcoin.Hash32Size+1, 2*bitcoin.Hash32Size+1+10)
 	copy(buf, o.Hash.String())
-	buf[2*chainhash.HashSize] = ':'
+	buf[2*bitcoin.Hash32Size] = ':'
 	buf = strconv.AppendUint(buf, uint64(o.Index), 10)
 	return string(buf)
 }
 
 // OutpointHash generates the Hash for the transaction.
-func (op OutPoint) OutpointHash() chainhash.Hash {
-	buf := bytes.NewBuffer(make([]byte, 0, chainhash.HashSize+4))
+func (op OutPoint) OutpointHash() *bitcoin.Hash32 {
+	buf := bytes.NewBuffer(make([]byte, 0, bitcoin.Hash32Size+4))
 	buf.Write(op.Hash[:])
 	binary.Write(buf, endian, uint32(op.Index))
-	return chainhash.HashH(buf.Bytes())
+	result, _ := bitcoin.NewHash32(bitcoin.Sha256(buf.Bytes()))
+	return result
+}
+
+// Serialize encodes op to the bitcoin protocol encoding for an OutPoint to w.
+func (op *OutPoint) Serialize(w io.Writer) error {
+	err := op.Hash.Serialize(w)
+	if err != nil {
+		return err
+	}
+
+	return binary.Write(w, endian, uint32(op.Index))
 }
 
 // TxIn defines a bitcoin transaction input.
@@ -273,14 +284,34 @@ func (msg *MsgTx) AddTxOut(to *TxOut) {
 }
 
 // TxHash generates the Hash for the transaction.
-func (msg *MsgTx) TxHash() chainhash.Hash {
+func (msg *MsgTx) TxHash() *bitcoin.Hash32 {
 	// Encode the transaction and calculate double sha256 on the result.
 	// Ignore the error returns since the only way the encode could fail
 	// is being out of memory or due to nil pointers, both of which would
 	// cause a run-time panic.
 	buf := bytes.NewBuffer(make([]byte, 0, msg.SerializeSize()))
 	_ = msg.Serialize(buf)
-	return chainhash.DoubleHashH(buf.Bytes())
+	result, _ := bitcoin.NewHash32(bitcoin.DoubleSha256(buf.Bytes()))
+	return result
+}
+
+func (msg *MsgTx) String() string {
+	result := fmt.Sprintf("TxId: %s\n", msg.TxHash().String())
+	result += fmt.Sprintf("  Version: %d\n", msg.Version)
+	result += "  Inputs:\n\n"
+	for _, input := range msg.TxIn {
+		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
+			input.PreviousOutPoint.Hash.String())
+		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Sequence: %x\n\n", input.Sequence)
+	}
+	result += "  Outputs:\n\n"
+	for _, output := range msg.TxOut {
+		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
+		result += fmt.Sprintf("    Script: %x\n\n", output.PkScript)
+	}
+	result += fmt.Sprintf("  LockTime: %d\n", msg.LockTime)
+	return result
 }
 
 // Copy creates a deep copy of a transaction so that the original does not get
@@ -666,17 +697,6 @@ func readOutPoint(r io.Reader, pver uint32, version int32, op *OutPoint) error {
 	return err
 }
 
-// writeOutPoint encodes op to the bitcoin protocol encoding for an OutPoint
-// to w.
-func writeOutPoint(w io.Writer, pver uint32, version int32, op *OutPoint) error {
-	_, err := w.Write(op.Hash[:])
-	if err != nil {
-		return err
-	}
-
-	return binary.Write(w, endian, uint32(op.Index))
-}
-
 // readScript reads a variable length byte array that represents a transaction
 // script.  It is encoded as a varInt containing the length of the array
 // followed by the bytes themselves.  An error is returned if the length is
@@ -728,7 +748,7 @@ func readTxIn(r io.Reader, pver uint32, version int32, ti *TxIn) error {
 // writeTxIn encodes ti to the bitcoin protocol encoding for a transaction
 // input (TxIn) to w.
 func writeTxIn(w io.Writer, pver uint32, version int32, ti *TxIn) error {
-	err := writeOutPoint(w, pver, version, &ti.PreviousOutPoint)
+	err := ti.PreviousOutPoint.Serialize(w)
 	if err != nil {
 		return err
 	}

@@ -164,12 +164,16 @@ func PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
 
 	pubkey := key.PublicKey().Bytes()
 
-	result := make([]byte, 0, len(sig)+len(pubkey)+2)
-	result = append(result, bitcoin.PushDataScript(uint64(len(sig)))...)
-	result = append(result, sig...)
-	result = append(result, bitcoin.PushDataScript(uint64(len(pubkey)))...)
-	result = append(result, pubkey...)
-	return result, nil
+	buf := bytes.NewBuffer(make([]byte, 0, len(sig)+len(pubkey)+2))
+	err = bitcoin.WritePushDataScript(buf, sig)
+	if err != nil {
+		return nil, err
+	}
+	err = bitcoin.WritePushDataScript(buf, pubkey)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func SHUnlockingScript(script []byte) ([]byte, error) {
@@ -198,5 +202,5 @@ func InputSignature(key bitcoin.Key, tx *wire.MsgTx, index int, lockScript []byt
 		return nil, fmt.Errorf("cannot sign tx input: %s", err)
 	}
 
-	return append(sig, byte(hashType)), nil
+	return append(sig.Bytes(), byte(hashType)), nil
 }

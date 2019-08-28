@@ -17,9 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -39,12 +37,12 @@ type Server struct {
 	walletLock        sync.RWMutex
 	txFilter          *filters.TxFilter
 	pendingResponses  []*wire.MsgTx
-	revertedTxs       []*chainhash.Hash
+	revertedTxs       []*bitcoin.Hash32
 	blockHeight       int // track current block height for confirm messages
 	inSync            bool
 
-	pendingTxs  map[chainhash.Hash]*IncomingTxData
-	readyTxs    []*chainhash.Hash // Saves order of tx approval in case preprocessing doesn't finish before approval.
+	pendingTxs  map[bitcoin.Hash32]*IncomingTxData
+	readyTxs    []*bitcoin.Hash32 // Saves order of tx approval in case preprocessing doesn't finish before approval.
 	pendingLock sync.Mutex
 
 	incomingTxs   IncomingTxChannel
@@ -82,7 +80,7 @@ func NewServer(
 		Handler:          handler,
 		utxos:            utxos,
 		txFilter:         txFilter,
-		pendingTxs:       make(map[chainhash.Hash]*IncomingTxData),
+		pendingTxs:       make(map[bitcoin.Hash32]*IncomingTxData),
 		pendingResponses: make([]*wire.MsgTx, 0),
 		blockHeight:      0,
 		inSync:           false,
@@ -92,8 +90,7 @@ func NewServer(
 	keys := wallet.ListAll()
 	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
 	for _, key := range keys {
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
-			wire.BitcoinNet(config.ChainParams.Net))
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()), config.Net)
 		if err != nil {
 			return nil
 		}
@@ -188,6 +185,8 @@ func (server *Server) Run(ctx context.Context) error {
 				server.SpyNode.Stop(ctx)
 			}
 			server.incomingTxs.Close()
+			server.processingTxs.Close()
+			server.holdingsChannel.Close()
 		}
 		node.LogVerbose(ctx, "Process thread finished")
 	}()
@@ -212,7 +211,7 @@ func (server *Server) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 
@@ -288,7 +287,7 @@ func (server *Server) removeConflictingPending(ctx context.Context, itx *inspect
 	for i, pendingTx := range server.pendingResponses {
 		for _, pendingInput := range pendingTx.TxIn {
 			for _, input := range itx.Inputs {
-				if pendingInput.PreviousOutPoint.Hash == input.UTXO.Hash &&
+				if pendingInput.PreviousOutPoint.Hash.Equal(input.UTXO.Hash) &&
 					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
 					node.Log(ctx, "Canceling pending response tx : %s", pendingTx.TxHash().String())
 					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
@@ -305,13 +304,13 @@ func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) 
 	server.lock.Lock()
 	defer server.lock.Unlock()
 
-	server.Tracer.RevertTx(ctx, &itx.Hash)
+	server.Tracer.RevertTx(ctx, itx.Hash)
 	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
-	server.Tracer.RevertTx(ctx, &itx.Hash)
+	server.Tracer.RevertTx(ctx, itx.Hash)
 	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
 	return server.Handler.Trigger(ctx, "LOST", itx)
 }
@@ -336,7 +335,7 @@ func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 
 	node.Log(ctx, "Adding key : %x", bitcoin.Hash160(k.PublicKey().Bytes()))
 	server.wallet.Add(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 	server.contractAddresses = append(server.contractAddresses, address)
@@ -361,15 +360,15 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 	}
 
 	// Check if contract exists
-	contractPKH := protocol.PublicKeyHashFromBytes(pkh)
-	_, err = contract.Retrieve(ctx, server.MasterDB, contractPKH)
+	_, err = contract.Retrieve(ctx, server.MasterDB, address)
 	if err != contract.ErrNotFound {
 		return nil
 	}
 
-	node.Log(ctx, "Removing key : %s", contractPKH.String())
+	stringAddress := bitcoin.NewAddressFromRawAddress(address, server.Config.Net)
+	node.Log(ctx, "Removing key : %s", stringAddress.String())
 	server.wallet.Remove(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, wire.BitcoinNet(server.Config.ChainParams.Net)); err != nil {
+	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
 

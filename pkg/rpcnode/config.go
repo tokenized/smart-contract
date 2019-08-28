@@ -2,15 +2,12 @@ package rpcnode
 
 import (
 	"fmt"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
 
 type Config struct {
-	Host        string
-	Username    string
-	Password    string
-	ChainParams *chaincfg.Params
+	Host     string
+	Username string
+	Password string
 }
 
 // String returns a custom string representation.

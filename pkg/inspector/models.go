@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -27,7 +26,7 @@ type Output struct {
 }
 
 type UTXO struct {
-	Hash     chainhash.Hash
+	Hash     *bitcoin.Hash32
 	Index    uint32
 	PkScript []byte
 	Value    int64
@@ -98,7 +97,7 @@ func (in *Input) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (in *Input) Read(buf *bytes.Buffer) error {
+func (in *Input) Read(buf *bytes.Reader) error {
 	msg := wire.MsgTx{}
 	if err := msg.Deserialize(buf); err != nil {
 		return err
@@ -128,7 +127,7 @@ func (in *Input) Read(buf *bytes.Buffer) error {
 }
 
 func (utxo *UTXO) Write(buf *bytes.Buffer) error {
-	if _, err := buf.Write(utxo.Hash[:]); err != nil {
+	if err := utxo.Hash.Serialize(buf); err != nil {
 		return err
 	}
 
@@ -152,8 +151,11 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (utxo *UTXO) Read(buf *bytes.Buffer) error {
-	if _, err := buf.Read(utxo.Hash[:]); err != nil {
+func (utxo *UTXO) Read(buf *bytes.Reader) error {
+	var err error
+
+	utxo.Hash, err = bitcoin.DeserializeHash32(buf)
+	if err != nil {
 		return err
 	}
 

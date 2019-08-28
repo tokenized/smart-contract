@@ -56,18 +56,12 @@ func (shc *SigHashCache) HashPrevOuts(tx *wire.MsgTx) []byte {
 		return shc.hashPrevOuts
 	}
 
-	var b bytes.Buffer
+	var buf bytes.Buffer
 	for _, in := range tx.TxIn {
-		// First write out the 32-byte transaction ID.
-		b.Write(in.PreviousOutPoint.Hash[:])
-
-		// Next, we'll encode the index of the referenced output as a little endian integer.
-		var buf [4]byte
-		binary.LittleEndian.PutUint32(buf[:], in.PreviousOutPoint.Index)
-		b.Write(buf[:])
+		in.PreviousOutPoint.Serialize(&buf)
 	}
 
-	shc.hashPrevOuts = bitcoin.DoubleSha256(b.Bytes())
+	shc.hashPrevOuts = bitcoin.DoubleSha256(buf.Bytes())
 	return shc.hashPrevOuts
 }
 
@@ -78,14 +72,12 @@ func (shc *SigHashCache) HashSequence(tx *wire.MsgTx) []byte {
 		return shc.hashSequence
 	}
 
-	var b bytes.Buffer
+	var buf bytes.Buffer
 	for _, in := range tx.TxIn {
-		var buf [4]byte
-		binary.LittleEndian.PutUint32(buf[:], in.Sequence)
-		b.Write(buf[:])
+		binary.Write(&buf, binary.LittleEndian, in.Sequence)
 	}
 
-	shc.hashSequence = bitcoin.DoubleSha256(b.Bytes())
+	shc.hashSequence = bitcoin.DoubleSha256(buf.Bytes())
 	return shc.hashSequence
 }
 
@@ -96,12 +88,12 @@ func (shc *SigHashCache) HashOutputs(tx *wire.MsgTx) []byte {
 		return shc.hashOutputs
 	}
 
-	var b bytes.Buffer
+	var buf bytes.Buffer
 	for _, out := range tx.TxOut {
-		out.Serialize(&b, 0, 0)
+		out.Serialize(&buf, 0, 0)
 	}
 
-	shc.hashOutputs = bitcoin.DoubleSha256(b.Bytes())
+	shc.hashOutputs = bitcoin.DoubleSha256(buf.Bytes())
 	return shc.hashOutputs
 }
 
@@ -129,9 +121,7 @@ func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
 	var buf bytes.Buffer
 
 	// First write out, then encode the transaction's version number.
-	var bVersion [4]byte
-	binary.LittleEndian.PutUint32(bVersion[:], uint32(tx.Version))
-	buf.Write(bVersion[:])
+	binary.Write(&buf, binary.LittleEndian, tx.Version)
 
 	// Next write out the possibly pre-calculated hashes for the sequence
 	// numbers of all inputs, and the hashes of the previous outs for all
@@ -155,21 +145,14 @@ func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
 	}
 
 	// Next, write the outpoint being spent.
-	buf.Write(tx.TxIn[index].PreviousOutPoint.Hash[:])
-	var bIndex [4]byte
-	binary.LittleEndian.PutUint32(bIndex[:], tx.TxIn[index].PreviousOutPoint.Index)
-	buf.Write(bIndex[:])
+	tx.TxIn[index].PreviousOutPoint.Serialize(&buf)
 
 	// Write the locking script being spent.
 	wire.WriteVarBytes(&buf, 0, lockScript)
 
 	// Next, add the input amount, and sequence number of the input being signed.
-	var bAmount [8]byte
-	binary.LittleEndian.PutUint64(bAmount[:], value)
-	buf.Write(bAmount[:])
-	var bSequence [4]byte
-	binary.LittleEndian.PutUint32(bSequence[:], tx.TxIn[index].Sequence)
-	buf.Write(bSequence[:])
+	binary.Write(&buf, binary.LittleEndian, value)
+	binary.Write(&buf, binary.LittleEndian, tx.TxIn[index].Sequence)
 
 	// If the current signature mode is single, or none, then we'll serialize and add only the
 	//   target output index to the signature pre-image.
@@ -185,12 +168,8 @@ func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
 	}
 
 	// Finally, write out the transaction's locktime, and the sig hash type.
-	var bLockTime [4]byte
-	binary.LittleEndian.PutUint32(bLockTime[:], tx.LockTime)
-	buf.Write(bLockTime[:])
-	var bHashType [4]byte
-	binary.LittleEndian.PutUint32(bHashType[:], uint32(hashType|SigHashForkID))
-	buf.Write(bHashType[:])
+	binary.Write(&buf, binary.LittleEndian, tx.LockTime)
+	binary.Write(&buf, binary.LittleEndian, uint32(hashType|SigHashForkID))
 
 	return bitcoin.DoubleSha256(buf.Bytes())
 }

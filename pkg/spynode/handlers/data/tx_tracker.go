@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -24,20 +24,20 @@ import (
 //   now confirmed.
 
 type TxTracker struct {
-	txids map[chainhash.Hash]time.Time
+	txids map[bitcoin.Hash32]time.Time
 	mutex sync.Mutex
 }
 
 func NewTxTracker() *TxTracker {
 	result := TxTracker{
-		txids: make(map[chainhash.Hash]time.Time),
+		txids: make(map[bitcoin.Hash32]time.Time),
 	}
 
 	return &result
 }
 
 // Adds a txid to tracker to be monitored for expired requests
-func (tracker *TxTracker) Add(txid *chainhash.Hash) {
+func (tracker *TxTracker) Add(txid *bitcoin.Hash32) {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
@@ -47,15 +47,15 @@ func (tracker *TxTracker) Add(txid *chainhash.Hash) {
 }
 
 // Call when a tx is received to cancel tracking
-func (tracker *TxTracker) Remove(ctx context.Context, txids []chainhash.Hash) {
+func (tracker *TxTracker) Remove(ctx context.Context, txids []*bitcoin.Hash32) {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
 	// Iterate tracker ids first since that list should be much smaller
 	for _, removeid := range txids {
-		if time, exists := tracker.txids[removeid]; exists {
+		if time, exists := tracker.txids[*removeid]; exists {
 			logger.Verbose(ctx, "Removing tracking for tx (%s) : %s", time.Format("15:04:05.999999"), removeid.String())
-			delete(tracker.txids, removeid)
+			delete(tracker.txids, *removeid)
 		}
 	}
 }

@@ -8,10 +8,9 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 const (
@@ -110,7 +109,7 @@ func (tracer *Tracer) AddTx(ctx context.Context, tx *wire.MsgTx) bool {
 }
 
 // RevertTx reverts any outputs from any traced paths.
-func (tracer *Tracer) RevertTx(ctx context.Context, txid *chainhash.Hash) {
+func (tracer *Tracer) RevertTx(ctx context.Context, txid *bitcoin.Hash32) {
 	for _, trace := range tracer.traces {
 		trace.revertTx(txid)
 	}
@@ -128,7 +127,7 @@ func (tracer *Tracer) Contains(ctx context.Context, tx *wire.MsgTx) bool {
 
 // Retrace returns the hash of the output that was requested to be monitored that contains the tx specified.
 // The trace is also removed.
-func (tracer *Tracer) Retrace(ctx context.Context, tx *wire.MsgTx) *chainhash.Hash {
+func (tracer *Tracer) Retrace(ctx context.Context, tx *wire.MsgTx) *bitcoin.Hash32 {
 	for i, trace := range tracer.traces {
 		if trace.contains(tx) {
 			tracer.traces = append(tracer.traces[:i], tracer.traces[i+1:]...)
@@ -149,7 +148,7 @@ func (node *traceNode) addTx(tx *wire.MsgTx) bool {
 		for _, input := range tx.TxIn {
 			if bytes.Equal(input.PreviousOutPoint.Hash[:], node.outpoint.Hash[:]) && input.PreviousOutPoint.Index == node.outpoint.Index {
 				for index, _ := range tx.TxOut {
-					newNode := traceNode{outpoint: wire.OutPoint{Hash: tx.TxHash(), Index: uint32(index)}}
+					newNode := traceNode{outpoint: wire.OutPoint{Hash: *tx.TxHash(), Index: uint32(index)}}
 					node.children = append(node.children, &newNode)
 				}
 				result = true
@@ -167,7 +166,7 @@ func (node *traceNode) addTx(tx *wire.MsgTx) bool {
 	return result
 }
 
-func (node *traceNode) revertTx(txid *chainhash.Hash) {
+func (node *traceNode) revertTx(txid *bitcoin.Hash32) {
 	for _, child := range node.children {
 		if bytes.Equal(txid[:], child.outpoint.Hash[:]) {
 			node.children = nil

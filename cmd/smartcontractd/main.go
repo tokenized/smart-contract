@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -19,9 +18,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/spynode"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/storage"
-	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
 
 var (
@@ -87,7 +83,7 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(appConfig.ChainParams, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
+	spyConfig, err := data.NewConfig(appConfig.Net, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
 		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
@@ -99,10 +95,9 @@ func main() {
 	// -------------------------------------------------------------------------
 	// RPC Node
 	rpcConfig := &rpcnode.Config{
-		Host:        cfg.RpcNode.Host,
-		Username:    cfg.RpcNode.Username,
-		Password:    cfg.RpcNode.Password,
-		ChainParams: appConfig.ChainParams,
+		Host:     cfg.RpcNode.Host,
+		Username: cfg.RpcNode.Username,
+		Password: cfg.RpcNode.Password,
 	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)
@@ -114,12 +109,12 @@ func main() {
 	// Wallet
 
 	masterWallet := bootstrap.NewWallet()
-	if err := masterWallet.Register(cfg.Contract.PrivateKey, wire.BitcoinNet(appConfig.ChainParams.Net)); err != nil {
+	if err := masterWallet.Register(cfg.Contract.PrivateKey, appConfig.Net); err != nil {
 		panic(err)
 	}
 
 	contractAddress := bitcoin.NewAddressFromRawAddress(masterWallet.KeyStore.GetAddresses()[0],
-		wire.BitcoinNet(appConfig.ChainParams.Net))
+		appConfig.Net)
 	logger.Info(ctx, "Contract address : %s", contractAddress.String())
 
 	// -------------------------------------------------------------------------
@@ -131,7 +126,7 @@ func main() {
 		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
 	}
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(&chaincfg.MainNetParams, pubKeys, tracer, appConfig.IsTest)
+	txFilter := filters.NewTxFilter(pubKeys, tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -149,7 +144,7 @@ func main() {
 
 	utxos := bootstrap.LoadUTXOsFromDB(ctx, masterDB)
 
-	var holdingsChannel holdings.CacheChannel
+	holdingsChannel := bootstrap.CreateHoldingsCacheChannel(ctx)
 
 	appHandlers, apiErr := handlers.API(
 		ctx,
@@ -160,7 +155,7 @@ func main() {
 		&sch,
 		spyNode,
 		utxos,
-		&holdingsChannel,
+		holdingsChannel,
 	)
 
 	if apiErr != nil {
@@ -179,7 +174,7 @@ func main() {
 		tracer,
 		utxos,
 		txFilter,
-		&holdingsChannel,
+		holdingsChannel,
 	)
 
 	// -------------------------------------------------------------------------

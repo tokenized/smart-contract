@@ -4,26 +4,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // MemPool is used for managing announced transactions that haven't confirmed yet.
 // The mempool is non-persistent and is mainly used to prevent duplicate tx requests.
 type MemPool struct {
-	txs      map[chainhash.Hash]*memPoolTx        // Lookup of block height by hash.
-	inputs   map[chainhash.Hash][]*chainhash.Hash // Lookup by hash of outpoint. Used to find conflicting inputs.
-	requests map[chainhash.Hash]time.Time         // Transactions that have been requested
+	txs      map[bitcoin.Hash32]*memPoolTx        // Lookup of block height by hash.
+	inputs   map[bitcoin.Hash32][]*bitcoin.Hash32 // Lookup by hash of outpoint. Used to find conflicting inputs.
+	requests map[bitcoin.Hash32]time.Time         // Transactions that have been requested
 	mutex    sync.Mutex
 }
 
 // NewMemPool returns a new MemPool.
 func NewMemPool() *MemPool {
 	result := MemPool{
-		txs:      make(map[chainhash.Hash]*memPoolTx),
-		inputs:   make(map[chainhash.Hash][]*chainhash.Hash),
-		requests: make(map[chainhash.Hash]time.Time),
+		txs:      make(map[bitcoin.Hash32]*memPoolTx),
+		inputs:   make(map[bitcoin.Hash32][]*bitcoin.Hash32),
+		requests: make(map[bitcoin.Hash32]time.Time),
 	}
 	return &result
 }
@@ -33,7 +32,7 @@ func NewMemPool() *MemPool {
 // Returns:
 //   bool - True if we already have the tx
 //   bool - True if the tx should be requested
-func (memPool *MemPool) AddRequest(txid *chainhash.Hash) (bool, bool) {
+func (memPool *MemPool) AddRequest(txid *bitcoin.Hash32) (bool, bool) {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
@@ -60,17 +59,17 @@ func (memPool *MemPool) AddRequest(txid *chainhash.Hash) (bool, bool) {
 
 // Adds a timestamped tx hash to the mempool
 // Returns:
-//   []*chainhash.Hash - list of conflicting transactions (not including this tx) if there are
+//   []*bitcoin.Hash32 - list of conflicting transactions (not including this tx) if there are
 //     conflicts with inputs (double spends).
 //   bool - true if the tx isn't already in the mempool and was added
-func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*chainhash.Hash, bool) {
+func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*bitcoin.Hash32, bool) {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
-	result := make([]*chainhash.Hash, 0)
+	result := make([]*bitcoin.Hash32, 0)
 	hash := tx.TxHash()
 
-	memTx, exists := memPool.txs[hash]
+	memTx, exists := memPool.txs[*hash]
 	if exists {
 		if len(memTx.outPoints) > 0 {
 			return result, false // Already in the mempool
@@ -78,7 +77,7 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*chainhash.Hash, bool)
 	} else {
 		// Add tx
 		memTx = newMemPoolTx(time.Now())
-		memPool.txs[hash] = memTx
+		memPool.txs[*hash] = memTx
 	}
 
 	// Add outpoints to mempool tx
@@ -87,18 +86,18 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*chainhash.Hash, bool)
 	// Add inputs while checking for conflicts
 	for _, outpoint := range memTx.outPoints {
 		outpointHash := outpoint.OutpointHash()
-		list, exists := memPool.inputs[outpointHash]
+		list, exists := memPool.inputs[*outpointHash]
 		if exists {
 			// Append conflicting
 			// It is possible tx conflict on more than one input and we don't want duplicates in
 			//   the result list.
 			appendIfNotContained(result, list)
-			list = append(list, &hash)
+			list = append(list, hash)
 		} else {
 			// Create new list with only this tx hash
-			list := make([]*chainhash.Hash, 1)
-			list[0] = &hash
-			memPool.inputs[outpointHash] = list
+			list := make([]*bitcoin.Hash32, 1)
+			list[0] = hash
+			memPool.inputs[*outpointHash] = list
 		}
 	}
 
@@ -106,7 +105,7 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]*chainhash.Hash, bool)
 }
 
 // Appends the items in add to list if they are not already in list
-func appendIfNotContained(list []*chainhash.Hash, add []*chainhash.Hash) {
+func appendIfNotContained(list []*bitcoin.Hash32, add []*bitcoin.Hash32) {
 	for _, addHash := range add {
 		found := false
 		for _, hash := range list {
@@ -124,7 +123,7 @@ func appendIfNotContained(list []*chainhash.Hash, add []*chainhash.Hash) {
 
 // Removes a tx hash from the mempool
 // Returns true if the tx was in the mempool
-func (memPool *MemPool) RemoveTransaction(hash *chainhash.Hash) bool {
+func (memPool *MemPool) RemoveTransaction(hash *bitcoin.Hash32) bool {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
@@ -133,24 +132,24 @@ func (memPool *MemPool) RemoveTransaction(hash *chainhash.Hash) bool {
 
 // Removes a tx hash from the mempool
 // Returns true if the tx was in the mempool
-func (memPool *MemPool) removeTransaction(hash *chainhash.Hash) bool {
+func (memPool *MemPool) removeTransaction(hash *bitcoin.Hash32) bool {
 	tx, exists := memPool.txs[*hash]
 	if exists {
 		// Remove outpoints
 		for _, outpoint := range tx.outPoints {
 			outpointHash := outpoint.OutpointHash()
-			otherHashes, exists := memPool.inputs[outpointHash]
+			otherHashes, exists := memPool.inputs[*outpointHash]
 			if exists { // It should always exist
 				if len(otherHashes) > 1 {
 					// Remove this outpoint hash from the list
 					for i, otherHash := range otherHashes {
-						if *otherHash == outpointHash {
+						if otherHash.Equal(outpointHash) {
 							otherHashes = append(otherHashes[:i], otherHashes[i+1:]...)
 							break
 						}
 					}
 				} else {
-					delete(memPool.inputs, outpointHash)
+					delete(memPool.inputs, *outpointHash)
 				}
 			}
 		}
@@ -162,7 +161,7 @@ func (memPool *MemPool) removeTransaction(hash *chainhash.Hash) bool {
 }
 
 // Returns true if the transaction is in the mempool
-func (memPool *MemPool) TransactionExists(hash *chainhash.Hash) bool {
+func (memPool *MemPool) TransactionExists(hash *bitcoin.Hash32) bool {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
@@ -177,14 +176,14 @@ func (memPool *MemPool) TransactionExists(hash *chainhash.Hash) bool {
 // Returns txids of any transactions from the mempool with inputs that conflict with the specified
 //   transaction.
 // Also removes them from the mempool.
-func (memPool *MemPool) Conflicting(tx *wire.MsgTx) []*chainhash.Hash {
+func (memPool *MemPool) Conflicting(tx *wire.MsgTx) []*bitcoin.Hash32 {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
-	result := make([]*chainhash.Hash, 0, 1)
+	result := make([]*bitcoin.Hash32, 0, 1)
 	// Check for conflicting inputs
 	for _, input := range tx.TxIn {
-		if list, exists := memPool.inputs[input.PreviousOutPoint.OutpointHash()]; exists {
+		if list, exists := memPool.inputs[*input.PreviousOutPoint.OutpointHash()]; exists {
 			for _, hash := range list {
 				result = append(result, hash)
 				memPool.removeTransaction(hash)

@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
@@ -49,13 +48,13 @@ func loadFixtureTX(name string) wire.MsgTx {
 	return decodeTX(b)
 }
 
-func newHash(hash string) chainhash.Hash {
-	h, err := chainhash.NewHashFromStr(hash)
+func newHash(hash string) *bitcoin.Hash32 {
+	h, err := bitcoin.NewHash32FromStr(hash)
 	if err != nil {
 		panic(err)
 	}
 
-	return *h
+	return h
 }
 
 func decodeAddress(address string) bitcoin.RawAddress {

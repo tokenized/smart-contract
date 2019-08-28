@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // TestBlock tests the MsgBlock API.
@@ -72,13 +72,13 @@ func TestBlock(t *testing.T) {
 func TestBlockTxHashes(t *testing.T) {
 	// Block 1, transaction 1 hash.
 	hashStr := "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098"
-	wantHash, err := chainhash.NewHashFromStr(hashStr)
+	wantHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 		return
 	}
 
-	wantHashes := []chainhash.Hash{*wantHash}
+	wantHashes := []*bitcoin.Hash32{wantHash}
 	hashes, err := blockOne.TxHashes()
 	if err != nil {
 		t.Errorf("TxHashes: %v", err)
@@ -92,15 +92,15 @@ func TestBlockTxHashes(t *testing.T) {
 // TestBlockHash tests the ability to generate the hash of a block accurately.
 func TestBlockHash(t *testing.T) {
 	// Block 1 hash.
-	hashStr := "839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
-	wantHash, err := chainhash.NewHashFromStr(hashStr)
+	hashStr := "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
+	wantHash, err := bitcoin.NewHash32FromStr(hashStr)
 	if err != nil {
 		t.Errorf("NewHashFromStr: %v", err)
 	}
 
 	// Ensure the hash produced is expected.
 	blockHash := blockOne.BlockHash()
-	if !blockHash.IsEqual(wantHash) {
+	if !blockHash.Equal(wantHash) {
 		t.Errorf("BlockHash: wrong hash - got %v, want %v",
 			spew.Sprint(blockHash), spew.Sprint(wantHash))
 	}
@@ -477,13 +477,13 @@ func TestBlockSerializeSize(t *testing.T) {
 var blockOne = MsgBlock{
 	Header: BlockHeader{
 		Version: 1,
-		PrevBlock: chainhash.Hash([chainhash.HashSize]byte{ // Make go vet happy.
+		PrevBlock: bitcoin.Hash32([bitcoin.Hash32Size]byte{ // Make go vet happy.
 			0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72,
 			0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
 			0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c,
 			0x68, 0xd6, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
 		}),
-		MerkleRoot: chainhash.Hash([chainhash.HashSize]byte{ // Make go vet happy.
+		MerkleRoot: bitcoin.Hash32([bitcoin.Hash32Size]byte{ // Make go vet happy.
 			0x98, 0x20, 0x51, 0xfd, 0x1e, 0x4b, 0xa7, 0x44,
 			0xbb, 0xbe, 0x68, 0x0e, 0x1f, 0xee, 0x14, 0x67,
 			0x7b, 0xa1, 0xa3, 0xc3, 0x54, 0x0b, 0xf7, 0xb1,
@@ -500,7 +500,7 @@ var blockOne = MsgBlock{
 			TxIn: []*TxIn{
 				{
 					PreviousOutPoint: OutPoint{
-						Hash:  chainhash.Hash{},
+						Hash:  bitcoin.Hash32{},
 						Index: 0xffffffff,
 					},
 					SignatureScript: []byte{

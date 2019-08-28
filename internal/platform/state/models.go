@@ -2,130 +2,134 @@ package state
 
 import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // Contract represents a Smart Contract.
 type Contract struct {
-	ID           protocol.PublicKeyHash `json:"id,omitempty"`
-	Revision     uint32                 `json:"revision,omitempty"`
-	CreatedAt    protocol.Timestamp     `json:"created_at,omitempty"`
-	UpdatedAt    protocol.Timestamp     `json:"updated_at,omitempty"`
-	Timestamp    protocol.Timestamp     `json:"timestamp,omitempty"`
-	FreezePeriod protocol.Timestamp     `json:"freeze_period,omitempty"`
+	Address      *bitcoin.JSONRawAddress `json:"Address,omitempty"`
+	Revision     uint32                  `json:"Revision,omitempty"`
+	CreatedAt    protocol.Timestamp      `json:"CreatedAt,omitempty"`
+	UpdatedAt    protocol.Timestamp      `json:"UpdatedAt,omitempty"`
+	Timestamp    protocol.Timestamp      `json:"Timestamp,omitempty"`
+	FreezePeriod protocol.Timestamp      `json:"FreezePeriod,omitempty"`
 
-	AdministrationPKH protocol.PublicKeyHash `json:"administration_pkh,omitempty"`
-	OperatorPKH       protocol.PublicKeyHash `json:"operator_pkh,omitempty"`
-	MasterPKH         protocol.PublicKeyHash `json:"master_pkh,omitempty"`
-	MovedTo           protocol.PublicKeyHash `json:"moved_to,omitempty"`
+	AdministrationAddress *bitcoin.JSONRawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       *bitcoin.JSONRawAddress `json:"OperatorAddress,omitempty"`
+	MasterAddress         *bitcoin.JSONRawAddress `json:"MasterAddress,omitempty"`
+	MovedTo               *bitcoin.JSONRawAddress `json:"MovedTo,omitempty"`
 
-	ContractName           string                  `json:"contract_name,omitempty"`
-	BodyOfAgreementType    uint8                   `json:"body_of_agreement_type,omitempty"`
-	BodyOfAgreement        []byte                  `json:"body_of_agreement,omitempty"`
-	ContractType           string                  `json:"contract_type,omitempty"`
-	SupportingDocs         []protocol.Document     `json:"supporting_docs,omitempty"`
-	GoverningLaw           string                  `json:"governing_law,omitempty"`
-	Jurisdiction           string                  `json:"jurisdiction,omitempty"`
-	ContractExpiration     protocol.Timestamp      `json:"contract_expiration,omitempty"`
-	ContractURI            string                  `json:"contract_uri,omitempty"`
-	Issuer                 protocol.Entity         `json:"issuer,omitempty"`
-	IssuerLogoURL          string                  `json:"issuer_logo_url,omitempty"`
-	ContractOperator       protocol.Entity         `json:"contract_operator,omitempty"`
-	ContractAuthFlags      []byte                  `json:"contract_auth_flags,omitempty"`
-	ContractFee            uint64                  `json:"contract_fee,omitempty"`
-	VotingSystems          []protocol.VotingSystem `json:"voting_systems,omitempty"`
-	RestrictedQtyAssets    uint64                  `json:"restricted_qty_assets,omitempty"`
-	AdministrationProposal bool                    `json:"administration_proposal,omitempty"`
-	HolderProposal         bool                    `json:"holder_proposal,omitempty"`
-	Oracles                []protocol.Oracle       `json:"oracles,omitempty"`
+	ContractName              string                       `json:"ContractName,omitempty"`
+	BodyOfAgreementType       uint32                       `json:"BodyOfAgreementType,omitempty"`
+	BodyOfAgreement           []byte                       `json:"BodyOfAgreement,omitempty"`
+	ContractType              string                       `json:"ContractType,omitempty"`
+	SupportingDocs            []*actions.DocumentField     `json:"SupportingDocs,omitempty"`
+	GoverningLaw              string                       `json:"GoverningLaw,omitempty"`
+	Jurisdiction              string                       `json:"Jurisdiction,omitempty"`
+	ContractExpiration        protocol.Timestamp           `json:"ContractExpiration,omitempty"`
+	ContractURI               string                       `json:"ContractURI,omitempty"`
+	Issuer                    *actions.EntityField         `json:"Issuer,omitempty"`
+	IssuerLogoURL             string                       `json:"IssuerLogoURL,omitempty"`
+	ContractOperator          *actions.EntityField         `json:"ContractOperator,omitempty"`
+	AdminOracle               *actions.OracleField         `json:"AdminOracle,omitempty"`
+	AdminOracleSignature      []byte                       `json:"AdminOracleSignature,omitempty"`
+	AdminOracleSigBlockHeight uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
+	ContractAuthFlags         []byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractFee               uint64                       `json:"ContractFee,omitempty"`
+	VotingSystems             []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
+	RestrictedQtyAssets       uint64                       `json:"RestrictedQtyAssets,omitempty"`
+	AdministrationProposal    bool                         `json:"AdministrationProposal,omitempty"`
+	HolderProposal            bool                         `json:"HolderProposal,omitempty"`
+	Oracles                   []*actions.OracleField       `json:"Oracles,omitempty"`
 
-	AssetCodes []protocol.AssetCode `json:"asset_codes,omitempty"`
+	AssetCodes []*protocol.AssetCode `json:"AssetCodes,omitempty"`
 
-	FullOracles []bitcoin.PublicKey
+	FullOracles []bitcoin.PublicKey `json:"_,omitempty"`
 }
 
 type Asset struct {
-	ID        protocol.AssetCode `json:"id,omitempty"`
-	Revision  uint32             `json:"revision,omitempty"`
-	CreatedAt protocol.Timestamp `json:"created_at,omitempty"`
-	UpdatedAt protocol.Timestamp `json:"updated_at,omitempty"`
-	Timestamp protocol.Timestamp `json:"timestamp,omitempty"`
+	Code      *protocol.AssetCode `json:"Code,omitempty"`
+	Revision  uint32              `json:"Revision,omitempty"`
+	CreatedAt protocol.Timestamp  `json:"CreatedAt,omitempty"`
+	UpdatedAt protocol.Timestamp  `json:"UpdatedAt,omitempty"`
+	Timestamp protocol.Timestamp  `json:"Timestamp,omitempty"`
 
-	AssetType                   string             `json:"asset_type,omitempty"`
-	AssetIndex                  uint64             `json:"asset_index,omitempty"`
-	AssetAuthFlags              []byte             `json:"asset_auth_flags,omitempty"`
-	TransfersPermitted          bool               `json:"transfers_permitted,omitempty"`
-	TradeRestrictions           [][3]byte          `json:"trade_restrictions,omitempty"`
-	EnforcementOrdersPermitted  bool               `json:"enforcement_orders_permitted,omitempty"`
-	VotingRights                bool               `json:"voting_rights,omitempty"`
-	VoteMultiplier              uint8              `json:"vote_multiplier,omitempty"`
-	AdministrationProposal      bool               `json:"administration_proposal,omitempty"`
-	HolderProposal              bool               `json:"holder_proposal,omitempty"`
-	AssetModificationGovernance uint8              `json:"asset_modification_governance,omitempty"`
-	TokenQty                    uint64             `json:"token_qty,omitempty"`
-	AssetPayload                []byte             `json:"asset_payload,omitempty"`
-	FreezePeriod                protocol.Timestamp `json:"freeze_period,omitempty"`
+	AssetType                   string             `json:"AssetType,omitempty"`
+	AssetIndex                  uint64             `json:"AssetIndex,omitempty"`
+	AssetAuthFlags              []byte             `json:"AssetAuthFlags,omitempty"`
+	TransfersPermitted          bool               `json:"TransfersPermitted,omitempty"`
+	TradeRestrictions           []string           `json:"TradeRestrictions,omitempty"`
+	EnforcementOrdersPermitted  bool               `json:"EnforcementOrdersPermitted,omitempty"`
+	VotingRights                bool               `json:"VotingRights,omitempty"`
+	VoteMultiplier              uint32             `json:"VoteMultiplier,omitempty"`
+	AdministrationProposal      bool               `json:"AdministrationProposal,omitempty"`
+	HolderProposal              bool               `json:"HolderProposal,omitempty"`
+	AssetModificationGovernance uint32             `json:"AssetModificationGovernance,omitempty"`
+	TokenQty                    uint64             `json:"TokenQty,omitempty"`
+	AssetPayload                []byte             `json:"AssetPayload,omitempty"`
+	FreezePeriod                protocol.Timestamp `json:"FreezePeriod,omitempty"`
 }
 
 type Holding struct {
-	PKH protocol.PublicKeyHash `json:"pkh,omit_empty"`
+	Address *bitcoin.JSONRawAddress `json:"Address,omitempty"`
 	// Balance after all pending changes have been finalized
-	PendingBalance uint64 `json:"pending_balance,omit_empty"`
+	PendingBalance uint64 `json:"PendingBalance,omitempty"`
 	// Balance without pending changes
-	FinalizedBalance uint64                           `json:"finalized_balance,omit_empty"`
-	HoldingStatuses  map[protocol.TxId]*HoldingStatus `json:"holding_statuses,omitempty"`
-	CreatedAt        protocol.Timestamp               `json:"created_at,omit_empty"`
-	UpdatedAt        protocol.Timestamp               `json:"updated_at,omitempty"`
+	FinalizedBalance uint64                           `json:"FinalizedBalance,omitempty"`
+	HoldingStatuses  map[protocol.TxId]*HoldingStatus `json:"HoldingStatuses,omitempty"`
+	CreatedAt        protocol.Timestamp               `json:"CreatedAt,omitempty"`
+	UpdatedAt        protocol.Timestamp               `json:"UpdatedAt,omitempty"`
 }
 
 type HoldingStatus struct {
 	// Code F = Freeze, R = Pending Receive, S = Pending Send
-	Code byte `json:"code,omit_empty"`
+	Code byte `json:"Code,omitempty"`
 
-	Expires        protocol.Timestamp `json:"expires,omitempty"`
-	Amount         uint64             `json:"amount,omit_empty"`
-	TxId           protocol.TxId      `json:"tx_id,omit_empty"`
-	SettleQuantity uint64             `json:"settlement_quantity,omit_empty"`
+	Expires        protocol.Timestamp `json:"Expires,omitempty"`
+	Amount         uint64             `json:"Amount,omitempty"`
+	TxId           *protocol.TxId     `json:"TxId,omitempty"`
+	SettleQuantity uint64             `json:"SettleQuantity,omitempty"`
 
 	// Balance has been posted to the chain and is not reversible without a reconcile.
-	Posted bool `json:"posted,omit_empty"`
+	Posted bool `json:"Posted,omitempty"`
 }
 
 type Vote struct {
-	Initiator          uint8                `json:"initiator,omit_empty"`
-	VoteSystem         uint8                `json:"vote_system,omit_empty"`
-	ContractWideVote   bool                 `json:"contract_wide_vote,omit_empty"`
-	AssetSpecificVote  bool                 `json:"asset_specific_vote,omit_empty"`
-	AssetType          string               `json:"asset_type,omit_empty"`
-	AssetCode          protocol.AssetCode   `json:"asset_code,omit_empty"`
-	Specific           bool                 `json:"specific,omit_empty"`
-	ProposedAmendments []protocol.Amendment `json:"proposed_amendments,omit_empty"`
+	Initiator          uint32                    `json:"Initiator,omitempty"`
+	VoteSystem         uint32                    `json:"VoteSystem,omitempty"`
+	ContractWideVote   bool                      `json:"ContractWideVote,omitempty"`
+	AssetSpecificVote  bool                      `json:"AssetSpecificVote,omitempty"`
+	AssetType          string                    `json:"AssetType,omitempty"`
+	AssetCode          *protocol.AssetCode       `json:"AssetCode,omitempty"`
+	Specific           bool                      `json:"Specific,omitempty"`
+	ProposedAmendments []*actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
-	VoteTxId     protocol.TxId      `json:"vote_tx_id,omit_empty"`
-	ProposalTxId protocol.TxId      `json:"proposal_tx_id,omit_empty"`
-	TokenQty     uint64             `json:"token_qty,omit_empty"`
-	Expires      protocol.Timestamp `json:"expires,omit_empty"`
-	Timestamp    protocol.Timestamp `json:"timestamp,omit_empty"`
-	CreatedAt    protocol.Timestamp `json:"created_at,omit_empty"`
-	UpdatedAt    protocol.Timestamp `json:"updated_at,omit_empty"`
+	VoteTxId     *protocol.TxId     `json:"VoteTxId,omitempty"`
+	ProposalTxId *protocol.TxId     `json:"ProposalTxId,omitempty"`
+	TokenQty     uint64             `json:"TokenQty,omitempty"`
+	Expires      protocol.Timestamp `json:"Expires,omitempty"`
+	Timestamp    protocol.Timestamp `json:"Timestamp,omitempty"`
+	CreatedAt    protocol.Timestamp `json:"CreatedAt,omitempty"`
+	UpdatedAt    protocol.Timestamp `json:"UpdatedAt,omitempty"`
 
-	OptionTally []uint64           `json:"option_tally,omit_empty"`
-	Result      string             `json:"result,omit_empty"`
-	AppliedTxId protocol.TxId      `json:"applied_tx_id,omit_empty"`
-	CompletedAt protocol.Timestamp `json:"completed_at,omit_empty"`
+	OptionTally []uint64           `json:"OptionTally,omitempty"`
+	Result      string             `json:"Result,omitempty"`
+	AppliedTxId *protocol.TxId     `json:"AppliedTxId,omitempty"`
+	CompletedAt protocol.Timestamp `json:"CompletedAt,omitempty"`
 
-	Ballots []*Ballot `json:"ballots,omit_empty"`
+	Ballots []*Ballot `json:"Ballots,omitempty"`
 }
 
 type Ballot struct {
-	PKH       protocol.PublicKeyHash `json:"pkh,omit_empty"`
-	Vote      string                 `json:"vote,omit_empty"`
-	Quantity  uint64                 `json:"quantity,omit_empty"`
-	Timestamp protocol.Timestamp     `json:"timestamp,omit_empty"`
+	Address   *bitcoin.JSONRawAddress `json:"Address,omitempty"`
+	Vote      string                  `json:"Vote,omitempty"`
+	Quantity  uint64                  `json:"Quantity,omitempty"`
+	Timestamp protocol.Timestamp      `json:"Timestamp,omitempty"`
 }
 
 // PendingTransfer defines the information required to monitor pending multi-contract transfers.
 type PendingTransfer struct {
-	TransferTxId protocol.TxId      `json:"transfer_tx_id,omit_empty"`
-	Timeout      protocol.Timestamp `json:"timestamp,omit_empty"`
+	TransferTxId *protocol.TxId     `json:"TransferTxId,omitempty"`
+	Timeout      protocol.Timestamp `json:"Timeout,omitempty"`
 }

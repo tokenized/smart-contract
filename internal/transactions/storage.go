@@ -7,10 +7,9 @@ import (
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/logger"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 const (
@@ -29,10 +28,10 @@ func AddTx(ctx context.Context, masterDb *db.DB, itx *inspector.Transaction) err
 	}
 
 	logger.Verbose(ctx, "Adding tx : %s", itx.Hash.String())
-	return masterDb.Put(ctx, buildStoragePath(&itx.Hash), buf.Bytes())
+	return masterDb.Put(ctx, buildStoragePath(itx.Hash), buf.Bytes())
 }
 
-func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, isTest bool) (*inspector.Transaction, error) {
+func GetTx(ctx context.Context, masterDb *db.DB, txid *bitcoin.Hash32, isTest bool) (*inspector.Transaction, error) {
 	data, err := masterDb.Fetch(ctx, buildStoragePath(txid))
 	if err != nil {
 		if err == db.ErrNotFound {
@@ -42,7 +41,7 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, isTest bo
 		return nil, err
 	}
 
-	buf := bytes.NewBuffer(data)
+	buf := bytes.NewReader(data)
 	result := inspector.Transaction{}
 	if err := result.Read(buf, isTest); err != nil {
 		return nil, err
@@ -52,6 +51,6 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *chainhash.Hash, isTest bo
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(txid *chainhash.Hash) string {
+func buildStoragePath(txid *bitcoin.Hash32) string {
 	return fmt.Sprintf("%s/%s", storageKey, txid.String())
 }

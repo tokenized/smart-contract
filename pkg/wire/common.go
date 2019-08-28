@@ -12,7 +12,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 const (
@@ -138,7 +138,7 @@ func readElement(r io.Reader, element interface{}) error {
 		}
 		return nil
 
-	case *chainhash.Hash:
+	case *bitcoin.Hash32:
 		_, err := io.ReadFull(r, e[:])
 		if err != nil {
 			return err
@@ -277,7 +277,7 @@ func writeElement(w io.Writer, element interface{}) error {
 		}
 		return nil
 
-	case *chainhash.Hash:
+	case *bitcoin.Hash32:
 		_, err := w.Write(e[:])
 		if err != nil {
 			return err

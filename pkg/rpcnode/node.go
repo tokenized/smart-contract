@@ -18,11 +18,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
@@ -35,10 +35,9 @@ const (
 )
 
 type RPCNode struct {
-	client      *rpcclient.Client
-	txCache     map[chainhash.Hash]*wire.MsgTx
-	chainParams *chaincfg.Params
-	lock        sync.Mutex
+	client  *rpcclient.Client
+	txCache map[bitcoin.Hash32]*wire.MsgTx
+	lock    sync.Mutex
 }
 
 // NewNode returns a new instance of an RPC node
@@ -57,21 +56,15 @@ func NewNode(config *Config) (*RPCNode, error) {
 	}
 
 	n := &RPCNode{
-		client:      client,
-		txCache:     make(map[chainhash.Hash]*wire.MsgTx),
-		chainParams: config.ChainParams,
+		client:  client,
+		txCache: make(map[bitcoin.Hash32]*wire.MsgTx),
 	}
 
 	return n, nil
 }
 
-// GetChainParams returns the bitcoin network parameters (mainnet/testnet)
-func (r *RPCNode) GetChainParams() *chaincfg.Params {
-	return r.chainParams
-}
-
 // GetTX requests a tx from the remote server.
-func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, error) {
+func (r *RPCNode) GetTX(ctx context.Context, id *bitcoin.Hash32) (*wire.MsgTx, error) {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "GetTX")
 
@@ -86,7 +79,8 @@ func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, e
 	r.lock.Unlock()
 
 	logger.Verbose(ctx, "Requesting tx from RPC : %s\n", id.String())
-	raw, err := r.client.GetRawTransactionVerbose(id)
+	ch, _ := chainhash.NewHash(id[:])
+	raw, err := r.client.GetRawTransactionVerbose(ch)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +101,7 @@ func (r *RPCNode) GetTX(ctx context.Context, id *chainhash.Hash) (*wire.MsgTx, e
 }
 
 // GetTXs requests a list of txs from the remote server.
-func (r *RPCNode) GetTXs(ctx context.Context, txids []*chainhash.Hash) ([]*wire.MsgTx, error) {
+func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.MsgTx, error) {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "GetTXs")
 
@@ -123,7 +117,8 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*chainhash.Hash) ([]*wire.
 			results[i] = msg
 		} else {
 			logger.Verbose(ctx, "Requesting tx from RPC : %s\n", txid.String())
-			request := r.client.GetRawTransactionVerboseAsync(txid)
+			ch, _ := chainhash.NewHash(txid[:])
+			request := r.client.GetRawTransactionVerboseAsync(ch)
 			requests[i] = &request
 		}
 	}
@@ -246,12 +241,12 @@ func (r *RPCNode) SaveTX(ctx context.Context, msg *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	hash := msg.TxHash()
 	logger.Verbose(ctx, "Saving tx to rpc cache : %s\n", hash.String())
-	r.txCache[hash] = msg
+	r.txCache[*hash] = msg
 	return nil
 }
 
 // SendTX sends a tx to the remote server to be broadcast to the P2P network.
-func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, error) {
+func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*bitcoin.Hash32, error) {
 
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 	defer logger.Elapsed(ctx, time.Now(), "SendTX")
@@ -263,12 +258,21 @@ func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*chainhash.Hash, 
 
 	logger.Debug(ctx, "Sending tx payload : %s", r.getRawPayload(nx))
 
-	return r.client.SendRawTransaction(nx, false)
+	ch, err := r.client.SendRawTransaction(nx, false)
+	if err != nil {
+		return nil, err
+	}
+	return bitcoin.NewHash32(ch[:])
 }
 
-func (r *RPCNode) GetLatestBlock() (*chainhash.Hash, int32, error) {
+func (r *RPCNode) GetLatestBlock() (*bitcoin.Hash32, int32, error) {
 	// Get the best block hash
 	hash, err := r.client.GetBestBlockHash()
+	if err != nil {
+		return nil, -1, err
+	}
+
+	bhash, err := bitcoin.NewHash32(hash[:])
 	if err != nil {
 		return nil, -1, err
 	}
@@ -279,7 +283,7 @@ func (r *RPCNode) GetLatestBlock() (*chainhash.Hash, int32, error) {
 		return nil, -1, err
 	}
 
-	return hash, header.Height, nil
+	return bhash, header.Height, nil
 }
 
 func (r *RPCNode) getRawPayload(tx *btcwire.MsgTx) string {

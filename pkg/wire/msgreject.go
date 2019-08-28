@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 // RejectCode represents a numeric value by which a remote peer indicates
@@ -68,7 +68,7 @@ type MsgReject struct {
 
 	// Hash identifies a specific block or transaction that was rejected
 	// and therefore only applies the MsgBlock and MsgTx messages.
-	Hash chainhash.Hash
+	Hash bitcoin.Hash32
 }
 
 // BtcDecode decodes r using the bitcoin protocol encoding into the receiver.

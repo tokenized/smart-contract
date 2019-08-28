@@ -8,10 +8,10 @@ import (
 	"io"
 	"sync"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/pkg/errors"
 )
 
@@ -23,7 +23,7 @@ const (
 //   sent to listeners.
 type TxRepository struct {
 	store           storage.Storage
-	unconfirmed     map[chainhash.Hash]*unconfirmedTx
+	unconfirmed     map[bitcoin.Hash32]*unconfirmedTx
 	unconfirmedLock sync.Mutex
 	blockLock       sync.Mutex
 }
@@ -32,13 +32,13 @@ type TxRepository struct {
 func NewTxRepository(store storage.Storage) *TxRepository {
 	result := TxRepository{
 		store:       store,
-		unconfirmed: make(map[chainhash.Hash]*unconfirmedTx),
+		unconfirmed: make(map[bitcoin.Hash32]*unconfirmedTx),
 	}
 	return &result
 }
 
 func (repo *TxRepository) Load(ctx context.Context) error {
-	repo.unconfirmed = make(map[chainhash.Hash]*unconfirmedTx)
+	repo.unconfirmed = make(map[bitcoin.Hash32]*unconfirmedTx)
 
 	data, err := repo.store.Read(ctx, unconfirmedPath)
 	if err == storage.ErrNotFound {
@@ -86,7 +86,7 @@ func (repo *TxRepository) Save(ctx context.Context) error {
 // Add a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns true if the txid was not already in the repo for the specified height, and was added
-func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted, safe bool, height int) (bool, error) {
+func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted, safe bool, height int) (bool, error) {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
@@ -119,14 +119,14 @@ func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted,
 	}
 
 	// Check for already existing
-	for i := 0; i < len(data); i += chainhash.HashSize {
-		if bytes.Equal(data[i:i+chainhash.HashSize], txid[:]) {
+	for i := 0; i < len(data); i += bitcoin.Hash32Size {
+		if bytes.Equal(data[i:i+bitcoin.Hash32Size], txid[:]) {
 			return false, nil
 		}
 	}
 
 	// Append txid to end of file
-	newData := make([]byte, len(data)+chainhash.HashSize)
+	newData := make([]byte, len(data)+bitcoin.Hash32Size)
 	copy(newData, data) // Copy in previous data
 	copy(newData[len(data):], txid[:])
 	return true, repo.store.Write(ctx, path, newData, nil)
@@ -135,12 +135,12 @@ func (repo *TxRepository) Add(ctx context.Context, txid chainhash.Hash, trusted,
 // Remove a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns true if the txid was removed
-func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
+func (repo *TxRepository) Remove(ctx context.Context, txid *bitcoin.Hash32, height int) (bool, error) {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
-		if _, exists := repo.unconfirmed[txid]; exists {
-			delete(repo.unconfirmed, txid)
+		if _, exists := repo.unconfirmed[*txid]; exists {
+			delete(repo.unconfirmed, *txid)
 			return true, nil
 		}
 		return false, nil
@@ -160,9 +160,9 @@ func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, heigh
 	}
 
 	// Check for match to remove
-	for i := 0; i < len(data); i += chainhash.HashSize {
-		if bytes.Equal(data[i:i+chainhash.HashSize], txid[:]) {
-			data = append(data[:i], data[i+chainhash.HashSize:]...)
+	for i := 0; i < len(data); i += bitcoin.Hash32Size {
+		if bytes.Equal(data[i:i+bitcoin.Hash32Size], txid[:]) {
+			data = append(data[:i], data[i+bitcoin.Hash32Size:]...)
 			return true, repo.store.Write(ctx, path, data, nil)
 		}
 	}
@@ -172,7 +172,7 @@ func (repo *TxRepository) Remove(ctx context.Context, txid chainhash.Hash, heigh
 
 // Contains returns true if the tx id is in the specified block
 // Height of -1 means unconfirmed
-func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, height int) (bool, error) {
+func (repo *TxRepository) Contains(ctx context.Context, txid bitcoin.Hash32, height int) (bool, error) {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
@@ -194,8 +194,8 @@ func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, hei
 	}
 
 	// Check for already existing
-	for i := 0; i < len(data); i += chainhash.HashSize {
-		if bytes.Equal(data[i:i+chainhash.HashSize], txid[:]) {
+	for i := 0; i < len(data); i += bitcoin.Hash32Size {
+		if bytes.Equal(data[i:i+bitcoin.Hash32Size], txid[:]) {
 			return true, nil
 		}
 	}
@@ -207,9 +207,9 @@ func (repo *TxRepository) Contains(ctx context.Context, txid chainhash.Hash, hei
 // Locks the tx repo.
 // RemoveBlock, SetBlock, or ReleaseBlock must be called after this to release the lock
 // Height of -1 means unconfirmed
-func (repo *TxRepository) GetUnconfirmed(ctx context.Context) ([]chainhash.Hash, error) {
+func (repo *TxRepository) GetUnconfirmed(ctx context.Context) ([]bitcoin.Hash32, error) {
 	repo.unconfirmedLock.Lock()
-	result := make([]chainhash.Hash, 0, len(repo.unconfirmed))
+	result := make([]bitcoin.Hash32, 0, len(repo.unconfirmed))
 	for hash, _ := range repo.unconfirmed {
 		result = append(result, hash)
 	}
@@ -220,7 +220,7 @@ func (repo *TxRepository) GetUnconfirmed(ctx context.Context) ([]chainhash.Hash,
 // Locks the tx repo.
 // RemoveBlock, SetBlock, or ReleaseBlock must be called after this to release the lock
 // Height of -1 is invalid for this function
-func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
+func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]bitcoin.Hash32, error) {
 	logger.Debug(ctx, "Get Block %d", height)
 	repo.blockLock.Lock()
 	hashes, err := repo.readBlock(ctx, height)
@@ -235,11 +235,11 @@ func (repo *TxRepository) GetBlock(ctx context.Context, height int) ([]chainhash
 // FinalizeBlock updates all "relevant" tx ids in a specified block and unconfirmed
 // Must only be called after GetBlock
 // Releases the lock made in GetBlock
-func (repo *TxRepository) FinalizeUnconfirmed(ctx context.Context, unconfirmed []chainhash.Hash) error {
+func (repo *TxRepository) FinalizeUnconfirmed(ctx context.Context, unconfirmed []bitcoin.Hash32) error {
 	defer repo.unconfirmedLock.Unlock()
 
 	// Update unconfirmed
-	newUnconfirmed := make(map[chainhash.Hash]*unconfirmedTx)
+	newUnconfirmed := make(map[bitcoin.Hash32]*unconfirmedTx)
 	for _, hash := range unconfirmed {
 		if tx, exists := repo.unconfirmed[hash]; exists {
 			newUnconfirmed[hash] = tx
@@ -283,11 +283,11 @@ func (repo *TxRepository) ReleaseBlock(ctx context.Context, height int) error {
 
 // SetBlock sets tx ids in a specified block
 // Height of -1 means unconfirmed
-func (repo *TxRepository) SetBlock(ctx context.Context, txids []chainhash.Hash, height int) error {
+func (repo *TxRepository) SetBlock(ctx context.Context, txids []bitcoin.Hash32, height int) error {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
-		newUnconfirmed := make(map[chainhash.Hash]*unconfirmedTx)
+		newUnconfirmed := make(map[bitcoin.Hash32]*unconfirmedTx)
 		for _, hash := range txids {
 			if tx, exists := repo.unconfirmed[hash]; exists {
 				newUnconfirmed[hash] = tx
@@ -320,7 +320,7 @@ func (repo *TxRepository) ClearBlock(ctx context.Context, height int) error {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
-		repo.unconfirmed = make(map[chainhash.Hash]*unconfirmedTx)
+		repo.unconfirmed = make(map[bitcoin.Hash32]*unconfirmedTx)
 		return nil
 	}
 
@@ -333,12 +333,12 @@ func (repo *TxRepository) ClearBlock(ctx context.Context, height int) error {
 	return err
 }
 
-func (repo *TxRepository) writeBlock(ctx context.Context, txids []chainhash.Hash, height int) error {
+func (repo *TxRepository) writeBlock(ctx context.Context, txids []bitcoin.Hash32, height int) error {
 	if height == -1 {
 		return errors.New("Can't write unconfirmed with this method")
 	}
 
-	data := make([]byte, 0, len(txids)*chainhash.HashSize)
+	data := make([]byte, 0, len(txids)*bitcoin.Hash32Size)
 
 	// Write all hashes to data
 	for _, txid := range txids {
@@ -348,27 +348,27 @@ func (repo *TxRepository) writeBlock(ctx context.Context, txids []chainhash.Hash
 	return repo.store.Write(ctx, repo.buildPath(height), data, nil)
 }
 
-func (repo *TxRepository) readBlock(ctx context.Context, height int) ([]chainhash.Hash, error) {
+func (repo *TxRepository) readBlock(ctx context.Context, height int) ([]bitcoin.Hash32, error) {
 	if height == -1 {
 		return nil, errors.New("Can't read unconfirmed with this method")
 	}
 
 	data, err := repo.store.Read(ctx, repo.buildPath(height))
 	if err == storage.ErrNotFound {
-		return make([]chainhash.Hash, 0), nil
+		return make([]bitcoin.Hash32, 0), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	// Parse hashes from data
-	hashes := make([]chainhash.Hash, 0, 100)
+	hashes := make([]bitcoin.Hash32, 0, 100)
 	endOffset := len(data)
-	for offset := 0; offset < endOffset; offset += chainhash.HashSize {
-		if offset+chainhash.HashSize > endOffset {
-			return make([]chainhash.Hash, 0), errors.New(fmt.Sprintf("TX file %08x has invalid size : %d", height, len(data)))
+	for offset := 0; offset < endOffset; offset += bitcoin.Hash32Size {
+		if offset+bitcoin.Hash32Size > endOffset {
+			return make([]bitcoin.Hash32, 0), errors.New(fmt.Sprintf("TX file %08x has invalid size : %d", height, len(data)))
 		}
-		newhash, err := chainhash.NewHash(data[offset : offset+chainhash.HashSize])
+		newhash, err := bitcoin.NewHash32(data[offset : offset+bitcoin.Hash32Size])
 		if err != nil {
 			return hashes, err
 		}

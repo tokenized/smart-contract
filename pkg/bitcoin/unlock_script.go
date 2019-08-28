@@ -3,12 +3,10 @@ package bitcoin
 import (
 	"bytes"
 	"errors"
-
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // AddressFromUnlockingScript returns the address associated with the specified unlocking script.
-func AddressFromUnlockingScript(unlockingScript []byte, net wire.BitcoinNet) (Address, error) {
+func AddressFromUnlockingScript(unlockingScript []byte, net Network) (Address, error) {
 	st, err := RawAddressFromUnlockingScript(unlockingScript)
 	if err != nil {
 		return nil, err
@@ -23,34 +21,26 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 		return nil, ErrUnknownScriptTemplate
 	}
 
-	buf := bytes.NewBuffer(unlockingScript)
+	buf := bytes.NewReader(unlockingScript)
 
 	// First push
-	pushSize, err := ParsePushDataScript(buf)
+	_, firstPush, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	firstPush := make([]byte, pushSize)
-	_, err = buf.Read(firstPush)
-	if err != nil {
-		return nil, err
-	}
-
-	if buf.Len() == 0 {
+	if len(firstPush) == 0 || buf.Len() == 0 {
 		return nil, ErrUnknownScriptTemplate
 	}
 
 	// Second push
-	pushSize, err = ParsePushDataScript(buf)
+	_, secondPush, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	secondPush := make([]byte, pushSize)
-	_, err = buf.Read(secondPush)
-	if err != nil {
-		return nil, err
+	if len(secondPush) == 0 {
+		return nil, ErrUnknownScriptTemplate
 	}
 
 	if isSignature(firstPush) && isPublicKey(secondPush) {
@@ -81,16 +71,10 @@ func PublicKeyFromUnlockingScript(unlockingScript []byte) ([]byte, error) {
 		return nil, ErrUnknownScriptTemplate
 	}
 
-	buf := bytes.NewBuffer(unlockingScript)
+	buf := bytes.NewReader(unlockingScript)
 
 	// First push
-	pushSize, err := ParsePushDataScript(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	firstPush := make([]byte, pushSize)
-	_, err = buf.Read(firstPush)
+	_, firstPush, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -104,13 +88,7 @@ func PublicKeyFromUnlockingScript(unlockingScript []byte) ([]byte, error) {
 	}
 
 	// Second push
-	pushSize, err = ParsePushDataScript(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	secondPush := make([]byte, pushSize)
-	_, err = buf.Read(secondPush)
+	_, secondPush, err := ParsePushDataScript(buf)
 	if err != nil {
 		return nil, err
 	}

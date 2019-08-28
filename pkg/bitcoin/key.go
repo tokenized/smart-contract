@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 var (
@@ -25,16 +24,19 @@ type Key interface {
 	String() string
 
 	// Network returns the network id for the address.
-	Network() wire.BitcoinNet
+	Network() Network
 
 	// Bytes returns non-network specific type followed by the key data.
 	Bytes() []byte
+
+	// Number returns the numeric value of the key.
+	Number() []byte
 
 	// PublicKey returns the public key.
 	PublicKey() PublicKey
 
 	// Sign creates a signature from a hash.
-	Sign([]byte) ([]byte, error)
+	Sign([]byte) (Signature, error)
 }
 
 // DecodeKeyString converts WIF (Wallet Import Format) key text to a key.
@@ -44,7 +46,7 @@ func DecodeKeyString(s string) (Key, error) {
 		return nil, err
 	}
 
-	var network wire.BitcoinNet
+	var network Network
 	switch b[0] {
 	case typeMainPrivKey:
 		network = MainNet
@@ -68,7 +70,7 @@ func DecodeKeyString(s string) (Key, error) {
 
 // DecodeKeyBytes decodes a binary bitcoin key. It returns the key and an error if there was an
 //   issue.
-func DecodeKeyBytes(b []byte, net wire.BitcoinNet) (Key, error) {
+func DecodeKeyBytes(b []byte, net Network) (Key, error) {
 	if b[0] != typeIntPrivKey {
 		return nil, ErrBadType
 	}
@@ -81,11 +83,11 @@ func DecodeKeyBytes(b []byte, net wire.BitcoinNet) (Key, error) {
 */
 type KeyS256 struct {
 	key *btcec.PrivateKey
-	net wire.BitcoinNet
+	net Network
 }
 
 // GenerateKeyS256 randomly generates a new key.
-func GenerateKeyS256(net wire.BitcoinNet) (*KeyS256, error) {
+func GenerateKeyS256(net Network) (*KeyS256, error) {
 	privkey, err := btcec.NewPrivateKey(elliptic.P256())
 	if err != nil {
 		return nil, err
@@ -94,7 +96,7 @@ func GenerateKeyS256(net wire.BitcoinNet) (*KeyS256, error) {
 }
 
 // KeyS256FromBytes creates a key from a set of bytes that represents a 256 bit big-endian integer.
-func KeyS256FromBytes(key []byte, net wire.BitcoinNet) (*KeyS256, error) {
+func KeyS256FromBytes(key []byte, net Network) (*KeyS256, error) {
 	privkey, _ := btcec.PrivKeyFromBytes(btcec.S256(), key)
 	return &KeyS256{key: privkey, net: net}, nil
 }
@@ -116,8 +118,9 @@ func (k *KeyS256) String() string {
 	return encodeAddress(b)
 }
 
+// Numbers returns the 32 byte values representing the 256 bit big-endian integer of the x and y coordinates.
 // Network returns the network id for the key.
-func (k *KeyS256) Network() wire.BitcoinNet {
+func (k *KeyS256) Network() Network {
 	return k.net
 }
 
@@ -137,10 +140,10 @@ func (k *KeyS256) PublicKey() PublicKey {
 }
 
 // Sign returns the serialized signature of the hash for the private key.
-func (k *KeyS256) Sign(hash []byte) ([]byte, error) {
+func (k *KeyS256) Sign(hash []byte) (Signature, error) {
 	signature, err := k.key.Sign(hash)
 	if err != nil {
 		return nil, err
 	}
-	return signature.Serialize(), nil
+	return SignatureS256FromBTCEC(signature), nil
 }

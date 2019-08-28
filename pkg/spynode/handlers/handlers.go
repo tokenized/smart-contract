@@ -3,15 +3,14 @@ package handlers
 import (
 	"context"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 type BlockMessage struct {
-	Hash   chainhash.Hash
+	Hash   bitcoin.Hash32
 	Height int
 }
 
@@ -56,7 +55,7 @@ type Listener interface {
 	HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error)
 
 	// Tx confirm, cancel, unsafe, and revert messages.
-	HandleTxState(ctx context.Context, msgType int, txid chainhash.Hash) error
+	HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error
 
 	// When in sync with network
 	HandleInSync(ctx context.Context) error

@@ -2,7 +2,7 @@ package inspector
 
 import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/specification/dist/golang/actions"
 )
 
 type Balance struct {
@@ -10,7 +10,7 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address bitcoin.RawAddress) Balance {
+func GetProtocolQuantity(itx *Transaction, m actions.Action, address bitcoin.RawAddress) Balance {
 
 	return Balance{
 		Qty:    0,
@@ -19,7 +19,7 @@ func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address b
 	/*
 		b := Balance{}
 
-		switch m.Type() {
+		switch m.Code() {
 		case protocol.CodeAssetCreation:
 			o := m.(*protocol.AssetCreation)
 			b.Qty = o.Qty
@@ -70,12 +70,12 @@ func GetProtocolQuantity(itx *Transaction, m protocol.OpReturnMessage, address b
 	*/
 }
 
-func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) []bitcoin.RawAddress {
+func GetProtocolContractAddresses(itx *Transaction, m actions.Action) []bitcoin.RawAddress {
 
 	addresses := []bitcoin.RawAddress{}
 
 	// Settlements may contain a second contract, although optional
-	if m.Type() == protocol.CodeSettlement {
+	if m.Code() == actions.CodeSettlement {
 		addresses = append(addresses, itx.Inputs[0].Address)
 
 		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
@@ -86,7 +86,7 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 	}
 
 	// Some specific actions have the contract address as an input
-	isOutgoing, ok := outgoingMessageTypes[m.Type()]
+	isOutgoing, ok := outgoingMessageTypes[m.Code()]
 	if ok && isOutgoing {
 		addresses = append(addresses, itx.Inputs[0].Address)
 		return addresses
@@ -100,12 +100,12 @@ func GetProtocolContractAddresses(itx *Transaction, m protocol.OpReturnMessage) 
 	return addresses
 }
 
-func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]byte {
+func GetProtocolContractPKHs(itx *Transaction, m actions.Action) [][]byte {
 
 	addresses := make([][]byte, 1)
 
 	// Settlements may contain a second contract, although optional
-	if m.Type() == protocol.CodeSettlement {
+	if m.Code() == actions.CodeSettlement {
 		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 		if ok {
 			addresses = append(addresses, addressPKH.PKH())
@@ -122,7 +122,7 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	}
 
 	// Some specific actions have the contract address as an input
-	isOutgoing, ok := outgoingMessageTypes[m.Type()]
+	isOutgoing, ok := outgoingMessageTypes[m.Code()]
 	if ok && isOutgoing {
 		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
 		if ok {
@@ -142,7 +142,7 @@ func GetProtocolContractPKHs(itx *Transaction, m protocol.OpReturnMessage) [][]b
 	return addresses
 }
 
-func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contractAddress bitcoin.RawAddress) []bitcoin.RawAddress {
+func GetProtocolAddresses(itx *Transaction, m actions.Action, contractAddress bitcoin.RawAddress) []bitcoin.RawAddress {
 
 	addresses := []bitcoin.RawAddress{}
 
@@ -158,7 +158,7 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 	// - Swap (T4)  output[0] and output[1] are contract addresses
 	// - Settlement (T4) - input[0] and input[1] are contract addresses
 	//
-	if m.Type() == protocol.CodeContractOffer {
+	if m.Code() == actions.CodeContractOffer {
 		addresses = append(addresses, itx.Inputs[0].Address)
 
 		// is there an operator address?
@@ -169,14 +169,14 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 		return addresses
 	}
 
-	// if m.Type() == protocol.CodeSwap {
+	// if m.Code() == protocol.CodeSwap {
 	// addresses = append(addresses, itx.Inputs[0].Address)
 	// addresses = append(addresses, itx.Inputs[1].Address)
 
 	// return addresses
 	// }
 
-	if m.Type() == protocol.CodeSettlement {
+	if m.Code() == actions.CodeSettlement {
 		addresses = append(addresses, itx.Outputs[0].Address)
 		addresses = append(addresses, itx.Outputs[1].Address)
 
@@ -184,17 +184,17 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 	}
 
 	// if this is an input message?
-	switch m.Type() {
-	case protocol.CodeContractOffer,
-		protocol.CodeContractAmendment,
-		protocol.CodeAssetDefinition,
-		protocol.CodeAssetModification,
-		protocol.CodeTransfer,
-		protocol.CodeProposal,
-		protocol.CodeBallotCast,
-		protocol.CodeOrder:
+	switch m.Code() {
+	case actions.CodeContractOffer,
+		actions.CodeContractAmendment,
+		actions.CodeAssetDefinition,
+		actions.CodeAssetModification,
+		actions.CodeTransfer,
+		actions.CodeProposal,
+		actions.CodeBallotCast,
+		actions.CodeOrder:
 
-		if m.Type() == protocol.CodeTransfer {
+		if m.Code() == actions.CodeTransfer {
 			addresses = append(addresses, itx.Outputs[1].Address)
 			addresses = append(addresses, itx.Outputs[2].Address)
 
@@ -209,9 +209,9 @@ func GetProtocolAddresses(itx *Transaction, m protocol.OpReturnMessage, contract
 	//
 	// output[0] can be change to the contract, so the recipient would be
 	// output[1] in that case.
-	if m.Type() == protocol.CodeResult {
+	if m.Code() == actions.CodeResult {
 		addresses = append(addresses, itx.Outputs[0].Address)
-	} else if m.Type() == protocol.CodeConfiscation {
+	} else if m.Code() == actions.CodeConfiscation {
 		addresses = append(addresses, itx.Outputs[0].Address)
 		addresses = append(addresses, itx.Outputs[1].Address)
 	} else {

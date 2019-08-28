@@ -6,13 +6,12 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 func TestKey(t *testing.T) {
 	tests := []struct {
 		keyText string
-		net     wire.BitcoinNet
+		net     Network
 		wif     string
 		err     error
 	}{

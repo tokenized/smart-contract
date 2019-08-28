@@ -1,7 +1,6 @@
 package contract
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -10,15 +9,12 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
-)
-
-const (
-	FieldCount       = 20 // The count of fields that can be changed with amendments.
-	EntityFieldCount = 15 // The count of fields in an entity that can be changed with amendments.
 )
 
 var (
@@ -30,12 +26,12 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
 	// Find contract in storage
-	contract, err := Fetch(ctx, dbConn, contractPKH)
+	contract, err := Fetch(ctx, dbConn, contractAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +40,9 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKe
 }
 
 // Create the contract
-func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, nu *NewContract, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, nu *NewContract,
+	now protocol.Timestamp) error {
+
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
@@ -57,16 +55,16 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
-	contract.ID = *contractPKH
+	contract.Address = bitcoin.NewJSONRawAddress(contractAddress)
 	contract.Revision = 0
 	contract.CreatedAt = now
 	contract.UpdatedAt = now
 
 	if contract.VotingSystems == nil {
-		contract.VotingSystems = []protocol.VotingSystem{}
+		contract.VotingSystems = []*actions.VotingSystemField{}
 	}
 	if contract.Oracles == nil {
-		contract.Oracles = []protocol.Oracle{}
+		contract.Oracles = []*actions.OracleField{}
 
 		if err := ExpandOracles(ctx, &contract); err != nil {
 			return err
@@ -77,12 +75,14 @@ func Create(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 }
 
 // Update the contract
-func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, upd *UpdateContract, now protocol.Timestamp) error {
+func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	upd *UpdateContract, now protocol.Timestamp) error {
+
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, contractPKH)
+	c, err := Fetch(ctx, dbConn, contractAddress)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -95,11 +95,11 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		c.Timestamp = *upd.Timestamp
 	}
 
-	if upd.AdministrationPKH != nil {
-		c.AdministrationPKH = *upd.AdministrationPKH
+	if upd.AdministrationAddress != nil {
+		c.AdministrationAddress = upd.AdministrationAddress
 	}
-	if upd.OperatorPKH != nil {
-		c.OperatorPKH = *upd.OperatorPKH
+	if upd.OperatorAddress != nil {
+		c.OperatorAddress = upd.OperatorAddress
 	}
 
 	if upd.ContractName != nil {
@@ -130,13 +130,13 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 		c.ContractURI = *upd.ContractURI
 	}
 	if upd.Issuer != nil {
-		c.Issuer = *upd.Issuer
+		c.Issuer = upd.Issuer
 	}
 	if upd.IssuerLogoURL != nil {
 		c.IssuerLogoURL = *upd.IssuerLogoURL
 	}
 	if upd.ContractOperator != nil {
-		c.ContractOperator = *upd.ContractOperator
+		c.ContractOperator = upd.ContractOperator
 	}
 	if upd.ContractAuthFlags != nil {
 		c.ContractAuthFlags = *upd.ContractAuthFlags
@@ -147,7 +147,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems
 		if c.VotingSystems == nil {
-			c.VotingSystems = []protocol.VotingSystem{}
+			c.VotingSystems = []*actions.VotingSystemField{}
 		}
 	}
 	if upd.RestrictedQtyAssets != nil {
@@ -162,7 +162,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 	if upd.Oracles != nil {
 		c.Oracles = *upd.Oracles
 		if c.Oracles == nil {
-			c.Oracles = []protocol.Oracle{}
+			c.Oracles = []*actions.OracleField{}
 		}
 
 		if err := ExpandOracles(ctx, c); err != nil {
@@ -179,12 +179,14 @@ func Update(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyH
 }
 
 // Move marks the contract as moved and copies the data to the new address.
-func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, newContractPKH *protocol.PublicKeyHash, now protocol.Timestamp) error {
+func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	newContractAddress bitcoin.RawAddress, now protocol.Timestamp) error {
+
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Move")
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, contractPKH)
+	c, err := Fetch(ctx, dbConn, contractAddress)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -192,7 +194,7 @@ func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 	// Get assets
 	assets := make([]*state.Asset, 0, len(c.AssetCodes))
 	for _, assetCode := range c.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, contractPKH, &assetCode)
+		as, err := asset.Retrieve(ctx, dbConn, contractAddress, assetCode)
 		if err != nil {
 			return err
 		}
@@ -200,15 +202,15 @@ func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 	}
 
 	// Get votes
-	vts, err := vote.List(ctx, dbConn, contractPKH)
+	vts, err := vote.List(ctx, dbConn, contractAddress)
 	if err != nil {
 		return err
 	}
 
 	newContract := *c
-	newContract.ID = *newContractPKH
+	newContract.Address = bitcoin.NewJSONRawAddress(newContractAddress)
 
-	c.MovedTo = *newContractPKH
+	c.MovedTo = bitcoin.NewJSONRawAddress(newContractAddress)
 
 	if err = Save(ctx, dbConn, c); err != nil {
 		return err
@@ -219,7 +221,7 @@ func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 
 	// Copy assets
 	for _, as := range assets {
-		err = asset.Save(ctx, dbConn, newContractPKH, as)
+		err = asset.Save(ctx, dbConn, newContractAddress, as)
 		if err != nil {
 			return err
 		}
@@ -227,7 +229,7 @@ func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 
 	// Copy votes
 	for _, vt := range vts {
-		err = vote.Save(ctx, dbConn, newContractPKH, vt)
+		err = vote.Save(ctx, dbConn, newContractAddress, vt)
 		if err != nil {
 			return err
 		}
@@ -237,17 +239,17 @@ func Move(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHas
 }
 
 // AddAssetCode adds an asset code to a contract
-func AddAssetCode(ctx context.Context, dbConn *db.DB, contractPKH *protocol.PublicKeyHash, assetCode *protocol.AssetCode, now protocol.Timestamp) error {
+func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
 	// Find contract
-	ct, err := Fetch(ctx, dbConn, contractPKH)
+	ct, err := Fetch(ctx, dbConn, contractAddress)
 	if err != nil {
 		return ErrNotFound
 	}
 
-	ct.AssetCodes = append(ct.AssetCodes, *assetCode)
+	ct.AssetCodes = append(ct.AssetCodes, assetCode)
 	ct.UpdatedAt = now
 
 	if err := Save(ctx, dbConn, ct); err != nil {
@@ -276,9 +278,9 @@ func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract.
-func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userPKH *protocol.PublicKeyHash) bool {
+func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userAddress bitcoin.RawAddress) bool {
 	for _, a := range ct.AssetCodes {
-		h, err := holdings.Fetch(ctx, dbConn, &ct.ID, &a, userPKH)
+		h, err := holdings.Fetch(ctx, dbConn, ct.Address, a, userAddress)
 		if err != nil {
 			continue
 		}
@@ -295,7 +297,7 @@ func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userP
 func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMultiplier bool) uint64 {
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
 		if err != nil {
 			continue
 		}
@@ -316,16 +318,16 @@ func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMu
 
 // GetVotingBalance returns the tokens held across all of the contract's assets.
 func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
-	userPKH *protocol.PublicKeyHash, applyMultiplier bool, now protocol.Timestamp) uint64 {
+	userAddress bitcoin.RawAddress, applyMultiplier bool, now protocol.Timestamp) uint64 {
 
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, &ct.ID, &a)
+		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
 		if err != nil {
 			continue
 		}
 
-		h, err := holdings.Fetch(ctx, dbConn, &ct.ID, &a, userPKH)
+		h, err := holdings.Fetch(ctx, dbConn, ct.Address, a, userAddress)
 		if err != nil {
 			continue
 		}
@@ -337,12 +339,21 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 }
 
 // IsOperator will check if the supplied pkh has operator permission (Administration or operator)
-func IsOperator(ctx context.Context, ct *state.Contract, pkh *protocol.PublicKeyHash) bool {
-	return bytes.Equal(ct.AdministrationPKH.Bytes(), pkh.Bytes()) || bytes.Equal(ct.OperatorPKH.Bytes(), pkh.Bytes())
+func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
+	if address == nil {
+		return false
+	}
+	if ct.AdministrationAddress != nil && ct.AdministrationAddress.Equal(address) {
+		return true
+	}
+	if ct.OperatorAddress != nil && ct.OperatorAddress.Equal(address) {
+		return true
+	}
+	return false
 }
 
 // ValidateVoting returns an error if voting is not allowed.
-func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint8) error {
+func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint32) error {
 	if len(ct.VotingSystems) == 0 {
 		return errors.New("No voting systems")
 	}
