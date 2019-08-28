@@ -53,6 +53,16 @@ func (h *Hash20) SetBytes(b []byte) error {
 	return nil
 }
 
+// Scan converts from a database column.
+func (h *Hash20) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("Hash20 db column not bytes")
+	}
+
+	return h.SetBytes(b)
+}
+
 // String returns the hex for the hash.
 func (h *Hash20) String() string {
 	var r [Hash20Size]byte

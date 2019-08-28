@@ -312,7 +312,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			updatedContract.AdministrationAddress = bitcoin.NewJSONRawAddress(itx.Inputs[inputIndex].Address)
+			updatedContract.AdministrationAddress = bitcoin.NewConcreteRawAddress(itx.Inputs[inputIndex].Address)
 			inputIndex++
 		}
 
@@ -322,7 +322,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			updatedContract.OperatorAddress = bitcoin.NewJSONRawAddress(itx.Inputs[inputIndex].Address)
+			updatedContract.OperatorAddress = bitcoin.NewConcreteRawAddress(itx.Inputs[inputIndex].Address)
 		}
 
 		if err := validateContractAmendOracleSig(ctx, &updatedContract, c.Headers); err != nil {
@@ -485,9 +485,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.AdministrationAddress = bitcoin.NewJSONRawAddress(offerTx.Inputs[0].Address) // First input of offer tx
+		nc.AdministrationAddress = bitcoin.NewConcreteRawAddress(offerTx.Inputs[0].Address) // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			nc.OperatorAddress = bitcoin.NewJSONRawAddress(offerTx.Inputs[1].Address) // Second input of offer tx
+			nc.OperatorAddress = bitcoin.NewConcreteRawAddress(offerTx.Inputs[1].Address) // Second input of offer tx
 		}
 
 		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
@@ -514,7 +514,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.AdministrationAddress = bitcoin.NewJSONRawAddress(request.Inputs[inputIndex].Address)
+			uc.AdministrationAddress = bitcoin.NewConcreteRawAddress(request.Inputs[inputIndex].Address)
 			inputIndex++
 			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
 				w.Config.Net)
@@ -527,7 +527,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			uc.OperatorAddress = bitcoin.NewJSONRawAddress(request.Inputs[inputIndex].Address)
+			uc.OperatorAddress = bitcoin.NewConcreteRawAddress(request.Inputs[inputIndex].Address)
 			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
 				w.Config.Net)
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())

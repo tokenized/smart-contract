@@ -38,7 +38,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawA
 	}
 
 	result = &state.Holding{
-		Address:         bitcoin.NewJSONRawAddress(address),
+		Address:         bitcoin.NewConcreteRawAddress(address),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 		HoldingStatuses: make(map[protocol.TxId]*state.HoldingStatus),

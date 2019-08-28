@@ -411,7 +411,7 @@ func deserializeHolding(buf *bytes.Reader) (*state.Holding, error) {
 	if err != nil {
 		return &result, err
 	}
-	result.Address = bitcoin.NewJSONRawAddress(ra)
+	result.Address = bitcoin.NewConcreteRawAddress(ra)
 
 	if err := binary.Read(buf, binary.LittleEndian, &result.PendingBalance); err != nil {
 		return &result, err

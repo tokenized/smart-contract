@@ -578,7 +578,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	issuerHolding := state.Holding{
-		Address:          bitcoin.NewJSONRawAddress(issuerKey.Address),
+		Address:          bitcoin.NewConcreteRawAddress(issuerKey.Address),
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
@@ -647,7 +647,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	issuerHolding := state.Holding{
-		Address:          bitcoin.NewJSONRawAddress(issuerKey.Address),
+		Address:          bitcoin.NewConcreteRawAddress(issuerKey.Address),
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
@@ -677,7 +677,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 
 func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	h := state.Holding{
-		Address:          bitcoin.NewJSONRawAddress(address),
+		Address:          bitcoin.NewConcreteRawAddress(address),
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),
@@ -694,7 +694,7 @@ func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uin
 
 func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	h := state.Holding{
-		Address:          bitcoin.NewJSONRawAddress(address),
+		Address:          bitcoin.NewConcreteRawAddress(address),
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),

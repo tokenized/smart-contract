@@ -128,7 +128,7 @@ func NewAddressFromRawAddress(st RawAddress, net Network) Address {
 		return t
 	case *AddressRPH:
 		return t
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return NewAddressFromRawAddress(t.RawAddress(), net)
 	}
 
@@ -143,7 +143,7 @@ func PKH(st RawAddress) ([]byte, bool) {
 		return a.PKH(), true
 	case *AddressPKH:
 		return a.PKH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return PKH(a.RawAddress())
 	}
 
@@ -158,7 +158,7 @@ func SH(st RawAddress) ([]byte, bool) {
 		return a.SH(), true
 	case *AddressSH:
 		return a.SH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return SH(a.RawAddress())
 	}
 
@@ -173,7 +173,7 @@ func PKHs(st RawAddress) ([]byte, bool) {
 		return a.PKHs(), true
 	case *AddressMultiPKH:
 		return a.PKHs(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return PKHs(a.RawAddress())
 	}
 
@@ -188,7 +188,7 @@ func RPH(st RawAddress) ([]byte, bool) {
 		return a.RPH(), true
 	case *AddressRPH:
 		return a.RPH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return RPH(a.RawAddress())
 	}
 

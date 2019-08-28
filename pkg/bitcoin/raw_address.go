@@ -156,7 +156,7 @@ func (a *RawAddressPKH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.pkh, o.pkh)
 	case *AddressPKH:
 		return bytes.Equal(a.pkh, o.pkh)
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
 	return false
@@ -207,7 +207,7 @@ func (a *RawAddressSH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.sh, o.sh)
 	case *AddressSH:
 		return bytes.Equal(a.sh, o.sh)
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
 	return false
@@ -299,7 +299,7 @@ func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
 			}
 		}
 		return true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
 
@@ -363,7 +363,7 @@ func (a *RawAddressRPH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.rph, o.rph)
 	case *AddressRPH:
 		return bytes.Equal(a.rph, o.rph)
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
 	return false
@@ -384,42 +384,44 @@ func (a *RawAddressRPH) Hash() (*Hash20, error) {
 	return NewHash20(a.rph)
 }
 
-// JSONRawAddress is a form of RawAddress that can be marshalled and unmarshalled to/from JSON.
-// RawAddress can't because it is only an interface.
-type JSONRawAddress struct {
+// ConcreteRawAddress is a concrete form of RawAddress.
+// It does things not possible with an interface.
+// It implements marshal and unmarshal to/from JSON.
+// It also Scan for converting from a database column.
+type ConcreteRawAddress struct {
 	ra RawAddress
 }
 
-func NewJSONRawAddress(ra RawAddress) *JSONRawAddress {
-	return &JSONRawAddress{ra}
+func NewConcreteRawAddress(ra RawAddress) *ConcreteRawAddress {
+	return &ConcreteRawAddress{ra}
 }
 
-func (a *JSONRawAddress) RawAddress() RawAddress {
+func (a *ConcreteRawAddress) RawAddress() RawAddress {
 	return a.ra
 }
 
 // Bytes returns the non-network specific type followed by the address data.
-func (a *JSONRawAddress) Bytes() []byte {
+func (a *ConcreteRawAddress) Bytes() []byte {
 	return a.ra.Bytes()
 }
 
 // LockingScript returns the bitcoin output(locking) script for paying to the address.
-func (a *JSONRawAddress) LockingScript() []byte {
+func (a *ConcreteRawAddress) LockingScript() []byte {
 	return a.ra.LockingScript()
 }
 
 // Equal returns true if the address parameter has the same value.
-func (a *JSONRawAddress) Equal(other RawAddress) bool {
+func (a *ConcreteRawAddress) Equal(other RawAddress) bool {
 	return a.ra.Equal(other)
 }
 
 // Serialize writes the address into a buffer.
-func (a *JSONRawAddress) Serialize(buf *bytes.Buffer) error {
+func (a *ConcreteRawAddress) Serialize(buf *bytes.Buffer) error {
 	return a.ra.Serialize(buf)
 }
 
 // Hash returns the hash corresponding to the address.
-func (a *JSONRawAddress) Hash() (*Hash20, error) {
+func (a *ConcreteRawAddress) Hash() (*Hash20, error) {
 	if a.ra == nil {
 		return nil, errors.New("Empty JSON Raw Address")
 	}
@@ -427,7 +429,7 @@ func (a *JSONRawAddress) Hash() (*Hash20, error) {
 }
 
 // MarshalJSON converts to json.
-func (a *JSONRawAddress) MarshalJSON() ([]byte, error) {
+func (a *ConcreteRawAddress) MarshalJSON() ([]byte, error) {
 	if a.ra == nil {
 		return []byte("\"\""), nil
 	}
@@ -435,7 +437,7 @@ func (a *JSONRawAddress) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON converts from json.
-func (a *JSONRawAddress) UnmarshalJSON(data []byte) error {
+func (a *ConcreteRawAddress) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
 		return fmt.Errorf("Too short for RawAddress hex data : %d", len(data))
 	}
@@ -450,5 +452,17 @@ func (a *JSONRawAddress) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	a.ra, err = DecodeRawAddress(raw)
+	return err
+}
+
+// Scan converts from a database column.
+func (a *ConcreteRawAddress) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("ConcreteRawAddress db column not bytes")
+	}
+
+	var err error
+	a.ra, err = DecodeRawAddress(b)
 	return err
 }
