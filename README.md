@@ -119,4 +119,4 @@ See the [deploy directory](deploy/) for information on how to deploy the smart c
 
 # License
 
-Copyright 2018 nChain Holdings Limited.
+The Tokenized Smart Contract is open-sourced software licensed under the [OPEN BITCOIN SV LICENSE FOR BSV TOKENISATION SOLUTION](LICENSE.md) license.
