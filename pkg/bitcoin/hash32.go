@@ -53,16 +53,6 @@ func (h *Hash32) SetBytes(b []byte) error {
 	return nil
 }
 
-// Scan converts from a database column.
-func (h *Hash32) Scan(data interface{}) error {
-	b, ok := data.([]byte)
-	if !ok {
-		return errors.New("Hash32 db column not bytes")
-	}
-
-	return h.SetBytes(b)
-}
-
 // String returns the hex for the hash.
 func (h *Hash32) String() string {
 	var r [Hash32Size]byte
@@ -118,6 +108,16 @@ func (h *Hash32) UnmarshalJSON(data []byte) error {
 	}
 	reverse32(h[:], b)
 	return nil
+}
+
+// Scan converts from a database column.
+func (h *Hash32) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("Hash32 db column not bytes")
+	}
+
+	return h.SetBytes(b)
 }
 
 func reverse32(h, rh []byte) {

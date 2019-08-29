@@ -39,16 +39,6 @@ func (k *BIP32Key) SetBytes(b []byte) error {
 	return nil
 }
 
-// Scan converts from a database column.
-func (k *BIP32Key) Scan(data interface{}) error {
-	b, ok := data.([]byte)
-	if !ok {
-		return errors.New("BIP32Key db column not bytes")
-	}
-
-	return k.SetBytes(b)
-}
-
 // Bytes returns the key data.
 func (k *BIP32Key) Bytes() []byte {
 	b, _ := k.key.Serialize()
@@ -111,4 +101,24 @@ func (k *BIP32Key) ChildKey(index uint32) (*BIP32Key, error) {
 		return nil, err
 	}
 	return &BIP32Key{key: child}, nil
+}
+
+// MarshalJSON converts to json.
+func (k *BIP32Key) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + k.String() + "\""), nil
+}
+
+// UnmarshalJSON converts from json.
+func (k *BIP32Key) UnmarshalJSON(data []byte) error {
+	return k.SetString(string(data[1:len(data)-1]))
+}
+
+// Scan converts from a database column.
+func (k *BIP32Key) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("BIP32Key db column not bytes")
+	}
+
+	return k.SetBytes(b)
 }
