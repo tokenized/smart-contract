@@ -26,8 +26,8 @@ func compact(dst *bytes.Buffer, src []byte, escape bool) error {
 				dst.Write(src[start:i])
 			}
 			dst.WriteString(`\u00`)
-			dst.WriteByte(hex[c>>4])
-			dst.WriteByte(hex[c&0xF])
+			dst.WriteByte(hexChars[c>>4])
+			dst.WriteByte(hexChars[c&0xF])
 			start = i + 1
 		}
 		// Convert U+2028 and U+2029 (E2 80 A8 and E2 80 A9).
@@ -36,7 +36,7 @@ func compact(dst *bytes.Buffer, src []byte, escape bool) error {
 				dst.Write(src[start:i])
 			}
 			dst.WriteString(`\u202`)
-			dst.WriteByte(hex[src[i+2]&0xF])
+			dst.WriteByte(hexChars[src[i+2]&0xF])
 			start = i + 3
 		}
 		v := scan.step(&scan, c)

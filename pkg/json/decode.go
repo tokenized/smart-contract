@@ -9,7 +9,7 @@ package json
 
 import (
 	"encoding"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -939,8 +939,8 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type(), Offset: int64(d.readIndex())})
 				break
 			}
-			b := make([]byte, base64.StdEncoding.DecodedLen(len(s)))
-			n, err := base64.StdEncoding.Decode(b, s)
+			b := make([]byte, len(s)*2)
+			n, err := hex.Decode(b, s)
 			if err != nil {
 				d.saveError(err)
 				break

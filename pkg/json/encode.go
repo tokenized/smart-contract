@@ -13,7 +13,7 @@ package json
 import (
 	"bytes"
 	"encoding"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"reflect"
@@ -53,7 +53,7 @@ import (
 // by calling SetEscapeHTML(false).
 //
 // Array and slice values encode as JSON arrays, except that
-// []byte encodes as a base64-encoded string, and a nil slice
+// []byte encodes as a hex-encoded string, and a nil slice
 // encodes as the null JSON value.
 //
 // Struct values encode as JSON objects.
@@ -202,8 +202,8 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 				dst.Write(src[start:i])
 			}
 			dst.WriteString(`\u00`)
-			dst.WriteByte(hex[c>>4])
-			dst.WriteByte(hex[c&0xF])
+			dst.WriteByte(hexChars[c>>4])
+			dst.WriteByte(hexChars[c&0xF])
 			start = i + 1
 		}
 		// Convert U+2028 and U+2029 (E2 80 A8 and E2 80 A9).
@@ -212,7 +212,7 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 				dst.Write(src[start:i])
 			}
 			dst.WriteString(`\u202`)
-			dst.WriteByte(hex[src[i+2]&0xF])
+			dst.WriteByte(hexChars[src[i+2]&0xF])
 			start = i + 3
 		}
 	}
@@ -272,7 +272,7 @@ func (e *MarshalerError) Error() string {
 
 func (e *MarshalerError) Unwrap() error { return e.Err }
 
-var hex = "0123456789abcdef"
+var hexChars = "0123456789abcdef"
 
 // An encodeState encodes JSON into a bytes.Buffer.
 type encodeState struct {
@@ -789,25 +789,24 @@ func encodeByteSlice(e *encodeState, v reflect.Value, _ encOpts) {
 	}
 	s := v.Bytes()
 	e.WriteByte('"')
-	encodedLen := base64.StdEncoding.EncodedLen(len(s))
+	encodedLen := len(s) * 2
 	if encodedLen <= len(e.scratch) {
 		// If the encoded bytes fit in e.scratch, avoid an extra
 		// allocation and use the cheaper Encoding.Encode.
 		dst := e.scratch[:encodedLen]
-		base64.StdEncoding.Encode(dst, s)
+		hex.Encode(dst, s)
 		e.Write(dst)
 	} else if encodedLen <= 1024 {
 		// The encoded bytes are short enough to allocate for, and
 		// Encoding.Encode is still cheaper.
 		dst := make([]byte, encodedLen)
-		base64.StdEncoding.Encode(dst, s)
+		hex.Encode(dst, s)
 		e.Write(dst)
 	} else {
 		// The encoded bytes are too long to cheaply allocate, and
 		// Encoding.Encode is no longer noticeably cheaper.
-		enc := base64.NewEncoder(base64.StdEncoding, e)
+		enc := hex.NewEncoder(e)
 		enc.Write(s)
-		enc.Close()
 	}
 	e.WriteByte('"')
 }
@@ -977,8 +976,8 @@ func (e *encodeState) string(s string, escapeHTML bool) {
 				// user-controlled strings are rendered into JSON
 				// and served to some browsers.
 				e.WriteString(`u00`)
-				e.WriteByte(hex[b>>4])
-				e.WriteByte(hex[b&0xF])
+				e.WriteByte(hexChars[b>>4])
+				e.WriteByte(hexChars[b&0xF])
 			}
 			i++
 			start = i
@@ -1006,7 +1005,7 @@ func (e *encodeState) string(s string, escapeHTML bool) {
 				e.WriteString(s[start:i])
 			}
 			e.WriteString(`\u202`)
-			e.WriteByte(hex[c&0xF])
+			e.WriteByte(hexChars[c&0xF])
 			i += size
 			start = i
 			continue
@@ -1049,8 +1048,8 @@ func (e *encodeState) stringBytes(s []byte, escapeHTML bool) {
 				// user-controlled strings are rendered into JSON
 				// and served to some browsers.
 				e.WriteString(`u00`)
-				e.WriteByte(hex[b>>4])
-				e.WriteByte(hex[b&0xF])
+				e.WriteByte(hexChars[b>>4])
+				e.WriteByte(hexChars[b&0xF])
 			}
 			i++
 			start = i
@@ -1078,7 +1077,7 @@ func (e *encodeState) stringBytes(s []byte, escapeHTML bool) {
 				e.Write(s[start:i])
 			}
 			e.WriteString(`\u202`)
-			e.WriteByte(hex[c&0xF])
+			e.WriteByte(hexChars[c&0xF])
 			i += size
 			start = i
 			continue

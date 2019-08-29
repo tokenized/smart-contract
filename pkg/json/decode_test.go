@@ -640,9 +640,9 @@ var unmarshalTests = []unmarshalTest{
 		out: S5{S8: S8{S9: S9{Y: 2}}},
 	},
 	{
-		in:                    `{"X": 1,"Y":2}`,
-		ptr:                   new(S5),
-		err:                   fmt.Errorf("json: unknown field \"X\""),
+		in:  `{"X": 1,"Y":2}`,
+		ptr: new(S5),
+		err: fmt.Errorf("json: unknown field \"X\""),
 		disallowUnknownFields: true,
 	},
 	{
@@ -651,9 +651,9 @@ var unmarshalTests = []unmarshalTest{
 		out: S10{S13: S13{S8: S8{S9: S9{Y: 2}}}},
 	},
 	{
-		in:                    `{"X": 1,"Y":2}`,
-		ptr:                   new(S10),
-		err:                   fmt.Errorf("json: unknown field \"X\""),
+		in:  `{"X": 1,"Y":2}`,
+		ptr: new(S10),
+		err: fmt.Errorf("json: unknown field \"X\""),
 		disallowUnknownFields: true,
 	},
 
@@ -717,11 +717,11 @@ var unmarshalTests = []unmarshalTest{
 	// Go 1.7 changed marshaling a slice of typed byte to use the methods on the byte type,
 	// similar to marshaling a slice of typed int.
 	// These tests check that, assuming the byte type also has valid decoding methods,
-	// either the old base64 string encoding or the new per-element encoding can be
+	// either the old hex string encoding or the new per-element encoding can be
 	// successfully unmarshaled. The custom unmarshalers were accessible in earlier
 	// versions of Go, even though the custom marshaler was not.
 	{
-		in:  `"AQID"`,
+		in:  `"010203"`,
 		ptr: new([]byteWithMarshalJSON),
 		out: []byteWithMarshalJSON{1, 2, 3},
 	},
@@ -732,7 +732,7 @@ var unmarshalTests = []unmarshalTest{
 		golden: true,
 	},
 	{
-		in:  `"AQID"`,
+		in:  `"010203"`,
 		ptr: new([]byteWithMarshalText),
 		out: []byteWithMarshalText{1, 2, 3},
 	},
@@ -743,7 +743,7 @@ var unmarshalTests = []unmarshalTest{
 		golden: true,
 	},
 	{
-		in:  `"AQID"`,
+		in:  `"010203"`,
 		ptr: new([]byteWithPtrMarshalJSON),
 		out: []byteWithPtrMarshalJSON{1, 2, 3},
 	},
@@ -754,7 +754,7 @@ var unmarshalTests = []unmarshalTest{
 		golden: true,
 	},
 	{
-		in:  `"AQID"`,
+		in:  `"010203"`,
 		ptr: new([]byteWithPtrMarshalText),
 		out: []byteWithPtrMarshalText{1, 2, 3},
 	},
@@ -765,7 +765,7 @@ var unmarshalTests = []unmarshalTest{
 		golden: true,
 	},
 
-	// ints work with the marshaler but not the base64 []byte case
+	// ints work with the marshaler but not the hex []byte case
 	{
 		in:     `["Z01","Z02","Z03"]`,
 		ptr:    new([]intWithMarshalJSON),
@@ -861,8 +861,8 @@ var unmarshalTests = []unmarshalTest{
 			"Q": 18,
 			"extra": true
 		}`,
-		ptr:                   new(Top),
-		err:                   fmt.Errorf("json: unknown field \"extra\""),
+		ptr: new(Top),
+		err: fmt.Errorf("json: unknown field \"extra\""),
 		disallowUnknownFields: true,
 	},
 	{
@@ -888,8 +888,8 @@ var unmarshalTests = []unmarshalTest{
 			"Z": 17,
 			"Q": 18
 		}`,
-		ptr:                   new(Top),
-		err:                   fmt.Errorf("json: unknown field \"extra\""),
+		ptr: new(Top),
+		err: fmt.Errorf("json: unknown field \"extra\""),
 		disallowUnknownFields: true,
 	},
 	// issue 26444
@@ -1493,7 +1493,7 @@ var allValueIndent = `{
 		"str25",
 		"str26"
 	],
-	"ByteSlice": "Gxwd",
+	"ByteSlice": "1b1c1d",
 	"Small": {
 		"Tag": "tag30"
 	},
