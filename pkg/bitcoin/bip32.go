@@ -41,12 +41,18 @@ func (k *BIP32Key) SetBytes(b []byte) error {
 
 // Bytes returns the key data.
 func (k *BIP32Key) Bytes() []byte {
+	if k.key == nil {
+		return nil
+	}
 	b, _ := k.key.Serialize()
 	return b
 }
 
 // String returns the key formatted as text.
 func (k *BIP32Key) String() string {
+	if k.key == nil {
+		return ""
+	}
 	return k.key.B58Serialize()
 }
 
@@ -62,16 +68,28 @@ func (k *BIP32Key) SetString(s string) error {
 
 // Equal returns true if the other key has the same value
 func (k *BIP32Key) Equal(other *BIP32Key) bool {
+	if k.key == nil {
+		return other.key == nil
+	}
+	if other.key == nil {
+		return false
+	}
 	return bytes.Equal(k.key.Key, other.key.Key)
 }
 
 // IsPrivate returns true if the key is a private key.
 func (k *BIP32Key) IsPrivate() bool {
+	if k.key == nil {
+		return false
+	}
 	return k.key.IsPrivate
 }
 
 // Key returns the (private) key associated with this key.
 func (k *BIP32Key) Key(net Network) Key {
+	if k.key == nil {
+		return nil
+	}
 	if !k.IsPrivate() {
 		return nil
 	}
@@ -81,6 +99,9 @@ func (k *BIP32Key) Key(net Network) Key {
 
 // PublicKey returns the public version of this key (xpub).
 func (k *BIP32Key) PublicKey() PublicKey {
+	if k.key == nil {
+		return nil
+	}
 	pk := k.key
 	if k.IsPrivate() {
 		pk = k.key.PublicKey()
@@ -91,11 +112,17 @@ func (k *BIP32Key) PublicKey() PublicKey {
 
 // BIP32PublicKey returns the public version of this key (xpub).
 func (k *BIP32Key) BIP32PublicKey() *BIP32Key {
+	if k.key == nil {
+		return nil
+	}
 	return &BIP32Key{key: k.key.PublicKey()}
 }
 
 // ChildKey returns the child key at the specified index.
 func (k *BIP32Key) ChildKey(index uint32) (*BIP32Key, error) {
+	if k.key == nil {
+		return nil, errors.New("Nil can't create child")
+	}
 	child, err := k.key.NewChildKey(index)
 	if err != nil {
 		return nil, err
@@ -105,6 +132,9 @@ func (k *BIP32Key) ChildKey(index uint32) (*BIP32Key, error) {
 
 // MarshalJSON converts to json.
 func (k *BIP32Key) MarshalJSON() ([]byte, error) {
+	if k.key == nil {
+		return nil, nil
+	}
 	return []byte("\"" + k.String() + "\""), nil
 }
 
@@ -120,5 +150,7 @@ func (k *BIP32Key) Scan(data interface{}) error {
 		return errors.New("BIP32Key db column not bytes")
 	}
 
-	return k.SetBytes(b)
+	c := make([]byte, len(b))
+	copy(c, b)
+	return k.SetBytes(c)
 }

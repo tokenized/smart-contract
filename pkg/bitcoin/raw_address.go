@@ -463,6 +463,8 @@ func (a *ConcreteRawAddress) Scan(data interface{}) error {
 	}
 
 	var err error
-	a.ra, err = DecodeRawAddress(b)
+	c := make([]byte, len(b))
+	copy(c, b)
+	a.ra, err = DecodeRawAddress(c)
 	return err
 }
