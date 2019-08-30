@@ -140,7 +140,7 @@ func (k *BIP32Key) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON converts from json.
 func (k *BIP32Key) UnmarshalJSON(data []byte) error {
-	return k.SetString(string(data[1:len(data)-1]))
+	return k.SetString(string(data[1 : len(data)-1]))
 }
 
 // Scan converts from a database column.
