@@ -42,10 +42,22 @@ type RawAddress interface {
 //   template, and an error if there was an issue.
 func DecodeRawAddress(b []byte) (RawAddress, error) {
 	switch b[0] {
+	case addressTypeMainPKH:
+		fallthrough
+	case addressTypeTestPKH:
+		fallthrough
 	case scriptTypePKH:
 		return NewRawAddressPKH(b[1:])
+	case addressTypeMainSH:
+		fallthrough
+	case addressTypeTestSH:
+		fallthrough
 	case scriptTypeSH:
 		return NewRawAddressSH(b[1:])
+	case addressTypeMainMultiPKH:
+		fallthrough
+	case addressTypeTestMultiPKH:
+		fallthrough
 	case scriptTypeMultiPKH:
 		b = b[1:] // remove type
 		// Parse required count
@@ -69,6 +81,10 @@ func DecodeRawAddress(b []byte) (RawAddress, error) {
 			b = b[scriptHashLength:]
 		}
 		return NewRawAddressMultiPKH(required, pkhs)
+	case addressTypeMainRPH:
+		fallthrough
+	case addressTypeTestRPH:
+		fallthrough
 	case scriptTypeRPH:
 		return NewRawAddressRPH(b[1:])
 	}
@@ -83,18 +99,30 @@ func DeserializeRawAddress(buf *bytes.Reader) (RawAddress, error) {
 	}
 
 	switch t {
+	case addressTypeMainPKH:
+		fallthrough
+	case addressTypeTestPKH:
+		fallthrough
 	case scriptTypePKH:
 		pkh := make([]byte, scriptHashLength)
 		if _, err := buf.Read(pkh); err != nil {
 			return nil, err
 		}
 		return NewRawAddressPKH(pkh)
+	case addressTypeMainSH:
+		fallthrough
+	case addressTypeTestSH:
+		fallthrough
 	case scriptTypeSH:
 		sh := make([]byte, scriptHashLength)
 		if _, err := buf.Read(sh); err != nil {
 			return nil, err
 		}
 		return NewRawAddressSH(sh)
+	case addressTypeMainMultiPKH:
+		fallthrough
+	case addressTypeTestMultiPKH:
+		fallthrough
 	case scriptTypeMultiPKH:
 		// Parse required count
 		var required uint16
@@ -115,6 +143,10 @@ func DeserializeRawAddress(buf *bytes.Reader) (RawAddress, error) {
 			pkhs = append(pkhs, pkh)
 		}
 		return NewRawAddressMultiPKH(required, pkhs)
+	case addressTypeMainRPH:
+		fallthrough
+	case addressTypeTestRPH:
+		fallthrough
 	case scriptTypeRPH:
 		rph := make([]byte, scriptHashLength)
 		if _, err := buf.Read(rph); err != nil {
@@ -156,6 +188,8 @@ func (a *RawAddressPKH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.pkh, o.pkh)
 	case *AddressPKH:
 		return bytes.Equal(a.pkh, o.pkh)
+	case *ConcreteAddress:
+		return a.Equal(o.Address())
 	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
@@ -207,6 +241,8 @@ func (a *RawAddressSH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.sh, o.sh)
 	case *AddressSH:
 		return bytes.Equal(a.sh, o.sh)
+	case *ConcreteAddress:
+		return a.Equal(o.Address())
 	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
@@ -299,6 +335,8 @@ func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
 			}
 		}
 		return true
+	case *ConcreteAddress:
+		return a.Equal(o.Address())
 	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
@@ -363,6 +401,8 @@ func (a *RawAddressRPH) Equal(other RawAddress) bool {
 		return bytes.Equal(a.rph, o.rph)
 	case *AddressRPH:
 		return bytes.Equal(a.rph, o.rph)
+	case *ConcreteAddress:
+		return a.Equal(o.Address())
 	case *ConcreteRawAddress:
 		return a.Equal(o.RawAddress())
 	}
