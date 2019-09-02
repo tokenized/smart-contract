@@ -480,7 +480,9 @@ func (ca *ConcreteAddress) Scan(data interface{}) error {
 	}
 
 	var err error
-	ca.a, err = decodeAddressBytes(b)
+	c := make([]byte, len(b))
+	copy(c, b)
+	ca.a, err = decodeAddressBytes(c)
 	return err
 }
 
