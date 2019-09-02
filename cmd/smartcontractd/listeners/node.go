@@ -277,7 +277,7 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 }
 
 func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
-	return server.processingTxs.Add(ProcessingTx{Itx: itx, Event: "REPROCESS"})
+	return server.processingTxs.Add(ProcessingTx{Itx: itx, Event: "END"})
 }
 
 // Remove any pending that are conflicting with this tx.
@@ -316,7 +316,7 @@ func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) 
 }
 
 func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {
-	return server.Handler.Trigger(ctx, "REPROCESS", itx)
+	return server.Handler.Trigger(ctx, "END", itx)
 }
 
 // AddContractKey adds a new contract key to those being monitored.

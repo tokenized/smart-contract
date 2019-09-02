@@ -21,8 +21,11 @@ const (
 	// STOLE is used for double spends
 	STOLE = "STOLE"
 
-	// REPROCESS is used to call back finalization of a tx
-	REPROCESS = "REPROCESS"
+	// END is used to call back finalization of a tx
+	END = "END"
+
+	// ANY_EVENT is used as the event, when the handler is for all events
+	ANY_EVENT = "*"
 )
 
 // Handler is the interface for this Protocol Mux
@@ -77,24 +80,8 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 		p.LostHandlers[event] = append(p.LostHandlers[event], handler)
 	case STOLE:
 		p.StoleHandlers[event] = append(p.StoleHandlers[event], handler)
-	case REPROCESS:
+	case END:
 		p.ReprocessHandlers[event] = append(p.ReprocessHandlers[event], handler)
-	default:
-		panic("Unknown handler type")
-	}
-}
-
-// Handle registers a new default handler
-func (p *ProtoMux) HandleDefault(verb string, handler HandlerFunc) {
-	switch verb {
-	case SEE:
-		p.SeeDefaultHandlers = append(p.SeeDefaultHandlers, handler)
-	case LOST:
-		p.LostDefaultHandlers = append(p.LostDefaultHandlers, handler)
-	case STOLE:
-		p.StoleDefaultHandlers = append(p.StoleDefaultHandlers, handler)
-	case REPROCESS:
-		p.ReprocessDefaultHandlers = append(p.ReprocessDefaultHandlers, handler)
 	default:
 		panic("Unknown handler type")
 	}
@@ -116,28 +103,21 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 		group = p.LostHandlers
 	case STOLE:
 		group = p.StoleHandlers
-	case REPROCESS:
+	case END:
 		group = p.ReprocessHandlers
 	default:
 		return errors.New("Unknown handler type")
 	}
 
 	// Locate the handlers from the group
-	txAction := itx.MsgProto.Code()
-	handlers, exists := group[txAction]
+	event := itx.MsgProto.Code()
+	handlers, exists := group[event]
 
 	if !exists {
-		switch verb {
-		case SEE:
-			handlers = p.SeeDefaultHandlers
-		case LOST:
-			handlers = p.LostDefaultHandlers
-		case STOLE:
-			handlers = p.StoleDefaultHandlers
-		case REPROCESS:
-			handlers = p.ReprocessDefaultHandlers
-		default:
-			return errors.New("Unknown handler type")
+		// Fall back to ANY_EVENT
+		handlers, exists = group[ANY_EVENT]
+		if !exists {
+			return nil
 		}
 	}
 

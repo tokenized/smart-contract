@@ -65,7 +65,7 @@ func API(
 
 	app.Handle("SEE", actions.CodeTransfer, t.TransferRequest)
 	app.Handle("SEE", actions.CodeSettlement, t.SettlementResponse)
-	app.Handle("REPROCESS", actions.CodeTransfer, t.TransferTimeout)
+	app.Handle("END", actions.CodeTransfer, t.TransferTimeout)
 
 	// Register enforcement based events.
 	e := Enforcement{
@@ -93,7 +93,7 @@ func API(
 	app.Handle("SEE", actions.CodeBallotCast, g.BallotCastRequest)
 	app.Handle("SEE", actions.CodeBallotCounted, g.BallotCountedResponse)
 	app.Handle("SEE", actions.CodeResult, g.ResultResponse)
-	app.Handle("REPROCESS", actions.CodeVote, g.FinalizeVote)
+	app.Handle("END", actions.CodeVote, g.FinalizeVote)
 
 	// Register message based operations.
 	m := Message{
@@ -109,8 +109,8 @@ func API(
 	app.Handle("SEE", actions.CodeMessage, m.ProcessMessage)
 	app.Handle("SEE", actions.CodeRejection, m.ProcessRejection)
 
-	app.HandleDefault("LOST", m.ProcessRevert)
-	app.HandleDefault("STOLE", m.ProcessRevert)
+	app.Handle("LOST", protomux.ANY_EVENT, m.ProcessRevert)
+	app.Handle("STOLE", protomux.ANY_EVENT, m.ProcessRevert)
 
 	return app, nil
 }
