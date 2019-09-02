@@ -21,8 +21,8 @@ const (
 	// STOLE is used for double spends
 	STOLE = "STOLE"
 
-	// REPROCESS is used to call back finalization of a tx
-	REPROCESS = "REPROCESS"
+	// END is used to call back finalization of a tx
+	END = "END"
 
 	// ANY_EVENT is used as the event, when the handler is for all events
 	ANY_EVENT = "*"
@@ -80,7 +80,7 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 		p.LostHandlers[event] = append(p.LostHandlers[event], handler)
 	case STOLE:
 		p.StoleHandlers[event] = append(p.StoleHandlers[event], handler)
-	case REPROCESS:
+	case END:
 		p.ReprocessHandlers[event] = append(p.ReprocessHandlers[event], handler)
 	default:
 		panic("Unknown handler type")
@@ -103,7 +103,7 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 		group = p.LostHandlers
 	case STOLE:
 		group = p.StoleHandlers
-	case REPROCESS:
+	case END:
 		group = p.ReprocessHandlers
 	default:
 		return errors.New("Unknown handler type")

@@ -131,7 +131,7 @@ func respondTx(ctx context.Context, tx *wire.MsgTx) error {
 }
 
 func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
-	return a.Trigger(ctx, "REPROCESS", itx)
+	return a.Trigger(ctx, "END", itx)
 }
 
 func getResponse() *wire.MsgTx {
