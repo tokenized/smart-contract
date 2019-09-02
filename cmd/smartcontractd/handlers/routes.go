@@ -109,8 +109,8 @@ func API(
 	app.Handle("SEE", actions.CodeMessage, m.ProcessMessage)
 	app.Handle("SEE", actions.CodeRejection, m.ProcessRejection)
 
-	app.HandleDefault("LOST", m.ProcessRevert)
-	app.HandleDefault("STOLE", m.ProcessRevert)
+	app.Handle("LOST", "ANY_EVENT", m.ProcessRevert)
+	app.Handle("STOLE", "ANY_EVENT", m.ProcessRevert)
 
 	return app, nil
 }

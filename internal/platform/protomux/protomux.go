@@ -23,6 +23,9 @@ const (
 
 	// REPROCESS is used to call back finalization of a tx
 	REPROCESS = "REPROCESS"
+
+	// ANY_EVENT is used as the event, when the handler is for all events
+	ANY_EVENT = "ANY_EVENT"
 )
 
 // Handler is the interface for this Protocol Mux
@@ -84,22 +87,6 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 	}
 }
 
-// Handle registers a new default handler
-func (p *ProtoMux) HandleDefault(verb string, handler HandlerFunc) {
-	switch verb {
-	case SEE:
-		p.SeeDefaultHandlers = append(p.SeeDefaultHandlers, handler)
-	case LOST:
-		p.LostDefaultHandlers = append(p.LostDefaultHandlers, handler)
-	case STOLE:
-		p.StoleDefaultHandlers = append(p.StoleDefaultHandlers, handler)
-	case REPROCESS:
-		p.ReprocessDefaultHandlers = append(p.ReprocessDefaultHandlers, handler)
-	default:
-		panic("Unknown handler type")
-	}
-}
-
 // Trigger fires a handler
 func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Transaction) error {
 
@@ -123,21 +110,14 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 	}
 
 	// Locate the handlers from the group
-	txAction := itx.MsgProto.Code()
-	handlers, exists := group[txAction]
+	event := itx.MsgProto.Code()
+	handlers, exists := group[event]
 
 	if !exists {
-		switch verb {
-		case SEE:
-			handlers = p.SeeDefaultHandlers
-		case LOST:
-			handlers = p.LostDefaultHandlers
-		case STOLE:
-			handlers = p.StoleDefaultHandlers
-		case REPROCESS:
-			handlers = p.ReprocessDefaultHandlers
-		default:
-			return errors.New("Unknown handler type")
+		// Fall back to ANY_EVENT
+		handlers, exists = group[ANY_EVENT]
+		if !exists {
+			return nil
 		}
 	}
 
