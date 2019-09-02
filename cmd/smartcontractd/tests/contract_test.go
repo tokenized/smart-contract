@@ -711,7 +711,7 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
+		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -726,8 +726,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 		ContractFee:            1000,
 		CreatedAt:              protocol.CurrentTimestamp(),
 		UpdatedAt:              protocol.CurrentTimestamp(),
-		AdministrationAddress:  bitcoin.NewJSONRawAddress(issuerKey.Address),
-		MasterAddress:          bitcoin.NewJSONRawAddress(test.MasterKey.Address),
+		AdministrationAddress:  bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		MasterAddress:          bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
 	}
 
 	// Define permissions for contact fields
@@ -754,7 +754,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewJSONRawAddress(test.Contract2Key.Address),
+		Address:             bitcoin.NewConcreteRawAddress(test.Contract2Key.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -770,8 +770,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewJSONRawAddress(test.Master2Key.Address),
+		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewConcreteRawAddress(test.Master2Key.Address),
 	}
 
 	// Define permissions for contract fields
@@ -797,7 +797,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType string,
 	issuerRole uint32, issuerName string) error {
 	var contractData = state.Contract{
-		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
+		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -813,8 +813,8 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewJSONRawAddress(test.MasterKey.Address),
+		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
@@ -846,7 +846,7 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 	issuerRole uint32, issuerName string) (*state.Contract, error) {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewJSONRawAddress(test.ContractKey.Address),
+		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -869,8 +869,8 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewJSONRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewJSONRawAddress(test.MasterKey.Address),
+		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		MasterAddress:         bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 

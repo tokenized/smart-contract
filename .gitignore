@@ -37,6 +37,7 @@ config/*.env
 conf/*.env
 log
 json
+!pkg/json
 
 # IDEs
 .idea/

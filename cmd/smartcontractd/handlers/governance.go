@@ -588,7 +588,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	}
 
 	ballot := state.Ballot{
-		Address:   bitcoin.NewJSONRawAddress(castTx.Inputs[0].Address),
+		Address:   bitcoin.NewConcreteRawAddress(castTx.Inputs[0].Address),
 		Vote:      cast.Vote,
 		Timestamp: protocol.NewTimestamp(msg.Timestamp),
 		Quantity:  msg.Quantity,

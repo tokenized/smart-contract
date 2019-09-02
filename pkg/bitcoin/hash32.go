@@ -110,6 +110,16 @@ func (h *Hash32) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Scan converts from a database column.
+func (h *Hash32) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("Hash32 db column not bytes")
+	}
+
+	return h.SetBytes(b)
+}
+
 func reverse32(h, rh []byte) {
 	i := Hash32Size - 1
 	for _, b := range rh[:] {

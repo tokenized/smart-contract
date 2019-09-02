@@ -1,14 +1,15 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/json"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 var cmdJSON = &cobra.Command{

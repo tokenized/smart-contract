@@ -12,13 +12,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/json"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -152,7 +152,7 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.
 }
 
 // WatchAddress instructs the RPC node to watch an address without rescan
-func (r *RPCNode) WatchAddress(ctx context.Context, address btcutil.Address) error {
+func (r *RPCNode) WatchAddress(ctx context.Context, address bitcoin.Address) error {
 	strAddr := address.String()
 
 	// Make address known to node without rescan
@@ -202,14 +202,16 @@ func (r *RPCNode) ListTransactions(ctx context.Context) ([]btcjson.ListTransacti
 }
 
 // ListUnspent returns unspent transactions
-func (r *RPCNode) ListUnspent(ctx context.Context, address btcutil.Address) ([]btcjson.ListUnspentResult, error) {
+func (r *RPCNode) ListUnspent(ctx context.Context, address bitcoin.Address) ([]btcjson.ListUnspentResult, error) {
 
 	// Make address known to node without rescan
 	if err := r.WatchAddress(ctx, address); err != nil {
 		return nil, err
 	}
 
-	addresses := []btcutil.Address{address}
+	btcaddress, _ := btcutil.DecodeAddress(address.String(),
+		bitcoin.NewChainParams(bitcoin.NetworkName(address.Network())))
+	addresses := []btcutil.Address{btcaddress}
 
 	// out []btcjson.ListUnspentResult
 	out, err := r.client.ListUnspentMinMaxAddresses(0, 999999, addresses)

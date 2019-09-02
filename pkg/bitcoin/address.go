@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 var (
@@ -32,6 +33,9 @@ type Address interface {
 	// Network returns the network id for the address.
 	Network() Network
 
+	// bytes returns the type and address data.
+	bytes() []byte
+
 	RawAddress
 }
 
@@ -43,6 +47,12 @@ func DecodeAddress(address string) (Address, error) {
 		return nil, err
 	}
 
+	return decodeAddressBytes(b)
+}
+
+// decodeAddressBytes decodes a base58 text bitcoin address. It returns the address, and an error
+//   if there was an issue.
+func decodeAddressBytes(b []byte) (Address, error) {
 	switch b[0] {
 	case addressTypeMainPKH:
 		return NewAddressPKH(b[1:], MainNet)
@@ -128,8 +138,10 @@ func NewAddressFromRawAddress(st RawAddress, net Network) Address {
 		return t
 	case *AddressRPH:
 		return t
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return NewAddressFromRawAddress(t.RawAddress(), net)
+	case *ConcreteAddress:
+		return t.Address()
 	}
 
 	return nil
@@ -143,8 +155,10 @@ func PKH(st RawAddress) ([]byte, bool) {
 		return a.PKH(), true
 	case *AddressPKH:
 		return a.PKH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return PKH(a.RawAddress())
+	case *ConcreteAddress:
+		return PKH(a.Address())
 	}
 
 	return nil, false
@@ -158,8 +172,10 @@ func SH(st RawAddress) ([]byte, bool) {
 		return a.SH(), true
 	case *AddressSH:
 		return a.SH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return SH(a.RawAddress())
+	case *ConcreteAddress:
+		return SH(a.Address())
 	}
 
 	return nil, false
@@ -173,8 +189,10 @@ func PKHs(st RawAddress) ([]byte, bool) {
 		return a.PKHs(), true
 	case *AddressMultiPKH:
 		return a.PKHs(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return PKHs(a.RawAddress())
+	case *ConcreteAddress:
+		return PKHs(a.Address())
 	}
 
 	return nil, false
@@ -188,8 +206,10 @@ func RPH(st RawAddress) ([]byte, bool) {
 		return a.RPH(), true
 	case *AddressRPH:
 		return a.RPH(), true
-	case *JSONRawAddress:
+	case *ConcreteRawAddress:
 		return RPH(a.RawAddress())
+	case *ConcreteAddress:
+		return RPH(a.Address())
 	}
 
 	return nil, false
@@ -212,6 +232,11 @@ func NewAddressPKH(pkh []byte, net Network) (*AddressPKH, error) {
 
 // String returns the type and address data followed by a checksum encoded with Base58.
 func (a *AddressPKH) String() string {
+	return encodeAddress(a.bytes())
+}
+
+// bytes returns the type and address data.
+func (a *AddressPKH) bytes() []byte {
 	var addressType byte
 
 	// Add address type byte in front
@@ -221,7 +246,7 @@ func (a *AddressPKH) String() string {
 	default:
 		addressType = addressTypeTestPKH
 	}
-	return encodeAddress(append([]byte{addressType}, a.pkh...))
+	return append([]byte{addressType}, a.pkh...)
 }
 
 // Network returns the network id for the address.
@@ -246,6 +271,11 @@ func NewAddressSH(sh []byte, net Network) (*AddressSH, error) {
 
 // String returns the type and address data followed by a checksum encoded with Base58.
 func (a *AddressSH) String() string {
+	return encodeAddress(a.bytes())
+}
+
+// bytes returns the type and address data.
+func (a *AddressSH) bytes() []byte {
 	var addressType byte
 
 	// Add address type byte in front
@@ -255,7 +285,7 @@ func (a *AddressSH) String() string {
 	default:
 		addressType = addressTypeTestSH
 	}
-	return encodeAddress(append([]byte{addressType}, a.sh...))
+	return append([]byte{addressType}, a.sh...)
 }
 
 // Network returns the network id for the address.
@@ -280,6 +310,11 @@ func NewAddressMultiPKH(required uint16, pkhs [][]byte, net Network) (*AddressMu
 
 // String returns the type and address data followed by a checksum encoded with Base58.
 func (a *AddressMultiPKH) String() string {
+	return encodeAddress(a.bytes())
+}
+
+// bytes returns the type and address data.
+func (a *AddressMultiPKH) bytes() []byte {
 	b := make([]byte, 0, 3+(len(a.pkhs)*scriptHashLength))
 
 	var addressType byte
@@ -303,7 +338,7 @@ func (a *AddressMultiPKH) String() string {
 		b = append(b, pkh...)
 	}
 
-	return encodeAddress(b)
+	return b
 }
 
 // Network returns the network id for the address.
@@ -328,6 +363,11 @@ func NewAddressRPH(rph []byte, net Network) (*AddressRPH, error) {
 
 // String returns the type and address data followed by a checksum encoded with Base58.
 func (a *AddressRPH) String() string {
+	return encodeAddress(a.bytes())
+}
+
+// bytes returns the type and address data.
+func (a *AddressRPH) bytes() []byte {
 	var addressType byte
 
 	// Add address type byte in front
@@ -337,12 +377,111 @@ func (a *AddressRPH) String() string {
 	default:
 		addressType = addressTypeTestRPH
 	}
-	return encodeAddress(append([]byte{addressType}, a.rph...))
+	return append([]byte{addressType}, a.rph...)
 }
 
 // Network returns the network id for the address.
 func (a *AddressRPH) Network() Network {
 	return a.net
+}
+
+// ConcreteAddress is a concrete form of Address.
+// It does things not possible with an interface.
+// It implements marshal and unmarshal to/from JSON.
+// It also Scan for converting from a database column.
+type ConcreteAddress struct {
+	a Address
+}
+
+func NewConcreteAddress(a Address) *ConcreteAddress {
+	return &ConcreteAddress{a}
+}
+
+func NewConcreteAddressFromRaw(ra RawAddress, net Network) *ConcreteAddress {
+	return &ConcreteAddress{NewAddressFromRawAddress(ra, net)}
+}
+
+func (ca *ConcreteAddress) Address() Address {
+	return ca.a
+}
+
+// String returns the address string.
+func (ca *ConcreteAddress) String() string {
+	return ca.a.String()
+}
+
+// bytes returns the type and address data.
+func (ca *ConcreteAddress) bytes() []byte {
+	return ca.a.bytes()
+}
+
+// Network returns the network id for the address.
+func (ca *ConcreteAddress) Network() Network {
+	return ca.a.Network()
+}
+
+// Bytes returns the network specific type followed by the address data.
+func (ca *ConcreteAddress) Bytes() []byte {
+	return ca.a.bytes()
+}
+
+// LockingScript returns the bitcoin output(locking) script for paying to the address.
+func (ca *ConcreteAddress) LockingScript() []byte {
+	return ca.a.LockingScript()
+}
+
+// Equal returns true if the address parameter has the same value.
+func (ca *ConcreteAddress) Equal(other RawAddress) bool {
+	return ca.a.Equal(other)
+}
+
+// Serialize writes the address into a buffer.
+func (ca *ConcreteAddress) Serialize(buf *bytes.Buffer) error {
+	return ca.a.Serialize(buf)
+}
+
+// Hash returns the hash corresponding to the address.
+func (ca *ConcreteAddress) Hash() (*Hash20, error) {
+	if ca.a == nil {
+		return nil, errors.New("Empty JSON Raw Address")
+	}
+	return ca.a.Hash()
+}
+
+// MarshalJSON converts to json.
+func (ca *ConcreteAddress) MarshalJSON() ([]byte, error) {
+	if ca.a == nil {
+		return []byte("\"\""), nil
+	}
+	return []byte("\"" + ca.a.String() + "\""), nil
+}
+
+// UnmarshalJSON converts from json.
+func (ca *ConcreteAddress) UnmarshalJSON(data []byte) error {
+	if len(data) < 2 {
+		return fmt.Errorf("Too short for Address data : %d", len(data))
+	}
+
+	if len(data) == 2 {
+		ca.a = nil // empty
+		return nil
+	}
+
+	var err error
+	ca.a, err = DecodeAddress(string(data[1 : len(data)-1]))
+	return err
+}
+
+// Scan converts from a database column.
+func (ca *ConcreteAddress) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("ConcreteAddress db column not bytes")
+	}
+
+	var err error
+	ca.a, err = decodeAddressBytes(b)
+	return err
 }
 
 func encodeAddress(b []byte) string {
