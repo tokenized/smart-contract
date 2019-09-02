@@ -2,15 +2,14 @@ package cmd
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/json"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -126,7 +125,6 @@ func transferSign(c *cobra.Command, args []string) error {
 				}
 
 				fmt.Printf("Signature : %x\n", signature)
-				fmt.Printf("Signature b64 : %s\n", base64.StdEncoding.EncodeToString(signature.Bytes()))
 				return nil
 			}
 

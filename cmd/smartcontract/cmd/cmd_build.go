@@ -3,8 +3,6 @@ package cmd
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/json"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -28,14 +27,13 @@ import (
 const (
 	FlagTx           = "tx"
 	FlagHexFormat    = "hex"
-	FlagBase64Format = "b64"
 	FlagSend         = "send"
 )
 
 var cmdBuild = &cobra.Command{
 	Use:   "build <typeCode> <jsonFile>",
 	Short: "Build an action/asset/message payload from a json file.",
-	Long:  "Build and action/asset/message payload from a json file. Note: fixedbin (fixed size binary) in json is an array of 8 bit integers and bin (variable size binary) is base64 encoded binary data.",
+	Long:  "Build and action/asset/message payload from a json file. Note: fixedbin (fixed size binary) in json is an array of 8 bit integers and bin (variable size binary) is hex encoded binary data.",
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) != 2 {
 			return errors.New("Missing json file parameter")
@@ -163,7 +161,6 @@ func buildAction(c *cobra.Command, args []string) error {
 	}
 
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
-	b64Format, _ := c.Flags().GetBool(FlagBase64Format)
 	buildTx, _ := c.Flags().GetBool(FlagTx)
 	if buildTx {
 		ctx := client.Context()
@@ -259,14 +256,6 @@ func buildAction(c *cobra.Command, args []string) error {
 				return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s tx", actionType))
 			}
 			fmt.Printf("%x\n", buf.Bytes())
-		} else if b64Format {
-			fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
-			var buf bytes.Buffer
-			err := tx.MsgTx.Serialize(&buf)
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s tx", actionType))
-			}
-			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(buf.Bytes()))
 		} else {
 			fmt.Println(tx.MsgTx.String())
 		}
@@ -282,8 +271,6 @@ func buildAction(c *cobra.Command, args []string) error {
 	fmt.Printf("Action : %s\n", actionType)
 	if hexFormat {
 		fmt.Printf("%x\n", script)
-	} else if b64Format {
-		fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(script))
 	} else {
 		data, err = json.MarshalIndent(action, "", "  ")
 		if err != nil {
@@ -313,8 +300,6 @@ func buildAction(c *cobra.Command, args []string) error {
 		fmt.Printf("Payload : %s\n", assetDef.AssetType)
 		if hexFormat {
 			fmt.Printf("%x\n", assetDef.AssetPayload)
-		} else if b64Format {
-			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetDef.AssetPayload))
 		} else {
 			data, err = json.MarshalIndent(asset, "", "  ")
 			if err != nil {
@@ -349,8 +334,6 @@ func buildAction(c *cobra.Command, args []string) error {
 		fmt.Printf("Payload : %s\n", assetCreation.AssetType)
 		if hexFormat {
 			fmt.Printf("%x\n", payload)
-		} else if b64Format {
-			fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(assetCreation.AssetPayload))
 		} else {
 			data, err = json.MarshalIndent(payload, "", "  ")
 			if err != nil {
@@ -391,11 +374,8 @@ func buildAssetPayload(c *cobra.Command, args []string) error {
 
 	fmt.Printf("Asset : %s\n", assetType)
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
-	b64Format, _ := c.Flags().GetBool(FlagBase64Format)
 	if hexFormat {
 		fmt.Printf("%x\n", data)
-	} else if b64Format {
-		fmt.Printf("%s\n", base64.StdEncoding.EncodeToString(data))
 	} else {
 		jsonData, err = json.MarshalIndent(&payload, "", "  ")
 		if err != nil {
@@ -414,6 +394,5 @@ func buildMessage(c *cobra.Command, args []string) error {
 func init() {
 	cmdBuild.Flags().Bool(FlagTx, false, "build a tx, if false only op return is built")
 	cmdBuild.Flags().Bool(FlagHexFormat, false, "hex format")
-	cmdBuild.Flags().Bool(FlagBase64Format, false, "base64 format")
 	cmdBuild.Flags().Bool(FlagSend, false, "send to network")
 }

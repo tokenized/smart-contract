@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/json"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -14,8 +14,8 @@ import (
 
 var cmdJSON = &cobra.Command{
 	Use:     "json message_type args",
-	Short:   "Generate JSON to be used a payload for the build command.",
-	Long:    "Generate JSON to be used a payload for the build command.",
+	Short:   "Generate JSON to be used as a payload for the build command.",
+	Long:    "Generate JSON to be used as a payload for the build command.",
 	Example: "smartcontract json T1 SHC 6259cbd4e0522d8c6539f0a291bfcf4cdad9a5275925571ba1ccbdbe5ac0188d 1GtQEoDE7us5udLWuNCmbngYuwjs12EnwP 90001 # create T1 payload",
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) == 0 {
