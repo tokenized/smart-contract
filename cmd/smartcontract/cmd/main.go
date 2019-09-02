@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/pkg/json"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/google/uuid"

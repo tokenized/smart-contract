@@ -2,12 +2,12 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/json"
 
 	"github.com/pkg/errors"
 )
