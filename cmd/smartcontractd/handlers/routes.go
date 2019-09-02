@@ -109,8 +109,8 @@ func API(
 	app.Handle("SEE", actions.CodeMessage, m.ProcessMessage)
 	app.Handle("SEE", actions.CodeRejection, m.ProcessRejection)
 
-	app.Handle("LOST", "ANY_EVENT", m.ProcessRevert)
-	app.Handle("STOLE", "ANY_EVENT", m.ProcessRevert)
+	app.Handle("LOST", protomux.ANY_EVENT, m.ProcessRevert)
+	app.Handle("STOLE", protomux.ANY_EVENT, m.ProcessRevert)
 
 	return app, nil
 }

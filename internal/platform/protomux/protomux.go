@@ -25,7 +25,7 @@ const (
 	REPROCESS = "REPROCESS"
 
 	// ANY_EVENT is used as the event, when the handler is for all events
-	ANY_EVENT = "ANY_EVENT"
+	ANY_EVENT = "*"
 )
 
 // Handler is the interface for this Protocol Mux
