@@ -25,28 +25,47 @@ var cmdConvert = &cobra.Command{
 
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err == nil {
-			fmt.Printf("Hex : %x\n", address.Bytes())
+			h, err := address.Hash()
+			if err != nil {
+				fmt.Printf("%s\n", err)
+				return nil
+			}
+			fmt.Printf("Hex : %x\n", h[:])
 			return nil
 		}
 
-		hash := make([]byte, 20)
+		if len(args[0]) > 42 {
+			fmt.Printf("Invalid hash size : %s\n", err)
+			return nil
+		}
+
+		hash := make([]byte, 21)
 		n, err := hex.Decode(hash, []byte(args[0]))
 		if err != nil {
 			fmt.Printf("Invalid hash : %s\n", err)
 			return nil
 		}
-		if n != 20 {
-			fmt.Printf("Invalid hash size : %d\n", n)
+		if n == 20 {
+			address, err = bitcoin.NewAddressPKH(hash[:20], net)
+			if err != nil {
+				fmt.Printf("Invalid hash : %s\n", err)
+				return nil
+			}
+			fmt.Printf("Address : %s\n", address.String())
+			return nil
+		}
+		if n == 21 {
+			rawAddress, err := bitcoin.DecodeRawAddress(hash)
+			if err != nil {
+				fmt.Printf("Invalid hash : %s\n", err)
+				return nil
+			}
+			address := bitcoin.NewAddressFromRawAddress(rawAddress, net)
+			fmt.Printf("Address : %s\n", address.String())
 			return nil
 		}
 
-		address, err = bitcoin.NewAddressPKH(hash, net)
-		if err != nil {
-			fmt.Printf("Invalid hash : %s\n", err)
-			return nil
-		}
-		fmt.Printf("Address : %s\n", address.String())
-
+		fmt.Printf("Invalid hash size : %d\n", n)
 		return nil
 	},
 }
