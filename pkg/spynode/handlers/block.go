@@ -116,7 +116,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		// Send block notification
 		var removed bool = false
 		height := handler.blocks.LastHeight()
-		blockMessage := BlockMessage{Hash: *hash, Height: height}
+		blockMessage := BlockMessage{Hash: *hash, Height: height, Time: block.Header.Timestamp}
 		for _, listener := range handler.listeners {
 			listener.HandleBlock(ctx, ListenerMsgBlock, &blockMessage)
 		}
