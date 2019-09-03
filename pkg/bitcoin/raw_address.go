@@ -452,6 +452,12 @@ func (a *ConcreteRawAddress) LockingScript() []byte {
 
 // Equal returns true if the address parameter has the same value.
 func (a *ConcreteRawAddress) Equal(other RawAddress) bool {
+	if a.ra == nil {
+		return other == nil
+	}
+	if other == nil {
+		return false
+	}
 	return a.ra.Equal(other)
 }
 

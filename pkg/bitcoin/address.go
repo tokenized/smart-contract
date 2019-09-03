@@ -53,6 +53,9 @@ func DecodeAddress(address string) (Address, error) {
 // decodeAddressBytes decodes a base58 text bitcoin address. It returns the address, and an error
 //   if there was an issue.
 func decodeAddressBytes(b []byte) (Address, error) {
+	if len(b) < 2 {
+		return nil, ErrBadType
+	}
 	switch b[0] {
 	case addressTypeMainPKH:
 		return NewAddressPKH(b[1:], MainNet)
@@ -432,6 +435,12 @@ func (ca *ConcreteAddress) LockingScript() []byte {
 
 // Equal returns true if the address parameter has the same value.
 func (ca *ConcreteAddress) Equal(other RawAddress) bool {
+	if ca.a == nil {
+		return other == nil
+	}
+	if other == nil {
+		return false
+	}
 	return ca.a.Equal(other)
 }
 
@@ -477,6 +486,11 @@ func (ca *ConcreteAddress) Scan(data interface{}) error {
 	b, ok := data.([]byte)
 	if !ok {
 		return errors.New("ConcreteAddress db column not bytes")
+	}
+
+	if len(b) == 0 {
+		ca.a = nil
+		return nil
 	}
 
 	var err error
