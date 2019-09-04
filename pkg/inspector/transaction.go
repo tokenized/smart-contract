@@ -44,12 +44,13 @@ var (
 // Transaction represents an ITX (Inspector Transaction) containing
 // information about a transaction that is useful to the protocol.
 type Transaction struct {
-	Hash       *bitcoin.Hash32
-	MsgTx      *wire.MsgTx
-	MsgProto   actions.Action
-	Inputs     []Input
-	Outputs    []Output
-	RejectCode uint32
+	Hash          *bitcoin.Hash32
+	MsgTx         *wire.MsgTx
+	MsgProto      actions.Action
+	MsgProtoIndex uint32
+	Inputs        []Input
+	Outputs       []Output
+	RejectCode    uint32
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
@@ -57,7 +58,7 @@ type Transaction struct {
 func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 	// Find and deserialize protocol message
 	var err error
-	for _, txOut := range itx.MsgTx.TxOut {
+	for i, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
 			if err := itx.MsgProto.Validate(); err != nil {
@@ -65,6 +66,7 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 				logger.Warn(ctx, "Protocol message is invalid : %s", err)
 				return nil
 			}
+			itx.MsgProtoIndex = uint32(i)
 			break // Tokenized output found
 		}
 	}
@@ -391,9 +393,10 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	itx.Outputs = outputs
 
 	// Protocol Message
-	for _, txOut := range itx.MsgTx.TxOut {
+	for i, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
+			itx.MsgProtoIndex = uint32(i)
 			break // Tokenized output found
 		}
 	}

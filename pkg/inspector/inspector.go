@@ -103,18 +103,21 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 
 	// Find and deserialize protocol message
 	var msg actions.Action
+	var msgProtoIndex uint32
 	var err error
-	for _, txOut := range tx.TxOut {
+	for i, txOut := range tx.TxOut {
 		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
+			msgProtoIndex = uint32(i)
 			break // Tokenized output found
 		}
 	}
 
 	return &Transaction{
-		Hash:     hash,
-		MsgTx:    tx,
-		MsgProto: msg,
+		Hash:          hash,
+		MsgTx:         tx,
+		MsgProto:      msg,
+		MsgProtoIndex: msgProtoIndex,
 	}, nil
 }
 
