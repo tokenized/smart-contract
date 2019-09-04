@@ -87,7 +87,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	if !bitcoin.DecodeNetMatches(feeAddress.Network(), appConfig.Net) {
 		logger.Fatal(ctx, "Wrong fee address encoding network")
 	}
-	appConfig.FeeAddress = feeAddress
+	appConfig.FeeAddress = bitcoin.NewRawAddressFromAddress(feeAddress)
 
 	return appConfig
 }

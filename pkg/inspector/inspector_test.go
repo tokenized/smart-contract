@@ -31,8 +31,10 @@ func TestParseTX(t *testing.T) {
 	txHash := newHash("2c68cf3e1216acaa1e274dfd3b665b6a9d1d1d252e68d190f9fffc5f7e11fd27")
 	address, _ := bitcoin.DecodeAddress("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
 	address2, _ := bitcoin.DecodeAddress("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
-	script, _ := bitcoin.RawAddressFromLockingScript(address.LockingScript())
-	script2, _ := bitcoin.RawAddressFromLockingScript(address2.LockingScript())
+	script, _ := bitcoin.NewRawAddressFromAddress(address).LockingScript()
+	script2, _ := bitcoin.NewRawAddressFromAddress(address2).LockingScript()
+	scriptAddress, _ := bitcoin.RawAddressFromLockingScript(script)
+	scriptAddress2, _ := bitcoin.RawAddressFromLockingScript(script2)
 
 	wantTX := &Transaction{
 		Hash:  txHash,
@@ -51,7 +53,7 @@ func TestParseTX(t *testing.T) {
 		// },
 		Outputs: []Output{
 			Output{
-				Address: script,
+				Address: scriptAddress,
 				Index:   0,
 				Value:   600,
 				UTXO: UTXO{
@@ -62,7 +64,7 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 			Output{
-				Address: script2,
+				Address: scriptAddress2,
 				Index:   1,
 				Value:   7604510,
 				UTXO: UTXO{

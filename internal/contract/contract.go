@@ -55,7 +55,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
-	contract.Address = bitcoin.NewConcreteRawAddress(contractAddress)
+	contract.Address = contractAddress
 	contract.Revision = 0
 	contract.CreatedAt = now
 	contract.UpdatedAt = now
@@ -96,10 +96,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	}
 
 	if upd.AdministrationAddress != nil {
-		c.AdministrationAddress = upd.AdministrationAddress
+		c.AdministrationAddress = *upd.AdministrationAddress
 	}
 	if upd.OperatorAddress != nil {
-		c.OperatorAddress = upd.OperatorAddress
+		c.OperatorAddress = *upd.OperatorAddress
 	}
 
 	if upd.ContractName != nil {
@@ -208,9 +208,9 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	}
 
 	newContract := *c
-	newContract.Address = bitcoin.NewConcreteRawAddress(newContractAddress)
+	newContract.Address = newContractAddress
 
-	c.MovedTo = bitcoin.NewConcreteRawAddress(newContractAddress)
+	c.MovedTo = newContractAddress
 
 	if err = Save(ctx, dbConn, c); err != nil {
 		return err
@@ -340,13 +340,13 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 
 // IsOperator will check if the supplied pkh has operator permission (Administration or operator)
 func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
-	if address == nil {
+	if address.IsEmpty() {
 		return false
 	}
-	if ct.AdministrationAddress != nil && ct.AdministrationAddress.Equal(address) {
+	if !ct.AdministrationAddress.IsEmpty() && ct.AdministrationAddress.Equal(address) {
 		return true
 	}
-	if ct.OperatorAddress != nil && ct.OperatorAddress.Equal(address) {
+	if !ct.OperatorAddress.IsEmpty() && ct.OperatorAddress.Equal(address) {
 		return true
 	}
 	return false

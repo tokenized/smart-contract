@@ -7,18 +7,20 @@ import (
 
 // AddressFromUnlockingScript returns the address associated with the specified unlocking script.
 func AddressFromUnlockingScript(unlockingScript []byte, net Network) (Address, error) {
-	st, err := RawAddressFromUnlockingScript(unlockingScript)
+	ra, err := RawAddressFromUnlockingScript(unlockingScript)
 	if err != nil {
-		return nil, err
+		return Address{}, err
 	}
-	return NewAddressFromRawAddress(st, net), nil
+	return NewAddressFromRawAddress(ra, net), nil
 }
 
 // RawAddressFromUnlockingScript returns the address associated with the specified unlocking
 //   script.
 func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
+	var result RawAddress
+
 	if len(unlockingScript) < 2 {
-		return nil, ErrUnknownScriptTemplate
+		return result, ErrUnknownScriptTemplate
 	}
 
 	buf := bytes.NewReader(unlockingScript)
@@ -26,27 +28,28 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 	// First push
 	_, firstPush, err := ParsePushDataScript(buf)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 
 	if len(firstPush) == 0 || buf.Len() == 0 {
-		return nil, ErrUnknownScriptTemplate
+		return result, ErrUnknownScriptTemplate
 	}
 
 	// Second push
 	_, secondPush, err := ParsePushDataScript(buf)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 
 	if len(secondPush) == 0 {
-		return nil, ErrUnknownScriptTemplate
+		return result, ErrUnknownScriptTemplate
 	}
 
 	if isSignature(firstPush) && isPublicKey(secondPush) {
 		// PKH
 		// <Signature> <PublicKey>
-		return NewRawAddressPKH(Hash160(secondPush))
+		result.SetPKH(Hash160(secondPush))
+		return result, nil
 	}
 
 	if isPublicKey(firstPush) && isSignature(secondPush) {
@@ -54,13 +57,13 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 		// <PublicKey> <Signature>
 		rValue, err := signatureRValue(secondPush)
 		if err != nil {
-			return nil, err
+			return result, err
 		}
-		return NewRawAddressPKH(Hash160(rValue))
+		result.SetRPH(Hash160(rValue))
+		return result, nil
 	}
 
-	// TODO MultiPKH
-	return nil, ErrUnknownScriptTemplate
+	return result, ErrUnknownScriptTemplate
 }
 
 // PublicKeyFromUnlockingScript returns the serialized compressed public key from the unlocking

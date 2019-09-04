@@ -227,7 +227,7 @@ func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 			return true
 		}
 
-		if client.ContractAddress.Equal(outputAddress) {
+		if bitcoin.NewRawAddressFromAddress(client.ContractAddress).Equal(outputAddress) {
 			logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 				"Matches PaymentToContract : %s", tx.TxHash().String())
 			return true

@@ -19,41 +19,40 @@ var (
 )
 
 type KeyStore struct {
-	Keys map[[20]byte]*Key
+	Keys map[bitcoin.Hash20]*Key
 }
 
 func NewKeyStore() *KeyStore {
 	return &KeyStore{
-		Keys: make(map[[20]byte]*Key),
+		Keys: make(map[bitcoin.Hash20]*Key),
 	}
 }
 
 func (k KeyStore) Add(key *Key) error {
-	var pkh [20]byte
-	copy(pkh[:], bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-	k.Keys[pkh] = key
+	hash, err := bitcoin.NewHash20(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
+	if err != nil {
+		return err
+	}
+	k.Keys[*hash] = key
 	return nil
 }
 
 func (k KeyStore) Remove(key *Key) error {
-	var pkh [20]byte
-	copy(pkh[:], bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-	delete(k.Keys, pkh)
+	hash, err := bitcoin.NewHash20(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
+	if err != nil {
+		return err
+	}
+	delete(k.Keys, *hash)
 	return nil
 }
 
 // Get returns the key corresponding to the specified address.
 func (k KeyStore) Get(address bitcoin.RawAddress) (*Key, error) {
-	var pkh [20]byte
-	switch a := address.(type) {
-	case *bitcoin.RawAddressPKH:
-		copy(pkh[:], a.PKH())
-	case *bitcoin.AddressPKH:
-		copy(pkh[:], a.PKH())
-	default:
-		return nil, errors.New("Address not PKH")
+	hash, err := address.Hash()
+	if err != nil {
+		return nil, err
 	}
-	key, ok := k.Keys[pkh]
+	key, ok := k.Keys[*hash]
 	if !ok {
 		return nil, ErrKeyNotFound
 	}
@@ -77,7 +76,7 @@ func (k KeyStore) GetAll() []*Key {
 }
 
 func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
-	k.Keys = make(map[[20]byte]*Key)
+	k.Keys = make(map[bitcoin.Hash20]*Key)
 
 	data, err := masterDB.Fetch(ctx, walletKey)
 	if err != nil {
@@ -94,15 +93,17 @@ func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Networ
 		return err
 	}
 
-	var spkh [20]byte
 	for i := uint32(0); i < count; i++ {
 		var newKey Key
 		if err := newKey.Read(buf, net); err != nil {
 			return err
 		}
 
-		copy(spkh[:], bitcoin.Hash160(newKey.Key.PublicKey().Bytes()))
-		k.Keys[spkh] = &newKey
+		hash, err := bitcoin.NewHash20(bitcoin.Hash160(newKey.Key.PublicKey().Bytes()))
+		if err != nil {
+			return err
+		}
+		k.Keys[*hash] = &newKey
 	}
 
 	return nil

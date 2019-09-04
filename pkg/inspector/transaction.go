@@ -271,10 +271,10 @@ func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
-// ContractAddresses returns the contract address, which may include more than one
-func (itx *Transaction) ContractPKHs() [][]byte {
-	return GetProtocolContractPKHs(itx, itx.MsgProto)
-}
+// // ContractPKHs returns the contract address, which may include more than one
+// func (itx *Transaction) ContractPKHs() [][]byte {
+// 	return GetProtocolContractPKHs(itx, itx.MsgProto)
+// }
 
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []bitcoin.RawAddress {

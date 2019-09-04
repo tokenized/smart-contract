@@ -68,9 +68,13 @@ func NewTxBuilderFromWire(changeAddress bitcoin.RawAddress, dustLimit uint64, fe
 	}
 
 	// Setup outputs
+	changeScript, err := result.ChangeAddress.LockingScript()
+	if err != nil {
+		return nil, err
+	}
 	for _, output := range result.MsgTx.TxOut {
 		newOutput := OutputSupplement{
-			IsChange: bytes.Equal(output.PkScript, result.ChangeAddress.LockingScript()),
+			IsChange: bytes.Equal(output.PkScript, changeScript),
 			IsDust:   false,
 		}
 		result.Outputs = append(result.Outputs, &newOutput)
@@ -102,7 +106,11 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 //   specified address.
 // isChange marks the output to receive remaining bitcoin.
 func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isChange bool) error {
-	return tx.AddOutput(address.LockingScript(), value, isChange, false)
+	script, err := address.LockingScript()
+	if err != nil {
+		return err
+	}
+	return tx.AddOutput(script, value, isChange, false)
 }
 
 // AddP2PKHDustOutput adds an output to TxBuilder with the dust limit amount and a script paying the
@@ -112,7 +120,11 @@ func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, 
 //   process the data in it. If value is later added to this output, the value replaces the dust
 //   limit amount rather than adding to it.
 func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isChange bool) error {
-	return tx.AddOutput(address.LockingScript(), tx.DustLimit, isChange, true)
+	script, err := address.LockingScript()
+	if err != nil {
+		return err
+	}
+	return tx.AddOutput(script, tx.DustLimit, isChange, true)
 }
 
 // AddOutput adds an output to TxBuilder with the specified script and value.
@@ -175,7 +187,7 @@ type OutputSupplement struct {
 // InputAddress returns the address that is paying to the input.
 func (tx *TxBuilder) InputAddress(index int) (bitcoin.RawAddress, error) {
 	if index >= len(tx.Inputs) {
-		return nil, errors.New("Input index out of range")
+		return bitcoin.RawAddress{}, errors.New("Input index out of range")
 	}
 	return bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockScript)
 }
@@ -183,7 +195,7 @@ func (tx *TxBuilder) InputAddress(index int) (bitcoin.RawAddress, error) {
 // OutputAddress returns the address that the output is paying to.
 func (tx *TxBuilder) OutputAddress(index int) (bitcoin.RawAddress, error) {
 	if index >= len(tx.MsgTx.TxOut) {
-		return nil, errors.New("Output index out of range")
+		return bitcoin.RawAddress{}, errors.New("Output index out of range")
 	}
 	return bitcoin.RawAddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
 }

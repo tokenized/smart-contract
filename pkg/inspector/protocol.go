@@ -100,47 +100,47 @@ func GetProtocolContractAddresses(itx *Transaction, m actions.Action) []bitcoin.
 	return addresses
 }
 
-func GetProtocolContractPKHs(itx *Transaction, m actions.Action) [][]byte {
-
-	addresses := make([][]byte, 1)
-
-	// Settlements may contain a second contract, although optional
-	if m.Code() == actions.CodeSettlement {
-		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
-		if ok {
-			addresses = append(addresses, addressPKH.PKH())
-		}
-
-		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
-			addressPKH, ok := itx.Inputs[1].Address.(*bitcoin.RawAddressPKH)
-			if ok {
-				addresses = append(addresses, addressPKH.PKH())
-			}
-		}
-
-		return addresses
-	}
-
-	// Some specific actions have the contract address as an input
-	isOutgoing, ok := outgoingMessageTypes[m.Code()]
-	if ok && isOutgoing {
-		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
-		if ok {
-			addresses = append(addresses, addressPKH.PKH())
-		}
-		return addresses
-	}
-
-	// Default behavior is contract as first output
-	addressPKH, ok := itx.Outputs[0].Address.(*bitcoin.RawAddressPKH)
-	if ok {
-		addresses = append(addresses, addressPKH.PKH())
-	}
-
-	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
-
-	return addresses
-}
+// func GetProtocolContractPKHs(itx *Transaction, m actions.Action) [][]byte {
+//
+// 	addresses := make([][]byte, 1)
+//
+// 	// Settlements may contain a second contract, although optional
+// 	if m.Code() == actions.CodeSettlement {
+// 		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
+// 		if ok {
+// 			addresses = append(addresses, addressPKH.PKH())
+// 		}
+//
+// 		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
+// 			addressPKH, ok := itx.Inputs[1].Address.(*bitcoin.RawAddressPKH)
+// 			if ok {
+// 				addresses = append(addresses, addressPKH.PKH())
+// 			}
+// 		}
+//
+// 		return addresses
+// 	}
+//
+// 	// Some specific actions have the contract address as an input
+// 	isOutgoing, ok := outgoingMessageTypes[m.Code()]
+// 	if ok && isOutgoing {
+// 		addressPKH, ok := itx.Inputs[0].Address.(*bitcoin.RawAddressPKH)
+// 		if ok {
+// 			addresses = append(addresses, addressPKH.PKH())
+// 		}
+// 		return addresses
+// 	}
+//
+// 	// Default behavior is contract as first output
+// 	addressPKH, ok := itx.Outputs[0].Address.(*bitcoin.RawAddressPKH)
+// 	if ok {
+// 		addresses = append(addresses, addressPKH.PKH())
+// 	}
+//
+// 	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
+//
+// 	return addresses
+// }
 
 func GetProtocolAddresses(itx *Transaction, m actions.Action, contractAddress bitcoin.RawAddress) []bitcoin.RawAddress {
 

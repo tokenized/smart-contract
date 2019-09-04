@@ -63,7 +63,7 @@ func decodeAddress(address string) bitcoin.RawAddress {
 		panic(err)
 	}
 
-	return bitcoin.RawAddress(a)
+	return bitcoin.NewRawAddressFromAddress(a)
 }
 
 func decodeTX(b []byte) wire.MsgTx {
