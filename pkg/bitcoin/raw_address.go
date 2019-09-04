@@ -346,7 +346,7 @@ func (ra *RawAddress) UnmarshalJSON(data []byte) error {
 
 	if len(data) == 2 {
 		// Empty raw address
-		ra.scriptType = ScriptTypePKH
+		ra.scriptType = 0
 		ra.data = nil
 		return nil
 	}
@@ -363,6 +363,13 @@ func (ra *RawAddress) UnmarshalJSON(data []byte) error {
 
 // Scan converts from a database column.
 func (ra *RawAddress) Scan(data interface{}) error {
+	if data == nil {
+		// Empty raw address
+		ra.scriptType = 0
+		ra.data = nil
+		return nil
+	}
+
 	b, ok := data.([]byte)
 	if !ok {
 		return errors.New("RawAddress db column not bytes")
@@ -370,7 +377,7 @@ func (ra *RawAddress) Scan(data interface{}) error {
 
 	if len(b) == 0 {
 		// Empty raw address
-		ra.scriptType = ScriptTypePKH
+		ra.scriptType = 0
 		ra.data = nil
 		return nil
 	}

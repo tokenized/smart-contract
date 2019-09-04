@@ -365,6 +365,13 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 
 // Scan converts from a database column.
 func (a *Address) Scan(data interface{}) error {
+	if data == nil {
+		// Empty address
+		a.addressType = AddressTypeMainPKH
+		a.data = nil
+		return nil
+	}
+
 	s, ok := data.(string)
 	if !ok {
 		return errors.New("Address db column not bytes")
