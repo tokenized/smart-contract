@@ -90,7 +90,7 @@ func NewServer(
 	keys := wallet.ListAll()
 	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
 	for _, key := range keys {
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()), config.Net)
+		address, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 		if err != nil {
 			return nil
 		}
@@ -324,21 +324,22 @@ func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()), k.Network())
+	rawAddress, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
 	if err != nil {
 		return err
 	}
 	newKey := wallet.Key{
-		Address: address,
+		Address: rawAddress,
 		Key:     k,
 	}
 
-	node.Log(ctx, "Adding key : %x", bitcoin.Hash160(k.PublicKey().Bytes()))
+	address, _ := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()), k.Network())
+	node.Log(ctx, "Adding key : %s", address.String())
 	server.wallet.Add(&newKey)
 	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
 		return err
 	}
-	server.contractAddresses = append(server.contractAddresses, address)
+	server.contractAddresses = append(server.contractAddresses, rawAddress)
 
 	server.txFilter.AddPubKey(ctx, k.PublicKey().Bytes())
 	return nil
@@ -349,23 +350,22 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	pkh := bitcoin.Hash160(k.PublicKey().Bytes())
-	address, err := bitcoin.NewAddressPKH(pkh, k.Network())
+	rawAddress, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
 	if err != nil {
 		return err
 	}
 	newKey := wallet.Key{
-		Address: address,
+		Address: rawAddress,
 		Key:     k,
 	}
 
 	// Check if contract exists
-	_, err = contract.Retrieve(ctx, server.MasterDB, address)
+	_, err = contract.Retrieve(ctx, server.MasterDB, rawAddress)
 	if err != contract.ErrNotFound {
 		return nil
 	}
 
-	stringAddress := bitcoin.NewAddressFromRawAddress(address, server.Config.Net)
+	stringAddress := bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net)
 	node.Log(ctx, "Removing key : %s", stringAddress.String())
 	server.wallet.Remove(&newKey)
 	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
@@ -373,7 +373,7 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 	}
 
 	for i, caddress := range server.contractAddresses {
-		if address.Equal(caddress) {
+		if rawAddress.Equal(caddress) {
 			server.contractAddresses = append(server.contractAddresses[:i], server.contractAddresses[i+1:]...)
 			break
 		}

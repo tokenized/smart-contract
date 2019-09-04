@@ -137,7 +137,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
@@ -238,7 +238,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
-		if ct.OperatorAddress != nil {
+		if !ct.OperatorAddress.IsEmpty() {
 			if len(itx.Inputs) < 2 {
 				node.Log(ctx, "All operators required for operator change")
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
@@ -303,7 +303,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		// Pull from amendment tx.
 		// Administration change. New administration in second input
 		inputIndex := 1
-		if ct.OperatorAddress != nil {
+		if !ct.OperatorAddress.IsEmpty() {
 			inputIndex++
 		}
 
@@ -312,17 +312,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			updatedContract.AdministrationAddress = bitcoin.NewConcreteRawAddress(itx.Inputs[inputIndex].Address)
+			updatedContract.AdministrationAddress = itx.Inputs[inputIndex].Address
 			inputIndex++
 		}
 
-		// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
+		// Operator changes. New operator in second input unless there is also a new administration,
+		//   then it is in the third input
 		if msg.ChangeOperatorAddress {
 			if len(itx.Inputs) <= inputIndex {
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			updatedContract.OperatorAddress = bitcoin.NewConcreteRawAddress(itx.Inputs[inputIndex].Address)
+			updatedContract.OperatorAddress = itx.Inputs[inputIndex].Address
 		}
 
 		if err := validateContractAmendOracleSig(ctx, &updatedContract, c.Headers); err != nil {
@@ -331,7 +332,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator, votingSystem); err != nil {
+	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator,
+		votingSystem); err != nil {
 		node.LogWarn(ctx, "Contract amendments not permitted : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
 	}
@@ -362,7 +364,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Administration change. New administration in next input
 	inputIndex := 1
-	if ct.OperatorAddress != nil {
+	if !ct.OperatorAddress.IsEmpty() {
 		inputIndex++
 	}
 	if msg.ChangeAdministrationAddress {
@@ -421,7 +423,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct != nil && ct.MovedTo != nil {
+	if ct != nil && !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
@@ -485,9 +487,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.AdministrationAddress = bitcoin.NewConcreteRawAddress(offerTx.Inputs[0].Address) // First input of offer tx
+		nc.AdministrationAddress = offerTx.Inputs[0].Address // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			nc.OperatorAddress = bitcoin.NewConcreteRawAddress(offerTx.Inputs[1].Address) // Second input of offer tx
+			nc.OperatorAddress = offerTx.Inputs[1].Address // Second input of offer tx
 		}
 
 		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
@@ -506,7 +508,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		// Pull from amendment tx.
 		// Administration change. New administration in next input
 		inputIndex := 1
-		if ct.OperatorAddress != nil {
+		if !ct.OperatorAddress.IsEmpty() {
 			inputIndex++
 		}
 		if amendment != nil && amendment.ChangeAdministrationAddress {
@@ -514,10 +516,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.AdministrationAddress = bitcoin.NewConcreteRawAddress(request.Inputs[inputIndex].Address)
+			uc.AdministrationAddress = &request.Inputs[inputIndex].Address
 			inputIndex++
-			address := bitcoin.NewAddressFromRawAddress(uc.AdministrationAddress,
-				w.Config.Net)
+			address := bitcoin.NewAddressFromRawAddress(*uc.AdministrationAddress, w.Config.Net)
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
@@ -527,9 +528,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			uc.OperatorAddress = bitcoin.NewConcreteRawAddress(request.Inputs[inputIndex].Address)
-			address := bitcoin.NewAddressFromRawAddress(uc.OperatorAddress,
-				w.Config.Net)
+			uc.OperatorAddress = &request.Inputs[inputIndex].Address
+			address := bitcoin.NewAddressFromRawAddress(*uc.OperatorAddress, w.Config.Net)
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
 		}
 
@@ -1326,11 +1326,11 @@ func validateContractAmendOracleSig(ctx context.Context, updatedContract *state.
 	addresses := make([]bitcoin.RawAddress, 0, 2)
 	entities := make([]*actions.EntityField, 0, 2)
 
-	addresses = append(addresses, updatedContract.AdministrationAddress.RawAddress())
+	addresses = append(addresses, updatedContract.AdministrationAddress)
 	entities = append(entities, updatedContract.Issuer)
 
-	if updatedContract.OperatorAddress != nil {
-		addresses = append(addresses, updatedContract.OperatorAddress.RawAddress())
+	if !updatedContract.OperatorAddress.IsEmpty() {
+		addresses = append(addresses, updatedContract.OperatorAddress)
 		entities = append(entities, updatedContract.ContractOperator)
 	}
 

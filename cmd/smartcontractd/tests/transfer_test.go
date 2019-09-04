@@ -102,10 +102,11 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+		script, _ := test.ContractKey.Address.LockingScript()
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 		// Data output
-		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 		}
@@ -283,10 +284,11 @@ func separateTransfersBenchmark(b *testing.B) {
 		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+		script, _ := test.ContractKey.Address.LockingScript()
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 		// Data output
-		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 		}
@@ -484,10 +486,11 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+		script, _ := test.ContractKey.Address.LockingScript()
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 		// Data output
-		script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 		}
@@ -660,10 +663,11 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
@@ -885,10 +889,11 @@ func sendTokens(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
@@ -1010,7 +1015,8 @@ func sendTokens(t *testing.T) {
 	transferTx2.TxIn = append(transferTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ = test.ContractKey.Address.LockingScript()
+	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1178,11 +1184,13 @@ func multiExchange(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract1
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
+	script1, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script1))
 	// To contract2
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, test.Contract2Key.Address.LockingScript()))
+	script2, _ := test.Contract2Key.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, script2))
 	// To contract1 boomerang
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, test.ContractKey.Address.LockingScript()))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, script1))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1415,10 +1423,11 @@ func oracleTransfer(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
@@ -1564,10 +1573,11 @@ func oracleTransferBad(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(bitcoinInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(52000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
@@ -1669,10 +1679,11 @@ func permitted(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}
@@ -1783,10 +1794,11 @@ func permittedBad(t *testing.T) {
 	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transfer2InputHash, 0), make([]byte, 130)))
 
 	// To contract
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
 	}

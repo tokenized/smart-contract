@@ -210,7 +210,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	// Add outputs to administration/operator
 	tx.AddDustOutput(ct.AdministrationAddress, false)
 	outputAmount := uint64(m.Config.DustLimit)
-	if ct.OperatorAddress != nil {
+	if !ct.OperatorAddress.IsEmpty() {
 		// Add operator
 		tx.AddDustOutput(ct.OperatorAddress, false)
 		message.AddressIndexes = append(message.AddressIndexes, uint32(1))
@@ -339,7 +339,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
@@ -368,7 +368,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	assetUpdates := make(map[protocol.AssetCode]map[bitcoin.RawAddress]*state.Holding)
+	assetUpdates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
 		settlement, m.Headers, assetUpdates)
 	if err != nil {
@@ -493,7 +493,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
@@ -665,7 +665,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, address)
 		} else {
-			settleOutputAddresses = append(settleOutputAddresses, nil)
+			settleOutputAddresses = append(settleOutputAddresses, bitcoin.RawAddress{})
 		}
 
 		action, err := protocol.Deserialize(output.PkScript, config.IsTest)
@@ -694,7 +694,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	for _, input := range settleTx.TxIn {
 		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
 		if err != nil {
-			settleInputAddresses = append(settleInputAddresses, nil)
+			settleInputAddresses = append(settleInputAddresses, bitcoin.RawAddress{})
 		} else {
 			settleInputAddresses = append(settleInputAddresses, address)
 		}
@@ -717,7 +717,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			}
 
 			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
-			if contractOutputAddress != nil && !contractOutputAddress.Equal(rk.Address) {
+			if !contractOutputAddress.IsEmpty() && !contractOutputAddress.Equal(rk.Address) {
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
@@ -766,7 +766,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
+				if !outputAddress.IsEmpty() && outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -813,7 +813,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			// Find output in settle tx
 			settleOutputIndex := uint32(0x0000ffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if outputAddress != nil && outputAddress.Equal(receiverAddress) {
+				if !outputAddress.IsEmpty() && outputAddress.Equal(receiverAddress) {
 					settleOutputIndex = uint32(i)
 					break
 				}
@@ -888,7 +888,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	if ct.ContractFee > 0 {
 		found := false
 		for i, outputAddress := range settleOutputAddresses {
-			if outputAddress != nil && outputAddress.Equal(config.FeeAddress) {
+			if !outputAddress.IsEmpty() && outputAddress.Equal(config.FeeAddress) {
 				if uint64(settleTx.TxOut[i].Value) < ct.ContractFee {
 					return fmt.Errorf("Contract fee too low")
 				}

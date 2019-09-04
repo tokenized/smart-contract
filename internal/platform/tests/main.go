@@ -93,8 +93,7 @@ func New(logFileName string) *Test {
 		return nil
 	}
 
-	nodeConfig.FeeAddress, err = bitcoin.NewAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()),
-		nodeConfig.Net)
+	nodeConfig.FeeAddress, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(feeKey.Key.PublicKey().Bytes()))
 	if err != nil {
 		fmt.Printf("main : Failed to create fee 2 address : %v\n", err)
 		return nil
@@ -240,7 +239,7 @@ func GenerateKey(net bitcoin.Network) (*wallet.Key, error) {
 		Key: key,
 	}
 
-	result.Address, err = bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), net)
+	result.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()))
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create key address")
 	}

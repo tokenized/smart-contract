@@ -77,13 +77,14 @@ func holderProposal(t *testing.T) {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, script))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize proposal : %v", tests.Failed, err)
 	}
@@ -182,10 +183,11 @@ func sendBallot(t *testing.T) {
 	ballotTx.TxIn = append(ballotTx.TxIn, wire.NewTxIn(wire.NewOutPoint(ballotInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	ballotTx.TxOut = append(ballotTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&ballotData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&ballotData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize ballot : %v", tests.Failed, err)
 	}
@@ -449,7 +451,7 @@ func mockUpBallot(ctx context.Context, address bitcoin.RawAddress, quantity uint
 	}
 
 	vt.Ballots = append(vt.Ballots, &state.Ballot{
-		Address:   bitcoin.NewConcreteRawAddress(address),
+		Address:   address,
 		Vote:      v,
 		Quantity:  quantity,
 		Timestamp: protocol.CurrentTimestamp(),
@@ -482,13 +484,15 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, script))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(3000, test.ContractKey.Address.LockingScript()))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(3000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
+	var err error
+	script, err = protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -523,7 +527,8 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	voteTx.TxIn = append(voteTx.TxIn, wire.NewTxIn(wire.NewOutPoint(voteInputHash, 1), make([]byte, 130)))
 
 	// To contract
-	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ = test.ContractKey.Address.LockingScript()
+	voteTx.TxOut = append(voteTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
 	script, err = protocol.Serialize(&voteActionData, test.NodeConfig.IsTest)
@@ -584,13 +589,15 @@ func mockUpProposal(ctx context.Context) error {
 	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0), make([]byte, 130)))
 
 	// To contract (for vote response)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, script))
 
 	// To contract (second output to fund result)
-	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
+	var err error
+	script, err = protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -697,7 +704,8 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(resultInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	resultTx.TxOut = append(resultTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
 	ts := protocol.CurrentTimestamp()
@@ -712,7 +720,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		Result:             "A",
 		Timestamp:          ts.Nano(),
 	}
-	script, err := protocol.Serialize(&resultData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&resultData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}

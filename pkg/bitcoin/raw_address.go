@@ -175,15 +175,19 @@ func NewRawAddressFromAddress(a Address) RawAddress {
 
 	switch a.addressType {
 	case AddressTypeMainPKH:
+		fallthrough
 	case AddressTypeTestPKH:
 		result.scriptType = ScriptTypePKH
 	case AddressTypeMainSH:
+		fallthrough
 	case AddressTypeTestSH:
 		result.scriptType = ScriptTypeSH
 	case AddressTypeMainMultiPKH:
+		fallthrough
 	case AddressTypeTestMultiPKH:
 		result.scriptType = ScriptTypeMultiPKH
 	case AddressTypeMainRPH:
+		fallthrough
 	case AddressTypeTestRPH:
 		result.scriptType = ScriptTypeRPH
 	}

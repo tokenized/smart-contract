@@ -287,6 +287,10 @@ func (a *Address) SetRPH(rph []byte, net Network) error {
 
 /***************************************** Common *************************************************/
 
+func (a Address) Type() byte {
+	return a.addressType
+}
+
 // String returns the type and address data followed by a checksum encoded with Base58.
 func (a Address) String() string {
 	return encodeAddress(append([]byte{a.addressType}, a.data...))
@@ -296,8 +300,11 @@ func (a Address) String() string {
 func (a Address) Network() Network {
 	switch a.addressType {
 	case AddressTypeMainPKH:
+		fallthrough
 	case AddressTypeMainSH:
+		fallthrough
 	case AddressTypeMainMultiPKH:
+		fallthrough
 	case AddressTypeMainRPH:
 		return MainNet
 	}
@@ -310,16 +317,22 @@ func (a Address) IsEmpty() bool {
 }
 
 // Hash returns the hash corresponding to the address.
-func (a *Address) Hash() (*Hash20, error) {
+func (a Address) Hash() (*Hash20, error) {
 	switch a.addressType {
 	case AddressTypeMainPKH:
+		fallthrough
 	case AddressTypeTestPKH:
+		fallthrough
 	case AddressTypeMainSH:
+		fallthrough
 	case AddressTypeTestSH:
+		fallthrough
 	case AddressTypeMainRPH:
+		fallthrough
 	case AddressTypeTestRPH:
 		return NewHash20(a.data)
 	case AddressTypeMainMultiPKH:
+		fallthrough
 	case AddressTypeTestMultiPKH:
 		return NewHash20(Hash160(a.data))
 	}

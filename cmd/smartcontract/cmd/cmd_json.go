@@ -101,7 +101,7 @@ func buildT1(cmd *cobra.Command,
 		},
 		Receivers: []receiver{
 			{
-				Address:  fmt.Sprintf("%x", address.Bytes()),
+				Address:  address.String(),
 				Quantity: qty,
 			},
 		},

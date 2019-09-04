@@ -13,6 +13,9 @@ func AddressFromLockingScript(lockingScript []byte, net Network) (Address, error
 //   script.
 func RawAddressFromLockingScript(lockingScript []byte) (RawAddress, error) {
 	var result RawAddress
+	if len(lockingScript) == 0 {
+		return result, ErrUnknownScriptTemplate
+	}
 	script := lockingScript
 	switch script[0] {
 	case OP_DUP: // PKH or RPH

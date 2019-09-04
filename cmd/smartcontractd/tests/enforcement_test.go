@@ -69,10 +69,11 @@ func freezeOrder(t *testing.T) {
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
@@ -170,10 +171,11 @@ func freezeAuthorityOrder(t *testing.T) {
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
@@ -260,10 +262,11 @@ func thawOrder(t *testing.T) {
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
@@ -345,10 +348,11 @@ func confiscateOrder(t *testing.T) {
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
@@ -450,10 +454,11 @@ func reconcileOrder(t *testing.T) {
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
 	}
@@ -552,10 +557,12 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	var err error
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		return nil, err
 	}
