@@ -293,6 +293,9 @@ func (ra RawAddress) Type() byte {
 }
 
 func (ra RawAddress) Bytes() []byte {
+	if len(ra.data) == 0 {
+		return nil
+	}
 	return append([]byte{ra.scriptType}, ra.data...)
 }
 
