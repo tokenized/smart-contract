@@ -796,17 +796,12 @@ func encodeByteSlice(e *encodeState, v reflect.Value, _ encOpts) {
 		dst := e.scratch[:encodedLen]
 		hex.Encode(dst, s)
 		e.Write(dst)
-	} else if encodedLen <= 1024 {
+	} else {
 		// The encoded bytes are short enough to allocate for, and
 		// Encoding.Encode is still cheaper.
 		dst := make([]byte, encodedLen)
 		hex.Encode(dst, s)
 		e.Write(dst)
-	} else {
-		// The encoded bytes are too long to cheaply allocate, and
-		// Encoding.Encode is no longer noticeably cheaper.
-		enc := hex.NewEncoder(e)
-		enc.Write(s)
 	}
 	e.WriteByte('"')
 }
