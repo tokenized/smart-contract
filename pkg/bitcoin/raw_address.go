@@ -288,10 +288,18 @@ func (ra *RawAddress) SetRPH(rph []byte) error {
 
 /***************************************** Common *************************************************/
 
+// Type returns the script type of the address.
 func (ra RawAddress) Type() byte {
 	return ra.scriptType
 }
 
+// IsSpendable returns true if the address produces a locking script that can be unlocked.
+func (ra RawAddress) IsSpendable() bool {
+	// TODO Full locking and unlocking support only available for P2PKH.
+	return !ra.IsEmpty() && (ra.scriptType == ScriptTypePKH)
+}
+
+// Bytes returns the byte encoded format of the address.
 func (ra RawAddress) Bytes() []byte {
 	if len(ra.data) == 0 {
 		return nil

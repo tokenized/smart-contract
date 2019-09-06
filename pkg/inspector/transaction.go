@@ -115,13 +115,8 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 
 	for n := range itx.MsgTx.TxOut {
 		output, err := buildOutput(itx.Hash, itx.MsgTx, n)
-
 		if err != nil {
 			return err
-		}
-
-		if output == nil {
-			continue
 		}
 
 		outputs = append(outputs, *output)
@@ -134,18 +129,9 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
-	// Zero value output
-	if txout.Value == 0 {
-		return nil, nil
-	}
-
 	address, err := bitcoin.RawAddressFromLockingScript(txout.PkScript)
-	if err != nil {
-		if err == bitcoin.ErrUnknownScriptTemplate {
-			return nil, nil // Skip non-payto scripts
-		} else {
-			return nil, err
-		}
+	if err != nil && err != bitcoin.ErrUnknownScriptTemplate {
+		return nil, err
 	}
 
 	utxo := NewUTXOFromHashWire(hash, tx, uint32(n))
