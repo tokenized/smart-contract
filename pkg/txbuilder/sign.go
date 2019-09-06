@@ -41,13 +41,16 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return err
 	}
 
-	pkhAddress, ok := address.(*bitcoin.RawAddressPKH)
-	if !ok {
+	if address.Type() != bitcoin.ScriptTypePKH {
 		return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
 	}
 
-	if !bytes.Equal(pkhAddress.PKH(), bitcoin.Hash160(key.PublicKey().Bytes())) {
-		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", pkhAddress.PKH()))
+	hash, err := address.Hash()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(hash.Bytes(), bitcoin.Hash160(key.PublicKey().Bytes())) {
+		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", hash.Bytes()))
 	}
 
 	tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(key, tx.MsgTx, index,
@@ -96,11 +99,15 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 				return err
 			}
 
-			switch a := address.(type) {
-			case *bitcoin.RawAddressPKH:
+			switch address.Type() {
+			case bitcoin.ScriptTypePKH:
+				hash, err := address.Hash()
+				if err != nil {
+					return err
+				}
 				signed := false
 				for i, pkh := range pkhs {
-					if !bytes.Equal(pkh, a.PKH()) {
+					if !bytes.Equal(pkh, hash.Bytes()) {
 						continue
 					}
 

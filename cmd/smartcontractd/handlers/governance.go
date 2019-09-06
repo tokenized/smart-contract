@@ -57,7 +57,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
@@ -308,7 +308,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return err
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
@@ -411,7 +411,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		return err
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
@@ -565,7 +565,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
@@ -588,7 +588,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	}
 
 	ballot := state.Ballot{
-		Address:   bitcoin.NewConcreteRawAddress(castTx.Inputs[0].Address),
+		Address:   castTx.Inputs[0].Address,
 		Vote:      cast.Vote,
 		Timestamp: protocol.NewTimestamp(msg.Timestamp),
 		Quantity:  msg.Quantity,
@@ -622,7 +622,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 		return err
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())
@@ -709,7 +709,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if ct.MovedTo != nil {
+	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
 			w.Config.Net)
 		return fmt.Errorf("Contract address changed : %s", address.String())

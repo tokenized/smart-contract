@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	FlagTx           = "tx"
-	FlagHexFormat    = "hex"
-	FlagSend         = "send"
+	FlagTx        = "tx"
+	FlagHexFormat = "hex"
+	FlagSend      = "send"
 )
 
 var cmdBuild = &cobra.Command{

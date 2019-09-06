@@ -94,10 +94,11 @@ func createAsset(t *testing.T) {
 	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
@@ -217,10 +218,11 @@ func assetIndex(t *testing.T) {
 	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
@@ -274,9 +276,14 @@ func assetIndex(t *testing.T) {
 	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, test.ContractKey.Address.LockingScript()))
+	script, _ = test.ContractKey.Address.LockingScript()
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
 
 	// Data output
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
 
 	assetItx, err = inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
@@ -359,10 +366,11 @@ func assetAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
 	}
@@ -474,10 +482,11 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
 	}
@@ -578,7 +587,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	issuerHolding := state.Holding{
-		Address:          bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		Address:          issuerKey.Address,
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
@@ -647,7 +656,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	issuerHolding := state.Holding{
-		Address:          bitcoin.NewConcreteRawAddress(issuerKey.Address),
+		Address:          issuerKey.Address,
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
@@ -677,7 +686,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 
 func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	h := state.Holding{
-		Address:          bitcoin.NewConcreteRawAddress(address),
+		Address:          address,
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),
@@ -694,7 +703,7 @@ func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uin
 
 func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	h := state.Holding{
-		Address:          bitcoin.NewConcreteRawAddress(address),
+		Address:          address,
 		PendingBalance:   quantity,
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
@@ -12,6 +13,7 @@ import (
 type BlockMessage struct {
 	Hash   bitcoin.Hash32
 	Height int
+	Time   time.Time
 }
 
 const (

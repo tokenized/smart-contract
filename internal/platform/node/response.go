@@ -94,7 +94,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 				break
 			}
 		}
-		if changeAddress == nil {
+		if changeAddress.IsEmpty() {
 			changeAddress = w.RejectOutputs[0].Address
 		}
 		rejectTx = txbuilder.NewTxBuilder(changeAddress, w.Config.DustLimit, w.Config.FeeRate)
@@ -115,12 +115,12 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 			}
 			rejectTx.AddPaymentOutput(output.Address, output.Value, output.Change)
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(i))
-			if w.RejectAddress != nil && output.Address.Equal(w.RejectAddress) {
+			if !w.RejectAddress.IsEmpty() && output.Address.Equal(w.RejectAddress) {
 				rejectAddressFound = true
 				rejection.RejectAddressIndex = uint32(i)
 			}
 		}
-		if !rejectAddressFound && w.RejectAddress != nil {
+		if !rejectAddressFound && !w.RejectAddress.IsEmpty() {
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(len(rejectTx.Outputs)))
 			rejectTx.AddDustOutput(w.RejectAddress, false)
 		}

@@ -77,17 +77,13 @@ func TestPKH(t *testing.T) {
 				t.Fatal("PKH decoded wrong net")
 			}
 
-			apkh, ok := a.(*AddressPKH)
-			if !ok {
-				t.Fatal("PKH decoded wrong address type")
-			}
-
-			if !bytes.Equal(apkh.PKH(), pkh) {
-				t.Fatalf("PKH decode invalid\ngot:%x\nwant:%x", apkh.PKH(), pkh)
+			hash, err := a.Hash()
+			if !bytes.Equal(hash.Bytes(), pkh) {
+				t.Fatalf("PKH decode invalid\ngot:%x\nwant:%x", hash.Bytes(), pkh)
 			}
 
 			// Locking script
-			script := address.LockingScript()
+			script, _ := NewRawAddressFromAddress(address).LockingScript()
 
 			if len(script) != 25 {
 				t.Fatalf("Invalid PKH locking script generated : %x", script)
@@ -98,13 +94,9 @@ func TestPKH(t *testing.T) {
 				t.Fatalf("Failed to parse PKH locking script : %s", err.Error())
 			}
 
-			spkh, ok := scriptAddress.(*AddressPKH)
-			if !ok {
-				t.Fatal("PKH parse script wrong address type")
-			}
-
-			if !bytes.Equal(spkh.PKH(), pkh) {
-				t.Fatalf("PKH parse script invalid\ngot:%x\nwant:%x", spkh.PKH(), pkh)
+			hash, err = scriptAddress.Hash()
+			if !bytes.Equal(hash.Bytes(), pkh) {
+				t.Fatalf("PKH parse script invalid\ngot:%x\nwant:%x", hash.Bytes(), pkh)
 			}
 
 			st, err := NewRawAddressPKH(pkh)
@@ -112,7 +104,8 @@ func TestPKH(t *testing.T) {
 				t.Fatalf("Failed to create script template : %s", err.Error())
 			}
 
-			if !bytes.Equal(st.LockingScript(), script) {
+			stScript, err := st.LockingScript()
+			if !bytes.Equal(stScript, script) {
 				t.Fatalf("Script template locking script doesn't match")
 			}
 		})
@@ -190,17 +183,13 @@ func TestSH(t *testing.T) {
 				t.Fatal("PKH decoded wrong net")
 			}
 
-			ash, ok := a.(*AddressSH)
-			if !ok {
-				t.Fatal("PKH decoded wrong address type")
-			}
-
-			if !bytes.Equal(ash.SH(), sh) {
-				t.Fatalf("PKH decode invalid\ngot:%x\nwant:%x", ash.SH(), sh)
+			hash, err := a.Hash()
+			if !bytes.Equal(hash.Bytes(), sh) {
+				t.Fatalf("PKH decode invalid\ngot:%x\nwant:%x", hash.Bytes(), sh)
 			}
 
 			// Locking script
-			script := address.LockingScript()
+			script, err := NewRawAddressFromAddress(address).LockingScript()
 
 			if len(script) != 23 {
 				t.Fatalf("Invalid SH locking script generated : %x", script)
@@ -211,13 +200,9 @@ func TestSH(t *testing.T) {
 				t.Fatalf("Failed to parse SH locking script : %s", err.Error())
 			}
 
-			spkh, ok := scriptAddress.(*AddressSH)
-			if !ok {
-				t.Fatal("SH parse script wrong address type")
-			}
-
-			if !bytes.Equal(spkh.SH(), sh) {
-				t.Fatalf("SH parse script invalid\ngot:%x\nwant:%x", spkh.SH(), sh)
+			hash, err = scriptAddress.Hash()
+			if !bytes.Equal(hash.Bytes(), sh) {
+				t.Fatalf("SH parse script invalid\ngot:%x\nwant:%x", hash.Bytes(), sh)
 			}
 		})
 	}

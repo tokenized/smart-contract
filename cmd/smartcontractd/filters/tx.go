@@ -78,12 +78,12 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 		if err != nil {
 			continue
 		}
-		pkhAddress, ok := bitcoin.PKH(address)
-		if !ok {
+		hash, err := address.Hash()
+		if err != nil {
 			continue
 		}
 		for _, pkh := range filter.pkhs {
-			if bytes.Equal(pkhAddress, pkh) {
+			if bytes.Equal(hash.Bytes(), pkh) {
 				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
 					"Matches PaymentToContract : %s", tx.TxHash().String())
 				return true

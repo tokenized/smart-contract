@@ -14,7 +14,8 @@ import (
 // Generate a fake funding tx so inspector can build off of it.
 func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address bitcoin.RawAddress) *wire.MsgTx {
 	result := wire.NewMsgTx(2)
-	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), address.LockingScript()))
+	script, _ := address.LockingScript()
+	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), script))
 	node.SaveTX(ctx, result)
 	return result
 }

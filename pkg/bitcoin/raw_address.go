@@ -9,502 +9,394 @@ import (
 )
 
 const (
-	scriptTypePKH      = 0x30 // Public Key Hash
-	scriptTypeSH       = 0x31 // Script Hash
-	scriptTypeMultiPKH = 0x32 // Multi-PKH
-	scriptTypeRPH      = 0x33 // RPH
+	ScriptTypePKH      = 0x30 // Public Key Hash
+	ScriptTypeSH       = 0x31 // Script Hash
+	ScriptTypeMultiPKH = 0x32 // Multi-PKH
+	ScriptTypeRPH      = 0x33 // RPH
 
-	scriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
+	ScriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
 )
 
 // RawAddress represents a bitcoin address in raw format, with no check sum or encoding.
 // It represents a "script template" for common locking and unlocking scripts.
 // It enables parsing and creating of common locking and unlocking scripts as well as identifying
 //   participants involved in the scripts via public key hashes and other hashes.
-type RawAddress interface {
-	// Bytes returns the non-network specific type followed by the address data.
-	Bytes() []byte
-
-	// LockingScript returns the bitcoin output(locking) script for paying to the address.
-	LockingScript() []byte
-
-	// Equal returns true if the address parameter has the same value.
-	Equal(RawAddress) bool
-
-	// Serialize writes the address into a buffer.
-	Serialize(*bytes.Buffer) error
-
-	// Hash returns the hash corresponding to the address.
-	Hash() (*Hash20, error)
+type RawAddress struct {
+	scriptType byte
+	data       []byte
 }
 
-// DecodeRawAddress decodes a binary bitcoin script template. It returns the script
-//   template, and an error if there was an issue.
+// DecodeRawAddress decodes a binary raw address. It returns an error if there was an issue.
 func DecodeRawAddress(b []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.Decode(b)
+	return result, err
+}
+
+// Decode decodes a binary raw address. It returns an error if there was an issue.
+func (ra *RawAddress) Decode(b []byte) error {
 	switch b[0] {
-	case addressTypeMainPKH:
+	// Public Key Hash
+	case AddressTypeMainPKH:
 		fallthrough
-	case addressTypeTestPKH:
+	case AddressTypeTestPKH:
 		fallthrough
-	case scriptTypePKH:
-		return NewRawAddressPKH(b[1:])
-	case addressTypeMainSH:
+	case ScriptTypePKH:
+		return ra.SetPKH(b[1:])
+
+	// Script Hash
+	case AddressTypeMainSH:
 		fallthrough
-	case addressTypeTestSH:
+	case AddressTypeTestSH:
 		fallthrough
-	case scriptTypeSH:
-		return NewRawAddressSH(b[1:])
-	case addressTypeMainMultiPKH:
+	case ScriptTypeSH:
+		return ra.SetSH(b[1:])
+
+	// Multiple Public Key Hash
+	case AddressTypeMainMultiPKH:
 		fallthrough
-	case addressTypeTestMultiPKH:
+	case AddressTypeTestMultiPKH:
 		fallthrough
-	case scriptTypeMultiPKH:
+	case ScriptTypeMultiPKH:
+		ra.scriptType = ScriptTypeMultiPKH
+		ra.data = b[1:]
+
+		// Validate data
 		b = b[1:] // remove type
 		// Parse required count
 		buf := bytes.NewBuffer(b[:4])
 		var required uint16
 		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, err
+			return err
 		}
 		// Parse hash count
 		var count uint16
 		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
-			return nil, err
+			return err
 		}
 		b = b[4:] // remove counts
-		pkhs := make([][]byte, 0, count)
 		for i := uint16(0); i < count; i++ {
-			if len(b) < scriptHashLength {
-				return nil, ErrBadScriptHashLength
+			if len(b) < ScriptHashLength {
+				return ErrBadScriptHashLength
 			}
-			pkhs = append(pkhs, b[:scriptHashLength])
-			b = b[scriptHashLength:]
+			b = b[ScriptHashLength:]
 		}
-		return NewRawAddressMultiPKH(required, pkhs)
-	case addressTypeMainRPH:
+		return nil
+
+	// R Puzzle Hash
+	case AddressTypeMainRPH:
 		fallthrough
-	case addressTypeTestRPH:
+	case AddressTypeTestRPH:
 		fallthrough
-	case scriptTypeRPH:
-		return NewRawAddressRPH(b[1:])
+	case ScriptTypeRPH:
+		return ra.SetRPH(b[1:])
 	}
 
-	return nil, ErrBadType
+	return ErrBadType
 }
 
-func DeserializeRawAddress(buf *bytes.Reader) (RawAddress, error) {
+// Deserialize reads a binary raw address. It returns an error if there was an issue.
+func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 	t, err := buf.ReadByte()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	switch t {
-	case addressTypeMainPKH:
+	// Public Key Hash
+	case AddressTypeMainPKH:
 		fallthrough
-	case addressTypeTestPKH:
+	case AddressTypeTestPKH:
 		fallthrough
-	case scriptTypePKH:
-		pkh := make([]byte, scriptHashLength)
+	case ScriptTypePKH:
+		pkh := make([]byte, ScriptHashLength)
 		if _, err := buf.Read(pkh); err != nil {
-			return nil, err
+			return err
 		}
-		return NewRawAddressPKH(pkh)
-	case addressTypeMainSH:
+		return ra.SetPKH(pkh)
+
+	// Script Hash
+	case AddressTypeMainSH:
 		fallthrough
-	case addressTypeTestSH:
+	case AddressTypeTestSH:
 		fallthrough
-	case scriptTypeSH:
-		sh := make([]byte, scriptHashLength)
+	case ScriptTypeSH:
+		sh := make([]byte, ScriptHashLength)
 		if _, err := buf.Read(sh); err != nil {
-			return nil, err
+			return err
 		}
-		return NewRawAddressSH(sh)
-	case addressTypeMainMultiPKH:
+		return ra.SetSH(sh)
+
+	// Multiple Public Key Hash
+	case AddressTypeMainMultiPKH:
 		fallthrough
-	case addressTypeTestMultiPKH:
+	case AddressTypeTestMultiPKH:
 		fallthrough
-	case scriptTypeMultiPKH:
+	case ScriptTypeMultiPKH:
 		// Parse required count
 		var required uint16
 		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, err
+			return err
 		}
 		// Parse hash count
 		var count uint16
 		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
-			return nil, err
+			return err
 		}
 		pkhs := make([][]byte, 0, count)
 		for i := uint16(0); i < count; i++ {
-			pkh := make([]byte, scriptHashLength)
+			pkh := make([]byte, ScriptHashLength)
 			if _, err := buf.Read(pkh); err != nil {
-				return nil, err
+				return err
 			}
 			pkhs = append(pkhs, pkh)
 		}
-		return NewRawAddressMultiPKH(required, pkhs)
-	case addressTypeMainRPH:
+		return ra.SetMultiPKH(required, pkhs)
+
+	// R Puzzle Hash
+	case AddressTypeMainRPH:
 		fallthrough
-	case addressTypeTestRPH:
+	case AddressTypeTestRPH:
 		fallthrough
-	case scriptTypeRPH:
-		rph := make([]byte, scriptHashLength)
+	case ScriptTypeRPH:
+		rph := make([]byte, ScriptHashLength)
 		if _, err := buf.Read(rph); err != nil {
-			return nil, err
+			return err
 		}
-		return NewRawAddressRPH(rph)
+		return ra.SetRPH(rph)
 	}
 
-	return nil, ErrBadType
+	return ErrBadType
+}
+
+// NewRawAddressFromAddress creates a RawAddress from an Address.
+func NewRawAddressFromAddress(a Address) RawAddress {
+	result := RawAddress{data: a.data}
+
+	switch a.addressType {
+	case AddressTypeMainPKH:
+		fallthrough
+	case AddressTypeTestPKH:
+		result.scriptType = ScriptTypePKH
+	case AddressTypeMainSH:
+		fallthrough
+	case AddressTypeTestSH:
+		result.scriptType = ScriptTypeSH
+	case AddressTypeMainMultiPKH:
+		fallthrough
+	case AddressTypeTestMultiPKH:
+		result.scriptType = ScriptTypeMultiPKH
+	case AddressTypeMainRPH:
+		fallthrough
+	case AddressTypeTestRPH:
+		result.scriptType = ScriptTypeRPH
+	}
+
+	return result
 }
 
 /****************************************** PKH ***************************************************/
-type RawAddressPKH struct {
-	pkh []byte
-}
 
 // NewRawAddressPKH creates an address from a public key hash.
-func NewRawAddressPKH(pkh []byte) (*RawAddressPKH, error) {
-	if len(pkh) != scriptHashLength {
-		return nil, ErrBadScriptHashLength
-	}
-	return &RawAddressPKH{pkh: pkh}, nil
+func NewRawAddressPKH(pkh []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetPKH(pkh)
+	return result, err
 }
 
-func (a *RawAddressPKH) PKH() []byte {
-	return a.pkh
-}
+// SetPKH sets the type as ScriptTypePKH and sets the data to the specified Public Key Hash.
+func (ra *RawAddress) SetPKH(pkh []byte) error {
+	if len(pkh) != ScriptHashLength {
+		return ErrBadScriptHashLength
+	}
 
-func (a *RawAddressPKH) Bytes() []byte {
-	return append([]byte{scriptTypePKH}, a.pkh...)
-}
-
-func (a *RawAddressPKH) Equal(other RawAddress) bool {
-	if other == nil {
-		return false
-	}
-	switch o := other.(type) {
-	case *RawAddressPKH:
-		return bytes.Equal(a.pkh, o.pkh)
-	case *AddressPKH:
-		return bytes.Equal(a.pkh, o.pkh)
-	case *ConcreteAddress:
-		return a.Equal(o.Address())
-	case *ConcreteRawAddress:
-		return a.Equal(o.RawAddress())
-	}
-	return false
-}
-
-func (a *RawAddressPKH) Serialize(buf *bytes.Buffer) error {
-	if err := buf.WriteByte(scriptTypePKH); err != nil {
-		return err
-	}
-	if _, err := buf.Write(a.pkh); err != nil {
-		return err
-	}
+	ra.scriptType = ScriptTypePKH
+	ra.data = pkh
 	return nil
-}
-
-// Hash returns the hash corresponding to the address.
-func (a *RawAddressPKH) Hash() (*Hash20, error) {
-	return NewHash20(a.pkh)
 }
 
 /******************************************* SH ***************************************************/
-type RawAddressSH struct {
-	sh []byte
-}
 
 // NewRawAddressSH creates an address from a script hash.
-func NewRawAddressSH(sh []byte) (*RawAddressSH, error) {
-	if len(sh) != scriptHashLength {
-		return nil, ErrBadScriptHashLength
-	}
-	return &RawAddressSH{sh: sh}, nil
+func NewRawAddressSH(sh []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetSH(sh)
+	return result, err
 }
 
-func (a *RawAddressSH) SH() []byte {
-	return a.sh
-}
+// SetSH sets the type as ScriptTypeSH and sets the data to the specified Script Hash.
+func (ra *RawAddress) SetSH(sh []byte) error {
+	if len(sh) != ScriptHashLength {
+		return ErrBadScriptHashLength
+	}
 
-func (a *RawAddressSH) Bytes() []byte {
-	return append([]byte{scriptTypeSH}, a.sh...)
-}
-
-func (a *RawAddressSH) Equal(other RawAddress) bool {
-	if other == nil {
-		return false
-	}
-	switch o := other.(type) {
-	case *RawAddressSH:
-		return bytes.Equal(a.sh, o.sh)
-	case *AddressSH:
-		return bytes.Equal(a.sh, o.sh)
-	case *ConcreteAddress:
-		return a.Equal(o.Address())
-	case *ConcreteRawAddress:
-		return a.Equal(o.RawAddress())
-	}
-	return false
-}
-
-func (a *RawAddressSH) Serialize(buf *bytes.Buffer) error {
-	if err := buf.WriteByte(scriptTypeSH); err != nil {
-		return err
-	}
-	if _, err := buf.Write(a.sh); err != nil {
-		return err
-	}
+	ra.scriptType = ScriptTypeSH
+	ra.data = sh
 	return nil
-}
-
-// Hash returns the hash corresponding to the address.
-func (a *RawAddressSH) Hash() (*Hash20, error) {
-	return NewHash20(a.sh)
 }
 
 /**************************************** MultiPKH ************************************************/
-type RawAddressMultiPKH struct {
-	pkhs     [][]byte
-	required uint16
+
+// NewRawAddressMultiPKH creates an address from multiple public key hashes.
+func NewRawAddressMultiPKH(required uint16, pkhs [][]byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetMultiPKH(required, pkhs)
+	return result, err
 }
 
-// NewRawAddressMultiPKH creates an address from a required signature count and some public key hashes.
-func NewRawAddressMultiPKH(required uint16, pkhs [][]byte) (*RawAddressMultiPKH, error) {
+// SetMultiPKH sets the type as ScriptTypeMultiPKH and puts the required count and Public Key Hashes into data.
+func (ra *RawAddress) SetMultiPKH(required uint16, pkhs [][]byte) error {
+	ra.scriptType = ScriptTypeMultiPKH
+	buf := bytes.NewBuffer(make([]byte, 0, 2+(len(pkhs)*ScriptHashLength)))
+	if err := binary.Write(buf, binary.LittleEndian, required); err != nil {
+		return err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, uint16(len(pkhs))); err != nil {
+		return err
+	}
 	for _, pkh := range pkhs {
-		if len(pkh) != scriptHashLength {
-			return nil, ErrBadScriptHashLength
-		}
-	}
-	return &RawAddressMultiPKH{pkhs: pkhs, required: required}, nil
-}
-
-func (a *RawAddressMultiPKH) PKHs() []byte {
-	b := make([]byte, 0, len(a.pkhs)*scriptHashLength)
-	for _, pkh := range a.pkhs {
-		b = append(b, pkh...)
-	}
-	return b
-}
-
-func (a *RawAddressMultiPKH) Bytes() []byte {
-	b := make([]byte, 0, 5+(len(a.pkhs)*scriptHashLength))
-
-	b = append(b, byte(scriptTypeMultiPKH))
-
-	// Append required and hash counts
-	var numBuf bytes.Buffer
-	binary.Write(&numBuf, binary.LittleEndian, a.required)
-	binary.Write(&numBuf, binary.LittleEndian, uint16(len(a.pkhs)))
-	b = append(b, numBuf.Bytes()...)
-
-	// Append all pkhs
-	for _, pkh := range a.pkhs {
-		b = append(b, pkh...)
-	}
-
-	return b
-}
-
-func (a *RawAddressMultiPKH) Equal(other RawAddress) bool {
-	if other == nil {
-		return false
-	}
-
-	switch o := other.(type) {
-	case *RawAddressMultiPKH:
-		if len(a.pkhs) != len(o.pkhs) {
-			return false
-		}
-
-		for i, pkh := range a.pkhs {
-			if !bytes.Equal(pkh, o.pkhs[i]) {
-				return false
-			}
-		}
-		return true
-	case *AddressMultiPKH:
-		if len(a.pkhs) != len(o.pkhs) {
-			return false
-		}
-
-		for i, pkh := range a.pkhs {
-			if !bytes.Equal(pkh, o.pkhs[i]) {
-				return false
-			}
-		}
-		return true
-	case *ConcreteAddress:
-		return a.Equal(o.Address())
-	case *ConcreteRawAddress:
-		return a.Equal(o.RawAddress())
-	}
-
-	return false
-}
-
-func (a *RawAddressMultiPKH) Serialize(buf *bytes.Buffer) error {
-	if err := buf.WriteByte(scriptTypeMultiPKH); err != nil {
-		return err
-	}
-
-	if err := binary.Write(buf, binary.LittleEndian, a.required); err != nil {
-		return err
-	}
-	if err := binary.Write(buf, binary.LittleEndian, uint16(len(a.pkhs))); err != nil {
-		return err
-	}
-
-	// Write all pkhs
-	for _, pkh := range a.pkhs {
-		if _, err := buf.Write(pkh); err != nil {
+		n, err := buf.Write(pkh)
+		if err != nil {
 			return err
 		}
+		if n != ScriptHashLength {
+			return ErrBadScriptHashLength
+		}
 	}
+	ra.data = buf.Bytes()
+	return nil
+}
 
+/******************************************** RPH *************************************************/
+
+// NewRawAddressRPH creates an address from a R puzzle hash.
+func NewRawAddressRPH(rph []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetRPH(rph)
+	return result, err
+}
+
+// SetRPH sets the type as ScriptTypeRPH and sets the data to the specified R Puzzle Hash.
+func (ra *RawAddress) SetRPH(rph []byte) error {
+	if len(rph) != ScriptHashLength {
+		return ErrBadScriptHashLength
+	}
+	ra.scriptType = ScriptTypeRPH
+	ra.data = rph
+	return nil
+}
+
+/***************************************** Common *************************************************/
+
+// Type returns the script type of the address.
+func (ra RawAddress) Type() byte {
+	return ra.scriptType
+}
+
+// IsSpendable returns true if the address produces a locking script that can be unlocked.
+func (ra RawAddress) IsSpendable() bool {
+	// TODO Full locking and unlocking support only available for P2PKH.
+	return !ra.IsEmpty() && (ra.scriptType == ScriptTypePKH)
+}
+
+// Bytes returns the byte encoded format of the address.
+func (ra RawAddress) Bytes() []byte {
+	if len(ra.data) == 0 {
+		return nil
+	}
+	return append([]byte{ra.scriptType}, ra.data...)
+}
+
+func (ra RawAddress) Equal(other RawAddress) bool {
+	return ra.scriptType == other.scriptType && bytes.Equal(ra.data, other.data)
+}
+
+// IsEmpty returns true if the address does not have a value set.
+func (ra RawAddress) IsEmpty() bool {
+	return len(ra.data) == 0
+}
+
+func (ra RawAddress) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(ra.scriptType); err != nil {
+		return err
+	}
+	if _, err := buf.Write(ra.data); err != nil {
+		return err
+	}
 	return nil
 }
 
 // Hash returns the hash corresponding to the address.
-func (a *RawAddressMultiPKH) Hash() (*Hash20, error) {
-	return NewHash20(Hash160(a.Bytes()))
-}
-
-/***************************************** RPH ************************************************/
-type RawAddressRPH struct {
-	rph []byte
-}
-
-// NewRawAddressRPH creates an address from an R puzzle hash.
-func NewRawAddressRPH(rph []byte) (*RawAddressRPH, error) {
-	if len(rph) != scriptHashLength {
-		return nil, ErrBadScriptHashLength
+func (ra *RawAddress) Hash() (*Hash20, error) {
+	switch ra.scriptType {
+	case ScriptTypePKH:
+		return NewHash20(ra.data)
+	case ScriptTypeSH:
+		return NewHash20(ra.data)
+	case ScriptTypeMultiPKH:
+		return NewHash20(Hash160(ra.Bytes()))
+	case ScriptTypeRPH:
+		return NewHash20(ra.data)
 	}
-	return &RawAddressRPH{rph: rph}, nil
-}
-
-func (a *RawAddressRPH) RPH() []byte {
-	return a.rph
-}
-
-func (a *RawAddressRPH) Bytes() []byte {
-	return append([]byte{scriptTypeRPH}, a.rph...)
-}
-
-func (a *RawAddressRPH) Equal(other RawAddress) bool {
-	if other == nil {
-		return false
-	}
-	switch o := other.(type) {
-	case *RawAddressRPH:
-		return bytes.Equal(a.rph, o.rph)
-	case *AddressRPH:
-		return bytes.Equal(a.rph, o.rph)
-	case *ConcreteAddress:
-		return a.Equal(o.Address())
-	case *ConcreteRawAddress:
-		return a.Equal(o.RawAddress())
-	}
-	return false
-}
-
-func (a *RawAddressRPH) Serialize(buf *bytes.Buffer) error {
-	if err := buf.WriteByte(scriptTypeRPH); err != nil {
-		return err
-	}
-	if _, err := buf.Write(a.rph); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Hash returns the hash corresponding to the address.
-func (a *RawAddressRPH) Hash() (*Hash20, error) {
-	return NewHash20(a.rph)
-}
-
-// ConcreteRawAddress is a concrete form of RawAddress.
-// It does things not possible with an interface.
-// It implements marshal and unmarshal to/from JSON.
-// It also Scan for converting from a database column.
-type ConcreteRawAddress struct {
-	ra RawAddress
-}
-
-func NewConcreteRawAddress(ra RawAddress) *ConcreteRawAddress {
-	return &ConcreteRawAddress{ra}
-}
-
-func (a *ConcreteRawAddress) RawAddress() RawAddress {
-	return a.ra
-}
-
-// Bytes returns the non-network specific type followed by the address data.
-func (a *ConcreteRawAddress) Bytes() []byte {
-	return a.ra.Bytes()
-}
-
-// LockingScript returns the bitcoin output(locking) script for paying to the address.
-func (a *ConcreteRawAddress) LockingScript() []byte {
-	return a.ra.LockingScript()
-}
-
-// Equal returns true if the address parameter has the same value.
-func (a *ConcreteRawAddress) Equal(other RawAddress) bool {
-	return a.ra.Equal(other)
-}
-
-// Serialize writes the address into a buffer.
-func (a *ConcreteRawAddress) Serialize(buf *bytes.Buffer) error {
-	return a.ra.Serialize(buf)
-}
-
-// Hash returns the hash corresponding to the address.
-func (a *ConcreteRawAddress) Hash() (*Hash20, error) {
-	if a.ra == nil {
-		return nil, errors.New("Empty JSON Raw Address")
-	}
-	return a.ra.Hash()
+	return nil, ErrUnknownScriptTemplate
 }
 
 // MarshalJSON converts to json.
-func (a *ConcreteRawAddress) MarshalJSON() ([]byte, error) {
-	if a.ra == nil {
+func (ra *RawAddress) MarshalJSON() ([]byte, error) {
+	if len(ra.data) == 0 {
 		return []byte("\"\""), nil
 	}
-	return []byte("\"" + hex.EncodeToString(a.ra.Bytes()) + "\""), nil
+	return []byte("\"" + hex.EncodeToString(ra.Bytes()) + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
-func (a *ConcreteRawAddress) UnmarshalJSON(data []byte) error {
+func (ra *RawAddress) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
 		return fmt.Errorf("Too short for RawAddress hex data : %d", len(data))
 	}
 
 	if len(data) == 2 {
-		a.ra = nil // empty
+		// Empty raw address
+		ra.scriptType = 0
+		ra.data = nil
 		return nil
 	}
 
+	// Decode hex and remove double quotes.
 	raw, err := hex.DecodeString(string(data[1 : len(data)-1]))
 	if err != nil {
 		return err
 	}
-	a.ra, err = DecodeRawAddress(raw)
-	return err
+
+	// Decode into raw address
+	return ra.Decode(raw)
 }
 
 // Scan converts from a database column.
-func (a *ConcreteRawAddress) Scan(data interface{}) error {
-	b, ok := data.([]byte)
-	if !ok {
-		return errors.New("ConcreteRawAddress db column not bytes")
+func (ra *RawAddress) Scan(data interface{}) error {
+	if data == nil {
+		// Empty raw address
+		ra.scriptType = 0
+		ra.data = nil
+		return nil
 	}
 
-	var err error
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("RawAddress db column not bytes")
+	}
+
+	if len(b) == 0 {
+		// Empty raw address
+		ra.scriptType = 0
+		ra.data = nil
+		return nil
+	}
+
+	// Copy byte slice because it will be wiped out by the database after this call.
 	c := make([]byte, len(b))
 	copy(c, b)
-	a.ra, err = DecodeRawAddress(c)
-	return err
+
+	// Decode into raw address
+	return ra.Decode(c)
 }

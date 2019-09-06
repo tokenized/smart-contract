@@ -10,9 +10,9 @@ import (
 type NewContract struct {
 	Timestamp protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AdministrationAddress *bitcoin.ConcreteRawAddress `json:"AdministrationAddress,omitempty"`
-	OperatorAddress       *bitcoin.ConcreteRawAddress `json:"OperatorAddress,omitempty"`
-	MasterAddress         *bitcoin.ConcreteRawAddress `json:"MasterAddress,omitempty"`
+	AdministrationAddress bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
+	MasterAddress         bitcoin.RawAddress `json:"MasterAddress,omitempty"`
 
 	ContractName              string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType       uint32                       `json:"BodyOfAgreementType,omitempty"`
@@ -48,8 +48,8 @@ type UpdateContract struct {
 	Revision  *uint32             `json:"Revision,omitempty"`
 	Timestamp *protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AdministrationAddress *bitcoin.ConcreteRawAddress `json:"AdministrationAddress,omitempty"`
-	OperatorAddress       *bitcoin.ConcreteRawAddress `json:"OperatorAddress,omitempty"`
+	AdministrationAddress *bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
+	OperatorAddress       *bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
 
 	ContractName              *string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType       *uint32                       `json:"BodyOfAgreementType,omitempty"`

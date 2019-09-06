@@ -15,96 +15,115 @@ var (
 )
 
 const (
-	addressTypeMainPKH      = 0x00 // Public Key Hash
-	addressTypeMainSH       = 0x05 // Script Hash
-	addressTypeMainMultiPKH = 0x10 // Multi-PKH - Experimental value. Not standard
-	addressTypeMainRPH      = 0x20 // RPH - Experimental value. Not standard
+	AddressTypeMainPKH      = 0x00 // Public Key Hash
+	AddressTypeMainSH       = 0x05 // Script Hash
+	AddressTypeMainMultiPKH = 0x10 // Multi-PKH - Experimental value. Not standard
+	AddressTypeMainRPH      = 0x20 // RPH - Experimental value. Not standard
 
-	addressTypeTestPKH      = 0x6f // Testnet Public Key Hash
-	addressTypeTestSH       = 0xc4 // Testnet Script Hash
-	addressTypeTestMultiPKH = 0xd0 // Multi-PKH - Experimental value. Not standard
-	addressTypeTestRPH      = 0xe0 // RPH - Experimental value. Not standard
+	AddressTypeTestPKH      = 0x6f // Testnet Public Key Hash
+	AddressTypeTestSH       = 0xc4 // Testnet Script Hash
+	AddressTypeTestMultiPKH = 0xd0 // Multi-PKH - Experimental value. Not standard
+	AddressTypeTestRPH      = 0xe0 // RPH - Experimental value. Not standard
 )
 
-type Address interface {
-	// String returns the type and address data followed by a checksum encoded with Base58.
-	String() string
-
-	// Network returns the network id for the address.
-	Network() Network
-
-	// bytes returns the type and address data.
-	bytes() []byte
-
-	RawAddress
+type Address struct {
+	addressType byte
+	data        []byte
 }
 
-// DecodeAddress decodes a base58 text bitcoin address. It returns the address, and an error
-//   if there was an issue.
+// DecodeAddress decodes a base58 text bitcoin address. It returns an error if there was an issue.
 func DecodeAddress(address string) (Address, error) {
+	var result Address
+	err := result.Decode(address)
+	return result, err
+}
+
+// Decode decodes a base58 text bitcoin address. It returns an error if there was an issue.
+func (a *Address) Decode(address string) error {
 	b, err := decodeAddress(address)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return decodeAddressBytes(b)
+	return a.decodeBytes(b)
 }
 
-// decodeAddressBytes decodes a base58 text bitcoin address. It returns the address, and an error
-//   if there was an issue.
-func decodeAddressBytes(b []byte) (Address, error) {
-	switch b[0] {
-	case addressTypeMainPKH:
-		return NewAddressPKH(b[1:], MainNet)
-	case addressTypeMainSH:
-		return NewAddressSH(b[1:], MainNet)
-	case addressTypeMainMultiPKH:
-		b = b[1:] // remove type
-		// Parse required count
-		buf := bytes.NewBuffer(b[:2])
-		var required uint16
-		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, err
-		}
-		b = b[2:] // remove required
-		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
-		for len(b) >= 0 {
-			if len(b) < scriptHashLength {
-				return nil, ErrBadScriptHashLength
-			}
-			pkhs = append(pkhs, b[:scriptHashLength])
-			b = b[scriptHashLength:]
-		}
-		return NewAddressMultiPKH(required, pkhs, MainNet)
-	case addressTypeMainRPH:
-		return NewAddressRPH(b[1:], MainNet)
-	case addressTypeTestPKH:
-		return NewAddressPKH(b[1:], TestNet)
-	case addressTypeTestSH:
-		return NewAddressSH(b[1:], TestNet)
-	case addressTypeTestMultiPKH:
-		b = b[1:] // remove type
-		// Parse required count
-		buf := bytes.NewBuffer(b[:2])
-		var required uint16
-		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
-			return nil, err
-		}
-		b = b[2:] // remove required
-		pkhs := make([][]byte, 0, len(b)/scriptHashLength)
-		for len(b) >= 0 {
-			if len(b) < scriptHashLength {
-				return nil, ErrBadScriptHashLength
-			}
-			pkhs = append(pkhs, b[:scriptHashLength])
-			b = b[scriptHashLength:]
-		}
-		return NewAddressMultiPKH(required, pkhs, TestNet)
-	case addressTypeTestRPH:
-		return NewAddressRPH(b[1:], TestNet)
+// decodeAddressBytes decodes a binary address. It returns an error if there was an issue.
+func (a *Address) decodeBytes(b []byte) error {
+	if len(b) < 2 {
+		return ErrBadType
 	}
 
-	return nil, ErrBadType
+	switch b[0] {
+
+	// MainNet
+	case AddressTypeMainPKH:
+		return a.SetPKH(b[1:], MainNet)
+	case AddressTypeMainSH:
+		return a.SetSH(b[1:], MainNet)
+	case AddressTypeMainMultiPKH:
+		a.data = b[1:]
+
+		// Validate data
+		b = b[1:] // remove type
+		// Parse required count
+		buf := bytes.NewBuffer(b[:4])
+		var required uint16
+		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+			return err
+		}
+		// Parse hash count
+		var count uint16
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return err
+		}
+		b = b[4:] // remove counts
+		for i := uint16(0); i < count; i++ {
+			if len(b) < ScriptHashLength {
+				return ErrBadScriptHashLength
+			}
+			b = b[ScriptHashLength:]
+		}
+		a.addressType = AddressTypeMainMultiPKH
+		return nil
+	case AddressTypeMainRPH:
+		return a.SetRPH(b[1:], MainNet)
+
+	// TestNet
+	case AddressTypeTestPKH:
+		return a.SetPKH(b[1:], TestNet)
+	case AddressTypeTestSH:
+		return a.SetSH(b[1:], TestNet)
+	case AddressTypeTestMultiPKH:
+		a.data = b[1:]
+
+		// Validate data
+		b = b[1:] // remove type
+		// Parse required count
+		buf := bytes.NewBuffer(b[:4])
+		var required uint16
+		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+			return err
+		}
+		// Parse hash count
+		var count uint16
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return err
+		}
+		b = b[4:] // remove counts
+		for i := uint16(0); i < count; i++ {
+			if len(b) < ScriptHashLength {
+				return ErrBadScriptHashLength
+			}
+			b = b[ScriptHashLength:]
+		}
+		a.addressType = AddressTypeTestMultiPKH
+		return nil
+	case AddressTypeTestRPH:
+		return a.SetRPH(b[1:], TestNet)
+	}
+
+	return ErrBadType
 }
 
 // DecodeNetMatches returns true if the decoded network id matches the specified network id.
@@ -120,370 +139,253 @@ func DecodeNetMatches(decoded Network, desired Network) bool {
 	return false
 }
 
-func NewAddressFromRawAddress(st RawAddress, net Network) Address {
-	switch t := st.(type) {
-	case *RawAddressPKH:
-		return &AddressPKH{t, net}
-	case *RawAddressSH:
-		return &AddressSH{t, net}
-	case *RawAddressMultiPKH:
-		return &AddressMultiPKH{t, net}
-	case *RawAddressRPH:
-		return &AddressRPH{t, net}
-	case *AddressPKH:
-		return t
-	case *AddressSH:
-		return t
-	case *AddressMultiPKH:
-		return t
-	case *AddressRPH:
-		return t
-	case *ConcreteRawAddress:
-		return NewAddressFromRawAddress(t.RawAddress(), net)
-	case *ConcreteAddress:
-		return t.Address()
+// NewAddressFromRawAddress creates an Address from a RawAddress and a network.
+func NewAddressFromRawAddress(ra RawAddress, net Network) Address {
+	result := Address{data: ra.data}
+
+	switch ra.scriptType {
+	case ScriptTypePKH:
+		if net == MainNet {
+			result.addressType = AddressTypeMainPKH
+		} else {
+			result.addressType = AddressTypeTestPKH
+		}
+	case ScriptTypeSH:
+		if net == MainNet {
+			result.addressType = AddressTypeMainSH
+		} else {
+			result.addressType = AddressTypeTestSH
+		}
+	case ScriptTypeMultiPKH:
+		if net == MainNet {
+			result.addressType = AddressTypeMainMultiPKH
+		} else {
+			result.addressType = AddressTypeTestMultiPKH
+		}
+	case ScriptTypeRPH:
+		if net == MainNet {
+			result.addressType = AddressTypeMainRPH
+		} else {
+			result.addressType = AddressTypeTestRPH
+		}
 	}
 
-	return nil
-}
-
-// PKH is a helper function that returns the PKH for a RawAddress or Address. It returns false
-//   if there is no PKH.
-func PKH(st RawAddress) ([]byte, bool) {
-	switch a := st.(type) {
-	case *RawAddressPKH:
-		return a.PKH(), true
-	case *AddressPKH:
-		return a.PKH(), true
-	case *ConcreteRawAddress:
-		return PKH(a.RawAddress())
-	case *ConcreteAddress:
-		return PKH(a.Address())
-	}
-
-	return nil, false
-}
-
-// SH is a helper function that returns the SH for a RawAddress or Address. It returns false
-//   if there is no SH.
-func SH(st RawAddress) ([]byte, bool) {
-	switch a := st.(type) {
-	case *RawAddressSH:
-		return a.SH(), true
-	case *AddressSH:
-		return a.SH(), true
-	case *ConcreteRawAddress:
-		return SH(a.RawAddress())
-	case *ConcreteAddress:
-		return SH(a.Address())
-	}
-
-	return nil, false
-}
-
-// PKHs is a helper function that returns the PKHs for a RawAddress or Address. It returns false
-//   if there is no PKHs.
-func PKHs(st RawAddress) ([]byte, bool) {
-	switch a := st.(type) {
-	case *RawAddressMultiPKH:
-		return a.PKHs(), true
-	case *AddressMultiPKH:
-		return a.PKHs(), true
-	case *ConcreteRawAddress:
-		return PKHs(a.RawAddress())
-	case *ConcreteAddress:
-		return PKHs(a.Address())
-	}
-
-	return nil, false
-}
-
-// RPH is a helper function that returns the RPH for a RawAddress or Address. It returns false
-//   if there is no RPH.
-func RPH(st RawAddress) ([]byte, bool) {
-	switch a := st.(type) {
-	case *RawAddressRPH:
-		return a.RPH(), true
-	case *AddressRPH:
-		return a.RPH(), true
-	case *ConcreteRawAddress:
-		return RPH(a.RawAddress())
-	case *ConcreteAddress:
-		return RPH(a.Address())
-	}
-
-	return nil, false
+	return result
 }
 
 /****************************************** PKH ***************************************************/
-type AddressPKH struct {
-	*RawAddressPKH
-	net Network
-}
 
 // NewAddressPKH creates an address from a public key hash.
-func NewAddressPKH(pkh []byte, net Network) (*AddressPKH, error) {
-	st, err := NewRawAddressPKH(pkh)
-	if err != nil {
-		return nil, err
+func NewAddressPKH(pkh []byte, net Network) (Address, error) {
+	var result Address
+	err := result.SetPKH(pkh, net)
+	return result, err
+}
+
+// SetPKH sets the Public Key Hash and script type of the address.
+func (a *Address) SetPKH(pkh []byte, net Network) error {
+	if len(pkh) != ScriptHashLength {
+		return ErrBadScriptHashLength
 	}
-	return &AddressPKH{st, net}, nil
-}
 
-// String returns the type and address data followed by a checksum encoded with Base58.
-func (a *AddressPKH) String() string {
-	return encodeAddress(a.bytes())
-}
-
-// bytes returns the type and address data.
-func (a *AddressPKH) bytes() []byte {
-	var addressType byte
-
-	// Add address type byte in front
-	switch a.net {
-	case MainNet:
-		addressType = addressTypeMainPKH
-	default:
-		addressType = addressTypeTestPKH
+	if net == MainNet {
+		a.addressType = AddressTypeMainPKH
+	} else {
+		a.addressType = AddressTypeTestPKH
 	}
-	return append([]byte{addressType}, a.pkh...)
+
+	a.data = pkh
+	return nil
 }
 
-// Network returns the network id for the address.
-func (a *AddressPKH) Network() Network {
-	return a.net
-}
-
-/******************************************* SH ***************************************************/
-type AddressSH struct {
-	*RawAddressSH
-	net Network
-}
+/****************************************** SH ***************************************************/
 
 // NewAddressSH creates an address from a script hash.
-func NewAddressSH(sh []byte, net Network) (*AddressSH, error) {
-	st, err := NewRawAddressSH(sh)
-	if err != nil {
-		return nil, err
+func NewAddressSH(sh []byte, net Network) (Address, error) {
+	var result Address
+	err := result.SetSH(sh, net)
+	return result, err
+}
+
+// SetSH sets the Script Hash and script type of the address.
+func (a *Address) SetSH(sh []byte, net Network) error {
+	if len(sh) != ScriptHashLength {
+		return ErrBadScriptHashLength
 	}
-	return &AddressSH{st, net}, nil
-}
 
-// String returns the type and address data followed by a checksum encoded with Base58.
-func (a *AddressSH) String() string {
-	return encodeAddress(a.bytes())
-}
-
-// bytes returns the type and address data.
-func (a *AddressSH) bytes() []byte {
-	var addressType byte
-
-	// Add address type byte in front
-	switch a.net {
-	case MainNet:
-		addressType = addressTypeMainSH
-	default:
-		addressType = addressTypeTestSH
+	if net == MainNet {
+		a.addressType = AddressTypeMainSH
+	} else {
+		a.addressType = AddressTypeTestSH
 	}
-	return append([]byte{addressType}, a.sh...)
-}
 
-// Network returns the network id for the address.
-func (a *AddressSH) Network() Network {
-	return a.net
+	a.data = sh
+	return nil
 }
 
 /**************************************** MultiPKH ************************************************/
-type AddressMultiPKH struct {
-	*RawAddressMultiPKH
-	net Network
+
+// NewAddressMultiPKH creates an address from multiple public key hashes.
+func NewAddressMultiPKH(required uint16, pkhs [][]byte, net Network) (Address, error) {
+	var result Address
+	err := result.SetMultiPKH(required, pkhs, net)
+	return result, err
 }
 
-// NewAddressMultiPKH creates an address from a required signature count and some public key hashes.
-func NewAddressMultiPKH(required uint16, pkhs [][]byte, net Network) (*AddressMultiPKH, error) {
-	st, err := NewRawAddressMultiPKH(required, pkhs)
-	if err != nil {
-		return nil, err
+// SetMultiPKH sets the Public Key Hashes and script type of the address.
+func (a *Address) SetMultiPKH(required uint16, pkhs [][]byte, net Network) error {
+	if net == MainNet {
+		a.addressType = AddressTypeMainMultiPKH
+	} else {
+		a.addressType = AddressTypeTestMultiPKH
 	}
-	return &AddressMultiPKH{st, net}, nil
+
+	buf := bytes.NewBuffer(make([]byte, 0, 2+(len(pkhs)*ScriptHashLength)))
+	if err := binary.Write(buf, binary.LittleEndian, required); err != nil {
+		return err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, uint16(len(pkhs))); err != nil {
+		return err
+	}
+	for _, pkh := range pkhs {
+		n, err := buf.Write(pkh)
+		if err != nil {
+			return err
+		}
+		if n != ScriptHashLength {
+			return ErrBadScriptHashLength
+		}
+	}
+	a.data = buf.Bytes()
+	return nil
+}
+
+/****************************************** RPH ***************************************************/
+
+// NewAddressRPH creates an address from a R puzzle hash.
+func NewAddressRPH(rph []byte, net Network) (Address, error) {
+	var result Address
+	err := result.SetRPH(rph, net)
+	return result, err
+}
+
+// SetRPH sets the R Puzzle Hash and script type of the address.
+func (a *Address) SetRPH(rph []byte, net Network) error {
+	if len(rph) != ScriptHashLength {
+		return ErrBadScriptHashLength
+	}
+
+	if net == MainNet {
+		a.addressType = AddressTypeMainRPH
+	} else {
+		a.addressType = AddressTypeTestRPH
+	}
+
+	a.data = rph
+	return nil
+}
+
+/***************************************** Common *************************************************/
+
+func (a Address) Type() byte {
+	return a.addressType
 }
 
 // String returns the type and address data followed by a checksum encoded with Base58.
-func (a *AddressMultiPKH) String() string {
-	return encodeAddress(a.bytes())
-}
-
-// bytes returns the type and address data.
-func (a *AddressMultiPKH) bytes() []byte {
-	b := make([]byte, 0, 3+(len(a.pkhs)*scriptHashLength))
-
-	var addressType byte
-
-	// Add address type byte in front
-	switch a.net {
-	case MainNet:
-		addressType = addressTypeMainMultiPKH
-	default:
-		addressType = addressTypeTestMultiPKH
-	}
-	b = append(b, byte(addressType))
-
-	// Append required count
-	var numBuf bytes.Buffer
-	binary.Write(&numBuf, binary.LittleEndian, a.required)
-	b = append(b, numBuf.Bytes()...)
-
-	// Append all pkhs
-	for _, pkh := range a.pkhs {
-		b = append(b, pkh...)
-	}
-
-	return b
+func (a Address) String() string {
+	return encodeAddress(append([]byte{a.addressType}, a.data...))
 }
 
 // Network returns the network id for the address.
-func (a *AddressMultiPKH) Network() Network {
-	return a.net
-}
-
-/***************************************** RPH ************************************************/
-type AddressRPH struct {
-	*RawAddressRPH
-	net Network
-}
-
-// NewAddressRPH creates an address from an R puzzle hash.
-func NewAddressRPH(rph []byte, net Network) (*AddressRPH, error) {
-	st, err := NewRawAddressRPH(rph)
-	if err != nil {
-		return nil, err
+func (a Address) Network() Network {
+	switch a.addressType {
+	case AddressTypeMainPKH:
+		fallthrough
+	case AddressTypeMainSH:
+		fallthrough
+	case AddressTypeMainMultiPKH:
+		fallthrough
+	case AddressTypeMainRPH:
+		return MainNet
 	}
-	return &AddressRPH{st, net}, nil
+	return TestNet
 }
 
-// String returns the type and address data followed by a checksum encoded with Base58.
-func (a *AddressRPH) String() string {
-	return encodeAddress(a.bytes())
-}
-
-// bytes returns the type and address data.
-func (a *AddressRPH) bytes() []byte {
-	var addressType byte
-
-	// Add address type byte in front
-	switch a.net {
-	case MainNet:
-		addressType = addressTypeMainRPH
-	default:
-		addressType = addressTypeTestRPH
-	}
-	return append([]byte{addressType}, a.rph...)
-}
-
-// Network returns the network id for the address.
-func (a *AddressRPH) Network() Network {
-	return a.net
-}
-
-// ConcreteAddress is a concrete form of Address.
-// It does things not possible with an interface.
-// It implements marshal and unmarshal to/from JSON.
-// It also Scan for converting from a database column.
-type ConcreteAddress struct {
-	a Address
-}
-
-func NewConcreteAddress(a Address) *ConcreteAddress {
-	return &ConcreteAddress{a}
-}
-
-func NewConcreteAddressFromRaw(ra RawAddress, net Network) *ConcreteAddress {
-	return &ConcreteAddress{NewAddressFromRawAddress(ra, net)}
-}
-
-func (ca *ConcreteAddress) Address() Address {
-	return ca.a
-}
-
-// String returns the address string.
-func (ca *ConcreteAddress) String() string {
-	return ca.a.String()
-}
-
-// bytes returns the type and address data.
-func (ca *ConcreteAddress) bytes() []byte {
-	return ca.a.bytes()
-}
-
-// Network returns the network id for the address.
-func (ca *ConcreteAddress) Network() Network {
-	return ca.a.Network()
-}
-
-// Bytes returns the network specific type followed by the address data.
-func (ca *ConcreteAddress) Bytes() []byte {
-	return ca.a.bytes()
-}
-
-// LockingScript returns the bitcoin output(locking) script for paying to the address.
-func (ca *ConcreteAddress) LockingScript() []byte {
-	return ca.a.LockingScript()
-}
-
-// Equal returns true if the address parameter has the same value.
-func (ca *ConcreteAddress) Equal(other RawAddress) bool {
-	return ca.a.Equal(other)
-}
-
-// Serialize writes the address into a buffer.
-func (ca *ConcreteAddress) Serialize(buf *bytes.Buffer) error {
-	return ca.a.Serialize(buf)
+// IsEmpty returns true if the address does not have a value set.
+func (a Address) IsEmpty() bool {
+	return len(a.data) == 0
 }
 
 // Hash returns the hash corresponding to the address.
-func (ca *ConcreteAddress) Hash() (*Hash20, error) {
-	if ca.a == nil {
-		return nil, errors.New("Empty JSON Raw Address")
+func (a Address) Hash() (*Hash20, error) {
+	switch a.addressType {
+	case AddressTypeMainPKH:
+		fallthrough
+	case AddressTypeTestPKH:
+		fallthrough
+	case AddressTypeMainSH:
+		fallthrough
+	case AddressTypeTestSH:
+		fallthrough
+	case AddressTypeMainRPH:
+		fallthrough
+	case AddressTypeTestRPH:
+		return NewHash20(a.data)
+	case AddressTypeMainMultiPKH:
+		fallthrough
+	case AddressTypeTestMultiPKH:
+		return NewHash20(Hash160(a.data))
 	}
-	return ca.a.Hash()
+	return nil, ErrUnknownScriptTemplate
 }
 
 // MarshalJSON converts to json.
-func (ca *ConcreteAddress) MarshalJSON() ([]byte, error) {
-	if ca.a == nil {
+func (a Address) MarshalJSON() ([]byte, error) {
+	if len(a.data) == 0 {
 		return []byte("\"\""), nil
 	}
-	return []byte("\"" + ca.a.String() + "\""), nil
+	return []byte("\"" + a.String() + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
-func (ca *ConcreteAddress) UnmarshalJSON(data []byte) error {
+func (a *Address) UnmarshalJSON(data []byte) error {
 	if len(data) < 2 {
 		return fmt.Errorf("Too short for Address data : %d", len(data))
 	}
 
 	if len(data) == 2 {
-		ca.a = nil // empty
+		// Empty address
+		a.addressType = AddressTypeMainPKH
+		a.data = nil
 		return nil
 	}
 
-	var err error
-	ca.a, err = DecodeAddress(string(data[1 : len(data)-1]))
-	return err
+	return a.Decode(string(data[1 : len(data)-1]))
 }
 
 // Scan converts from a database column.
-func (ca *ConcreteAddress) Scan(data interface{}) error {
-	b, ok := data.([]byte)
-	if !ok {
-		return errors.New("ConcreteAddress db column not bytes")
+func (a *Address) Scan(data interface{}) error {
+	if data == nil {
+		// Empty address
+		a.addressType = AddressTypeMainPKH
+		a.data = nil
+		return nil
 	}
 
-	var err error
-	c := make([]byte, len(b))
-	copy(c, b)
-	ca.a, err = decodeAddressBytes(c)
-	return err
+	s, ok := data.(string)
+	if !ok {
+		return errors.New("Address db column not bytes")
+	}
+
+	if len(s) == 0 {
+		// Empty address
+		a.addressType = AddressTypeMainPKH
+		a.data = nil
+		return nil
+	}
+
+	// Decode address
+	return a.Decode(s)
 }
 
 func encodeAddress(b []byte) string {

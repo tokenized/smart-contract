@@ -106,7 +106,7 @@ func TestTxBuilderSample(t *testing.T) {
 	changeAddress, _ := bitcoin.DecodeAddress("mq4htwkZSAG9isuVbEvcLaAiNL59p26W64")
 
 	// Create an instance of the TxBuilder using 512 as the dust limit and 1.1 sat/byte fee rate.
-	builder := NewTxBuilder(changeAddress, 512, 1.1)
+	builder := NewTxBuilder(bitcoin.NewRawAddressFromAddress(changeAddress), 512, 1.1)
 
 	// Add an input
 	// To spend an input you need the txid, output index, and the locking script and value from that output.
@@ -114,11 +114,12 @@ func TestTxBuilderSample(t *testing.T) {
 	index := uint32(0)
 	value := uint64(2000)
 	spendAddress, _ := bitcoin.DecodeAddress("mupiWN44gq3NZmvZuMMyx8KbRwism69Gbw")
-	_ = builder.AddInput(*wire.NewOutPoint(hash, index), spendAddress.LockingScript(), value)
+	lockingScript, _ := bitcoin.NewRawAddressFromAddress(spendAddress).LockingScript()
+	_ = builder.AddInput(*wire.NewOutPoint(hash, index), lockingScript, value)
 
 	// add an output to the recipient
 	paymentAddress, _ := bitcoin.DecodeAddress("n1kBjpqmH82jgiRnEHLmFMNv77kvugBomm")
-	_ = builder.AddPaymentOutput(paymentAddress, 1000, false)
+	_ = builder.AddPaymentOutput(bitcoin.NewRawAddressFromAddress(paymentAddress), 1000, false)
 
 	// sign the first and only input
 	_ = builder.Sign([]bitcoin.Key{key})

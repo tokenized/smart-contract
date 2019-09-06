@@ -144,7 +144,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				if len(handler.listeners) > 0 {
 					// Send block revert notification
 					hash := header.BlockHash()
-					blockMessage := BlockMessage{Hash: *hash, Height: height}
+					blockMessage := BlockMessage{Hash: *hash, Height: height, Time: header.Timestamp}
 					for _, listener := range handler.listeners {
 						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}

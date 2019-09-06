@@ -48,7 +48,7 @@ func loadContract(ctx context.Context,
 	address bitcoin.Address,
 	net bitcoin.Network) error {
 
-	c, err := contract.Fetch(ctx, db, address)
+	c, err := contract.Fetch(ctx, db, bitcoin.NewRawAddressFromAddress(address))
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,8 @@ func loadContract(ctx context.Context,
 		fmt.Printf("### Holdings\n\n")
 
 		// get the PKH's inside the holders/asset_code directory
-		holdings, err := holdings.FetchAll(ctx, db, address, assetCode)
+		holdings, err := holdings.FetchAll(ctx, db, bitcoin.NewRawAddressFromAddress(address),
+			assetCode)
 		if err != nil {
 			return nil
 		}

@@ -25,6 +25,12 @@ var (
 	ErrDuplicateEntry = errors.New("Holdings duplicate entry")
 )
 
+const (
+	FreezeCode  = byte('F')
+	DebitCode   = byte('S')
+	DepositCode = byte('R')
+)
+
 // GetHolding returns the holding data for a PKH.
 func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
@@ -38,7 +44,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawA
 	}
 
 	result = &state.Holding{
-		Address:         bitcoin.NewConcreteRawAddress(address),
+		Address:         address,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 		HoldingStatuses: make(map[protocol.TxId]*state.HoldingStatus),
@@ -56,7 +62,7 @@ func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
 
 	unfrozenBalance := h.FinalizedBalance
 	for _, status := range h.HoldingStatuses {
-		if status.Code != byte('F') {
+		if status.Code != FreezeCode {
 			continue
 		}
 		if statusExpired(status, now) {
@@ -90,7 +96,7 @@ func UnfrozenBalance(h *state.Holding, now protocol.Timestamp) uint64 {
 	}
 
 	for _, status := range h.HoldingStatuses {
-		if status.Code != byte('F') {
+		if status.Code != FreezeCode {
 			continue
 		}
 		if statusExpired(status, now) {
@@ -116,10 +122,10 @@ func FinalizeTx(h *state.Holding, txid *protocol.TxId, now protocol.Timestamp) e
 	h.UpdatedAt = now
 
 	switch hs.Code {
-	case byte('S'):
+	case DebitCode:
 		h.FinalizedBalance -= hs.Amount
 		delete(h.HoldingStatuses, *txid)
-	case byte('R'):
+	case DepositCode:
 		h.FinalizedBalance += hs.Amount
 		delete(h.HoldingStatuses, *txid)
 	default:
@@ -148,7 +154,7 @@ func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol
 	h.UpdatedAt = now
 
 	hs := state.HoldingStatus{
-		Code:           byte('S'),
+		Code:           DebitCode,
 		Amount:         amount,
 		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
@@ -168,7 +174,7 @@ func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, now protoc
 	h.UpdatedAt = now
 
 	hs := state.HoldingStatus{
-		Code:           byte('R'),
+		Code:           DepositCode,
 		Amount:         amount,
 		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
@@ -190,7 +196,7 @@ func AddFreeze(h *state.Holding, txid *protocol.TxId, amount uint64,
 	h.UpdatedAt = now
 
 	hs := state.HoldingStatus{
-		Code:    byte('F'), // Freeze
+		Code:    FreezeCode, // Freeze
 		Expires: timeout,
 		Amount:  amount,
 		TxId:    txid,
@@ -206,7 +212,7 @@ func CheckDebit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64, e
 		return 0, errors.New("Missing settlement")
 	}
 
-	if hs.Code != byte('S') {
+	if hs.Code != DebitCode {
 		return 0, errors.New("Wrong settlement type")
 	}
 
@@ -224,7 +230,7 @@ func CheckDeposit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64,
 		return 0, errors.New("Missing settlement")
 	}
 
-	if hs.Code != byte('R') {
+	if hs.Code != DepositCode {
 		return 0, errors.New("Wrong settlement type")
 	}
 
@@ -241,7 +247,7 @@ func CheckFreeze(h *state.Holding, txid *protocol.TxId, amount uint64) error {
 		return fmt.Errorf("Missing freeze : %s", txid.String())
 	}
 
-	if hs.Code != byte('F') {
+	if hs.Code != FreezeCode {
 		return errors.New("Wrong freeze type")
 	}
 
@@ -260,9 +266,9 @@ func RevertStatus(h *state.Holding, txid *protocol.TxId) error {
 	}
 
 	switch hs.Code {
-	case byte('S'):
+	case DebitCode:
 		h.PendingBalance += hs.Amount
-	case byte('R'):
+	case DepositCode:
 		h.PendingBalance -= hs.Amount
 	}
 

@@ -29,10 +29,35 @@ func TestParseTX(t *testing.T) {
 
 	// the hash of the TX being parsed.
 	txHash := newHash("2c68cf3e1216acaa1e274dfd3b665b6a9d1d1d252e68d190f9fffc5f7e11fd27")
-	address, _ := bitcoin.DecodeAddress("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
-	address2, _ := bitcoin.DecodeAddress("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
-	script, _ := bitcoin.RawAddressFromLockingScript(address.LockingScript())
-	script2, _ := bitcoin.RawAddressFromLockingScript(address2.LockingScript())
+	address, err := bitcoin.DecodeAddress("1AWtnFroMiC7LJWUENVnE8NRKkWW6bQFc")
+	if err != nil {
+		t.Fatalf("Failed to decode address 1 : %s", err)
+	}
+	address2, err := bitcoin.DecodeAddress("1PY39VCHyALcJ7L5EUnu9v7JY2NUh1wxSM")
+	if err != nil {
+		t.Fatalf("Failed to decode address 2 : %s", err)
+	}
+	hash, err := address.Hash()
+	if err != nil {
+		t.Fatalf("Failed to get address 1 hash : %s", err)
+	}
+	t.Logf("Address 1 : %d, %s", address.Type(), hash)
+	script, err := bitcoin.NewRawAddressFromAddress(address).LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create address 1 locking script : %s", err)
+	}
+	script2, err := bitcoin.NewRawAddressFromAddress(address2).LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create address 2 locking script : %s", err)
+	}
+	scriptAddress, err := bitcoin.RawAddressFromLockingScript(script)
+	if err != nil {
+		t.Fatalf("Failed to create address 1 from locking script : %s", err)
+	}
+	scriptAddress2, err := bitcoin.RawAddressFromLockingScript(script2)
+	if err != nil {
+		t.Fatalf("Failed to create address 2 from locking script : %s", err)
+	}
 
 	wantTX := &Transaction{
 		Hash:  txHash,
@@ -51,7 +76,7 @@ func TestParseTX(t *testing.T) {
 		// },
 		Outputs: []Output{
 			Output{
-				Address: script,
+				Address: scriptAddress,
 				Index:   0,
 				Value:   600,
 				UTXO: UTXO{
@@ -62,7 +87,7 @@ func TestParseTX(t *testing.T) {
 				},
 			},
 			Output{
-				Address: script2,
+				Address: scriptAddress2,
 				Index:   1,
 				Value:   7604510,
 				UTXO: UTXO{

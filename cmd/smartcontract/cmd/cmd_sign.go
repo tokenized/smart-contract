@@ -58,6 +58,7 @@ func transferSign(c *cobra.Command, args []string) error {
 		fmt.Printf("Invalid contract address : %s\n", err)
 		return nil
 	}
+	contractRawAddress := bitcoin.NewRawAddressFromAddress(contractAddress)
 
 	receiverIndex, err := strconv.Atoi(args[2])
 	if err != nil {
@@ -110,7 +111,7 @@ func transferSign(c *cobra.Command, args []string) error {
 				}
 				fmt.Printf("Signing for address quantity %d : %x\n", receiver.Quantity,
 					receiverAddress.Bytes())
-				hash, err := protocol.TransferOracleSigHash(context.Background(), contractAddress,
+				hash, err := protocol.TransferOracleSigHash(context.Background(), contractRawAddress,
 					asset.AssetCode, receiverAddress, receiver.Quantity, blockHash, 1)
 				if err != nil {
 					fmt.Printf("Failed to generate sig hash : %s\n", err)

@@ -83,10 +83,11 @@ func createContract(t *testing.T) {
 	offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(1000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(1000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
@@ -301,11 +302,11 @@ func oracleContract(t *testing.T) {
 		make([]byte, 130)))
 
 	// To contract
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000,
-		test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&offerData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
@@ -474,10 +475,11 @@ func contractAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
 	}
@@ -577,10 +579,11 @@ func contractOracleAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
 	}
@@ -663,10 +666,11 @@ func contractProposalAmendment(t *testing.T) {
 	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, test.ContractKey.Address.LockingScript()))
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
-	script, err := protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize contract amendment : %v", tests.Failed, err)
 	}
@@ -711,7 +715,7 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
+		Address:             test.ContractKey.Address,
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -726,8 +730,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 		ContractFee:            1000,
 		CreatedAt:              protocol.CurrentTimestamp(),
 		UpdatedAt:              protocol.CurrentTimestamp(),
-		AdministrationAddress:  bitcoin.NewConcreteRawAddress(issuerKey.Address),
-		MasterAddress:          bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
+		AdministrationAddress:  issuerKey.Address,
+		MasterAddress:          test.MasterKey.Address,
 	}
 
 	// Define permissions for contact fields
@@ -754,7 +758,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewConcreteRawAddress(test.Contract2Key.Address),
+		Address:             test.Contract2Key.Address,
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -770,8 +774,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewConcreteRawAddress(test.Master2Key.Address),
+		AdministrationAddress: issuerKey.Address,
+		MasterAddress:         test.Master2Key.Address,
 	}
 
 	// Define permissions for contract fields
@@ -797,7 +801,7 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 func mockUpContractWithOracle(ctx context.Context, name, agreement string, issuerType string,
 	issuerRole uint32, issuerName string) error {
 	var contractData = state.Contract{
-		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
+		Address:             test.ContractKey.Address,
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -813,8 +817,8 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
+		AdministrationAddress: issuerKey.Address,
+		MasterAddress:         test.MasterKey.Address,
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 
@@ -846,7 +850,7 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 	issuerRole uint32, issuerName string) (*state.Contract, error) {
 
 	var contractData = state.Contract{
-		Address:             bitcoin.NewConcreteRawAddress(test.ContractKey.Address),
+		Address:             test.ContractKey.Address,
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),
@@ -869,8 +873,8 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 
 		CreatedAt:             protocol.CurrentTimestamp(),
 		UpdatedAt:             protocol.CurrentTimestamp(),
-		AdministrationAddress: bitcoin.NewConcreteRawAddress(issuerKey.Address),
-		MasterAddress:         bitcoin.NewConcreteRawAddress(test.MasterKey.Address),
+		AdministrationAddress: issuerKey.Address,
+		MasterAddress:         test.MasterKey.Address,
 		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
 	}
 

@@ -15,14 +15,15 @@ import (
 var (
 	// Incoming protocol message types (requests)
 	incomingMessageTypes = map[string]bool{
-		actions.CodeContractOffer:     true,
-		actions.CodeContractAmendment: true,
-		actions.CodeAssetDefinition:   true,
-		actions.CodeAssetModification: true,
-		actions.CodeTransfer:          true,
-		actions.CodeProposal:          true,
-		actions.CodeBallotCast:        true,
-		actions.CodeOrder:             true,
+		actions.CodeContractOffer:         true,
+		actions.CodeContractAmendment:     true,
+		actions.CodeAssetDefinition:       true,
+		actions.CodeAssetModification:     true,
+		actions.CodeTransfer:              true,
+		actions.CodeProposal:              true,
+		actions.CodeBallotCast:            true,
+		actions.CodeOrder:                 true,
+		actions.CodeContractAddressChange: true,
 	}
 
 	// Outgoing protocol message types (responses)
@@ -44,12 +45,13 @@ var (
 // Transaction represents an ITX (Inspector Transaction) containing
 // information about a transaction that is useful to the protocol.
 type Transaction struct {
-	Hash       *bitcoin.Hash32
-	MsgTx      *wire.MsgTx
-	MsgProto   actions.Action
-	Inputs     []Input
-	Outputs    []Output
-	RejectCode uint32
+	Hash          *bitcoin.Hash32
+	MsgTx         *wire.MsgTx
+	MsgProto      actions.Action
+	MsgProtoIndex uint32
+	Inputs        []Input
+	Outputs       []Output
+	RejectCode    uint32
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
@@ -57,7 +59,7 @@ type Transaction struct {
 func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 	// Find and deserialize protocol message
 	var err error
-	for _, txOut := range itx.MsgTx.TxOut {
+	for i, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
 			if err := itx.MsgProto.Validate(); err != nil {
@@ -65,6 +67,7 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 				logger.Warn(ctx, "Protocol message is invalid : %s", err)
 				return nil
 			}
+			itx.MsgProtoIndex = uint32(i)
 			break // Tokenized output found
 		}
 	}
@@ -112,13 +115,8 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 
 	for n := range itx.MsgTx.TxOut {
 		output, err := buildOutput(itx.Hash, itx.MsgTx, n)
-
 		if err != nil {
 			return err
-		}
-
-		if output == nil {
-			continue
 		}
 
 		outputs = append(outputs, *output)
@@ -131,18 +129,9 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
-	// Zero value output
-	if txout.Value == 0 {
-		return nil, nil
-	}
-
 	address, err := bitcoin.RawAddressFromLockingScript(txout.PkScript)
-	if err != nil {
-		if err == bitcoin.ErrUnknownScriptTemplate {
-			return nil, nil // Skip non-payto scripts
-		} else {
-			return nil, err
-		}
+	if err != nil && err != bitcoin.ErrUnknownScriptTemplate {
+		return nil, err
 	}
 
 	utxo := NewUTXOFromHashWire(hash, tx, uint32(n))
@@ -269,10 +258,10 @@ func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 	return GetProtocolContractAddresses(itx, itx.MsgProto)
 }
 
-// ContractAddresses returns the contract address, which may include more than one
-func (itx *Transaction) ContractPKHs() [][]byte {
-	return GetProtocolContractPKHs(itx, itx.MsgProto)
-}
+// // ContractPKHs returns the contract address, which may include more than one
+// func (itx *Transaction) ContractPKHs() [][]byte {
+// 	return GetProtocolContractPKHs(itx, itx.MsgProto)
+// }
 
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []bitcoin.RawAddress {
@@ -391,9 +380,10 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	itx.Outputs = outputs
 
 	// Protocol Message
-	for _, txOut := range itx.MsgTx.TxOut {
+	for i, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {
+			itx.MsgProtoIndex = uint32(i)
 			break // Tokenized output found
 		}
 	}

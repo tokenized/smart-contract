@@ -27,7 +27,7 @@ import (
 type Client struct {
 	Wallet             Wallet
 	Config             Config
-	ContractAddress    bitcoin.Address
+	ContractAddress    bitcoin.RawAddress
 	spyNode            *spynode.Node
 	spyNodeStopChannel chan error
 	blocksAdded        int
@@ -102,11 +102,12 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 
 	// -------------------------------------------------------------------------
 	// Contract
-	client.ContractAddress, err = bitcoin.DecodeAddress(client.Config.Contract)
+	contractAddress, err := bitcoin.DecodeAddress(client.Config.Contract)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get contract address")
 	}
-	if !bitcoin.DecodeNetMatches(client.ContractAddress.Network(), client.Config.Net) {
+	client.ContractAddress = bitcoin.NewRawAddressFromAddress(contractAddress)
+	if !bitcoin.DecodeNetMatches(contractAddress.Network(), client.Config.Net) {
 		return nil, errors.Wrap(err, "Contract address encoded for wrong network")
 	}
 	logger.Info(ctx, "Contract address : %s", client.Config.Contract)
