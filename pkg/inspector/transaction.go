@@ -15,14 +15,15 @@ import (
 var (
 	// Incoming protocol message types (requests)
 	incomingMessageTypes = map[string]bool{
-		actions.CodeContractOffer:     true,
-		actions.CodeContractAmendment: true,
-		actions.CodeAssetDefinition:   true,
-		actions.CodeAssetModification: true,
-		actions.CodeTransfer:          true,
-		actions.CodeProposal:          true,
-		actions.CodeBallotCast:        true,
-		actions.CodeOrder:             true,
+		actions.CodeContractOffer:         true,
+		actions.CodeContractAmendment:     true,
+		actions.CodeAssetDefinition:       true,
+		actions.CodeAssetModification:     true,
+		actions.CodeTransfer:              true,
+		actions.CodeProposal:              true,
+		actions.CodeBallotCast:            true,
+		actions.CodeOrder:                 true,
+		actions.CodeContractAddressChange: true,
 	}
 
 	// Outgoing protocol message types (responses)

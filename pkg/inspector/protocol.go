@@ -10,94 +10,36 @@ type Balance struct {
 	Frozen uint64
 }
 
-func GetProtocolQuantity(itx *Transaction, m actions.Action, address bitcoin.RawAddress) Balance {
-
-	return Balance{
-		Qty:    0,
-		Frozen: 0,
-	}
-	/*
-		b := Balance{}
-
-		switch m.Code() {
-		case protocol.CodeAssetCreation:
-			o := m.(*protocol.AssetCreation)
-			b.Qty = o.Qty
-
-		case protocol.CodeSettlement:
-			o := m.(*protocol.Settlement)
-
-			// which token balance do we want? is this address for party1 or
-			// party2?
-			if address.String() == itx.Outputs[0].Address.String() {
-				b.Qty = o.Party1TokenQty
-			} else {
-				b.Qty = o.Party2TokenQty
-			}
-
-		case protocol.CodeFreeze:
-			o := m.(*protocol.Freeze)
-
-			// this makes the assumption that the amount frozen is the amount
-			// that is held.
-			//
-			// See https://bitbucket.org/tokenized/contract/issues/55/review-freeze
-			b.Qty = o.Qty
-			b.Frozen = o.Qty
-
-		case protocol.CodeThaw:
-			o := m.(*protocol.Thaw)
-
-			b.Qty = o.Qty
-			b.Frozen = 0
-
-		case protocol.CodeConfiscation:
-			o := m.(*protocol.Confiscation)
-
-			if address.String() == itx.Outputs[0].Address.String() {
-				b.Qty = o.TargetsQty
-			} else {
-				b.Qty = o.DepositsQty
-			}
-
-		case protocol.CodeReconciliation:
-			o := m.(*protocol.Reconciliation)
-			b.Qty = o.TargetAddressQty
-
-		}
-
-		return b
-	*/
-}
-
 func GetProtocolContractAddresses(itx *Transaction, m actions.Action) []bitcoin.RawAddress {
+	if !itx.IsTokenized() {
+		return nil
+	}
 
-	addresses := []bitcoin.RawAddress{}
-
-	// Settlements may contain a second contract, although optional
-	if m.Code() == actions.CodeSettlement {
-		addresses = append(addresses, itx.Inputs[0].Address)
-
-		if len(itx.Inputs) > 1 && !itx.Inputs[1].Address.Equal(itx.Inputs[0].Address) {
-			addresses = append(addresses, itx.Inputs[1].Address)
+	// Settlements may contain multiple contracts
+	settlement, isSettlement := m.(*actions.Settlement)
+	if isSettlement {
+		result := []bitcoin.RawAddress{}
+		for _, asset := range settlement.Assets {
+			if int(asset.ContractIndex) < len(itx.Inputs) {
+				result = append(result, itx.Inputs[asset.ContractIndex].Address)
+			}
 		}
-
-		return addresses
+		return result
 	}
 
 	// Some specific actions have the contract address as an input
 	isOutgoing, ok := outgoingMessageTypes[m.Code()]
 	if ok && isOutgoing {
-		addresses = append(addresses, itx.Inputs[0].Address)
-		return addresses
+		return []bitcoin.RawAddress{itx.Inputs[0].Address}
 	}
 
 	// Default behavior is contract as first output
-	addresses = append(addresses, itx.Outputs[0].Address)
+	isIncoming, ok := incomingMessageTypes[m.Code()]
+	if ok && isIncoming {
+		return []bitcoin.RawAddress{itx.Outputs[0].Address}
+	}
 
-	// TODO Transfers/Settlements can contain multiple contracts in inputs and outputs
-
-	return addresses
+	return nil
 }
 
 // func GetProtocolContractPKHs(itx *Transaction, m actions.Action) [][]byte {
