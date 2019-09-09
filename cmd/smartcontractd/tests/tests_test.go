@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"

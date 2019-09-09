@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/pkg/errors"

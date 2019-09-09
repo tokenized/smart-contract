@@ -1,7 +1,7 @@
 package data
 
 import (
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

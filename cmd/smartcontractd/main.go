@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"syscall"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"

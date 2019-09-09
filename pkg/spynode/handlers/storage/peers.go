@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/logger"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 	"runtime/pprof"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"

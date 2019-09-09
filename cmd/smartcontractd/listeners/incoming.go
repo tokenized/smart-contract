@@ -3,7 +3,7 @@ package listeners
 import (
 	"context"
 	"fmt"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"

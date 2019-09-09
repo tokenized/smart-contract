@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"net"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -153,7 +153,7 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 
 		node.outgoing = make(chan wire.Message, 100)
-		node.txChannel.Open(1000)
+		node.txChannel.Open(100)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))

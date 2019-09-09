@@ -1,7 +1,7 @@
 package protomux
 
 import (
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 // To ensure multiple messages do not modify the same Contract in

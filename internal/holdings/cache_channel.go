@@ -2,7 +2,7 @@ package holdings
 
 import (
 	"context"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"

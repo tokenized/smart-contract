@@ -2,7 +2,7 @@ package listeners
 
 import (
 	"context"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/internal/contract"

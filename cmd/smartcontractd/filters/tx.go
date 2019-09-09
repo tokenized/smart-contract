@@ -3,7 +3,7 @@ package filters
 import (
 	"bytes"
 	"context"
-	"sync"
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
