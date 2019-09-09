@@ -24,56 +24,58 @@ const (
 
 // Node is the main object for spynode.
 type Node struct {
-	config         data.Config                        // Configuration
-	state          *data.State                        // Non-persistent data
-	store          storage.Storage                    // Persistent data
-	peers          *handlerstorage.PeerRepository     // Peer data
-	blocks         *handlerstorage.BlockRepository    // Block data
-	txs            *handlerstorage.TxRepository       // Tx data
-	reorgs         *handlerstorage.ReorgRepository    // Reorg data
-	txTracker      *data.TxTracker                    // Tracks tx requests to ensure all txs are received
-	memPool        *data.MemPool                      // Tracks which txs have been received and checked
-	handlers       map[string]handlers.CommandHandler // Handlers for messages from trusted node
-	connection     net.Conn                           // Connection to trusted node
-	outgoing       chan wire.Message                  // Channel for messages to send to trusted node
-	listeners      []handlers.Listener                // Receive data and notifications about transactions
-	txFilters      []handlers.TxFilter                // Determines if a tx should be seen by listeners
-	untrustedNodes []*UntrustedNode                   // Randomized peer connections to monitor for double spends
-	addresses      map[string]time.Time               // Recently used peer addresses
-	txChannel      handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
-	broadcastTx    *wire.MsgTx                        // Tx to transmit to nodes upon connection
-	needsRestart   bool
-	hardStop       bool
-	stopping       bool
-	stopped        bool
-	scanning       bool
-	lock           sync.Mutex
-	untrustedLock  sync.Mutex
+	config          data.Config                        // Configuration
+	state           *data.State                        // Non-persistent data
+	store           storage.Storage                    // Persistent data
+	peers           *handlerstorage.PeerRepository     // Peer data
+	blocks          *handlerstorage.BlockRepository    // Block data
+	txs             *handlerstorage.TxRepository       // Tx data
+	reorgs          *handlerstorage.ReorgRepository    // Reorg data
+	txTracker       *data.TxTracker                    // Tracks tx requests to ensure all txs are received
+	memPool         *data.MemPool                      // Tracks which txs have been received and checked
+	handlers        map[string]handlers.CommandHandler // Handlers for messages from trusted node
+	connection      net.Conn                           // Connection to trusted node
+	outgoing        chan wire.Message                  // Channel for messages to send to trusted node
+	listeners       []handlers.Listener                // Receive data and notifications about transactions
+	txFilters       []handlers.TxFilter                // Determines if a tx should be seen by listeners
+	untrustedNodes  []*UntrustedNode                   // Randomized peer connections to monitor for double spends
+	addresses       map[string]time.Time               // Recently used peer addresses
+	confTxChannel   handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
+	unconfTxChannel handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
+	broadcastTx     *wire.MsgTx                        // Tx to transmit to nodes upon connection
+	needsRestart    bool
+	hardStop        bool
+	stopping        bool
+	stopped         bool
+	scanning        bool
+	lock            sync.Mutex
+	untrustedLock   sync.Mutex
 }
 
 // NewNode creates a new node.
 // See handlers/handlers.go for the listener interface definitions.
 func NewNode(config data.Config, store storage.Storage) *Node {
 	result := Node{
-		config:         config,
-		state:          data.NewState(),
-		store:          store,
-		peers:          handlerstorage.NewPeerRepository(store),
-		blocks:         handlerstorage.NewBlockRepository(&config, store),
-		txs:            handlerstorage.NewTxRepository(store),
-		reorgs:         handlerstorage.NewReorgRepository(store),
-		txTracker:      data.NewTxTracker(),
-		memPool:        data.NewMemPool(),
-		outgoing:       nil,
-		listeners:      make([]handlers.Listener, 0),
-		txFilters:      make([]handlers.TxFilter, 0),
-		untrustedNodes: make([]*UntrustedNode, 0),
-		addresses:      make(map[string]time.Time),
-		needsRestart:   false,
-		hardStop:       false,
-		stopping:       false,
-		stopped:        false,
-		txChannel:      handlers.TxChannel{},
+		config:          config,
+		state:           data.NewState(),
+		store:           store,
+		peers:           handlerstorage.NewPeerRepository(store),
+		blocks:          handlerstorage.NewBlockRepository(&config, store),
+		txs:             handlerstorage.NewTxRepository(store),
+		reorgs:          handlerstorage.NewReorgRepository(store),
+		txTracker:       data.NewTxTracker(),
+		memPool:         data.NewMemPool(),
+		outgoing:        nil,
+		listeners:       make([]handlers.Listener, 0),
+		txFilters:       make([]handlers.TxFilter, 0),
+		untrustedNodes:  make([]*UntrustedNode, 0),
+		addresses:       make(map[string]time.Time),
+		needsRestart:    false,
+		hardStop:        false,
+		stopping:        false,
+		stopped:         false,
+		confTxChannel:   handlers.TxChannel{},
+		unconfTxChannel: handlers.TxChannel{},
 	}
 	return &result
 }
@@ -115,8 +117,8 @@ func (node *Node) load(ctx context.Context) error {
 	}
 
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
-		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, &node.txChannel, node.listeners,
-		node.txFilters, node)
+		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, &node.confTxChannel,
+		&node.unconfTxChannel, node.listeners, node.txFilters, node)
 	return nil
 }
 
@@ -153,14 +155,15 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 
 		node.outgoing = make(chan wire.Message, 100)
-		node.txChannel.Open(100)
+		node.confTxChannel.Open(100)
+		node.unconfTxChannel.Open(100)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
 
 		wg := sync.WaitGroup{}
-		wg.Add(6)
+		wg.Add(7)
 
 		go func() {
 			defer wg.Done()
@@ -182,8 +185,14 @@ func (node *Node) Run(ctx context.Context) error {
 
 		go func() {
 			defer wg.Done()
-			node.processTxs(ctx)
-			logger.Debug(ctx, "Process txs finished")
+			node.processConfirmedTxs(ctx)
+			logger.Debug(ctx, "Process confirmed txs finished")
+		}()
+
+		go func() {
+			defer wg.Done()
+			node.processUnconfirmedTxs(ctx)
+			logger.Debug(ctx, "Process uncofirmed txs finished")
 		}()
 
 		go func() {
@@ -272,7 +281,8 @@ func (node *Node) requestStop(ctx context.Context) error {
 		close(node.outgoing)
 		node.outgoing = nil
 	}
-	node.txChannel.Close()
+	node.confTxChannel.Close()
+	node.unconfTxChannel.Close()
 	if node.connection != nil {
 		node.connection.Close()
 	}
@@ -423,42 +433,52 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
-	return node.txChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true, ConfirmedHeight: -1})
+	return node.unconfTxChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true, ConfirmedHeight: -1})
 }
 
-func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
+func (node *Node) processConfirmedTx(ctx context.Context, tx *handlers.TxData) error {
 	hash := tx.Msg.TxHash()
 
-	if tx.ConfirmedHeight != -1 {
-		// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
-		// Or if it isn't in the mempool (not sent to listener yet).
-		var err error
-		marked := false
-		if !tx.Relevant { // Full tx hasn't been sent to listener yet
-			if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
-				var mark bool
-				for _, listener := range node.listeners {
-					mark, _ = listener.HandleTx(ctx, tx.Msg)
-					if mark {
-						marked = true
-					}
+	if tx.ConfirmedHeight == -1 {
+		return errors.New("Process confirmed tx with no height")
+	}
+
+	// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
+	// Or if it isn't in the mempool (not sent to listener yet).
+	var err error
+	marked := false
+	if !tx.Relevant { // Full tx hasn't been sent to listener yet
+		if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
+			var mark bool
+			for _, listener := range node.listeners {
+				mark, _ = listener.HandleTx(ctx, tx.Msg)
+				if mark {
+					marked = true
 				}
 			}
 		}
+	}
 
-		if marked || tx.Relevant {
-			// Notify of confirm
-			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, *hash)
-			}
-
-			// Add to txs for block
-			if _, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
-				return err
-			}
+	if marked || tx.Relevant {
+		// Notify of confirm
+		for _, listener := range node.listeners {
+			listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, *hash)
 		}
 
-		return nil
+		// Add to txs for block
+		if _, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (node *Node) processUnconfirmedTx(ctx context.Context, tx *handlers.TxData) error {
+	hash := tx.Msg.TxHash()
+
+	if tx.ConfirmedHeight != -1 {
+		return errors.New("Process unconfirmed tx with height")
 	}
 
 	// The mempool is needed to track which transactions have been sent to listeners and to check
@@ -536,11 +556,24 @@ func (node *Node) processTx(ctx context.Context, tx *handlers.TxData) error {
 	return nil
 }
 
-// ProcessTxs pulls txs from the tx channel and processes them.
-func (node *Node) processTxs(ctx context.Context) {
-	for tx := range node.txChannel.Channel {
-		if err := node.processTx(ctx, tx); err != nil {
-			logger.Warn(ctx, "Failed to process tx : %s : %s", err, tx.Msg.TxHash().String())
+// processUnconfirmedTxs pulls txs from the unconfirmed tx channel and processes them.
+func (node *Node) processUnconfirmedTxs(ctx context.Context) {
+	for tx := range node.unconfTxChannel.Channel {
+		if err := node.processUnconfirmedTx(ctx, tx); err != nil {
+			logger.Warn(ctx, "Failed to process unconfirmed tx : %s : %s", err,
+				tx.Msg.TxHash().String())
+			node.requestStop(ctx)
+			break
+		}
+	}
+}
+
+// processConfirmedTxs pulls txs from the confiremd tx channel and processes them.
+func (node *Node) processConfirmedTxs(ctx context.Context) {
+	for tx := range node.confTxChannel.Channel {
+		if err := node.processConfirmedTx(ctx, tx); err != nil {
+			logger.Warn(ctx, "Failed to process confirmed tx : %s : %s", err,
+				tx.Msg.TxHash().String())
 			node.requestStop(ctx)
 			break
 		}
@@ -864,7 +897,7 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 
 		// Attempt connection
 		newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-			node.memPool, &node.txChannel, node.listeners, node.txFilters, true)
+			node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, true)
 		nodes = append(nodes, newNode)
 		wg.Add(1)
 		go func() {
@@ -1022,7 +1055,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 
 	// Attempt connection
 	newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-		node.memPool, &node.txChannel, node.listeners, node.txFilters, false)
+		node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, false)
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
 	wg.Add(1)
