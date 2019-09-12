@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -407,7 +408,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}

@@ -18,6 +18,7 @@ import (
 	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -1620,7 +1621,7 @@ func oracleTransferBad(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if address.Equal(userKey.Address) && output.Value >= int64(bitcoinTransferAmount) {
+		if address.Equal(userKey.Address) && output.Value >= bitcoinTransferAmount {
 			found = true
 			break
 		}

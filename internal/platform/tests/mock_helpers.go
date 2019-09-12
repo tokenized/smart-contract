@@ -15,7 +15,7 @@ import (
 func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address bitcoin.RawAddress) *wire.MsgTx {
 	result := wire.NewMsgTx(2)
 	script, _ := address.LockingScript()
-	result.TxOut = append(result.TxOut, wire.NewTxOut(int64(value), script))
+	result.TxOut = append(result.TxOut, wire.NewTxOut(value, script))
 	node.SaveTX(ctx, result)
 	return result
 }

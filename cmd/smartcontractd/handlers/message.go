@@ -22,6 +22,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -148,7 +149,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	if hash != nil {
 		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, m.Config.IsTest)
 	} else {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, itx.Inputs[0].UTXO.Hash, m.Config.IsTest)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, m.Config.IsTest)
 	}
 	if err != nil {
 		return nil
@@ -225,7 +226,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	tx.AddOutput(payload, 0, false, false)
 
 	// Estimate fee with 2 inputs
-	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedInputSize)
+	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedP2PKHInputSize)
 
 	for {
 		utxos, err := m.UTXOs.Get(amount, rk.Address)
@@ -314,10 +315,11 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Bitcoin balance of first contract
-	contractBalance := uint64(transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex].Value)
+	contractBalance := transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex].UTXO.Value
 
 	// Build settle tx
-	settleTx, err := buildSettlementTx(ctx, m.MasterDB, m.Config, transferTx, transfer, settlementRequest, contractBalance, rk)
+	settleTx, err := buildSettlementTx(ctx, m.MasterDB, m.Config, transferTx, transfer,
+		settlementRequest, contractBalance, rk)
 	if err != nil {
 		return errors.Wrap(err, "Failed to build settle tx")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -67,7 +68,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	contractAddress := wk.Address
 
 	// Find spendable UTXOs
-	var utxos []inspector.UTXO
+	var utxos []bitcoin.UTXO
 	var err error
 	if len(w.RejectInputs) > 0 {
 		utxos = w.RejectInputs // Custom UTXOs. Just refund anything available to them.
@@ -103,7 +104,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	for _, utxo := range utxos {
-		rejectTx.AddInput(wire.OutPoint{Hash: *utxo.Hash, Index: utxo.Index}, utxo.PkScript, uint64(utxo.Value))
+		rejectTx.AddInputUTXO(utxo)
 	}
 
 	// Add a dust output to the requestor, but so they will also receive change.
@@ -164,7 +165,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Get the specified UTXOs, otherwise look up the spendable
 	// UTXO's received for the contract address
-	var utxos []inspector.UTXO
+	var utxos []bitcoin.UTXO
 	var err error
 	if len(w.Inputs) > 0 {
 		utxos = w.Inputs
@@ -178,8 +179,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Add specified inputs
 	for _, utxo := range utxos {
-		respondTx.AddInput(wire.OutPoint{Hash: *utxo.Hash, Index: utxo.Index}, utxo.PkScript,
-			uint64(utxo.Value))
+		respondTx.AddInputUTXO(utxo)
 	}
 
 	// Add specified outputs

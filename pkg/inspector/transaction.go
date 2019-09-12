@@ -138,8 +138,6 @@ func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 
 	output := Output{
 		Address: address,
-		Index:   utxo.Index,
-		Value:   utxo.Value,
 		UTXO:    utxo,
 	}
 
@@ -181,8 +179,6 @@ func buildInput(hash *bitcoin.Hash32, tx *wire.MsgTx, n uint32) (*Input, error) 
 	// Build the Input
 	input := Input{
 		Address: address,
-		Index:   utxo.Index,
-		Value:   utxo.Value,
 		UTXO:    utxo,
 		FullTx:  tx,
 	}

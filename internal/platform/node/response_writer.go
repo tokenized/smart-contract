@@ -5,14 +5,13 @@ import (
 
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 type ResponseWriter struct {
-	Inputs        []inspector.UTXO
+	Inputs        []bitcoin.UTXO
 	Outputs       []Output
-	RejectInputs  []inspector.UTXO
+	RejectInputs  []bitcoin.UTXO
 	RejectOutputs []Output
 	RejectAddress bitcoin.RawAddress
 	Config        *Config
@@ -53,14 +52,14 @@ func (w *ResponseWriter) AddContractFee(ctx context.Context, value uint64) error
 
 // SetUTXOs is an optional function that allows explicit UTXOs to be spent in the response
 // be sure to remember any remaining UTXOs so they can be spent later.
-func (w *ResponseWriter) SetUTXOs(ctx context.Context, utxos []inspector.UTXO) error {
+func (w *ResponseWriter) SetUTXOs(ctx context.Context, utxos []bitcoin.UTXO) error {
 	w.Inputs = utxos
 	return nil
 }
 
 // SetRejectUTXOs is an optional function that allows explicit UTXOs to be spent in the reject
 // response be sure to remember any remaining UTXOs so they can be spent later.
-func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []inspector.UTXO) error {
+func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []bitcoin.UTXO) error {
 	w.RejectInputs = utxos
 	return nil
 }

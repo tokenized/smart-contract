@@ -36,7 +36,7 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return errors.New("Input index out of range")
 	}
 
-	address, err := bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockScript)
+	address, err := bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockingScript)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 	}
 
 	tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(key, tx.MsgTx, index,
-		tx.Inputs[index].LockScript, tx.Inputs[index].Value, SigHashAll+SigHashForkID, hashCache)
+		tx.Inputs[index].LockingScript, tx.Inputs[index].Value, SigHashAll+SigHashForkID, hashCache)
 
 	return err
 }
@@ -94,7 +94,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 
 		// Sign all inputs
 		for index, input := range tx.Inputs {
-			address, err := bitcoin.RawAddressFromLockingScript(input.LockScript)
+			address, err := bitcoin.RawAddressFromLockingScript(input.LockingScript)
 			if err != nil {
 				return err
 			}
@@ -112,7 +112,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 					}
 
 					tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(keys[i], tx.MsgTx,
-						index, tx.Inputs[index].LockScript, tx.Inputs[index].Value,
+						index, tx.Inputs[index].LockingScript, tx.Inputs[index].Value,
 						SigHashAll+SigHashForkID, &shc)
 
 					if err != nil {
