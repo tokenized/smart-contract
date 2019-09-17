@@ -10,7 +10,7 @@ package wallet
 import (
 	"context"
 	"errors"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

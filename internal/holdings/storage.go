@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"net"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

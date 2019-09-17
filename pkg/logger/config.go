@@ -2,7 +2,7 @@ package logger
 
 import (
 	"os"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 )
 
 // Config defines the logging configuration for the context it is attached to.

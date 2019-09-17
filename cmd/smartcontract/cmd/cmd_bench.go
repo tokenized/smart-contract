@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"

@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"syscall"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

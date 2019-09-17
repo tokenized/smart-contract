@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

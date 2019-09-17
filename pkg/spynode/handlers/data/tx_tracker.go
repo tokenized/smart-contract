@@ -3,7 +3,7 @@ package data
 import (
 	"context"
 	"time"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"

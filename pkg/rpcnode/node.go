@@ -15,7 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"

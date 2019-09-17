@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"

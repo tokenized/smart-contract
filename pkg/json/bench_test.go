@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"testing"
 )
 

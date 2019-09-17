@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	sync "github.com/sasha-s/go-deadlock"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
