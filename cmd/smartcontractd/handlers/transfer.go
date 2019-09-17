@@ -83,7 +83,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !itx.Outputs[first].Address.Equal(rk.Address) {
-		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message Offer : %x",
+		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %x",
 			itx.Outputs[first].Address.Bytes())
 		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
 			return errors.Wrap(err, "Failed to save tx")

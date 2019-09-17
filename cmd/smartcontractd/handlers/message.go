@@ -906,7 +906,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	return nil
 }
 
-// respondTransferMessageReject responds to an M1 Offer or SigRequest with a rejection message.
+// respondTransferMessageReject responds to an M1 SettlementRequest or SignatureRequest with a
+//   rejection message.
 // If this is the first contract, it will send a full refund/reject to all parties involved.
 // If this is not the first contract, it will send a reject message to the first contract so that
 //   it can send the refund/reject to everyone.
