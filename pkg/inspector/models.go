@@ -2,8 +2,6 @@ package inspector
 
 import (
 	"bytes"
-	"encoding/binary"
-	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -12,40 +10,21 @@ import (
 
 type Input struct {
 	Address bitcoin.RawAddress
-	Index   uint32
-	Value   int64
-	UTXO    UTXO
+	UTXO    bitcoin.UTXO
 	FullTx  *wire.MsgTx
 }
 
 type Output struct {
 	Address bitcoin.RawAddress
-	Index   uint32
-	Value   int64
-	UTXO    UTXO
-}
-
-type UTXO struct {
-	Hash     *bitcoin.Hash32
-	Index    uint32
-	PkScript []byte
-	Value    int64
-}
-
-func (u UTXO) ID() string {
-	return fmt.Sprintf("%v:%v", u.Hash, u.Index)
-}
-
-func (u UTXO) Address() (bitcoin.RawAddress, error) {
-	return bitcoin.RawAddressFromLockingScript(u.PkScript)
+	UTXO    bitcoin.UTXO
 }
 
 // UTXOs is a wrapper for a []UTXO.
-type UTXOs []UTXO
+type UTXOs []bitcoin.UTXO
 
 // Value returns the total value of the set of UTXO's.
-func (u UTXOs) Value() int64 {
-	v := int64(0)
+func (u UTXOs) Value() uint64 {
+	v := uint64(0)
 
 	for _, utxo := range u {
 		v += utxo.Value
@@ -82,14 +61,6 @@ func (in *Input) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.LittleEndian, &in.Index); err != nil {
-		return err
-	}
-
-	if err := binary.Write(buf, binary.LittleEndian, &in.Value); err != nil {
-		return err
-	}
-
 	if err := in.UTXO.Write(buf); err != nil {
 		return err
 	}
@@ -104,14 +75,6 @@ func (in *Input) Read(buf *bytes.Reader) error {
 	}
 	in.FullTx = &msg
 
-	if err := binary.Read(buf, binary.LittleEndian, &in.Index); err != nil {
-		return err
-	}
-
-	if err := binary.Read(buf, binary.LittleEndian, &in.Value); err != nil {
-		return err
-	}
-
 	if err := in.UTXO.Read(buf); err != nil {
 		return err
 	}
@@ -120,60 +83,6 @@ func (in *Input) Read(buf *bytes.Reader) error {
 	var err error
 	in.Address, err = in.UTXO.Address()
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (utxo *UTXO) Write(buf *bytes.Buffer) error {
-	if err := utxo.Hash.Serialize(buf); err != nil {
-		return err
-	}
-
-	scriptSize := uint32(len(utxo.PkScript))
-	if err := binary.Write(buf, binary.LittleEndian, &scriptSize); err != nil {
-		return err
-	}
-
-	if _, err := buf.Write(utxo.PkScript); err != nil {
-		return err
-	}
-
-	if err := binary.Write(buf, binary.LittleEndian, &utxo.Index); err != nil {
-		return err
-	}
-
-	if err := binary.Write(buf, binary.LittleEndian, &utxo.Value); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (utxo *UTXO) Read(buf *bytes.Reader) error {
-	var err error
-
-	utxo.Hash, err = bitcoin.DeserializeHash32(buf)
-	if err != nil {
-		return err
-	}
-
-	var scriptSize uint32
-	if err := binary.Read(buf, binary.LittleEndian, &scriptSize); err != nil {
-		return err
-	}
-
-	utxo.PkScript = make([]byte, int(scriptSize))
-	if _, err := buf.Read(utxo.PkScript); err != nil {
-		return err
-	}
-
-	if err := binary.Read(buf, binary.LittleEndian, &utxo.Index); err != nil {
-		return err
-	}
-
-	if err := binary.Read(buf, binary.LittleEndian, &utxo.Value); err != nil {
 		return err
 	}
 

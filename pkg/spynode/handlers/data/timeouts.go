@@ -33,7 +33,7 @@ func (state *State) CheckTimeouts() error {
 	for _, blockRequest := range state.blocksRequested {
 		if now.Sub(blockRequest.time).Seconds() > blockTimeout {
 			return errors.New(fmt.Sprintf("Block request took longer than %d seconds : %s",
-				blockTimeout, blockRequest.hash))
+				blockTimeout, blockRequest.hash.String()))
 		}
 	}
 

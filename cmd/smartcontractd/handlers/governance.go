@@ -19,6 +19,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -264,7 +265,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	vote := actions.Vote{Timestamp: v.Now.Nano()}
 
 	// Fund with first output of proposal tx. Second is reserved for vote result tx.
-	w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[0].UTXO})
+	w.SetUTXOs(ctx, []bitcoin.UTXO{itx.Outputs[0].UTXO})
 
 	// Build outputs
 	// 1 - Contract Address
@@ -320,7 +321,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve Proposal
-	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	proposalTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return errors.New("Proposal not found for vote")
 	}
@@ -571,7 +572,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	castTx, err := transactions.GetTx(ctx, g.MasterDB, itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
+	castTx, err := transactions.GetTx(ctx, g.MasterDB, &itx.Inputs[0].UTXO.Hash, g.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Ballot cast not found for ballot counted msg")
 	}
@@ -665,7 +666,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Fund with second output of proposal tx.
-	w.SetUTXOs(ctx, []inspector.UTXO{proposalTx.Outputs[1].UTXO})
+	w.SetUTXOs(ctx, []bitcoin.UTXO{proposalTx.Outputs[1].UTXO})
 
 	// Build outputs
 	// 1 - Contract Address

@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -429,7 +430,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, c.MasterDB, itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 	var vt *state.Vote
 	var amendment *actions.ContractAmendment
 	if err == nil && request != nil {
@@ -476,7 +477,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
 		}

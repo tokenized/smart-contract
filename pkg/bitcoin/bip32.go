@@ -2,6 +2,7 @@ package bitcoin
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 
 	bip32 "github.com/tyler-smith/go-bip32"
@@ -9,6 +10,17 @@ import (
 
 type BIP32Key struct {
 	key *bip32.Key
+}
+
+// GenerateBIP32Key creates a key from random data.
+func GenerateMasterBIP32Key() (*BIP32Key, error) {
+	seed := make([]byte, 64)
+	rand.Read(seed)
+	key, err := bip32.NewMasterKey(seed)
+	if err != nil {
+		return nil, err
+	}
+	return &BIP32Key{key: key}, nil
 }
 
 // BIP32KeyFromBytes creates a key from bytes.

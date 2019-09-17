@@ -22,6 +22,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -82,7 +83,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !itx.Outputs[first].Address.Equal(rk.Address) {
-		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message Offer : %x",
+		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %x",
 			itx.Outputs[first].Address.Bytes())
 		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
 			return errors.Wrap(err, "Failed to save tx")
@@ -113,7 +114,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
-	contractBalance := uint64(itx.Outputs[first].Value)
+	contractBalance := itx.Outputs[first].UTXO.Value
 
 	settlementRequest := messages.SettlementRequest{
 		Timestamp:    v.Now.Nano(),
@@ -377,8 +378,8 @@ func buildSettlementTx(ctx context.Context,
 
 		// Add input from contract to settlement tx so all involved contracts have to sign for a valid tx.
 		err = settleTx.AddInput(wire.OutPoint{Hash: *transferTx.Hash, Index: uint32(assetTransfer.ContractIndex)},
-			transferTx.Outputs[assetTransfer.ContractIndex].UTXO.PkScript,
-			uint64(transferTx.Outputs[assetTransfer.ContractIndex].Value))
+			transferTx.Outputs[assetTransfer.ContractIndex].UTXO.LockingScript,
+			transferTx.Outputs[assetTransfer.ContractIndex].UTXO.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -509,9 +510,9 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 			input := transferTx.Inputs[sender.Index]
 
 			// Get sender's balance
-			if int64(sender.Quantity) >= input.Value {
+			if uint64(sender.Quantity) >= input.UTXO.Value {
 				return fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
-					senderOffset, input.Value, sender.Quantity)
+					senderOffset, input.UTXO.Value, sender.Quantity)
 			}
 
 			// Update total send balance
@@ -618,7 +619,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	// Generate public key hashes for all the inputs
 	settleInputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.Inputs))
 	for _, input := range settleTx.Inputs {
-		address, err := bitcoin.RawAddressFromLockingScript(input.LockScript)
+		address, err := bitcoin.RawAddressFromLockingScript(input.LockingScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, bitcoin.RawAddress{})
 			continue
@@ -1010,7 +1011,7 @@ func sendToNextSettlementContract(ctx context.Context,
 
 	// Setup M1 response
 	var err error
-	err = w.SetUTXOs(ctx, []inspector.UTXO{itx.Outputs[boomerangIndex].UTXO})
+	err = w.SetUTXOs(ctx, []bitcoin.UTXO{itx.Outputs[boomerangIndex].UTXO})
 	if err != nil {
 		return err
 	}

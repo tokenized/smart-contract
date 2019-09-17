@@ -18,7 +18,7 @@ const (
 	//   Public key push to stack = 34
 	//       push size = 1 byte
 	//       public key size = 33 bytes
-	EstimatedInputSize = 32 + 4 + 2 + 75 + 34
+	EstimatedP2PKHInputSize = 32 + 4 + 2 + 75 + 34
 
 	// Size of output not including script
 	OutputBaseSize = 8
@@ -53,7 +53,7 @@ func (tx *TxBuilder) EstimatedSize() int {
 		if len(input.SignatureScript) > 0 {
 			result += input.SerializeSize()
 		} else {
-			result += EstimatedInputSize
+			result += EstimatedP2PKHInputSize
 		}
 	}
 
@@ -122,12 +122,12 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 			return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for tx fee"))
 		}
 
-		if tx.MsgTx.TxOut[changeOutputIndex].Value < amount {
+		if tx.MsgTx.TxOut[changeOutputIndex].Value < uint64(amount) {
 			return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
 		}
 
 		// Decrease change, thereby increasing the fee
-		tx.MsgTx.TxOut[changeOutputIndex].Value -= amount
+		tx.MsgTx.TxOut[changeOutputIndex].Value -= uint64(amount)
 
 		// Check if change is below dust
 		if uint64(tx.MsgTx.TxOut[changeOutputIndex].Value) < tx.DustLimit {
@@ -153,7 +153,7 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 		} else {
 			// Increase change, thereby decreasing the fee
 			// (amount is negative so subracting it increases the change value)
-			tx.MsgTx.TxOut[changeOutputIndex].Value -= amount
+			tx.MsgTx.TxOut[changeOutputIndex].Value += uint64(-amount)
 		}
 	}
 

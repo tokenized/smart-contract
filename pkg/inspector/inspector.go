@@ -9,6 +9,7 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -129,22 +130,22 @@ func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transacti
 }
 
 // NewUTXOFromWire returns a new UTXO from a wire message.
-func NewUTXOFromWire(tx *wire.MsgTx, index uint32) UTXO {
-	return UTXO{
-		Hash:     tx.TxHash(),
-		Index:    index,
-		PkScript: tx.TxOut[index].PkScript,
-		Value:    tx.TxOut[index].Value,
+func NewUTXOFromWire(tx *wire.MsgTx, index uint32) bitcoin.UTXO {
+	return bitcoin.UTXO{
+		Hash:          *tx.TxHash(),
+		Index:         index,
+		LockingScript: tx.TxOut[index].PkScript,
+		Value:         tx.TxOut[index].Value,
 	}
 }
 
 // NewUTXOFromHashWire returns a new UTXO from a wire message.
-func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) UTXO {
-	return UTXO{
-		Hash:     hash,
-		Index:    index,
-		PkScript: tx.TxOut[index].PkScript,
-		Value:    tx.TxOut[index].Value,
+func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) bitcoin.UTXO {
+	return bitcoin.UTXO{
+		Hash:          *hash,
+		Index:         index,
+		LockingScript: tx.TxOut[index].PkScript,
+		Value:         tx.TxOut[index].Value,
 	}
 }
 

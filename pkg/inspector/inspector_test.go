@@ -77,24 +77,20 @@ func TestParseTX(t *testing.T) {
 		Outputs: []Output{
 			Output{
 				Address: scriptAddress,
-				Index:   0,
-				Value:   600,
-				UTXO: UTXO{
-					Hash:     txHash,
-					PkScript: []byte{118, 169, 20, 1, 204, 178, 102, 159, 29, 44, 88, 54, 25, 65, 62, 5, 44, 168, 187, 71, 18, 197, 246, 136, 172},
-					Index:    0,
-					Value:    600,
+				UTXO: bitcoin.UTXO{
+					Hash:          *txHash,
+					LockingScript: []byte{118, 169, 20, 1, 204, 178, 102, 159, 29, 44, 88, 54, 25, 65, 62, 5, 44, 168, 187, 71, 18, 197, 246, 136, 172},
+					Index:         0,
+					Value:         600,
 				},
 			},
 			Output{
 				Address: scriptAddress2,
-				Index:   1,
-				Value:   7604510,
-				UTXO: UTXO{
-					Hash:     txHash,
-					PkScript: []byte{118, 169, 20, 247, 49, 116, 38, 84, 195, 208, 193, 148, 143, 52, 84, 240, 127, 2, 157, 14, 128, 197, 170, 136, 172},
-					Index:    1,
-					Value:    7604510,
+				UTXO: bitcoin.UTXO{
+					Hash:          *txHash,
+					LockingScript: []byte{118, 169, 20, 247, 49, 116, 38, 84, 195, 208, 193, 148, 143, 52, 84, 240, 127, 2, 157, 14, 128, 197, 170, 136, 172},
+					Index:         1,
+					Value:         7604510,
 				},
 			},
 		},
