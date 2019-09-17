@@ -80,9 +80,10 @@ type StateReady interface {
 }
 
 // NewCommandHandlers returns a mapping of commands and Handler's.
-func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State, peers *storage.PeerRepository,
-	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, reorgRepo *storage.ReorgRepository,
-	tracker *data.TxTracker, memPool *data.MemPool, txChannel *TxChannel, listeners []Listener, txFilters []TxFilter,
+func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State,
+	peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
+	reorgRepo *storage.ReorgRepository, tracker *data.TxTracker, memPool *data.MemPool,
+	confTxChannel *TxChannel, unconfTxChannel *TxChannel, listeners []Listener, txFilters []TxFilter,
 	blockProcessor BlockProcessor) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
@@ -90,8 +91,9 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 		wire.CmdVersion: NewVersionHandler(state, config.NodeAddress),
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewInvHandler(state, txRepo, tracker, memPool),
-		wire.CmdTx:      NewTXHandler(state, txChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdBlock:   NewBlockHandler(state, txChannel, memPool, blockRepo, txRepo, listeners, txFilters, blockProcessor),
+		wire.CmdTx:      NewTXHandler(state, unconfTxChannel, memPool, txRepo, listeners, txFilters),
+		wire.CmdBlock: NewBlockHandler(state, confTxChannel, memPool, blockRepo, txRepo, listeners,
+			txFilters, blockProcessor),
 		wire.CmdHeaders: NewHeadersHandler(config, state, blockRepo, txRepo, reorgRepo, listeners),
 		wire.CmdReject:  NewRejectHandler(),
 	}

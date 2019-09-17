@@ -105,17 +105,23 @@ func TestHandlers(test *testing.T) {
 	testListener := TestListener{test: test, txs: txRepo, height: 0, txTracker: txTracker}
 	listeners := []Listener{&testListener}
 
-	txChannel := TxChannel{}
-	txChannel.Open(100)
+	confTxChannel := TxChannel{}
+	confTxChannel.Open(100)
+
+	unconfTxChannel := TxChannel{}
+	unconfTxChannel.Open(100)
 
 	// Create handlers
-	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo, reorgRepo, txTracker, memPool, &txChannel, listeners, nil, &testListener)
+	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo,
+		reorgRepo, txTracker, memPool, &confTxChannel, &unconfTxChannel, listeners, nil,
+		&testListener)
 
 	// Build a bunch of headers
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
 	txs := make([]*wire.MsgTx, 0, testBlockCount)
 	headersMsg := wire.NewMsgHeaders()
-	zeroHash, _ := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
+	zeroHash, _ :=
+		bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
 	previousHash, err := blockRepo.Hash(ctx, 0)
 	if err != nil {
 		test.Errorf("Failed to get genesis hash : %s", err)

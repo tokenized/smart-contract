@@ -123,6 +123,9 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 	// Private Key
 	var err error
 	wallet.Key, err = bitcoin.DecodeKeyString(wifKey)
+	if err != nil {
+		return err
+	}
 	if !bitcoin.DecodeNetMatches(wallet.Key.Network(), net) {
 		return errors.New("Incorrect network encoding")
 	}
