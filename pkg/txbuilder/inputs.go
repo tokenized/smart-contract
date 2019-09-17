@@ -53,13 +53,12 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 // AddFunding adds inputs spending the specified UTXOs until the transaction has enough funding to
 //   cover the fees and outputs.
 func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
-	var err error
 
 	inputValue := tx.InputValue()
 	outputValue := tx.OutputValue(false)
-	feeValue := tx.EstimatedFee()
+	feeValue := uint64(float32(tx.EstimatedFee()) * 0.95)
 
-	if inputValue > outputValue+feeValue {
+	if outputValue+feeValue < inputValue {
 		return nil // Already funded
 	}
 
@@ -67,6 +66,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	// TODO Add support for input scripts other than P2PKH.
 	funding := uint64(float32(EstimatedP2PKHInputSize)*tx.FeeRate) + feeValue + outputValue - inputValue
 
+	var err error
 	for _, utxo := range utxos {
 		err = tx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.LockingScript, utxo.Value)
 		if err != nil {

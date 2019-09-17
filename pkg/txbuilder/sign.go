@@ -147,7 +147,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 
 		currentFee = int64(inputValue) - int64(outputValue) - int64(changeValue)
 		if currentFee >= targetFee && float32(currentFee-targetFee)/float32(targetFee) < 0.05 {
-			break // Within 10% of target fee
+			break // Within 5% of target fee
 		}
 
 		done, err = tx.adjustFee(targetFee - currentFee)
