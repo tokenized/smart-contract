@@ -52,7 +52,7 @@ func (k *BIP32Key) SetBytes(b []byte) error {
 }
 
 // Bytes returns the key data.
-func (k *BIP32Key) Bytes() []byte {
+func (k BIP32Key) Bytes() []byte {
 	if k.key == nil {
 		return nil
 	}
