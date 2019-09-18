@@ -40,7 +40,7 @@ func NewHash32FromStr(s string) (*Hash32, error) {
 }
 
 // Bytes returns the data for the hash.
-func (h *Hash32) Bytes() []byte {
+func (h Hash32) Bytes() []byte {
 	return h[:]
 }
 

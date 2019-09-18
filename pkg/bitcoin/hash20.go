@@ -40,7 +40,7 @@ func NewHash20FromStr(s string) (*Hash20, error) {
 }
 
 // Bytes returns the data for the hash.
-func (h *Hash20) Bytes() []byte {
+func (h Hash20) Bytes() []byte {
 	return h[:]
 }
 
