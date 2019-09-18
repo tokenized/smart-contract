@@ -473,7 +473,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	hash, err := depositAddress.Hash()
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(depositAddress, w.Config.Net)
-		node.LogWarn(ctx, "Invalid deposit address : %s", msg.AssetCode, address.String())
+		node.LogWarn(ctx, "Invalid deposit address : %x %s", msg.AssetCode, address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 	_, exists := hds[*hash]
