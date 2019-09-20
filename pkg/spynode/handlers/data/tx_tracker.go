@@ -2,8 +2,8 @@ package data
 
 import (
 	"context"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"

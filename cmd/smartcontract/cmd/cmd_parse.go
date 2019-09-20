@@ -6,78 +6,115 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tokenized/smart-contract/pkg/wire"
+	
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/messages"
+	"github.com/tokenized/specification/dist/golang/protocol"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tokenized/smart-contract/pkg/wire"
-	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 var cmdParse = &cobra.Command{
 	Use:   "parse <hex> [isTest boolean optional]",
-	Short: "Parse a hexadecimal representation of a TX, and output the result.",
-	Long:  "Parse a hexadecimal representation of a TX, and output the result.",
+	Short: "Parse a hexadecimal representation of a TX or OP_RETURN script, and output the result.",
+	Long:  "Parse a hexadecimal representation of a TX or OP_RETURN script, and output the result.",
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return errors.New("Missing hex input")
 		}
 
-		input := args[0]
+		input := strings.Trim(string(args[0]), "\n ")
 
 		// optional isTest argument
 		isTest := false
 		if len(args) == 2 && args[1] == "true" {
+			fmt.Printf("Using test\n")
 			isTest = true
 		}
 
-		return parseMessage(c, input, isTest)
+		data, err := hex.DecodeString(input)
+		if err != nil {
+			fmt.Printf("Failed to decode hex : %s\n", err)
+		}
+
+		if parseTx(c, data, isTest) == nil {
+			return nil
+		}
+
+		parseScript(c, data, isTest)
+
+		return nil
 	},
 }
 
-func parseMessage(c *cobra.Command, rawtx string, isTest bool) error {
-	data := strings.Trim(string(rawtx), "\n ")
-
-	// setup the tx
-	b, err := hex.DecodeString(data)
-	if err != nil {
-		panic("Failed to decode payload")
-	}
+func parseTx(c *cobra.Command, rawtx []byte, isTest bool) error {
 
 	tx := wire.MsgTx{}
-	buf := bytes.NewReader(b)
+	buf := bytes.NewReader(rawtx)
 
 	if err := tx.Deserialize(buf); err != nil {
-		panic("Failed to deserialize TX")
+		return errors.Wrap(err, "decode tx")
 	}
 
-	m := loadMessageFromTX(tx, isTest)
-
-	if m == nil {
-		return nil
-	}
-
-	fmt.Printf("type : %v\n\n", m.Code())
-
-	if err := dumpJSON(m); err != nil {
-		return err
+	for _, txOut := range tx.TxOut {
+		if parseScript(c, txOut.PkScript, isTest) == nil {
+			return nil
+		}
 	}
 
 	return nil
 }
 
-func loadMessageFromTX(tx wire.MsgTx, isTest bool) actions.Action {
-	for _, txOut := range tx.TxOut {
-		m, err := protocol.Deserialize(txOut.PkScript, isTest)
+func parseScript(c *cobra.Command, script []byte, isTest bool) error {
+
+	message, err := protocol.Deserialize(script, isTest)
+	if err != nil {
+		return errors.Wrap(err, "decode op return")
+	}
+
+	fmt.Printf("type : %s\n\n", message.Code())
+
+	if err := dumpJSON(message); err != nil {
+		return err
+	}
+
+	switch m := message.(type) {
+	case *actions.AssetDefinition:
+		if len(m.AssetPayload) == 0 {
+			fmt.Printf("Empty asset payload!\n")
+			return nil
+		}
+		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
 		if err != nil {
-			continue
+			fmt.Printf("Failed to deserialize payload : %s", err)
+		} else {
+			dumpJSON(asset)
 		}
-
-		if m == nil {
-			// this isn't something we are intersted in
-			continue
+	case *actions.AssetCreation:
+		if len(m.AssetPayload) == 0 {
+			fmt.Printf("Empty asset payload!\n")
+			return nil
 		}
-
-		return m
+		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
+		if err != nil {
+			fmt.Printf("Failed to deserialize payload : %s", err)
+		} else {
+			dumpJSON(asset)
+		}
+	case *actions.Message:
+		if len(m.MessagePayload) == 0 {
+			fmt.Printf("Empty message payload!\n")
+			return nil
+		}
+		msg, err := messages.Deserialize(m.MessageCode, m.MessagePayload)
+		if err != nil {
+			fmt.Printf("Failed to deserialize payload : %s", err)
+		} else {
+			dumpJSON(msg)
+		}
 	}
 
 	return nil
