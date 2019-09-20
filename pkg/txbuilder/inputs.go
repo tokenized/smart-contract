@@ -13,6 +13,9 @@ import (
 type InputSupplement struct {
 	LockingScript []byte `json:"locking_script"`
 	Value         uint64 `json:"value"`
+
+	// Optional identifier for external use to track the key needed to sign the input.
+	KeyID string `json:"key_id,omitempty"`
 }
 
 // AddInput adds an input to TxBuilder.
@@ -20,6 +23,7 @@ func (tx *TxBuilder) AddInputUTXO(utxo bitcoin.UTXO) error {
 	input := InputSupplement{
 		LockingScript: utxo.LockingScript,
 		Value:         utxo.Value,
+		KeyID:         utxo.KeyID,
 	}
 	tx.Inputs = append(tx.Inputs, &input)
 
@@ -68,7 +72,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 	var err error
 	for _, utxo := range utxos {
-		err = tx.AddInput(wire.OutPoint{Hash: utxo.Hash, Index: utxo.Index}, utxo.LockingScript, utxo.Value)
+		err = tx.AddInputUTXO(utxo)
 		if err != nil {
 			return errors.Wrap(err, "adding input")
 		}
