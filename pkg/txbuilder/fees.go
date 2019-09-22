@@ -145,7 +145,11 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 		if changeOutputIndex == 0xffffffff {
 			// Add a change output if it would be more than the dust limit
 			if uint64(-amount) > tx.DustLimit {
-				tx.AddPaymentOutput(tx.ChangeAddress, uint64(-amount), true)
+				err := tx.AddPaymentOutput(tx.ChangeAddress, uint64(-amount), true)
+				if err != nil {
+					return false, err
+				}
+				tx.Outputs[len(tx.Outputs)-1].KeyID = tx.ChangeKeyID
 				tx.Outputs[len(tx.Outputs)-1].addedForFee = true
 			} else {
 				done = true
