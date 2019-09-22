@@ -9,9 +9,12 @@ import (
 
 // OutputSupplement contains data that
 type OutputSupplement struct {
-	IsChange    bool
-	IsDust      bool
+	IsChange    bool `json:"is_change"`
+	IsDust      bool `json:"is_dust"`
 	addedForFee bool
+
+	// Optional identifier for external use to track the key needed to spend.
+	KeyID string `json:"key_id,omitempty"`
 }
 
 // AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the

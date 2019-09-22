@@ -87,6 +87,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 				if err != nil {
 					return errors.Wrap(err, "adding change")
 				}
+				tx.Outputs[len(tx.Outputs)-1].KeyID = tx.ChangeKeyID
 			}
 			funding = 0
 			break

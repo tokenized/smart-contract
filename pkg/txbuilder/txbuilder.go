@@ -23,6 +23,9 @@ type TxBuilder struct {
 	ChangeAddress bitcoin.RawAddress  // The address to pay extra bitcoins to if a change output isn't specified
 	DustLimit     uint64              // Smallest amount of bitcoin for a valid spendable output
 	FeeRate       float32             // The target fee rate in sat/byte
+
+	// Optional identifier for external use to track the key needed to spend change
+	ChangeKeyID   string
 }
 
 // NewTx returns a new TxBuilder with the specified change PKH
@@ -76,6 +79,7 @@ func NewTxBuilderFromWire(changeAddress bitcoin.RawAddress, dustLimit uint64, fe
 		newOutput := OutputSupplement{
 			IsChange: bytes.Equal(output.PkScript, changeScript),
 			IsDust:   false,
+			KeyID:    result.ChangeKeyID,
 		}
 		result.Outputs = append(result.Outputs, &newOutput)
 	}
