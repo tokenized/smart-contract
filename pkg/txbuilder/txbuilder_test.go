@@ -2,6 +2,7 @@ package txbuilder
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"testing"
 
@@ -181,5 +182,109 @@ func TestTxSigHash(t *testing.T) {
 	if sighashHex != "54638b5c5126e187cb3a6e62c28fa595c925d3c1dec50780d5a2116879eaf381" {
 		t.Fatalf("Wrong sig hash : \n  got  %s\n  want %s", sighashHex,
 			"54638b5c5126e187cb3a6e62c28fa595c925d3c1dec50780d5a2116879eaf381")
+	}
+}
+
+func randomTxId() *bitcoin.Hash32 {
+	rb := make([]byte, 32)
+	rand.Read(rb)
+	result, _ := bitcoin.NewHash32(rb)
+	return result
+}
+
+func randomAddress() bitcoin.RawAddress {
+	rb := make([]byte, 20)
+	rand.Read(rb)
+	result, _ := bitcoin.NewRawAddressPKH(rb)
+	return result
+}
+
+func TestSendMaxTxBuilder(t *testing.T) {
+	utxos := []bitcoin.UTXO{
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 1000,
+			KeyID: "m/0/1",
+		},
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 2000,
+			KeyID: "m/0/2",
+		},
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 10000,
+			KeyID: "m/0/3",
+		},
+	}
+
+	toAddress := randomAddress()
+	toScript, err := toAddress.LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create locking script : %s", err)
+	}
+
+	tx, err := NewSendMaxTxBuilder(utxos, []bitcoin.RawAddress{toAddress}, []uint64{}, 546, 1.1)
+	if err != nil {
+		t.Fatalf("Failed to build max send tx : %s", err)
+	}
+
+	if len(tx.Inputs) != 3 {
+		t.Fatalf("Incorrect input count : got %d, want %d", len(tx.Inputs), 3)
+	}
+
+	if len(tx.Outputs) != 1 {
+		t.Fatalf("Incorrect output count : got %d, want %d", len(tx.Outputs), 1)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[0].PkScript, toScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[0].PkScript, toScript)
+	}
+
+	fee := float32(tx.Fee())
+	estimatedFee := float32(tx.EstimatedSize()) * 1.1
+	low := estimatedFee * 0.95
+	high := estimatedFee * 1.05
+	if fee < low || fee > high {
+		t.Fatalf("Incorrect fee : got %f, want %f", fee, estimatedFee)
+	}
+
+	// Attempt with 2 addresses ********************************************************************
+	toAddress2 := randomAddress()
+	toScript2, err := toAddress2.LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create locking script : %s", err)
+	}
+
+	tx, err = NewSendMaxTxBuilder(utxos, []bitcoin.RawAddress{toAddress, toAddress2}, []uint64{5000}, 546, 1.1)
+	if err != nil {
+		t.Fatalf("Failed to build max send tx : %s", err)
+	}
+
+	if len(tx.Inputs) != 3 {
+		t.Fatalf("Incorrect input count : got %d, want %d", len(tx.Inputs), 3)
+	}
+
+	if len(tx.Outputs) != 2 {
+		t.Fatalf("Incorrect output count : got %d, want %d", len(tx.Outputs), 2)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[0].PkScript, toScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[0].PkScript, toScript)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[1].PkScript, toScript2) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[1].PkScript, toScript2)
+	}
+
+	fee = float32(tx.Fee())
+	estimatedFee = float32(tx.EstimatedSize()) * 1.1
+	low = estimatedFee * 0.95
+	high = estimatedFee * 1.05
+	if fee < low || fee > high {
+		t.Fatalf("Incorrect fee : got %f, want %f", fee, estimatedFee)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
-	
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"

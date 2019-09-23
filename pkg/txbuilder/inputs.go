@@ -18,6 +18,14 @@ type InputSupplement struct {
 	KeyID string `json:"key_id,omitempty"`
 }
 
+// InputAddress returns the address that is paying to the input.
+func (tx *TxBuilder) InputAddress(index int) (bitcoin.RawAddress, error) {
+	if index >= len(tx.Inputs) {
+		return bitcoin.RawAddress{}, errors.New("Input index out of range")
+	}
+	return bitcoin.RawAddressFromLockingScript(tx.Inputs[index].LockingScript)
+}
+
 // AddInput adds an input to TxBuilder.
 func (tx *TxBuilder) AddInputUTXO(utxo bitcoin.UTXO) error {
 	input := InputSupplement{
