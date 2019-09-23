@@ -53,7 +53,7 @@ func (tx *TxBuilder) EstimatedSize() int {
 		if len(input.SignatureScript) > 0 {
 			result += input.SerializeSize()
 		} else {
-			result += EstimatedP2PKHInputSize
+			result += EstimatedP2PKHInputSize // TODO Update when non-P2PKH inputs are implemented
 		}
 	}
 
@@ -81,7 +81,7 @@ func (tx *TxBuilder) InputValue() uint64 {
 func (tx *TxBuilder) OutputValue(includeChange bool) uint64 {
 	outputValue := uint64(0)
 	for i, output := range tx.MsgTx.TxOut {
-		if includeChange || !tx.Outputs[i].IsChange {
+		if includeChange || !tx.Outputs[i].IsRemainder {
 			outputValue += uint64(output.Value)
 		}
 	}
@@ -92,14 +92,15 @@ func (tx *TxBuilder) OutputValue(includeChange bool) uint64 {
 func (tx *TxBuilder) changeSum() uint64 {
 	changeValue := uint64(0)
 	for i, output := range tx.MsgTx.TxOut {
-		if tx.Outputs[i].IsChange {
+		if tx.Outputs[i].IsRemainder {
 			changeValue += uint64(output.Value)
 		}
 	}
 	return changeValue
 }
 
-// adjustFee
+// adjustFee adjusts the tx fee up or down depending on if the amount is negative or positive.
+// It returns true if no further fee adjustments should be attempted.
 func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 	if amount == int64(0) {
 		return true, nil
@@ -110,7 +111,7 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 	// Find change output
 	changeOutputIndex := 0xffffffff
 	for i, output := range tx.Outputs {
-		if output.IsChange {
+		if output.IsRemainder {
 			changeOutputIndex = i
 			break
 		}
@@ -130,7 +131,7 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 		tx.MsgTx.TxOut[changeOutputIndex].Value -= uint64(amount)
 
 		// Check if change is below dust
-		if uint64(tx.MsgTx.TxOut[changeOutputIndex].Value) < tx.DustLimit {
+		if tx.MsgTx.TxOut[changeOutputIndex].Value < tx.DustLimit {
 			if !tx.Outputs[changeOutputIndex].addedForFee {
 				// Don't remove outputs unless they were added by fee adjustment
 				return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))

@@ -7,14 +7,29 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
-// OutputSupplement contains data that
+// OutputSupplement contains data that is not contained in a tx message, but that is needed to
+//   perform operations on the tx, like fee and change calculation.
 type OutputSupplement struct {
-	IsChange    bool `json:"is_change"`
-	IsDust      bool `json:"is_dust"`
+	// Used when calculating fees to put remaining input value in.
+	IsRemainder bool `json:"is_remainder"`
+
+	// Used as a notification payment, but if value is added, then the previous dust amount isn't
+	//   added to the new amount.
+	IsDust bool `json:"is_dust"`
+
+	// This output was added by the fee calculation and can be removed by the fee calculation.
 	addedForFee bool
 
 	// Optional identifier for external use to track the key needed to spend.
 	KeyID string `json:"key_id,omitempty"`
+}
+
+// OutputAddress returns the address that the output is paying to.
+func (tx *TxBuilder) OutputAddress(index int) (bitcoin.RawAddress, error) {
+	if index >= len(tx.MsgTx.TxOut) {
+		return bitcoin.RawAddress{}, errors.New("Output index out of range")
+	}
+	return bitcoin.RawAddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
 }
 
 // AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the
@@ -48,8 +63,8 @@ func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isChange bool) er
 //    amount is added later.
 func (tx *TxBuilder) AddOutput(lockScript []byte, value uint64, isChange bool, isDust bool) error {
 	output := OutputSupplement{
-		IsChange: isChange,
-		IsDust:   isDust,
+		IsRemainder: isChange,
+		IsDust:      isDust,
 	}
 	tx.Outputs = append(tx.Outputs, &output)
 
