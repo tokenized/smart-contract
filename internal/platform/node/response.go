@@ -86,7 +86,7 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 	}
 
 	// Create reject tx. Change goes back to requestor.
-	var rejectTx *txbuilder.TxBuilder
+	rejectTx := txbuilder.NewTxBuilder(w.Config.DustLimit, w.Config.FeeRate)
 	if len(w.RejectOutputs) > 0 {
 		var changeAddress bitcoin.RawAddress
 		for _, output := range w.RejectOutputs {
@@ -98,9 +98,9 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 		if changeAddress.IsEmpty() {
 			changeAddress = w.RejectOutputs[0].Address
 		}
-		rejectTx = txbuilder.NewTxBuilder(changeAddress, w.Config.DustLimit, w.Config.FeeRate)
+		rejectTx.SetChangeAddress(changeAddress, "")
 	} else {
-		rejectTx = txbuilder.NewTxBuilder(itx.Inputs[0].Address, w.Config.DustLimit, w.Config.FeeRate)
+		rejectTx.SetChangeAddress(itx.Inputs[0].Address, "")
 	}
 
 	for _, utxo := range utxos {
@@ -161,7 +161,8 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
-	respondTx := txbuilder.NewTxBuilder(w.Config.FeeAddress, w.Config.DustLimit, w.Config.FeeRate)
+	respondTx := txbuilder.NewTxBuilder(w.Config.DustLimit, w.Config.FeeRate)
+	respondTx.SetChangeAddress(w.Config.FeeAddress, "")
 
 	// Get the specified UTXOs, otherwise look up the spendable
 	// UTXO's received for the contract address

@@ -1,6 +1,7 @@
 package txbuilder
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -32,38 +33,57 @@ func (tx *TxBuilder) OutputAddress(index int) (bitcoin.RawAddress, error) {
 	return bitcoin.RawAddressFromLockingScript(tx.MsgTx.TxOut[index].PkScript)
 }
 
+func (tx *TxBuilder) SetChangeAddress(address bitcoin.RawAddress, keyID string) error {
+	tx.ChangeAddress = address
+	tx.ChangeKeyID = keyID
+
+	// Update outputs
+	changeScript, err := tx.ChangeAddress.LockingScript()
+	if err != nil {
+		return err
+	}
+	for i, output := range tx.MsgTx.TxOut {
+		if bytes.Equal(output.PkScript, changeScript) {
+			tx.Outputs[i].IsRemainder = true
+			tx.Outputs[i].KeyID = keyID
+		}
+	}
+
+	return nil
+}
+
 // AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the
 //   specified address.
 // isChange marks the output to receive remaining bitcoin.
-func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isChange bool) error {
+func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isRemainder bool) error {
 	script, err := address.LockingScript()
 	if err != nil {
 		return err
 	}
-	return tx.AddOutput(script, value, isChange, false)
+	return tx.AddOutput(script, value, isRemainder, false)
 }
 
 // AddP2PKHDustOutput adds an output to TxBuilder with the dust limit amount and a script paying the
 //   specified address.
-// isChange marks the output to receive remaining bitcoin.
+// isRemainder marks the output to receive remaining bitcoin.
 // These dust outputs are meant as "notifiers" so that an address will see this transaction and
 //   process the data in it. If value is later added to this output, the value replaces the dust
 //   limit amount rather than adding to it.
-func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isChange bool) error {
+func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isRemainder bool) error {
 	script, err := address.LockingScript()
 	if err != nil {
 		return err
 	}
-	return tx.AddOutput(script, tx.DustLimit, isChange, true)
+	return tx.AddOutput(script, tx.DustLimit, isRemainder, true)
 }
 
 // AddOutput adds an output to TxBuilder with the specified script and value.
 // isChange marks the output to receive remaining bitcoin.
 // isDust marks the output as a dust amount which will be replaced by any non-dust amount if an
 //    amount is added later.
-func (tx *TxBuilder) AddOutput(lockScript []byte, value uint64, isChange bool, isDust bool) error {
+func (tx *TxBuilder) AddOutput(lockScript []byte, value uint64, isRemainder bool, isDust bool) error {
 	output := OutputSupplement{
-		IsRemainder: isChange,
+		IsRemainder: isRemainder,
 		IsDust:      isDust,
 	}
 	tx.Outputs = append(tx.Outputs, &output)

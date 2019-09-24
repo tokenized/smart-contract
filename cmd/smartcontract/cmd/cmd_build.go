@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/json"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -174,7 +175,8 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx := txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		// Add output to contract
 		contractOutputIndex := uint32(0)

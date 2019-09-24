@@ -81,8 +81,8 @@ var cmdDoubleSpend = &cobra.Command{
 		}
 
 		// Create UTXOs ============================================================================
-		tx := txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-			theClient.Config.FeeRate)
+		tx := txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		UTXOs := theClient.Wallet.UnspentOutputs()
 		balance := uint64(0)
@@ -128,8 +128,8 @@ var cmdDoubleSpend = &cobra.Command{
 		utxoIndex := uint32(0)
 
 		// Create contract =========================================================================
-		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-			theClient.Config.FeeRate)
+		tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
@@ -173,8 +173,8 @@ var cmdDoubleSpend = &cobra.Command{
 		contractTx := tx
 
 		// Create asset ============================================================================
-		tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-			theClient.Config.FeeRate)
+		tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
@@ -222,8 +222,8 @@ var cmdDoubleSpend = &cobra.Command{
 		doubleTxs := make([]*txbuilder.TxBuilder, 0, count)
 
 		for i := 0; i < count; i++ {
-			tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-				theClient.Config.FeeRate)
+			tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+			tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
 				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
@@ -267,8 +267,8 @@ var cmdDoubleSpend = &cobra.Command{
 			transferTxs = append(transferTxs, tx)
 
 			// TODO Build double spend tx
-			tx = txbuilder.NewTxBuilder(theClient.Wallet.Address, theClient.Config.DustLimit,
-				theClient.Config.FeeRate)
+			tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+			tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 			doubleTxs = append(doubleTxs, tx)
 		}
