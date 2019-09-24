@@ -68,6 +68,11 @@ func (tx *TxBuilder) EstimatedFee() uint64 {
 	return uint64(float32(tx.EstimatedSize()) * tx.FeeRate)
 }
 
+func (tx *TxBuilder) CalculateFee() error {
+	_, err := tx.adjustFee(int64(tx.EstimatedFee()) - int64(tx.Fee()))
+	return err
+}
+
 // InputValue returns the sum of the values of the inputs.
 func (tx *TxBuilder) InputValue() uint64 {
 	inputValue := uint64(0)

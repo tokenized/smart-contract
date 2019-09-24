@@ -355,7 +355,8 @@ func buildSettlementTx(ctx context.Context,
 	//
 	// Settle Inputs
 	//   Any contracts involved.
-	settleTx := txbuilder.NewTxBuilder(rk.Address, config.DustLimit, config.FeeRate)
+	settleTx := txbuilder.NewTxBuilder(config.DustLimit, config.FeeRate)
+	settleTx.SetChangeAddress(rk.Address, "")
 
 	var err error
 	addresses := make(map[bitcoin.Hash20]uint32)

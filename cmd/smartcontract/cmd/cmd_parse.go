@@ -59,6 +59,8 @@ func parseTx(c *cobra.Command, rawtx []byte, isTest bool) error {
 		return errors.Wrap(err, "decode tx")
 	}
 
+	dumpJSON(tx)
+
 	for _, txOut := range tx.TxOut {
 		if parseScript(c, txOut.PkScript, isTest) == nil {
 			return nil

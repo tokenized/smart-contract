@@ -206,7 +206,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Create tx
-	tx := txbuilder.NewTxBuilder(rk.Address, m.Config.DustLimit, m.Config.FeeRate)
+	tx := txbuilder.NewTxBuilder(m.Config.DustLimit, m.Config.FeeRate)
+	tx.SetChangeAddress(rk.Address, "")
 
 	// Add outputs to administration/operator
 	tx.AddDustOutput(ct.AdministrationAddress, false)
@@ -533,8 +534,9 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	// Convert settle tx to a txbuilder tx
 	var settleTx *txbuilder.TxBuilder
-	settleTx, err = txbuilder.NewTxBuilderFromWire(rk.Address, m.Config.DustLimit, m.Config.FeeRate,
+	settleTx, err = txbuilder.NewTxBuilderFromWire(m.Config.DustLimit, m.Config.FeeRate,
 		settleWireTx, []*wire.MsgTx{transferTx.MsgTx})
+	settleTx.SetChangeAddress(rk.Address, "")
 	if err != nil {
 		return errors.Wrap(err, "Failed to compose settle tx")
 	}
