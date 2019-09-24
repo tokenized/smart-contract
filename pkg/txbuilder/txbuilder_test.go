@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"testing"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
-func TestTxBuilder(t *testing.T) {
+func TestBasic(t *testing.T) {
 	key, err := bitcoin.GenerateKeyS256(bitcoin.TestNet)
 	if err != nil {
 		t.Errorf("Failed to create private key : %s", err)
@@ -99,7 +98,7 @@ func TestTxBuilder(t *testing.T) {
 	}
 }
 
-func TestTxBuilderSample(t *testing.T) {
+func TestSample(t *testing.T) {
 	// Load your private key
 	wif := "cQDgbH4C7HP3LSJevMSb1dPMCviCPoLwJ28mxnDRJueMSCa72xjm"
 	key, err := bitcoin.DecodeKeyString(wif)
@@ -206,7 +205,153 @@ func randomAddress() bitcoin.RawAddress {
 	return result
 }
 
-func TestSendMaxTxBuilder(t *testing.T) {
+func TestAddFunding(t *testing.T) {
+	utxos := []bitcoin.UTXO{
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 10000,
+			KeyID: "m/0/1",
+		},
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 2000,
+			KeyID: "m/0/2",
+		},
+		bitcoin.UTXO{
+			Hash:  *randomTxId(),
+			Index: 0,
+			Value: 1000,
+			KeyID: "m/0/3",
+		},
+	}
+
+	toAddress := randomAddress()
+	toScript, err := toAddress.LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create locking script : %s", err)
+	}
+
+	changeAddress := randomAddress()
+	changeScript, err := changeAddress.LockingScript()
+	if err != nil {
+		t.Fatalf("Failed to create locking script : %s", err)
+	}
+
+	// Change address needed ***********************************************************************
+	tx := NewTxBuilder(546, 1.1)
+	if err != nil {
+		t.Fatalf("Failed to build max send tx : %s", err)
+	}
+	tx.SetChangeAddress(changeAddress, "")
+
+	err = tx.AddPaymentOutput(toAddress, 600, false)
+	if err != nil {
+		t.Fatalf("Failed to payment : %s", err)
+	}
+
+	err = tx.AddFunding(utxos)
+	if err != nil {
+		t.Fatalf("Failed to add funding : %s", err)
+	}
+
+	fee := float32(tx.Fee())
+	t.Logf("Fee : %d", uint64(fee))
+	t.Logf("Estimated Fee : %d", uint64(float32(tx.EstimatedSize())*1.1))
+	estimatedFee := float32(tx.EstimatedSize()) * 1.1
+	low := estimatedFee * 0.95
+	high := estimatedFee * 1.05
+	if fee < low || fee > high {
+		t.Fatalf("Incorrect fee : got %f, want %f", fee, estimatedFee)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[0].PkScript, toScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[0].PkScript, toScript)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[1].PkScript, changeScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[1].PkScript, changeScript)
+	}
+
+	// Already has change output *******************************************************************
+	tx = NewTxBuilder(546, 1.1)
+	if err != nil {
+		t.Fatalf("Failed to build max send tx : %s", err)
+	}
+	tx.SetChangeAddress(changeAddress, "")
+
+	err = tx.AddPaymentOutput(toAddress, 600, false)
+	if err != nil {
+		t.Fatalf("Failed to payment : %s", err)
+	}
+
+	err = tx.AddPaymentOutput(changeAddress, 700, true)
+	if err != nil {
+		t.Fatalf("Failed to payment : %s", err)
+	}
+
+	err = tx.AddFunding(utxos)
+	if err != nil {
+		t.Fatalf("Failed to add funding : %s", err)
+	}
+
+	fee = float32(tx.Fee())
+	t.Logf("Fee : %d", uint64(fee))
+	t.Logf("Estimated Fee : %d", uint64(float32(tx.EstimatedSize())*1.1))
+	estimatedFee = float32(tx.EstimatedSize()) * 1.1
+	low = estimatedFee * 0.95
+	high = estimatedFee * 1.05
+	if fee < low || fee > high {
+		t.Fatalf("Incorrect fee : got %f, want %f", fee, estimatedFee)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[0].PkScript, toScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[0].PkScript, toScript)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[1].PkScript, changeScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[1].PkScript, changeScript)
+	}
+
+	// Change is dust ******************************************************************************
+	tx = NewTxBuilder(546, 1.1)
+	if err != nil {
+		t.Fatalf("Failed to build max send tx : %s", err)
+	}
+	tx.SetChangeAddress(changeAddress, "")
+
+	err = tx.AddPaymentOutput(toAddress, 600, false)
+	if err != nil {
+		t.Fatalf("Failed to payment : %s", err)
+	}
+
+	utxos[0].Value = 900
+	err = tx.AddFunding(utxos)
+	if err != nil {
+		t.Fatalf("Failed to add funding : %s", err)
+	}
+
+	fee = float32(tx.Fee())
+	t.Logf("Fee : %d", uint64(fee))
+	t.Logf("Estimated Fee : %d", uint64(float32(tx.EstimatedSize())*1.1))
+	estimatedFee = float32(tx.EstimatedSize()) * 1.1
+	low = estimatedFee * 0.95
+	high = 305
+	if fee < low || fee > high {
+		t.Fatalf("Incorrect fee : got %f, want %f", fee, estimatedFee)
+	}
+
+	if !bytes.Equal(tx.MsgTx.TxOut[0].PkScript, toScript) {
+		t.Fatalf("Incorrect locking script : \ngot  %s\nwant %s", tx.MsgTx.TxOut[0].PkScript, toScript)
+	}
+
+	if len(tx.Outputs) != 1 {
+		t.Fatalf("Incorrect output count : got %d, want %d", len(tx.Outputs), 1)
+	}
+}
+
+func TestSendMax(t *testing.T) {
 	utxos := []bitcoin.UTXO{
 		bitcoin.UTXO{
 			Hash:  *randomTxId(),

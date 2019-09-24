@@ -67,16 +67,33 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 	inputValue := tx.InputValue()
-	outputValue := tx.OutputValue(false)
-	feeValue := uint64(float32(tx.EstimatedFee()) * 0.95)
+	outputValue := tx.OutputValue(true)
+	feeValue := tx.Fee()
+	estFeeValue := tx.EstimatedFee()
+	estFeeLow := uint64(float32(estFeeValue) * 0.95)
 
-	if outputValue+feeValue < inputValue {
+	if feeValue > estFeeLow {
 		return nil // Already funded
+	}
+
+	// Find change output
+	changeOutputIndex := 0xffffffff
+	for i, output := range tx.Outputs {
+		if output.IsRemainder {
+			changeOutputIndex = i
+			break
+		}
 	}
 
 	// Calculate additional funding needed. Include cost of first added input.
 	// TODO Add support for input scripts other than P2PKH.
-	funding := uint64(float32(EstimatedP2PKHInputSize)*tx.FeeRate) + feeValue + outputValue - inputValue
+	funding := estFeeValue + outputValue - inputValue
+	estInputFee := uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
+	estOutputFee := uint64(float32(P2PKHOutputSize) * tx.FeeRate)
+	funding += estInputFee
+	if changeOutputIndex == 0xffffffff {
+		funding += estOutputFee // Change output
+	}
 
 	var err error
 	for _, utxo := range utxos {
@@ -90,12 +107,19 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		} else {
 			// Funding complete
 			change := utxo.Value - funding
-			if change > tx.DustLimit {
-				err = tx.AddPaymentOutput(tx.ChangeAddress, change, true)
-				if err != nil {
-					return errors.Wrap(err, "adding change")
+			if changeOutputIndex == 0xffffffff {
+				if change > tx.DustLimit {
+					if tx.ChangeAddress.IsEmpty() {
+						return errors.New("Change address needed")
+					}
+					err = tx.AddPaymentOutput(tx.ChangeAddress, change, true)
+					if err != nil {
+						return errors.Wrap(err, "adding change")
+					}
+					tx.Outputs[len(tx.Outputs)-1].KeyID = tx.ChangeKeyID
 				}
-				tx.Outputs[len(tx.Outputs)-1].KeyID = tx.ChangeKeyID
+			} else {
+				tx.MsgTx.TxOut[changeOutputIndex].Value += change
 			}
 			funding = 0
 			break

@@ -1,6 +1,7 @@
 package txbuilder
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -40,7 +41,12 @@ const (
 // If the fee is too low after signing, then the fee should be adjusted and the tx re-signed.
 
 func (tx *TxBuilder) Fee() uint64 {
-	return tx.InputValue() - tx.OutputValue(true)
+	o := tx.OutputValue(true)
+	i := tx.InputValue()
+	if o > i {
+		return 0
+	}
+	return i - o
 }
 
 // EstimatedSize returns the estimated size in bytes of the tx after signatures are added.
@@ -151,6 +157,9 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 		if changeOutputIndex == 0xffffffff {
 			// Add a change output if it would be more than the dust limit
 			if uint64(-amount) > tx.DustLimit {
+				if tx.ChangeAddress.IsEmpty() {
+					return false, errors.New("Change address needed")
+				}
 				err := tx.AddPaymentOutput(tx.ChangeAddress, uint64(-amount), true)
 				if err != nil {
 					return false, err
