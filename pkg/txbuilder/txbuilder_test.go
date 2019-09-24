@@ -390,14 +390,13 @@ func TestSendMax(t *testing.T) {
 		t.Fatalf("Failed to build max send tx : %s", err)
 	}
 
-	tx.AddInputUTXO(utxos[0])
-
 	tx.AddPaymentOutput(toAddress, 600, false)
 	tx.AddPaymentOutput(toAddress2, 0, true)
 
-	err = tx.CalculateFee()
+	tx.SetSendMax()
+	err = tx.AddFunding(utxos[:1])
 	if err != nil {
-		t.Fatalf("Failed to calc max send fee : %s", err)
+		t.Fatalf("Failed to add funding : %s", err)
 	}
 
 	if len(tx.Inputs) != 1 {
@@ -426,15 +425,12 @@ func TestSendMax(t *testing.T) {
 		t.Fatalf("Failed to build max send tx : %s", err)
 	}
 
-	for _, utxo := range utxos {
-		tx.AddInputUTXO(utxo)
-	}
-
 	tx.AddPaymentOutput(toAddress, 0, true)
 
-	err = tx.CalculateFee()
+	tx.SetSendMax()
+	err = tx.AddFunding(utxos)
 	if err != nil {
-		t.Fatalf("Failed to calc max send fee : %s", err)
+		t.Fatalf("Failed to add funding : %s", err)
 	}
 
 	if len(tx.Inputs) != 3 {
@@ -463,16 +459,13 @@ func TestSendMax(t *testing.T) {
 		t.Fatalf("Failed to build max send tx : %s", err)
 	}
 
-	for _, utxo := range utxos {
-		tx.AddInputUTXO(utxo)
-	}
-
 	tx.AddPaymentOutput(toAddress, 5000, false)
 	tx.AddPaymentOutput(toAddress2, 0, true)
 
-	err = tx.CalculateFee()
+	tx.SetSendMax()
+	err = tx.AddFunding(utxos)
 	if err != nil {
-		t.Fatalf("Failed to calc max send fee : %s", err)
+		t.Fatalf("Failed to add funding : %s", err)
 	}
 
 	if len(tx.Inputs) != 3 {

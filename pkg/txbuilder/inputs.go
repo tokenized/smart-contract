@@ -62,8 +62,15 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 	return nil
 }
 
+// SetSendMax sets the SendMax flag so AddFunding will add all UTXOs as inputs, even if they are not
+//   needed to fund outputs.
+func (tx *TxBuilder) SetSendMax() {
+	tx.SendMax = true
+}
+
 // AddFunding adds inputs spending the specified UTXOs until the transaction has enough funding to
 //   cover the fees and outputs.
+// If SendMax is set then all UTXOs are added as inputs.
 func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 	inputValue := tx.InputValue()
@@ -72,7 +79,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	estFeeValue := tx.EstimatedFee()
 	estFeeLow := uint64(float32(estFeeValue) * 0.95)
 
-	if feeValue > estFeeLow {
+	if !tx.SendMax && feeValue > estFeeLow {
 		return nil // Already funded
 	}
 
@@ -102,6 +109,10 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 			return errors.Wrap(err, "adding input")
 		}
 
+		if tx.SendMax {
+			continue
+		}
+
 		if funding > utxo.Value {
 			funding -= utxo.Value // More UTXOs required
 		} else {
@@ -122,14 +133,16 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 				tx.MsgTx.TxOut[changeOutputIndex].Value += change
 			}
 			funding = 0
-			break
+			return nil
 		}
 
 		// Add cost of next input
 		funding += uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
 	}
 
-	if funding != 0 {
+	if tx.SendMax {
+		return tx.CalculateFee()
+	} else {
 		available := uint64(0)
 		for _, utxo := range utxos {
 			available += utxo.Value
