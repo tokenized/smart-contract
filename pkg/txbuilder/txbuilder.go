@@ -22,6 +22,7 @@ type TxBuilder struct {
 	ChangeAddress bitcoin.RawAddress  // The address to pay extra bitcoins to if a change output isn't specified
 	DustLimit     uint64              // Smallest amount of bitcoin for a valid spendable output
 	FeeRate       float32             // The target fee rate in sat/byte
+	SendMax       bool                // When set, AddFunding will add all UTXOs given
 
 	// Optional identifier for external use to track the key needed to spend change
 	ChangeKeyID string
