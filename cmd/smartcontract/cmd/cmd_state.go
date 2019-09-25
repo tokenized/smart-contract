@@ -18,7 +18,7 @@ import (
 )
 
 var cmdState = &cobra.Command{
-	Use:   "state <hex>",
+	Use:   "state <contract address>",
 	Short: "Load and print the contract state.",
 	Long:  "Load and print the contract state.",
 	RunE: func(c *cobra.Command, args []string) error {
