@@ -80,7 +80,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	estFeeLow := uint64(float32(estFeeValue) * 0.95)
 
 	if !tx.SendMax && feeValue > estFeeLow {
-		return nil // Already funded
+		return tx.CalculateFee() // Already funded
 	}
 
 	// Find change output
