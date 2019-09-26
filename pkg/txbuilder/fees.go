@@ -8,18 +8,18 @@ import (
 )
 
 const (
-	// P2PKH/P2SH input size 147
+	// P2PKH/P2SH input size 146
 	//   Previous Transaction ID = 32 bytes
 	//   Previous Transaction Output Index = 4 bytes
 	//   script size = 2 bytes
-	//   Signature push to stack = 75
+	//   Signature push to stack = 74
 	//       push size = 1 byte
-	//       signature up to = 73 bytes
+	//       signature up to = 72 bytes
 	//       signature hash type = 1 byte
 	//   Public key push to stack = 34
 	//       push size = 1 byte
 	//       public key size = 33 bytes
-	EstimatedP2PKHInputSize = 32 + 4 + 2 + 75 + 34
+	EstimatedP2PKHInputSize = 32 + 4 + 2 + 74 + 34
 
 	// Size of output not including script
 	OutputBaseSize = 8
