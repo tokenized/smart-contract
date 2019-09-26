@@ -80,7 +80,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	estFeeLow := uint64(float32(estFeeValue) * 0.95)
 
 	if !tx.SendMax && feeValue > estFeeLow {
-		return nil // Already funded
+		return tx.CalculateFee() // Already funded
 	}
 
 	// Find change output
@@ -94,12 +94,12 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 	// Calculate additional funding needed. Include cost of first added input.
 	// TODO Add support for input scripts other than P2PKH.
-	funding := estFeeValue + outputValue - inputValue
+	neededFunding := estFeeValue + outputValue - inputValue
 	estInputFee := uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
 	estOutputFee := uint64(float32(P2PKHOutputSize) * tx.FeeRate)
-	funding += estInputFee
+	neededFunding += estInputFee
 	if changeOutputIndex == 0xffffffff {
-		funding += estOutputFee // Change output
+		neededFunding += estOutputFee // Change output
 	}
 
 	var err error
@@ -113,11 +113,11 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 			continue
 		}
 
-		if funding > utxo.Value {
-			funding -= utxo.Value // More UTXOs required
+		if neededFunding > utxo.Value {
+			neededFunding -= utxo.Value // More UTXOs required
 		} else {
 			// Funding complete
-			change := utxo.Value - funding
+			change := utxo.Value - neededFunding
 			if changeOutputIndex == 0xffffffff {
 				if change > tx.DustLimit {
 					if tx.ChangeAddress.IsEmpty() {
@@ -132,12 +132,12 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 			} else {
 				tx.MsgTx.TxOut[changeOutputIndex].Value += change
 			}
-			funding = 0
+			neededFunding = 0
 			return nil
 		}
 
 		// Add cost of next input
-		funding += uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
+		neededFunding += uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
 	}
 
 	if tx.SendMax {
@@ -147,7 +147,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		for _, utxo := range utxos {
 			available += utxo.Value
 		}
-		return fmt.Errorf("insufficient funding %d/%d", available, tx.EstimatedFee())
+		return fmt.Errorf("insufficient funding %d/%d", available, outputValue + tx.EstimatedFee())
 	}
 
 	return nil
