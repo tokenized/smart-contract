@@ -261,15 +261,18 @@ func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 
 // Addresses returns all the PKH addresses involved in the transaction
 func (itx *Transaction) Addresses() []bitcoin.RawAddress {
-	l := len(itx.Inputs) + len(itx.Outputs)
-	addresses := make([]bitcoin.RawAddress, l, l)
+	addresses := make([]bitcoin.RawAddress, 0, len(itx.Inputs)+len(itx.Outputs))
 
-	for i, input := range itx.Inputs {
-		addresses[i] = input.Address
+	for _, input := range itx.Inputs {
+		if !input.Address.IsEmpty() {
+			addresses = append(addresses, input.Address)
+		}
 	}
 
-	for i, output := range itx.Outputs {
-		addresses[i+len(itx.Inputs)] = output.Address
+	for _, output := range itx.Outputs {
+		if !output.Address.IsEmpty() {
+			addresses = append(addresses, output.Address)
+		}
 	}
 
 	return addresses
@@ -281,33 +284,32 @@ func (itx *Transaction) AddressesUnique() []bitcoin.RawAddress {
 }
 
 // uniqueAddresses is an isolated function used for testing
-func uniqueAddresses(s []bitcoin.RawAddress) []bitcoin.RawAddress {
-	u := []bitcoin.RawAddress{}
+func uniqueAddresses(addresses []bitcoin.RawAddress) []bitcoin.RawAddress {
+	result := make([]bitcoin.RawAddress, 0, len(addresses))
 
 	// Spin over every address and check if it is found
 	// in the list of unique addresses
-	for _, v := range s {
-		if len(u) == 0 {
-			u = append(u, v)
+	for _, address := range addresses {
+		if len(result) == 0 {
+			result = append(result, address)
 			continue
 		}
 
-		var seen bool
-
-		for _, x := range u {
+		seen := false
+		for _, seenAddress := range result {
 			// We have seen this address
-			if x.Equal(v) {
+			if seenAddress.Equal(address) {
 				seen = true
 				break
 			}
 		}
 
 		if !seen {
-			u = append(u, v)
+			result = append(result, address)
 		}
 	}
 
-	return u
+	return result
 }
 
 func (itx *Transaction) Write(buf *bytes.Buffer) error {

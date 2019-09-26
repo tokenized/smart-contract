@@ -147,7 +147,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		for _, utxo := range utxos {
 			available += utxo.Value
 		}
-		return fmt.Errorf("insufficient funding %d/%d", available, outputValue + tx.EstimatedFee())
+		return fmt.Errorf("insufficient funding %d/%d", available, outputValue+tx.EstimatedFee())
 	}
 
 	return nil
