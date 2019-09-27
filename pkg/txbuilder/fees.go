@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	// P2PKH/P2SH input size 146
+	// P2PKH/P2SH input size 149
 	//   Previous Transaction ID = 32 bytes
 	//   Previous Transaction Output Index = 4 bytes
-	//   script size = 2 bytes
+	//   script size = 1 byte
 	//   Signature push to stack = 74
 	//       push size = 1 byte
 	//       signature up to = 72 bytes
@@ -19,7 +19,8 @@ const (
 	//   Public key push to stack = 34
 	//       push size = 1 byte
 	//       public key size = 33 bytes
-	EstimatedP2PKHInputSize = 32 + 4 + 2 + 74 + 34
+	//   Sequence number = 4
+	MaximumP2PKHInputSize = 32 + 4 + 1 + 74 + 34 + 4
 
 	// Size of output not including script
 	OutputBaseSize = 8
@@ -59,7 +60,7 @@ func (tx *TxBuilder) EstimatedSize() int {
 		if len(input.SignatureScript) > 0 {
 			result += input.SerializeSize()
 		} else {
-			result += EstimatedP2PKHInputSize // TODO Update when non-P2PKH inputs are implemented
+			result += MaximumP2PKHInputSize // TODO Update when non-P2PKH inputs are implemented
 		}
 	}
 

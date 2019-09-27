@@ -95,7 +95,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	// Calculate additional funding needed. Include cost of first added input.
 	// TODO Add support for input scripts other than P2PKH.
 	neededFunding := estFeeValue + outputValue - inputValue
-	estInputFee := uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
+	estInputFee := uint64(float32(MaximumP2PKHInputSize) * tx.FeeRate)
 	estOutputFee := uint64(float32(P2PKHOutputSize) * tx.FeeRate)
 	neededFunding += estInputFee
 	if changeOutputIndex == 0xffffffff {
@@ -137,7 +137,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		}
 
 		// Add cost of next input
-		neededFunding += uint64(float32(EstimatedP2PKHInputSize) * tx.FeeRate)
+		neededFunding += uint64(float32(MaximumP2PKHInputSize) * tx.FeeRate)
 	}
 
 	if tx.SendMax {

@@ -227,7 +227,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	tx.AddOutput(payload, 0, false, false)
 
 	// Estimate fee with 2 inputs
-	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.EstimatedP2PKHInputSize)
+	amount := tx.EstimatedFee() + outputAmount + (2 * txbuilder.MaximumP2PKHInputSize)
 
 	for {
 		utxos, err := m.UTXOs.Get(amount, rk.Address)
