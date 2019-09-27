@@ -149,8 +149,18 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
 
 	for _, txin := range itx.MsgTx.TxIn {
-		h := txin.PreviousOutPoint.Hash
+		if txin.PreviousOutPoint.Index == 0xffffffff {
+			// Empty coinbase input
+			inputs = append(inputs, Input{
+				UTXO: bitcoin.UTXO{
+					Index: 0xffffffff,
+				},
+			})
+			continue
+		}
 
+		// Lookup outpoint transaction
+		h := txin.PreviousOutPoint.Hash
 		inputTX, err := node.GetTX(ctx, &h)
 		if err != nil {
 			return err
