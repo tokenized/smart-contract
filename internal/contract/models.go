@@ -29,7 +29,7 @@ type NewContract struct {
 	AdminOracle               *actions.OracleField         `json:"AdminOracle,omitempty"`
 	AdminOracleSignature      []byte                       `json:"AdminOracleSignature,omitempty"`
 	AdminOracleSigBlockHeight uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
-	ContractAuthFlags         []byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractPermissions       []byte                       `json:"ContractPermissions,omitempty"`
 	ContractFee               uint64                       `json:"ContractFee,omitempty"`
 	VotingSystems             []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	RestrictedQtyAssets       uint64                       `json:"RestrictedQtyAssets,omitempty"`
@@ -66,7 +66,7 @@ type UpdateContract struct {
 	AdminOracle               *actions.OracleField          `json:"AdminOracle,omitempty"`
 	AdminOracleSignature      *[]byte                       `json:"AdminOracleSignature,omitempty"`
 	AdminOracleSigBlockHeight *uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
-	ContractAuthFlags         *[]byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractPermissions       *[]byte                       `json:"ContractPermissions,omitempty"`
 	ContractFee               *uint64                       `json:"ContractFee,omitempty"`
 	VotingSystems             *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	RestrictedQtyAssets       *uint64                       `json:"RestrictedQtyAssets,omitempty"`

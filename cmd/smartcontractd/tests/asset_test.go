@@ -70,19 +70,21 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = true               // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
 	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
+	t.Logf("Asset Permissions : 0x%x", assetData.AssetPermissions)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	// Build asset definition transaction
@@ -194,19 +196,20 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = true               // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
 	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	// Build asset definition transaction
@@ -352,9 +355,11 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
+	fip := protocol.FieldIndexPath{actions.AssetFieldTokenQty}
+	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: actions.AssetFieldTokenQty,
-		Data:       buf.Bytes(),
+		FieldIndexPath: fipBytes,
+		Data:           buf.Bytes(),
 	})
 
 	// Build amendment transaction
@@ -448,9 +453,11 @@ func assetProposalAmendment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
+	fip := protocol.FieldIndexPath{actions.AssetFieldAssetPayload}
+	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
-		FieldIndex: actions.AssetFieldAssetPayload,
-		Data:       payloadData,
+		FieldIndexPath: fipBytes,
+		Data:           payloadData,
 	}
 	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)
 	if err != nil {
@@ -571,17 +578,17 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, 2)
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+			VotingSystemsAllowed:   []bool{true, false},
+		},
 	}
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -640,17 +647,17 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, 2)
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+			VotingSystemsAllowed:   []bool{true, false}, // Enable this voting system for proposals on this field.
+		},
 	}
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}

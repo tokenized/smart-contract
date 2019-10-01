@@ -138,8 +138,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.ContractOperator != nil {
 		c.ContractOperator = upd.ContractOperator
 	}
-	if upd.ContractAuthFlags != nil {
-		c.ContractAuthFlags = *upd.ContractAuthFlags
+	if upd.ContractPermissions != nil {
+		c.ContractPermissions = *upd.ContractPermissions
 	}
 	if upd.ContractFee != nil {
 		c.ContractFee = *upd.ContractFee

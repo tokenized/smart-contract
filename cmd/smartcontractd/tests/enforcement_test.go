@@ -140,7 +140,6 @@ func freezeAuthorityOrder(t *testing.T) {
 		AssetType:          testAssetType,
 		AssetCode:          testAssetCode.Bytes(),
 		Message:            "Court order",
-		AuthorityIncluded:  true,
 		AuthorityName:      "District Court #345",
 		AuthorityPublicKey: authorityKey.Key.PublicKey().Bytes(),
 		SignatureAlgorithm: 1,

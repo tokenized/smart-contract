@@ -17,8 +17,9 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
-	spynodeHandlers "github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -55,20 +56,21 @@ func createContract(t *testing.T) {
 	}
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = false              // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              false, // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+		},
 	}
 
+	permissions[0].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
 	var err error
-	offerData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	offerData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize contract auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize contract permissions : %v", tests.Failed, err)
 	}
 
 	// Create funding tx
@@ -274,19 +276,20 @@ func oracleContract(t *testing.T) {
 	offerData.AdminOracleSignature = sig.Bytes()
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = false              // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              false, // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+		},
 	}
 
-	offerData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	permissions[0].VotingSystemsAllowed = make([]bool, len(offerData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	offerData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize contract auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize contract permissions : %v", tests.Failed, err)
 	}
 
 	// Create funding tx
@@ -346,7 +349,7 @@ func oracleContract(t *testing.T) {
 		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
 	}
 
-	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
+	if err := server.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
 		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
 	}
 
@@ -407,7 +410,7 @@ func oracleContract(t *testing.T) {
 		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
 	}
 
-	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
+	if err := server.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
 		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
 	}
 
@@ -461,9 +464,11 @@ func contractAmendment(t *testing.T) {
 		ContractRevision: 0,
 	}
 
+	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: 0, // ContractName
-		Data:       []byte("Test Contract 2"),
+		FieldIndexPath: fipBytes,
+		Data:           []byte("Test Contract 2"),
 	})
 
 	// Build amendment transaction
@@ -553,16 +558,20 @@ func contractOracleAmendment(t *testing.T) {
 		ChangeAdministrationAddress: true,
 	}
 
+	fip := protocol.FieldIndexPath{actions.ContractFieldAdminOracleSignature}
+	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: actions.ContractFieldAdminOracleSignature,
-		Data:       signature.Bytes(),
+		FieldIndexPath: fipBytes,
+		Data:           signature.Bytes(),
 	})
 
 	var blockHeightBuf bytes.Buffer
 	binary.Write(&blockHeightBuf, binary.LittleEndian, &blockHeight)
+	fip = protocol.FieldIndexPath{actions.ContractFieldAdminOracleSigBlockHeight}
+	fipBytes, _ = fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: actions.ContractFieldAdminOracleSigBlockHeight,
-		Data:       blockHeightBuf.Bytes(),
+		FieldIndexPath: fipBytes,
+		Data:           blockHeightBuf.Bytes(),
 	})
 
 	// Build amendment transaction
@@ -634,9 +643,11 @@ func contractProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 
+	fip := protocol.FieldIndexPath{actions.ContractFieldContractType}
+	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
-		FieldIndex: 3, // ContractType
-		Data:       []byte("New Type"),
+		FieldIndexPath: fipBytes,
+		Data:           []byte("New Type"),
 	}
 	err = mockUpContractAmendmentVote(ctx, 0, 0, &assetAmendment)
 	if err != nil {
@@ -735,18 +746,19 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 	}
 
 	// Define permissions for contact fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+		},
 	}
 
+	permissions[0].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
 	var err error
-	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	contractData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -779,18 +791,19 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 	}
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+		},
 	}
 
+	permissions[0].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
 	var err error
-	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	contractData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -823,18 +836,19 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 	}
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = false              // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              false, // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+		},
 	}
 
+	permissions[0].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
 	var err error
-	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	contractData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -891,17 +905,18 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 	contractData.AdminOracleSignature = sig.Bytes()
 
 	// Define permissions for contract fields
-	permissions := make([]protocol.Permission, actions.ContractFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = true               // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := protocol.Permissions{
+		protocol.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+		},
 	}
 
-	contractData.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	permissions[0].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	contractData.ContractPermissions, err = permissions.Bytes()
 	if err != nil {
 		return nil, err
 	}

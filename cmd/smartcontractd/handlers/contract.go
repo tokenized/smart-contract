@@ -71,8 +71,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if _, err = protocol.ReadAuthFlags(msg.ContractAuthFlags, actions.ContractFieldCount, len(msg.VotingSystems)); err != nil {
-		node.LogWarn(ctx, "Invalid contract auth flags : %s", err)
+	if _, err = protocol.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
+		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -203,12 +203,12 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.Specific {
+		if len(vt.ProposedAmendments) == 0 {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if vt.AssetSpecificVote {
+		if !vt.AssetCode.IsZero() {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -268,8 +268,12 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	if ct.AdminOracle != nil {
 		// Check that new signature is provided
 		adminOracleSigIncluded := false
-		for _, amendment := range msg.Amendments {
-			if amendment.FieldIndex == actions.ContractFieldAdminOracleSignature {
+		for i, amendment := range msg.Amendments {
+			fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+			if err != nil {
+				return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
+			}
+			if len(fip) > 0 && fip[0] == actions.ContractFieldAdminOracleSignature {
 				adminOracleSigIncluded = true
 				break
 			}
@@ -289,7 +293,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to convert state contract to contract formation")
 		}
 
-		if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
+		if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalInitiator,
+			votingSystem); err != nil {
 			node.LogWarn(ctx, "Failed to apply amendments to check admin oracle sig : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -333,12 +338,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	if err := checkContractAmendmentsPermissions(ct, msg.Amendments, proposed, proposalInitiator,
-		votingSystem); err != nil {
-		node.LogWarn(ctx, "Contract amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAuthFlags)
-	}
-
 	// Contract Formation <- Contract Amendment
 	cf := actions.ContractFormation{}
 
@@ -352,8 +351,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = v.Now.Nano()
 
-	if err := applyContractAmendments(&cf, msg.Amendments); err != nil {
+	if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalInitiator,
+		votingSystem); err != nil {
 		node.LogWarn(ctx, "Contract amendments failed : %s", err)
+		code, ok := node.ErrorCode(err)
+		if ok {
+			return node.RespondReject(ctx, w, itx, rk, code)
+		}
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -625,9 +629,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating admin oracle sig block height (%s)", ct.ContractName)
 		}
 
-		if !bytes.Equal(ct.ContractAuthFlags[:], msg.ContractAuthFlags[:]) {
-			uc.ContractAuthFlags = &msg.ContractAuthFlags
-			node.Log(ctx, "Updating contract auth flags (%s) : %v", ct.ContractName, *uc.ContractAuthFlags)
+		if !bytes.Equal(ct.ContractPermissions[:], msg.ContractPermissions[:]) {
+			uc.ContractPermissions = &msg.ContractPermissions
+			node.Log(ctx, "Updating contract permissions (%s) : %v", ct.ContractName, *uc.ContractPermissions)
 		}
 
 		if ct.ContractFee != msg.ContractFee {
@@ -764,84 +768,348 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	return nil
 }
 
-// checkContractAmendmentsPermissions verifies that the amendments are permitted bases on the auth flags.
-func checkContractAmendmentsPermissions(ct *state.Contract, amendments []*actions.AmendmentField, proposed bool,
-	proposalInitiator, votingSystem uint32) error {
+// applyOracleAmendments applies the amendments to the oracle field.
+func applyOracleAmendments(oracle *actions.OracleField, amendment *actions.AmendmentField,
+	parentFIP, fip protocol.FieldIndexPath) error {
 
-	permissions, err := protocol.ReadAuthFlags(ct.ContractAuthFlags, actions.ContractFieldCount, len(ct.VotingSystems))
-	if err != nil {
-		return fmt.Errorf("Invalid contract auth flags : %s", err)
+	if len(fip) == 0 {
+		return errors.New("Amendments on complex fields (Oracle) not allowed")
 	}
 
-	for _, amendment := range amendments {
-		if int(amendment.FieldIndex) >= len(permissions) {
-			return fmt.Errorf("Amendment field index out of range : %d", amendment.FieldIndex)
+	switch fip[0] {
+	case 0: // Name
+		oracle.Name = string(amendment.Data)
+
+	case 1: // URL
+		oracle.URL = string(amendment.Data)
+
+	case 2: // PublicKey
+		if _, err := bitcoin.DecodePublicKeyBytes(amendment.Data); err != nil {
+			return errors.Wrap(err, "AdminOracle public key invalid")
 		}
-		if proposed {
-			switch proposalInitiator {
-			case 0: // Administration
-				if !permissions[amendment.FieldIndex].AdministrationProposal {
-					return fmt.Errorf("Field %d amendment not permitted by administration proposal", amendment.FieldIndex)
-				}
-			case 1: // Holder
-				if !permissions[amendment.FieldIndex].HolderProposal {
-					return fmt.Errorf("Field %d amendment not permitted by holder proposal", amendment.FieldIndex)
-				}
-			default:
-				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+		oracle.PublicKey = amendment.Data
+
+	default:
+		return fmt.Errorf("Contract amendment subfield offset for Oracle out of range : %s", fip.String())
+	}
+
+	return nil
+}
+
+// applyEntityAmendments applies the amendments to the entity field.
+func applyEntityAmendments(entity *actions.EntityField, amendment *actions.AmendmentField,
+	parentFIP, fip protocol.FieldIndexPath) error {
+
+	if len(fip) == 0 {
+		return errors.New("Amendments on complex fields (Entity) not allowed")
+	}
+
+	switch fip[0] {
+	case actions.EntityFieldName:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.Name : %s",
+				fip.String())
+		}
+		entity.Name = string(amendment.Data)
+
+	case actions.EntityFieldType:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.Type : %s",
+				fip.String())
+		}
+		if len(amendment.Data) != 1 {
+			return fmt.Errorf("Entity.Type amendment value is wrong size : %d", len(amendment.Data))
+		}
+		entity.Type = string([]byte{amendment.Data[0]})
+
+	case actions.EntityFieldLEI:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.LEI : %s",
+				fip.String())
+		}
+		entity.LEI = string(amendment.Data)
+
+	case actions.EntityFieldUnitNumber:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.UnitNumber : %s",
+				fip.String())
+		}
+		entity.UnitNumber = string(amendment.Data)
+
+	case actions.EntityFieldBuildingNumber:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.BuildingNumber : %s",
+				fip.String())
+		}
+		entity.BuildingNumber = string(amendment.Data)
+
+	case actions.EntityFieldStreet:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.Street : %s",
+				fip.String())
+		}
+		entity.Street = string(amendment.Data)
+
+	case actions.EntityFieldSuburbCity:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.SuburbCity : %s",
+				fip.String())
+		}
+		entity.SuburbCity = string(amendment.Data)
+
+	case actions.EntityFieldTerritoryStateProvinceCode:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.TerritoryStateProvinceCode : %s",
+				fip.String())
+		}
+		entity.TerritoryStateProvinceCode = string(amendment.Data)
+
+	case actions.EntityFieldCountryCode:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.CountryCode : %s",
+				fip.String())
+		}
+		entity.CountryCode = string(amendment.Data)
+
+	case actions.EntityFieldPostalZIPCode:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.ZIPCode : %s",
+				fip.String())
+		}
+		entity.PostalZIPCode = string(amendment.Data)
+
+	case actions.EntityFieldEmailAddress:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.EmailAddress : %s",
+				fip.String())
+		}
+		entity.EmailAddress = string(amendment.Data)
+
+	case actions.EntityFieldPhoneNumber:
+		if len(fip) > 1 {
+			return fmt.Errorf("Contract amendment field index path too deep for Entity.PhoneNumber : %s",
+				fip.String())
+		}
+		entity.PhoneNumber = string(amendment.Data)
+
+	case actions.EntityFieldAdministration: // []*actions.Administrator
+		switch amendment.Operation {
+		case 0: // Modify
+			if len(fip) != 2 { // includes list index
+				return fmt.Errorf("Contract amendment field index path incorrect depth for modify Entity.Administration : %s",
+					fip.String())
+			}
+			if int(fip[1]) >= len(entity.Administration) {
+				return fmt.Errorf("Contract amendment subfield element out of range for Entity.Administration : %d",
+					fip[1])
 			}
 
-			if int(votingSystem) >= len(permissions[amendment.FieldIndex].VotingSystemsAllowed) {
-				return fmt.Errorf("Field %d amendment voting system out of range : %d", amendment.FieldIndex, votingSystem)
+			entity.Administration[fip[1]].Reset()
+			if len(amendment.Data) != 0 {
+				if err := proto.Unmarshal(amendment.Data, entity.Administration[fip[1]]); err != nil {
+					return fmt.Errorf("Contract amendment Entity.Administration[%d] failed to deserialize : %s",
+						fip[1], err)
+				}
 			}
-			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
-				return fmt.Errorf("Field %d amendment not allowed using voting system %d", amendment.FieldIndex, votingSystem)
+
+		case 1: // Add element
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for add Entity.Administration : %s",
+					fip.String())
 			}
-		} else if !permissions[amendment.FieldIndex].Permitted {
-			return fmt.Errorf("Field %d amendment not permitted without proposal", amendment.FieldIndex)
+			newAdministrator := actions.AdministratorField{}
+			if len(amendment.Data) != 0 {
+				if err := proto.Unmarshal(amendment.Data, &newAdministrator); err != nil {
+					return fmt.Errorf("Contract amendment addition to Entity.Administration failed to deserialize : %s",
+						err)
+				}
+			}
+			entity.Administration = append(entity.Administration, &newAdministrator)
+
+		case 2: // Delete element
+			if len(fip) != 2 { // includes list index
+				return fmt.Errorf("Contract amendment field index path incorrect depth for delete Entity.Administration : %s",
+					fip.String())
+			}
+			if int(fip[1]) >= len(entity.Administration) {
+				return fmt.Errorf("Contract amendment subfield element out of range for Entity.Administration : %d",
+					fip[1])
+			}
+			entity.Administration = append(entity.Administration[:fip[1]],
+				entity.Administration[fip[1]+1:]...)
+
+		default:
+			return fmt.Errorf("Invalid contract amendment operation for Entity.Administration : %d",
+				amendment.Operation)
 		}
+
+	case actions.EntityFieldManagement: // []*actions.Manager
+		switch amendment.Operation {
+		case 0: // Modify
+			if len(fip) != 2 { // includes list index
+				return fmt.Errorf("Contract amendment field index path incorrect depth for modify Entity.Management : %s",
+					fip.String())
+			}
+			if int(fip[1]) >= len(entity.Management) {
+				return fmt.Errorf("Contract amendment subfield element out of range for Entity.Management : %d",
+					fip[1])
+			}
+
+			entity.Management[fip[1]].Reset()
+			if len(amendment.Data) != 0 {
+				if err := proto.Unmarshal(amendment.Data, entity.Management[fip[1]]); err != nil {
+					return fmt.Errorf("Contract amendment Entity.Management[%d] failed to deserialize : %s",
+						fip[1], err)
+				}
+			}
+
+		case 1: // Add element
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for add Entity.Management : %s",
+					fip.String())
+			}
+			newManager := actions.ManagerField{}
+			if len(amendment.Data) != 0 {
+				if err := proto.Unmarshal(amendment.Data, &newManager); err != nil {
+					return fmt.Errorf("Contract amendment addition to Entity.Management failed to deserialize : %s",
+						err)
+				}
+			}
+			entity.Management = append(entity.Management, &newManager)
+
+		case 2: // Delete element
+			if len(fip) != 2 { // includes list index
+				return fmt.Errorf("Contract amendment field index path incorrect depth for delete Entity.Management : %s",
+					fip.String())
+			}
+			if int(fip[1]) >= len(entity.Management) {
+				return fmt.Errorf("Contract amendment subfield element out of range for Entity.Management : %d",
+					fip[1])
+			}
+			entity.Management = append(entity.Management[:fip[1]],
+				entity.Management[fip[1]+1:]...)
+
+		default:
+			return fmt.Errorf("Invalid contract amendment operation for Entity.Management : %d",
+				amendment.Operation)
+		}
+
+	default:
+		return fmt.Errorf("Contract amendment subfield offset for Entity out of range : %s",
+			fip.String())
 	}
 
 	return nil
 }
 
 // applyContractAmendments applies the amendments to the contract formation.
-func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField) error {
-	authFieldsUpdated := false
-	for _, amendment := range amendments {
-		switch amendment.FieldIndex {
+func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField,
+	proposed bool, proposalInitiator, votingSystem uint32) error {
+
+	permissions, err := protocol.PermissionsFromBytes(cf.ContractPermissions, len(cf.VotingSystems))
+	if err != nil {
+		return fmt.Errorf("Invalid contract permissions : %s", err)
+	}
+
+	for i, amendment := range amendments {
+		fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		if err != nil {
+			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
+		}
+		if len(fip) == 0 {
+			return fmt.Errorf("Amendment %d has no field specified", i)
+		}
+
+		permission := permissions.PermissionOf(fip)
+
+		if proposed {
+			switch proposalInitiator {
+			case 0: // Administration
+				if !permission.AdministrationProposal {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
+							fip))
+				}
+			case 1: // Holder
+				if !permission.HolderProposal {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
+				}
+			default:
+				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+			}
+
+			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
+				return fmt.Errorf("Field %s amendment voting system out of range : %d", fip,
+					votingSystem)
+			}
+			if !permission.VotingSystemsAllowed[votingSystem] {
+				return node.NewError(actions.RejectionsContractPermissions,
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d", fip,
+						votingSystem))
+			}
+		} else if !permission.Permitted {
+			return node.NewError(actions.RejectionsContractPermissions,
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
+		}
+
+		switch fip[0] {
 		case actions.ContractFieldContractName:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractName : %s",
+					fip.String())
+			}
 			cf.ContractName = string(amendment.Data)
 
 		case actions.ContractFieldBodyOfAgreementType:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for BodyOfAgreementType : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
 				return fmt.Errorf("BodyOfAgreementType amendment value is wrong size : %d", len(amendment.Data))
 			}
 			cf.BodyOfAgreementType = uint32(amendment.Data[0])
 
 		case actions.ContractFieldBodyOfAgreement:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for BodyOfAgreement : %s",
+					fip.String())
+			}
 			cf.BodyOfAgreement = amendment.Data
 
 		case actions.ContractFieldContractType:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractType : %s",
+					fip.String())
+			}
 			cf.ContractType = string(amendment.Data)
 
 		case actions.ContractFieldSupportingDocs:
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(cf.SupportingDocs) {
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Contract amendment field index path incorrect depth for modify SupportingDocs : %s",
+						fip.String())
+				}
+				if int(fip[1]) >= len(cf.SupportingDocs) {
 					return fmt.Errorf("Contract amendment element out of range for SupportingDocs : %d",
-						amendment.Element)
+						fip[1])
 				}
 
-				cf.SupportingDocs[amendment.Element].Reset()
+				cf.SupportingDocs[fip[1]].Reset()
 				if len(amendment.Data) != 0 {
-					if err := proto.Unmarshal(amendment.Data, cf.SupportingDocs[amendment.Element]); err != nil {
+					if err := proto.Unmarshal(amendment.Data, cf.SupportingDocs[fip[1]]); err != nil {
 						return fmt.Errorf("Contract amendment SupportingDocs[%d] failed to deserialize : %s",
-							amendment.Element, err)
+							fip[1], err)
 					}
 				}
 
 			case 1: // Add element
+				if len(fip) > 1 {
+					return fmt.Errorf("Contract amendment field index path too deep for add SupportingDocs : %s",
+						fip.String())
+				}
 				newDocument := actions.DocumentField{}
 				if len(amendment.Data) != 0 {
 					if err := proto.Unmarshal(amendment.Data, &newDocument); err != nil {
@@ -852,24 +1120,41 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				cf.SupportingDocs = append(cf.SupportingDocs, &newDocument)
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(cf.SupportingDocs) {
-					return fmt.Errorf("Contract amendment element out of range for SupportingDocs : %d",
-						amendment.Element)
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Contract amendment field index path incorrect depth for delete SupportingDocs : %s",
+						fip.String())
 				}
-				cf.SupportingDocs = append(cf.SupportingDocs[:amendment.Element],
-					cf.SupportingDocs[amendment.Element+1:]...)
+				if int(fip[1]) >= len(cf.SupportingDocs) {
+					return fmt.Errorf("Contract amendment element out of range for SupportingDocs : %d",
+						fip[1])
+				}
+				cf.SupportingDocs = append(cf.SupportingDocs[:fip[1]],
+					cf.SupportingDocs[fip[1]+1:]...)
 
 			default:
-				return fmt.Errorf("Invalid contract amendment operation for SupportingDocs : %d", amendment.Operation)
+				return fmt.Errorf("Invalid contract amendment operation for SupportingDocs : %d",
+					amendment.Operation)
 			}
 
 		case actions.ContractFieldGoverningLaw:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for GoverningLaw : %s",
+					fip.String())
+			}
 			cf.GoverningLaw = string(amendment.Data)
 
 		case actions.ContractFieldJurisdiction:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for Jurisdiction : %s",
+					fip.String())
+			}
 			cf.Jurisdiction = string(amendment.Data)
 
 		case actions.ContractFieldContractExpiration:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractExpiration : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 8 {
 				return fmt.Errorf("ContractExpiration amendment value is wrong size : %d", len(amendment.Data))
 			}
@@ -881,298 +1166,80 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			cf.ContractExpiration = contractExpiration.Nano()
 
 		case actions.ContractFieldContractURI:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractURI : %s",
+					fip.String())
+			}
 			cf.ContractURI = string(amendment.Data)
 
 		case actions.ContractFieldIssuer:
-			switch amendment.SubfieldIndex {
-			case actions.EntityFieldName:
-				cf.Issuer.Name = string(amendment.Data)
-
-			case actions.EntityFieldType:
-				if len(amendment.Data) != 1 {
-					return fmt.Errorf("Issuer.Type amendment value is wrong size : %d", len(amendment.Data))
-				}
-				cf.Issuer.Type = string([]byte{amendment.Data[0]})
-
-			case actions.EntityFieldLEI:
-				cf.Issuer.LEI = string(amendment.Data)
-
-			case actions.EntityFieldUnitNumber:
-				cf.Issuer.UnitNumber = string(amendment.Data)
-
-			case actions.EntityFieldBuildingNumber:
-				cf.Issuer.BuildingNumber = string(amendment.Data)
-
-			case actions.EntityFieldStreet:
-				cf.Issuer.Street = string(amendment.Data)
-
-			case actions.EntityFieldSuburbCity:
-				cf.Issuer.SuburbCity = string(amendment.Data)
-
-			case actions.EntityFieldTerritoryStateProvinceCode:
-				cf.Issuer.TerritoryStateProvinceCode = string(amendment.Data)
-
-			case actions.EntityFieldCountryCode:
-				cf.Issuer.CountryCode = string(amendment.Data)
-
-			case actions.EntityFieldPostalZIPCode:
-				cf.Issuer.PostalZIPCode = string(amendment.Data)
-
-			case actions.EntityFieldEmailAddress:
-				cf.Issuer.EmailAddress = string(amendment.Data)
-
-			case actions.EntityFieldPhoneNumber:
-				cf.Issuer.PhoneNumber = string(amendment.Data)
-
-			case actions.EntityFieldAdministration: // []*actions.Administrator
-				switch amendment.Operation {
-				case 0: // Modify
-					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
-						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
-							amendment.SubfieldElement)
-					}
-
-					cf.Issuer.Administration[amendment.SubfieldElement].Reset()
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, cf.Issuer.Administration[amendment.SubfieldElement]); err != nil {
-							return fmt.Errorf("Contract amendment Issuer.Administration[%d] failed to deserialize : %s",
-								amendment.SubfieldElement, err)
-						}
-					}
-
-				case 1: // Add element
-					newAdministrator := actions.AdministratorField{}
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, &newAdministrator); err != nil {
-							return fmt.Errorf("Contract amendment addition to Issuer.Administration failed to deserialize : %s",
-								err)
-						}
-					}
-					cf.Issuer.Administration = append(cf.Issuer.Administration, &newAdministrator)
-
-				case 2: // Delete element
-					if int(amendment.SubfieldElement) >= len(cf.Issuer.Administration) {
-						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Administration : %d",
-							amendment.SubfieldElement)
-					}
-					cf.Issuer.Administration = append(cf.Issuer.Administration[:amendment.SubfieldElement],
-						cf.Issuer.Administration[amendment.SubfieldElement+1:]...)
-
-				default:
-					return fmt.Errorf("Invalid contract amendment operation for Issuer.Administration : %d", amendment.Operation)
-				}
-
-			case actions.EntityFieldManagement: // []*actions.Manager
-				switch amendment.Operation {
-				case 0: // Modify
-					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
-						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
-							amendment.SubfieldElement)
-					}
-
-					cf.Issuer.Management[amendment.SubfieldElement].Reset()
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, cf.Issuer.Management[amendment.SubfieldElement]); err != nil {
-							return fmt.Errorf("Contract amendment Issuer.Management[%d] failed to deserialize : %s",
-								amendment.SubfieldElement, err)
-						}
-					}
-
-				case 1: // Add element
-					newManager := actions.ManagerField{}
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, &newManager); err != nil {
-							return fmt.Errorf("Contract amendment addition to Issuer.Management failed to deserialize : %s",
-								err)
-						}
-					}
-					cf.Issuer.Management = append(cf.Issuer.Management, &newManager)
-
-				case 2: // Delete element
-					if int(amendment.SubfieldElement) >= len(cf.Issuer.Management) {
-						return fmt.Errorf("Contract amendment subfield element out of range for Issuer.Management : %d",
-							amendment.SubfieldElement)
-					}
-					cf.Issuer.Management = append(cf.Issuer.Management[:amendment.SubfieldElement],
-						cf.Issuer.Management[amendment.SubfieldElement+1:]...)
-
-				default:
-					return fmt.Errorf("Invalid contract amendment operation for Issuer.Management : %d", amendment.Operation)
-				}
-
-			default:
-				return fmt.Errorf("Contract amendment subfield offset for Issuer out of range : %d", amendment.SubfieldIndex)
+			err := applyEntityAmendments(cf.Issuer, amendment, fip[:1], fip[1:])
+			if err != nil {
+				return errors.Wrap(err, "apply entity amendment")
 			}
 
 		case actions.ContractFieldIssuerLogoURL:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for IssuerLogoURL : %s",
+					fip.String())
+			}
 			cf.IssuerLogoURL = string(amendment.Data)
 
 		case actions.ContractFieldContractOperator:
-			switch amendment.SubfieldIndex {
-			case 0: // Name
-				cf.ContractOperator.Name = string(amendment.Data)
-
-			case 1: // Type
-				if len(amendment.Data) != 1 {
-					return fmt.Errorf("ContractOperator.Type amendment value is wrong size : %d", len(amendment.Data))
-				}
-				cf.ContractOperator.Type = string([]byte{amendment.Data[0]})
-
-			case 2: // LEI
-				cf.ContractOperator.LEI = string(amendment.Data)
-
-			case 3: // AddressIncluded
-				return fmt.Errorf("Amendment attempting to change ContractOperator.AddressIncluded")
-
-			case 4: // UnitNumber
-				cf.ContractOperator.UnitNumber = string(amendment.Data)
-
-			case 5: // BuildingNumber
-				cf.ContractOperator.BuildingNumber = string(amendment.Data)
-
-			case 6: // Street
-				cf.ContractOperator.Street = string(amendment.Data)
-
-			case 7: // SuburbCity
-				cf.ContractOperator.SuburbCity = string(amendment.Data)
-
-			case 8: // TerritoryStateProvinceCode
-				cf.ContractOperator.TerritoryStateProvinceCode = string(amendment.Data)
-
-			case 9: // CountryCode
-				cf.ContractOperator.CountryCode = string(amendment.Data)
-
-			case 10: // PostalZIPCode
-				cf.ContractOperator.PostalZIPCode = string(amendment.Data)
-
-			case 11: // EmailAddress
-				cf.ContractOperator.EmailAddress = string(amendment.Data)
-
-			case 12: // PhoneNumber
-				cf.ContractOperator.PhoneNumber = string(amendment.Data)
-
-			case 13: // Administration []Administrator
-				switch amendment.Operation {
-				case 0: // Modify
-					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
-						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
-							amendment.SubfieldElement)
-					}
-
-					cf.ContractOperator.Administration[amendment.SubfieldElement].Reset()
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, cf.ContractOperator.Administration[amendment.SubfieldElement]); err != nil {
-							return fmt.Errorf("Contract amendment ContractOperator.Administration[%d] failed to deserialize : %s",
-								amendment.SubfieldElement, err)
-						}
-					}
-
-				case 1: // Add element
-					newAdministrator := actions.AdministratorField{}
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, &newAdministrator); err != nil {
-							return fmt.Errorf("Contract amendment addition to ContractOperator.Administration failed to deserialize : %s",
-								err)
-						}
-					}
-
-					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration, &newAdministrator)
-
-				case 2: // Delete element
-					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Administration) {
-						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Administration : %d",
-							amendment.SubfieldElement)
-					}
-					cf.ContractOperator.Administration = append(cf.ContractOperator.Administration[:amendment.SubfieldElement],
-						cf.ContractOperator.Administration[amendment.SubfieldElement+1:]...)
-
-				default:
-					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Administration : %d", amendment.Operation)
-				}
-
-			case 14: // Management []Manager
-				switch amendment.Operation {
-				case 0: // Modify
-					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
-						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
-							amendment.SubfieldElement)
-					}
-
-					cf.ContractOperator.Management[amendment.SubfieldElement].Reset()
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, cf.ContractOperator.Management[amendment.SubfieldElement]); err != nil {
-							return fmt.Errorf("Contract amendment ContractOperator.Management[%d] failed to deserialize : %s",
-								amendment.SubfieldElement, err)
-						}
-					}
-
-				case 1: // Add element
-					newManager := actions.ManagerField{}
-					if len(amendment.Data) != 0 {
-						if err := proto.Unmarshal(amendment.Data, &newManager); err != nil {
-							return fmt.Errorf("Contract amendment addition to ContractOperator.Management failed to deserialize : %s",
-								err)
-						}
-					}
-
-					cf.ContractOperator.Management = append(cf.ContractOperator.Management, &newManager)
-
-				case 2: // Delete element
-					if int(amendment.SubfieldElement) >= len(cf.ContractOperator.Management) {
-						return fmt.Errorf("Contract amendment subfield element out of range for ContractOperator.Management : %d",
-							amendment.SubfieldElement)
-					}
-					cf.ContractOperator.Management = append(cf.ContractOperator.Management[:amendment.SubfieldElement],
-						cf.ContractOperator.Management[amendment.SubfieldElement+1:]...)
-
-				default:
-					return fmt.Errorf("Invalid contract amendment operation for ContractOperator.Management : %d", amendment.Operation)
-				}
-
-			default:
-				return fmt.Errorf("Contract amendment subfield offset for ContractOperator out of range : %d", amendment.SubfieldIndex)
+			err := applyEntityAmendments(cf.ContractOperator, amendment, fip[:1], fip[1:])
+			if err != nil {
+				return errors.Wrap(err, "apply entity amendment")
 			}
 
 		case actions.ContractFieldAdminOracle:
-			switch amendment.SubfieldIndex {
-			case 0: // Name
-				cf.AdminOracle.Name = string(amendment.Data)
-
-			case 1: // URL
-				cf.AdminOracle.URL = string(amendment.Data)
-
-			case 2: // PublicKey
-				if _, err := bitcoin.DecodePublicKeyBytes(amendment.Data); err != nil {
-					return errors.Wrap(err, "AdminOracle public key invalid")
-				}
-				cf.AdminOracle.PublicKey = amendment.Data
-
-			default:
-				return fmt.Errorf("Contract amendment subfield offset for AdminOracle out of range : %d", amendment.SubfieldIndex)
+			err := applyOracleAmendments(cf.AdminOracle, amendment, fip[:1], fip[1:])
+			if err != nil {
+				return errors.Wrap(err, "apply oracle amendment")
 			}
 
 		case actions.ContractFieldAdminOracleSignature:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for OracleSignature : %s",
+					fip.String())
+			}
 			if _, err := bitcoin.DecodeSignatureBytes(amendment.Data); err != nil {
 				return errors.Wrap(err, "AdminOracleSignature invalid")
 			}
 			cf.AdminOracleSignature = amendment.Data
 
 		case actions.ContractFieldAdminOracleSigBlockHeight:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for SigBlockHeight : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 4 {
-				return fmt.Errorf("AdminOracleSigBlockHeight amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AdminOracleSigBlockHeight amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &cf.AdminOracleSigBlockHeight); err != nil {
 				return fmt.Errorf("AdminOracleSigBlockHeight amendment value failed to deserialize : %s", err)
 			}
 
-		case actions.ContractFieldContractAuthFlags:
-			cf.ContractAuthFlags = amendment.Data
-			authFieldsUpdated = true
+		case actions.ContractFieldContractPermissions:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractPermissions : %s",
+					fip.String())
+			}
+			_, err := protocol.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems))
+			if err != nil {
+				return fmt.Errorf("Invalid amendment data for ContractPermissions : %s", err)
+			}
+			cf.ContractPermissions = amendment.Data
 
 		case actions.ContractFieldContractFee:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for ContractFee : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 8 {
-				return fmt.Errorf("ContractFee amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("ContractFee amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &cf.ContractFee); err != nil {
@@ -1182,20 +1249,28 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 		case actions.ContractFieldVotingSystems:
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(cf.VotingSystems) {
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Contract amendment field index path incorrect depth for modify VotingSystems : %s",
+						fip.String())
+				}
+				if int(fip[1]) >= len(cf.VotingSystems) {
 					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
-						amendment.Element)
+						fip[1])
 				}
 
-				cf.VotingSystems[amendment.Element].Reset()
+				cf.VotingSystems[fip[1]].Reset()
 				if len(amendment.Data) != 0 {
-					if err := proto.Unmarshal(amendment.Data, cf.VotingSystems[amendment.Element]); err != nil {
+					if err := proto.Unmarshal(amendment.Data, cf.VotingSystems[fip[1]]); err != nil {
 						return fmt.Errorf("Contract amendment VotingSystems[%d] failed to deserialize : %s",
-							amendment.Element, err)
+							fip[1], err)
 					}
 				}
 
 			case 1: // Add element
+				if len(fip) > 1 {
+					return fmt.Errorf("Contract amendment field index path too deep for add VotingSystems : %s",
+						fip.String())
+				}
 				newVotingSystem := actions.VotingSystemField{}
 				if len(amendment.Data) != 0 {
 					if err := proto.Unmarshal(amendment.Data, &newVotingSystem); err != nil {
@@ -1207,20 +1282,29 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				cf.VotingSystems = append(cf.VotingSystems, &newVotingSystem)
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(cf.VotingSystems) {
-					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
-						amendment.Element)
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Contract amendment field index path incorrect depth for delete VotingSystems : %s",
+						fip.String())
 				}
-				cf.VotingSystems = append(cf.VotingSystems[:amendment.Element],
-					cf.VotingSystems[amendment.Element+1:]...)
+				if int(fip[1]) >= len(cf.VotingSystems) {
+					return fmt.Errorf("Contract amendment element out of range for VotingSystems : %d",
+						fip[1])
+				}
+				cf.VotingSystems = append(cf.VotingSystems[:fip[1]], cf.VotingSystems[fip[1]+1:]...)
 
 			default:
-				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d", amendment.Operation)
+				return fmt.Errorf("Invalid contract amendment operation for VotingSystems : %d",
+					amendment.Operation)
 			}
 
 		case actions.ContractFieldRestrictedQtyAssets:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for RestrictedQtyAssets : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 8 {
-				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("RestrictedQtyAssets amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &cf.RestrictedQtyAssets); err != nil {
@@ -1228,8 +1312,13 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 
 		case actions.ContractFieldAdministrationProposal:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for AdministrationProposal : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &cf.AdministrationProposal); err != nil {
@@ -1237,8 +1326,13 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 
 		case actions.ContractFieldHolderProposal:
+			if len(fip) > 1 {
+				return fmt.Errorf("Contract amendment field index path too deep for HolderProposal : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("HolderProposal amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &cf.HolderProposal); err != nil {
@@ -1248,20 +1342,25 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 		case actions.ContractFieldOracles:
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(cf.Oracles) {
+				if len(fip) < 3 { // includes list index
+					return fmt.Errorf("Contract amendment field index path too shallow for modify Oracles : %s",
+						fip.String())
+				}
+				if int(fip[1]) >= len(cf.Oracles) {
 					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
-						amendment.Element)
+						fip[1])
 				}
 
-				cf.Oracles[amendment.Element].Reset()
-				if len(amendment.Data) != 0 {
-					if err := proto.Unmarshal(amendment.Data, cf.Oracles[amendment.Element]); err != nil {
-						return fmt.Errorf("Contract amendment Oracles[%d] failed to deserialize : %s",
-							amendment.Element, err)
-					}
+				err := applyOracleAmendments(cf.Oracles[fip[1]], amendment, fip[:2], fip[2:])
+				if err != nil {
+					return errors.Wrap(err, "apply oracle amendment")
 				}
 
 			case 1: // Add element
+				if len(fip) > 1 {
+					return fmt.Errorf("Contract amendment field index path too deep for add Oracles : %s",
+						fip.String())
+				}
 				newOracle := actions.OracleField{}
 				if len(amendment.Data) != 0 {
 					if err := proto.Unmarshal(amendment.Data, &newOracle); err != nil {
@@ -1273,26 +1372,23 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				cf.Oracles = append(cf.Oracles, &newOracle)
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(cf.Oracles) {
-					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
-						amendment.Element)
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Contract amendment field index path incorrect depth for delete Oracles : %s",
+						fip.String())
 				}
-				cf.Oracles = append(cf.Oracles[:amendment.Element],
-					cf.Oracles[amendment.Element+1:]...)
+				if int(fip[1]) >= len(cf.Oracles) {
+					return fmt.Errorf("Contract amendment element out of range for Oracles : %d",
+						fip[1])
+				}
+				cf.Oracles = append(cf.Oracles[:fip[1]], cf.Oracles[fip[1]+1:]...)
 
 			default:
-				return fmt.Errorf("Invalid contract amendment operation for Oracles : %d", amendment.Operation)
+				return fmt.Errorf("Invalid contract amendment operation for Oracles : %d",
+					amendment.Operation)
 			}
 
 		default:
-			return fmt.Errorf("Contract amendment field offset out of range : %d", amendment.FieldIndex)
-		}
-	}
-
-	if authFieldsUpdated {
-		if _, err := protocol.ReadAuthFlags(cf.ContractAuthFlags, actions.ContractFieldCount,
-			len(cf.VotingSystems)); err != nil {
-			return fmt.Errorf("Invalid contract auth flags : %s", err)
+			return fmt.Errorf("Contract amendment field offset out of range : %s", fip.String())
 		}
 	}
 

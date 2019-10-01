@@ -11,10 +11,8 @@ type NewVote struct {
 	Initiator          uint32                   `json:"Initiator,omitempty"`
 	VoteSystem         uint32                   `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                     `json:"ContractWideVote,omitempty"`
-	AssetSpecificVote  bool                     `json:"AssetSpecificVote,omitempty"`
 	AssetType          string                   `json:"AssetType,omitempty"`
 	AssetCode          protocol.AssetCode       `json:"AssetCode,omitempty"`
-	Specific           bool                     `json:"Specific,omitempty"`
 	ProposedAmendments []actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
 	VoteTxId     protocol.TxId      `json:"VoteTxId,omitempty"`

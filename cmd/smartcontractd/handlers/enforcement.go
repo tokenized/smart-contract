@@ -15,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -71,7 +72,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Validate enforcement authority public key and signature
-	if msg.AuthorityIncluded {
+	if len(msg.OrderSignature) > 0 || msg.SignatureAlgorithm != 0 {
 		if msg.SignatureAlgorithm != 1 {
 			node.LogWarn(ctx, "Invalid authority sig algo : %02x", msg.SignatureAlgorithm)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)

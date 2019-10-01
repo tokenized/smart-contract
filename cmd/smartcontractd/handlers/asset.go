@@ -72,9 +72,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, actions.AssetFieldCount,
-		len(ct.VotingSystems)); err != nil {
-		node.LogWarn(ctx, "Invalid asset auth flags : %s", err)
+	if _, err = protocol.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
+		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -256,12 +255,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.Specific {
+		if len(vt.ProposedAmendments) == 0 {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.AssetSpecificVote || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
+		if vt.AssetCode.IsZero() || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
 			node.LogWarn(ctx, "Vote was not for this asset code")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -284,12 +283,6 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		votingSystem = vt.VoteSystem
 	}
 
-	if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.Amendments, proposed,
-		proposalInitiator, votingSystem); err != nil {
-		node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
-	}
-
 	// Asset Creation <- Asset Modification
 	ac := actions.AssetCreation{}
 
@@ -304,8 +297,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	node.Log(ctx, "Amending asset : %x", msg.AssetCode)
 
-	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments); err != nil {
+	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
+		proposalInitiator, votingSystem); err != nil {
 		node.LogWarn(ctx, "Asset amendments failed : %s", err)
+		code, ok := node.ErrorCode(err)
+		if ok {
+			return node.RespondReject(ctx, w, itx, rk, code)
+		}
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -315,7 +313,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		updateHoldings = true
 
 		// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
-		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode, ct.AdministrationAddress, v.Now)
+		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
+			ct.AdministrationAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
@@ -495,9 +494,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			ua.AssetType = stringPointer(string(msg.AssetType))
 			node.Log(ctx, "Updating asset type (%x) : %s", msg.AssetCode, *ua.AssetType)
 		}
-		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
-			ua.AssetAuthFlags = &msg.AssetAuthFlags
-			node.Log(ctx, "Updating asset auth flags (%x) : %x", msg.AssetCode, *ua.AssetAuthFlags)
+		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
+			ua.AssetPermissions = &msg.AssetPermissions
+			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode, *ua.AssetPermissions)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
@@ -596,88 +595,119 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-// checkAssetAmendmentsPermissions verifies that the amendments are permitted based on the auth flags.
-func checkAssetAmendmentsPermissions(as *state.Asset, votingSystems []*actions.VotingSystemField,
+func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
 	amendments []*actions.AmendmentField, proposed bool, proposalInitiator, votingSystem uint32) error {
 
-	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, actions.AssetFieldCount, len(votingSystems))
+	permissions, err := protocol.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
 	if err != nil {
-		return fmt.Errorf("Invalid asset auth flags : %s", err)
+		return fmt.Errorf("Invalid asset permissions : %s", err)
 	}
 
-	for _, amendment := range amendments {
-		if int(amendment.FieldIndex) >= len(permissions) {
-			return fmt.Errorf("Amendment field index out of range : %d", amendment.FieldIndex)
+	for i, amendment := range amendments {
+		fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		if err != nil {
+			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
+		if len(fip) == 0 {
+			return fmt.Errorf("Amendment %d has no field specified", i)
+		}
+
+		permission := permissions.PermissionOf(fip)
+
 		if proposed {
 			switch proposalInitiator {
 			case 0: // Administration
-				if !permissions[amendment.FieldIndex].AdministrationProposal {
-					return fmt.Errorf("Field %d amendment not permitted by administration proposal", amendment.FieldIndex)
+				if !permission.AdministrationProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
+							fip.String()))
 				}
 			case 1: // Holder
-				if !permissions[amendment.FieldIndex].HolderProposal {
-					return fmt.Errorf("Field %d amendment not permitted by holder proposal", amendment.FieldIndex)
+				if !permission.HolderProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
+							fip.String()))
 				}
 			default:
 				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
 			}
 
-			if int(votingSystem) >= len(permissions[amendment.FieldIndex].VotingSystemsAllowed) {
-				return fmt.Errorf("Field %d amendment voting system out of range : %d", amendment.FieldIndex, votingSystem)
+			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
+				return fmt.Errorf("Field %s amendment voting system out of range : %d",
+					fip.String(), votingSystem)
 			}
-			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
-				return fmt.Errorf("Field %d amendment not allowed using voting system %d", amendment.FieldIndex, votingSystem)
+			if !permission.VotingSystemsAllowed[votingSystem] {
+				return node.NewError(actions.RejectionsAssetPermissions,
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
+						fip.String(), votingSystem))
 			}
-		} else if !permissions[amendment.FieldIndex].Permitted {
-			return fmt.Errorf("Field %d amendment not permitted without proposal", amendment.FieldIndex)
+		} else if !permission.Permitted {
+			return node.NewError(actions.RejectionsAssetPermissions,
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip.String()))
 		}
-	}
 
-	return nil
-}
-
-func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
-	amendments []*actions.AmendmentField) error {
-	authFieldsUpdated := false
-	for _, amendment := range amendments {
-		switch amendment.FieldIndex {
+		switch fip[0] {
 		case actions.AssetFieldAssetType:
-			return fmt.Errorf("Asset amendment attempting to update asset type")
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Asset type amendments prohibited")
 
-		case actions.AssetFieldAssetAuthFlags:
-			ac.AssetAuthFlags = amendment.Data
-			authFieldsUpdated = true
+		case actions.AssetFieldAssetPermissions:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for AssetPermissions : %s",
+					fip.String())
+			}
+			if _, err := protocol.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
+				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
+			}
+			ac.AssetPermissions = amendment.Data
 
 		case actions.AssetFieldTransfersPermitted:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for TransfersPermitted : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("TransfersPermitted amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("TransfersPermitted amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TransfersPermitted); err != nil {
-				return fmt.Errorf("TransfersPermitted amendment value failed to deserialize : %s", err)
+				return fmt.Errorf("TransfersPermitted amendment value failed to deserialize : %s",
+					err)
 			}
 
 		case actions.AssetFieldTradeRestrictions:
 			switch amendment.Operation {
 			case 0: // Modify
-				if int(amendment.Element) >= len(ac.TradeRestrictions) {
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Asset amendment field index path incorrect depth for modify TradeRestrictions : %s",
+						fip.String())
+				}
+				if int(fip[1]) >= len(ac.TradeRestrictions) {
 					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						amendment.Element)
+						fip[1])
 				}
 
 				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
+					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d",
+						len(amendment.Data))
 				}
 				buf := bytes.NewBuffer(amendment.Data)
-				if err := binary.Read(buf, protocol.DefaultEndian, &ac.TradeRestrictions[amendment.Element]); err != nil {
-					return fmt.Errorf("TradeRestrictions amendment value failed to deserialize : %s", err)
+				if err := binary.Read(buf, protocol.DefaultEndian,
+					&ac.TradeRestrictions[fip[1]]); err != nil {
+					return fmt.Errorf("TradeRestrictions amendment value failed to deserialize : %s",
+						err)
 				}
 
 			case 1: // Add element
+				if len(fip) > 1 {
+					return fmt.Errorf("Asset amendment field index path too deep for add TradeRestrictions : %s",
+						fip.String())
+				}
 				var newPolity [3]byte
 				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
+					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d",
+						len(amendment.Data))
 				}
 				buf := bytes.NewBuffer(amendment.Data)
 				if err := binary.Read(buf, protocol.DefaultEndian, &newPolity); err != nil {
@@ -687,20 +717,30 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				ac.TradeRestrictions = append(ac.TradeRestrictions, string(newPolity[:]))
 
 			case 2: // Delete element
-				if int(amendment.Element) >= len(ac.TradeRestrictions) {
-					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						amendment.Element)
+				if len(fip) != 2 { // includes list index
+					return fmt.Errorf("Asset amendment field index path incorrect depth for delete TradeRestrictions : %s",
+						fip.String())
 				}
-				ac.TradeRestrictions = append(ac.TradeRestrictions[:amendment.Element],
-					ac.TradeRestrictions[amendment.Element+1:]...)
+				if int(fip[1]) >= len(ac.TradeRestrictions) {
+					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
+						fip[1])
+				}
+				ac.TradeRestrictions = append(ac.TradeRestrictions[:fip[1]],
+					ac.TradeRestrictions[fip[1]+1:]...)
 
 			default:
-				return fmt.Errorf("Invalid asset amendment operation for TradeRestrictions : %d", amendment.Operation)
+				return fmt.Errorf("Invalid asset amendment operation for TradeRestrictions : %d",
+					amendment.Operation)
 			}
 
 		case actions.AssetFieldEnforcementOrdersPermitted:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for EnforcementOrdersPermitted : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("EnforcementOrdersPermitted amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("EnforcementOrdersPermitted amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.EnforcementOrdersPermitted); err != nil {
@@ -708,8 +748,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldVotingRights:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for AssetFieldVotingRights : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VotingRights amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("VotingRights amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VotingRights); err != nil {
@@ -717,8 +762,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldVoteMultiplier:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for AssetFieldVoteMultiplier : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VoteMultiplier amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("VoteMultiplier amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VoteMultiplier); err != nil {
@@ -726,8 +776,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldAdministrationProposal:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for AdministrationProposal : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AdministrationProposal); err != nil {
@@ -735,8 +790,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldHolderProposal:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for HolderProposal : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("HolderProposal amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.HolderProposal); err != nil {
@@ -744,8 +804,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldAssetModificationGovernance:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for ModificationGovernance : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AssetModificationGovernance amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("AssetModificationGovernance amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AssetModificationGovernance); err != nil {
@@ -753,8 +818,13 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldTokenQty:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for TokenQty : %s",
+					fip.String())
+			}
 			if len(amendment.Data) != 8 {
-				return fmt.Errorf("TokenQty amendment value is wrong size : %d", len(amendment.Data))
+				return fmt.Errorf("TokenQty amendment value is wrong size : %d",
+					len(amendment.Data))
 			}
 			buf := bytes.NewBuffer(amendment.Data)
 			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TokenQty); err != nil {
@@ -762,6 +832,10 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 		case actions.AssetFieldAssetPayload:
+			if len(fip) > 1 {
+				return fmt.Errorf("Asset amendment field index path too deep for AssetPayload : %s",
+					fip.String())
+			}
 			// Validate payload
 			_, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
 			if err != nil {
@@ -771,14 +845,7 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			ac.AssetPayload = amendment.Data
 
 		default:
-			return fmt.Errorf("Asset amendment field offset out of range : %d", amendment.FieldIndex)
-		}
-	}
-
-	if authFieldsUpdated {
-		if _, err := protocol.ReadAuthFlags(ac.AssetAuthFlags, actions.AssetFieldCount,
-			len(votingSystems)); err != nil {
-			return fmt.Errorf("Invalid asset auth flags : %s", err)
+			return fmt.Errorf("Asset amendment field offset out of range : %s", fip.String())
 		}
 	}
 

@@ -54,18 +54,18 @@ func holderProposal(t *testing.T) {
 
 	proposalData := actions.Proposal{
 		Initiator:           1,
-		AssetSpecificVote:   false,
 		VoteSystem:          0,
-		Specific:            true,
 		VoteOptions:         "AB",
 		VoteMax:             1,
 		ProposalDescription: "Change contract name",
 		VoteCutOffTimestamp: v.Now.Nano() + 10000000000,
 	}
 
+	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
-		FieldIndex: 0,
-		Data:       []byte("Test Name 2"),
+		FieldIndexPath: fipBytes,
+		Data:           []byte("Test Name 2"),
 	})
 
 	// Build proposal transaction
@@ -467,9 +467,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 
 	proposalData := actions.Proposal{
 		Initiator:           1,
-		AssetSpecificVote:   false,
 		VoteSystem:          voteSystem,
-		Specific:            true,
 		VoteOptions:         "AB",
 		VoteMax:             1,
 		VoteCutOffTimestamp: v.Now.Nano() + 500000000,
@@ -566,18 +564,18 @@ func mockUpProposal(ctx context.Context) error {
 
 	proposalData := actions.Proposal{
 		Initiator:           1,
-		AssetSpecificVote:   false,
 		VoteSystem:          0,
-		Specific:            true,
 		VoteOptions:         "AB",
 		VoteMax:             1,
 		ProposalDescription: "Change contract name",
 		VoteCutOffTimestamp: v.Now.Nano() + 500000000,
 	}
 
+	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
-		FieldIndex: 0,
-		Data:       []byte("Test Name 2"),
+		FieldIndexPath: fipBytes,
+		Data:           []byte("Test Name 2"),
 	})
 
 	// Build proposal transaction
@@ -620,10 +618,8 @@ func mockUpProposal(ctx context.Context) error {
 	testVoteTxId = *tests.RandomTxId()
 
 	var voteData = state.Vote{
-		Initiator:         1,
-		VoteSystem:        0,
-		AssetSpecificVote: false,
-		Specific:          false,
+		Initiator:  1,
+		VoteSystem: 0,
 
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
@@ -639,12 +635,10 @@ func mockUpProposal(ctx context.Context) error {
 func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint32, amendment *actions.AmendmentField) error {
 	now := protocol.CurrentTimestamp()
 	var voteData = state.Vote{
-		Initiator:         initiator,
-		VoteSystem:        system,
-		AssetSpecificVote: true,
-		AssetType:         testAssetType,
-		AssetCode:         &testAssetCode,
-		Specific:          true,
+		Initiator:  initiator,
+		VoteSystem: system,
+		AssetType:  testAssetType,
+		AssetCode:  &testAssetCode,
 
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
@@ -664,10 +658,8 @@ func mockUpContractAmendmentVote(ctx context.Context, initiator, system uint32,
 	amendment *actions.AmendmentField) error {
 	now := protocol.CurrentTimestamp()
 	var voteData = state.Vote{
-		Initiator:         initiator,
-		VoteSystem:        system,
-		AssetSpecificVote: false,
-		Specific:          true,
+		Initiator:  initiator,
+		VoteSystem: system,
 
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
@@ -710,10 +702,8 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	// Data output
 	ts := protocol.CurrentTimestamp()
 	resultData := actions.Result{
-		AssetSpecificVote:  vt.AssetSpecificVote,
 		AssetType:          vt.AssetType,
 		AssetCode:          vt.AssetCode.Bytes(),
-		Specific:           vt.Specific,
 		ProposedAmendments: vt.ProposedAmendments,
 		VoteTxId:           testVoteTxId.Bytes(),
 		OptionTally:        []uint64{1000, 0},

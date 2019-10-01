@@ -10,10 +10,6 @@ import (
 
 // ValidateProposal returns true if the Proposal is valid.
 func ValidateProposal(msg *actions.Proposal, now protocol.Timestamp) error {
-	if msg.Specific && len(msg.ProposedAmendments) == 0 {
-		return errors.New("Specific with no amendments")
-	}
-
 	if len(msg.VoteOptions) == 0 {
 		return errors.New("No vote options")
 	}
