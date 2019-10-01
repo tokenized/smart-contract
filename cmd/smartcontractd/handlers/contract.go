@@ -773,24 +773,25 @@ func applyOracleAmendments(oracle *actions.OracleField, amendment *actions.Amend
 	parentFIP, fip protocol.FieldIndexPath) error {
 
 	if len(fip) == 0 {
-		return errors.New("Amendments on complex fields (Oracle) not allowed")
+		return node.NewError(actions.RejectionsContractNotPermitted,
+			"Amendments on complex fields (Oracle) not allowed")
 	}
 
 	switch fip[0] {
-	case 0: // Name
+	case actions.OracleFieldName: // Name
 		oracle.Name = string(amendment.Data)
 
-	case 1: // URL
+	case actions.OracleFieldURL: // URL
 		oracle.URL = string(amendment.Data)
 
-	case 2: // PublicKey
+	case actions.OracleFieldPublicKey: // PublicKey
 		if _, err := bitcoin.DecodePublicKeyBytes(amendment.Data); err != nil {
 			return errors.Wrap(err, "AdminOracle public key invalid")
 		}
 		oracle.PublicKey = amendment.Data
 
 	default:
-		return fmt.Errorf("Contract amendment subfield offset for Oracle out of range : %s", fip.String())
+		return fmt.Errorf("Contract amendment field index for Oracle out of range : %s", fip.String())
 	}
 
 	return nil
@@ -995,7 +996,7 @@ func applyEntityAmendments(entity *actions.EntityField, amendment *actions.Amend
 		}
 
 	default:
-		return fmt.Errorf("Contract amendment subfield offset for Entity out of range : %s",
+		return fmt.Errorf("Contract amendment field index for Entity out of range : %s",
 			fip.String())
 	}
 
@@ -1388,7 +1389,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 
 		default:
-			return fmt.Errorf("Contract amendment field offset out of range : %s", fip.String())
+			return fmt.Errorf("Contract amendment field index out of range : %s", fip.String())
 		}
 	}
 
