@@ -445,19 +445,11 @@ func assetProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	assetPayload := assets.ShareCommon{
-		Ticker:      "TST  ",
-		Description: "Test new common shares",
-	}
-	payloadData, err := assetPayload.Bytes()
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
-	}
-	fip := protocol.FieldIndexPath{actions.AssetFieldAssetPayload}
+	fip := protocol.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
 	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
-		Data:           payloadData,
+		Data:           []byte("Test new common shares"),
 	}
 	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)
 	if err != nil {

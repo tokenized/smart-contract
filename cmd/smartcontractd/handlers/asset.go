@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -647,205 +646,63 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 		}
 
 		switch fip[0] {
+		case actions.AssetFieldAssetCode:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"AssetCode amendments prohibited")
+
+		case actions.AssetFieldAssetIndex:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"AssetIndex amendments prohibited")
+
 		case actions.AssetFieldAssetType:
 			return node.NewError(actions.RejectionsAssetNotPermitted,
 				"Asset type amendments prohibited")
 
 		case actions.AssetFieldAssetPermissions:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for AssetPermissions : %s",
-					fip.String())
-			}
 			if _, err := protocol.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
 				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
 			}
-			ac.AssetPermissions = amendment.Data
-
-		case actions.AssetFieldTransfersPermitted:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for TransfersPermitted : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("TransfersPermitted amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TransfersPermitted); err != nil {
-				return fmt.Errorf("TransfersPermitted amendment value failed to deserialize : %s",
-					err)
-			}
-
-		case actions.AssetFieldTradeRestrictions:
-			switch amendment.Operation {
-			case 0: // Modify
-				if len(fip) != 2 { // includes list index
-					return fmt.Errorf("Asset amendment field index path incorrect depth for modify TradeRestrictions : %s",
-						fip.String())
-				}
-				if int(fip[1]) >= len(ac.TradeRestrictions) {
-					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						fip[1])
-				}
-
-				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d",
-						len(amendment.Data))
-				}
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := binary.Read(buf, protocol.DefaultEndian,
-					&ac.TradeRestrictions[fip[1]]); err != nil {
-					return fmt.Errorf("TradeRestrictions amendment value failed to deserialize : %s",
-						err)
-				}
-
-			case 1: // Add element
-				if len(fip) > 1 {
-					return fmt.Errorf("Asset amendment field index path too deep for add TradeRestrictions : %s",
-						fip.String())
-				}
-				var newPolity [3]byte
-				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d",
-						len(amendment.Data))
-				}
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := binary.Read(buf, protocol.DefaultEndian, &newPolity); err != nil {
-					return fmt.Errorf("Contract amendment addition to TradeRestrictions failed to deserialize : %s", err)
-				}
-
-				ac.TradeRestrictions = append(ac.TradeRestrictions, string(newPolity[:]))
-
-			case 2: // Delete element
-				if len(fip) != 2 { // includes list index
-					return fmt.Errorf("Asset amendment field index path incorrect depth for delete TradeRestrictions : %s",
-						fip.String())
-				}
-				if int(fip[1]) >= len(ac.TradeRestrictions) {
-					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						fip[1])
-				}
-				ac.TradeRestrictions = append(ac.TradeRestrictions[:fip[1]],
-					ac.TradeRestrictions[fip[1]+1:]...)
-
-			default:
-				return fmt.Errorf("Invalid asset amendment operation for TradeRestrictions : %d",
-					amendment.Operation)
-			}
-
-		case actions.AssetFieldEnforcementOrdersPermitted:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for EnforcementOrdersPermitted : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("EnforcementOrdersPermitted amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.EnforcementOrdersPermitted); err != nil {
-				return fmt.Errorf("EnforcementOrdersPermitted amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldVotingRights:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for AssetFieldVotingRights : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VotingRights amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VotingRights); err != nil {
-				return fmt.Errorf("VotingRights amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldVoteMultiplier:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for AssetFieldVoteMultiplier : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VoteMultiplier amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VoteMultiplier); err != nil {
-				return fmt.Errorf("VoteMultiplier amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldAdministrationProposal:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for AdministrationProposal : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AdministrationProposal); err != nil {
-				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldHolderProposal:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for HolderProposal : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("HolderProposal amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.HolderProposal); err != nil {
-				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldAssetModificationGovernance:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for ModificationGovernance : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AssetModificationGovernance amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AssetModificationGovernance); err != nil {
-				return fmt.Errorf("AssetModificationGovernance amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldTokenQty:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for TokenQty : %s",
-					fip.String())
-			}
-			if len(amendment.Data) != 8 {
-				return fmt.Errorf("TokenQty amendment value is wrong size : %d",
-					len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TokenQty); err != nil {
-				return fmt.Errorf("TokenQty amendment value failed to deserialize : %s", err)
-			}
 
 		case actions.AssetFieldAssetPayload:
-			if len(fip) > 1 {
-				return fmt.Errorf("Asset amendment field index path too deep for AssetPayload : %s",
-					fip.String())
+			if len(fip) == 1 {
+				return node.NewError(actions.RejectionsAssetNotPermitted,
+					"Amendments on complex fields (AssetPayload) prohibited")
 			}
-			// Validate payload
-			_, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
+
+			// Get payload object
+			asset, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
 			if err != nil {
 				return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
 			}
 
-			ac.AssetPayload = amendment.Data
+			if err = asset.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data); err != nil {
+				return err
+			}
 
-		default:
-			return fmt.Errorf("Asset amendment field offset out of range : %s", fip.String())
+			if err = asset.Validate(); err != nil {
+				return err
+			}
+
+			newPayload, err := asset.Bytes()
+			if err != nil {
+				return err
+			}
+
+			ac.AssetPayload = newPayload
+			continue // Amendment already applied
+
+		case actions.AssetFieldAssetRevision:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Revision amendments prohibited")
+
+		case actions.AssetFieldTimestamp:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Timestamp amendments prohibited")
+		}
+
+		err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+		if err != nil {
+			return err
 		}
 	}
 
