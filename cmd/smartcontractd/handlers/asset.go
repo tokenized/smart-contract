@@ -71,7 +71,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = protocol.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
+	if _, err = actions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
@@ -597,13 +597,13 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
 	amendments []*actions.AmendmentField, proposed bool, proposalInitiator, votingSystem uint32) error {
 
-	permissions, err := protocol.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
+	permissions, err := actions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid asset permissions : %s", err)
 	}
 
 	for i, amendment := range amendments {
-		fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
@@ -659,7 +659,7 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				"Asset type amendments prohibited")
 
 		case actions.AssetFieldAssetPermissions:
-			if _, err := protocol.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
+			if _, err := actions.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
 				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
 			}
 

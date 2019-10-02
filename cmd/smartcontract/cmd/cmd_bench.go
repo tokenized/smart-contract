@@ -415,7 +415,7 @@ func contractOpReturn() ([]byte, error) {
 	}
 
 	var err error
-	empty := protocol.Permissions{}
+	empty := actions.Permissions{}
 	contract.ContractPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err
@@ -437,7 +437,7 @@ func assetOpReturn() ([]byte, error) {
 		AssetPayload:       payloadData,
 	}
 
-	empty := protocol.Permissions{}
+	empty := actions.Permissions{}
 	asset.AssetPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err

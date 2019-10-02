@@ -69,7 +69,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if _, err = protocol.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
+	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
@@ -267,7 +267,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		// Check that new signature is provided
 		adminOracleSigIncluded := false
 		for i, amendment := range msg.Amendments {
-			fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+			fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 			if err != nil {
 				return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 			}
@@ -770,13 +770,13 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField,
 	proposed bool, proposalInitiator, votingSystem uint32) error {
 
-	permissions, err := protocol.PermissionsFromBytes(cf.ContractPermissions, len(cf.VotingSystems))
+	permissions, err := actions.PermissionsFromBytes(cf.ContractPermissions, len(cf.VotingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid contract permissions : %s", err)
 	}
 
 	for i, amendment := range amendments {
-		fip, err := protocol.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
@@ -819,7 +819,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 
 		switch fip[0] {
 		case actions.ContractFieldContractPermissions:
-			if _, err := protocol.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems)); err != nil {
+			if _, err := actions.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems)); err != nil {
 				return fmt.Errorf("ContractPermissions amendment value is invalid : %s", err)
 			}
 

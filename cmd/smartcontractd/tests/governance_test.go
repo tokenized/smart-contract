@@ -13,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -61,7 +62,7 @@ func holderProposal(t *testing.T) {
 		VoteCutOffTimestamp: v.Now.Nano() + 10000000000,
 	}
 
-	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -571,7 +572,7 @@ func mockUpProposal(ctx context.Context) error {
 		VoteCutOffTimestamp: v.Now.Nano() + 500000000,
 	}
 
-	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,

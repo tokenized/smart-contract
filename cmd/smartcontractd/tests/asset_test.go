@@ -15,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -70,8 +71,8 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -196,8 +197,8 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -355,7 +356,7 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
-	fip := protocol.FieldIndexPath{actions.AssetFieldTokenQty}
+	fip := actions.FieldIndexPath{actions.AssetFieldTokenQty}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -445,7 +446,7 @@ func assetProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	fip := protocol.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
+	fip := actions.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
 	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -570,8 +571,8 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	// Define permissions for asset fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -639,8 +640,8 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	// Define permissions for asset fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field

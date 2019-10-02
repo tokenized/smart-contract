@@ -88,7 +88,7 @@ func buildAction(c *cobra.Command, args []string) error {
 	switch m := action.(type) {
 	case *actions.ContractOffer:
 		fmt.Printf("Checking Contract Offer\n")
-		_, err := protocol.PermissionsFromBytes(m.ContractPermissions, len(m.VotingSystems))
+		_, err := actions.PermissionsFromBytes(m.ContractPermissions, len(m.VotingSystems))
 		if err != nil {
 			fmt.Printf("Invalid permissions\n")
 		}
@@ -107,7 +107,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 		fmt.Printf("Checking Asset Definition\n")
-		_, err = protocol.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
+		_, err = actions.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
 		if err != nil {
 			fmt.Printf("Invalid permissions\n")
 		}

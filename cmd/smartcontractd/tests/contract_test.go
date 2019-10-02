@@ -56,8 +56,8 @@ func createContract(t *testing.T) {
 	}
 
 	// Define permissions for contract fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -276,8 +276,8 @@ func oracleContract(t *testing.T) {
 	offerData.AdminOracleSignature = sig.Bytes()
 
 	// Define permissions for contract fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -464,7 +464,7 @@ func contractAmendment(t *testing.T) {
 		ContractRevision: 0,
 	}
 
-	fip := protocol.FieldIndexPath{actions.ContractFieldContractName}
+	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -558,7 +558,7 @@ func contractOracleAmendment(t *testing.T) {
 		ChangeAdministrationAddress: true,
 	}
 
-	fip := protocol.FieldIndexPath{actions.ContractFieldAdminOracleSignature}
+	fip := actions.FieldIndexPath{actions.ContractFieldAdminOracleSignature}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -567,7 +567,7 @@ func contractOracleAmendment(t *testing.T) {
 
 	var blockHeightBuf bytes.Buffer
 	binary.Write(&blockHeightBuf, binary.LittleEndian, &blockHeight)
-	fip = protocol.FieldIndexPath{actions.ContractFieldAdminOracleSigBlockHeight}
+	fip = actions.FieldIndexPath{actions.ContractFieldAdminOracleSigBlockHeight}
 	fipBytes, _ = fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -643,7 +643,7 @@ func contractProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 
-	fip := protocol.FieldIndexPath{actions.ContractFieldContractType}
+	fip := actions.FieldIndexPath{actions.ContractFieldContractType}
 	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -746,8 +746,8 @@ func mockUpContract(ctx context.Context, name, agreement string, issuerType stri
 	}
 
 	// Define permissions for contact fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -791,8 +791,8 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 	}
 
 	// Define permissions for contract fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -836,8 +836,8 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 	}
 
 	// Define permissions for contract fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -905,8 +905,8 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 	contractData.AdminOracleSignature = sig.Bytes()
 
 	// Define permissions for contract fields
-	permissions := protocol.Permissions{
-		protocol.Permission{
+	permissions := actions.Permissions{
+		actions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
