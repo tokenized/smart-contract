@@ -536,14 +536,18 @@ func assetProposalAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified new payload description : %s", tests.Success, sharePayload.Description)
 }
 
+var currentTimestamp = protocol.CurrentTimestamp()
+
 var sampleAssetPayload = assets.ShareCommon{
-	Ticker:      "TST  ",
-	Description: "Test common shares",
+	Ticker:          "TST  ",
+	Description:     "Test common shares",
+	TransferLockout: currentTimestamp.Nano(),
 }
 
 var sampleAssetPayload2 = assets.ShareCommon{
-	Ticker:      "TS2  ",
-	Description: "Test common shares 2",
+	Ticker:          "TS2  ",
+	Description:     "Test common shares 2",
+	TransferLockout: currentTimestamp.Nano(),
 }
 
 func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,

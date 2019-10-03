@@ -375,10 +375,10 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
 		settlement, m.Headers, assetUpdates)
 	if err != nil {
-		reject, ok := err.(rejectError)
+		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
-			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, reject.code)
+			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, rejectCode)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -522,11 +522,11 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	err = verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx,
 		settlement, m.Headers)
 	if err != nil {
-		reject, ok := err.(rejectError)
+		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
 			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-				reject.code)
+				rejectCode)
 		} else {
 			return errors.Wrap(err, "Failed to verify settlement data")
 		}
@@ -725,7 +725,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectionsContractFrozen}
+				return node.NewError(actions.RejectionsContractFrozen, "")
 			}
 
 			// Locate Asset
@@ -734,10 +734,10 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				return fmt.Errorf("Asset code not found : %x : %s", assetTransfer.AssetCode, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectionsAssetFrozen}
+				return node.NewError(actions.RejectionsAssetFrozen, "")
 			}
 			if !as.TransfersPermitted {
-				return rejectError{code: actions.RejectionsAssetNotPermitted}
+				return node.NewError(actions.RejectionsAssetNotPermitted, "")
 			}
 		}
 
@@ -796,7 +796,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						config.Net)
 					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
 						address.String(), err)
-					return rejectError{code: actions.RejectionsMsgMalformed}
+					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
 
@@ -845,7 +845,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						config.Net)
 					node.LogWarn(ctx, "Receive invalid : %x %s : %s",
 						assetTransfer.AssetCode, address.String(), err)
-					return rejectError{code: actions.RejectionsMsgMalformed}
+					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
 
