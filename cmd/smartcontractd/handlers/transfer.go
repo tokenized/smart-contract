@@ -1018,9 +1018,9 @@ func sendToNextSettlementContract(ctx context.Context,
 		return err
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First output is receiver of message
-		MessageCode:    settlementRequest.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First output is receiver of message
+		MessageCode:     settlementRequest.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	if err := node.RespondSuccess(ctx, w, itx, rk, &message); err != nil {

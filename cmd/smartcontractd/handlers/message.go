@@ -60,14 +60,18 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter,
 
 	// Check if message is addressed to contract.
 	found := false
-	for _, outputIndex := range msg.AddressIndexes {
-		if int(outputIndex) >= len(itx.Outputs) {
-			return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
-		}
+	if len(msg.ReceiverIndexes) == 0 {
+		found = itx.Outputs[0].Address.Equal(rk.Address)
+	} else {
+		for _, outputIndex := range msg.ReceiverIndexes {
+			if int(outputIndex) >= len(itx.Outputs) {
+				return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
+			}
 
-		if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
-			found = true
-			break
+			if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
+				found = true
+				break
+			}
 		}
 	}
 
@@ -195,9 +199,9 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to serialize revert payload")
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First receiver is administration
-		MessageCode:    messagePayload.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First receiver is administration
+		MessageCode:     messagePayload.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
@@ -215,7 +219,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	if !ct.OperatorAddress.IsEmpty() {
 		// Add operator
 		tx.AddDustOutput(ct.OperatorAddress, false)
-		message.AddressIndexes = append(message.AddressIndexes, uint32(1))
+		message.ReceiverIndexes = append(message.ReceiverIndexes, uint32(1))
 		outputAmount += uint64(m.Config.DustLimit)
 	}
 
@@ -643,9 +647,9 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 		return err
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First output is receiver of message
-		MessageCode:    messagePayload.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First output is receiver of message
+		MessageCode:     messagePayload.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	return node.RespondSuccess(ctx, w, itx, rk, &message)
