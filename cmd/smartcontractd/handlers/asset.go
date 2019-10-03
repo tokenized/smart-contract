@@ -106,21 +106,28 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Validate payload
-	payload := assets.NewAssetFromCode(msg.AssetType)
-	if payload == nil {
-		node.LogWarn(ctx, "Asset payload type unknown : %s", msg.AssetType)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-	}
-
-	asset, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+	assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
 	if err != nil {
 		node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if err := asset.Validate(); err != nil {
+	if err := assetPayload.Validate(); err != nil {
 		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
+	// Only one Owner/Administrator Membership asset allowed
+	if msg.AssetType == "MEM" && !ct.AdminMemberAsset.IsZero() {
+		membership, ok := assetPayload.(*assets.Membership)
+		if !ok {
+			node.LogWarn(ctx, "Membership payload is wrong type")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+		if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+			node.LogWarn(ctx, "Only one Owner/Administrator Membership asset allowed")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
+		}
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
@@ -209,7 +216,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Check proposal if there was one
 	proposed := false
-	proposalInitiator := uint32(0)
+	proposalType := uint32(0)
 	votingSystem := uint32(0)
 
 	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
@@ -278,7 +285,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		proposalInitiator = vt.Initiator
+		proposalType = vt.Type
 		votingSystem = vt.VoteSystem
 	}
 
@@ -297,7 +304,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	node.Log(ctx, "Amending asset : %x", msg.AssetCode)
 
 	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
-		proposalInitiator, votingSystem); err != nil {
+		proposalType, votingSystem); err != nil {
 		node.LogWarn(ctx, "Asset amendments failed : %s", err)
 		code, ok := node.ErrorCode(err)
 		if ok {
@@ -478,6 +485,29 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to save holdings")
 		}
 		a.HoldingsChannel.Add(cacheItem)
+
+		// Update Owner/Administrator Membership asset in contract
+		if msg.AssetType == "MEM" {
+			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+
+			membership, ok := assetPayload.(*assets.Membership)
+			if !ok {
+				node.LogWarn(ctx, "Membership payload is wrong type")
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+			if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: assetCode,
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			}
+		}
 	} else {
 		// Required pointers
 		stringPointer := func(s string) *string { return &s }
@@ -589,13 +619,48 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
+
+		// Update Owner/Administrator Membership asset in contract
+		if msg.AssetType == "MEM" {
+			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+
+			membership, ok := assetPayload.(*assets.Membership)
+			if !ok {
+				node.LogWarn(ctx, "Membership payload is wrong type")
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+			isAdminMemberAsset := membership.MembershipClass == "Owner" ||
+			membership.MembershipClass == "Administrator"
+
+			if isAdminMemberAsset && !assetCode.Equal(ct.AdminMemberAsset) {
+				// Set contract AdminMemberAsset
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: assetCode,
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			} else if !isAdminMemberAsset && assetCode.Equal(ct.AdminMemberAsset) {
+				// Clear contract AdminMemberAsset
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: &protocol.AssetCode{}, // zero asset code
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			}
+		}
 	}
 
 	return nil
 }
 
 func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
-	amendments []*actions.AmendmentField, proposed bool, proposalInitiator, votingSystem uint32) error {
+	amendments []*actions.AmendmentField, proposed bool, proposalType, votingSystem uint32) error {
 
 	permissions, err := actions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
 	if err != nil {
@@ -614,7 +679,7 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 		permission := permissions.PermissionOf(fip)
 
 		if proposed {
-			switch proposalInitiator {
+			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
 					return node.NewError(actions.RejectionsAssetPermissions,
@@ -627,8 +692,14 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
 							fip.String()))
 				}
+			case 2: // Administrative Matter
+				if !permission.AdministrativeMatter {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
+							fip.String()))
+				}
 			default:
-				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+				return fmt.Errorf("Invalid proposal type : %d", proposalType)
 			}
 
 			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
@@ -670,20 +741,28 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 			// Get payload object
-			asset, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
+			assetPayload, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
 			if err != nil {
 				return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
 			}
 
-			if err = asset.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data); err != nil {
+			if err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data); err != nil {
 				return err
 			}
 
-			if err = asset.Validate(); err != nil {
+			if err = assetPayload.Validate(); err != nil {
 				return err
 			}
 
-			newPayload, err := asset.Bytes()
+			switch assetPayload.(type) {
+			case *assets.Membership:
+				if fip[1] == assets.MembershipFieldMembershipClass {
+					return node.NewError(actions.RejectionsAssetNotPermitted,
+						"Amendments on MembershipClass prohibited")
+				}
+			}
+
+			newPayload, err := assetPayload.Bytes()
 			if err != nil {
 				return err
 			}

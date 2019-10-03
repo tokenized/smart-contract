@@ -156,7 +156,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Check proposal if there was one
 	proposed := false
-	proposalInitiator := uint32(0)
+	proposalType := uint32(0)
 	votingSystem := uint32(0)
 
 	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
@@ -225,7 +225,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		proposalInitiator = vt.Initiator
+		proposalType = vt.Type
 		votingSystem = vt.VoteSystem
 	}
 
@@ -291,7 +291,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to convert state contract to contract formation")
 		}
 
-		if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalInitiator,
+		if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalType,
 			votingSystem); err != nil {
 			node.LogWarn(ctx, "Failed to apply amendments to check admin oracle sig : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -349,7 +349,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = v.Now.Nano()
 
-	if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalInitiator,
+	if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalType,
 		votingSystem); err != nil {
 		node.LogWarn(ctx, "Contract amendments failed : %s", err)
 		code, ok := node.ErrorCode(err)
@@ -768,7 +768,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 
 // applyContractAmendments applies the amendments to the contract formation.
 func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField,
-	proposed bool, proposalInitiator, votingSystem uint32) error {
+	proposed bool, proposalType, votingSystem uint32) error {
 
 	permissions, err := actions.PermissionsFromBytes(cf.ContractPermissions, len(cf.VotingSystems))
 	if err != nil {
@@ -787,7 +787,7 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 		permission := permissions.PermissionOf(fip)
 
 		if proposed {
-			switch proposalInitiator {
+			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
@@ -799,8 +799,13 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 					return node.NewError(actions.RejectionsContractPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
 				}
+			case 2: // Administrative Matter
+				if !permission.AdministrativeMatter {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote", fip))
+				}
 			default:
-				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
 			}
 
 			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {

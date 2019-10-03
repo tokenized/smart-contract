@@ -51,6 +51,8 @@ type UpdateContract struct {
 	AdministrationAddress *bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
 	OperatorAddress       *bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
 
+	AdminMemberAsset *protocol.AssetCode `json:"AdminMemberAsset,omitempty"`
+
 	ContractName              *string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType       *uint32                       `json:"BodyOfAgreementType,omitempty"`
 	BodyOfAgreement           *[]byte                       `json:"BodyOfAgreement,omitempty"`

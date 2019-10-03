@@ -54,7 +54,7 @@ func holderProposal(t *testing.T) {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	proposalData := actions.Proposal{
-		Initiator:           1,
+		Type:           1,
 		VoteSystem:          0,
 		VoteOptions:         "AB",
 		VoteMax:             1,
@@ -124,11 +124,11 @@ func holderProposal(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
 	}
 
-	if vt.Initiator != proposalData.Initiator {
-		t.Fatalf("\t%s\tInitiator incorrect : %d != %d", tests.Failed, vt.Initiator, proposalData.Initiator)
+	if vt.Type != proposalData.Type {
+		t.Fatalf("\t%s\tType incorrect : %d != %d", tests.Failed, vt.Type, proposalData.Type)
 	}
 
-	t.Logf("\t%s\tVerified initiator : %d", tests.Success, vt.Initiator)
+	t.Logf("\t%s\tVerified initiator : %d", tests.Success, vt.Type)
 
 	if vt.VoteSystem != proposalData.VoteSystem {
 		t.Fatalf("\t%s\tVote system incorrect : %d != %d", tests.Failed, vt.VoteSystem, proposalData.VoteSystem)
@@ -467,7 +467,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	proposalData := actions.Proposal{
-		Initiator:           1,
+		Type:           1,
 		VoteSystem:          voteSystem,
 		VoteOptions:         "AB",
 		VoteMax:             1,
@@ -564,7 +564,7 @@ func mockUpProposal(ctx context.Context) error {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	proposalData := actions.Proposal{
-		Initiator:           1,
+		Type:           1,
 		VoteSystem:          0,
 		VoteOptions:         "AB",
 		VoteMax:             1,
@@ -619,7 +619,7 @@ func mockUpProposal(ctx context.Context) error {
 	testVoteTxId = *tests.RandomTxId()
 
 	var voteData = state.Vote{
-		Initiator:  1,
+		Type:  1,
 		VoteSystem: 0,
 
 		CreatedAt: protocol.CurrentTimestamp(),
@@ -633,10 +633,10 @@ func mockUpProposal(ctx context.Context) error {
 	return vote.Save(ctx, test.MasterDB, test.ContractKey.Address, &voteData)
 }
 
-func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint32, amendment *actions.AmendmentField) error {
+func mockUpAssetAmendmentVote(ctx context.Context, voteType, system uint32, amendment *actions.AmendmentField) error {
 	now := protocol.CurrentTimestamp()
 	var voteData = state.Vote{
-		Initiator:  initiator,
+		Type:  voteType,
 		VoteSystem: system,
 		AssetType:  testAssetType,
 		AssetCode:  &testAssetCode,
@@ -655,11 +655,11 @@ func mockUpAssetAmendmentVote(ctx context.Context, initiator, system uint32, ame
 	return vote.Save(ctx, test.MasterDB, test.ContractKey.Address, &voteData)
 }
 
-func mockUpContractAmendmentVote(ctx context.Context, initiator, system uint32,
+func mockUpContractAmendmentVote(ctx context.Context, voteType, system uint32,
 	amendment *actions.AmendmentField) error {
 	now := protocol.CurrentTimestamp()
 	var voteData = state.Vote{
-		Initiator:  initiator,
+		Type:  voteType,
 		VoteSystem: system,
 
 		CreatedAt: protocol.CurrentTimestamp(),

@@ -83,12 +83,12 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Check if sender is allowed to make proposal
-	if msg.Initiator == 0 { // Administration Proposal
+	if msg.Type == 0 { // Administration Proposal
 		if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 			node.LogWarn(ctx, "Initiator is not administration or operator")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 		}
-	} else if msg.Initiator == 1 { // Holder Proposal
+	} else if msg.Type == 1 { // Holder Proposal
 		// Sender must hold balance of at least one asset
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address) {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
@@ -96,8 +96,13 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
+	} else if msg.Type == 2 { // Administrative Matter
+		if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
+			node.LogWarn(ctx, "Initiator is not administration or operator")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
+		}
 	} else {
-		node.LogWarn(ctx, "Invalid Initiator value : %02x", msg.Initiator)
+		node.LogWarn(ctx, "Invalid Initiator value : %02x", msg.Type)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -131,7 +136,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Asset does not allow voting
-		if err := asset.ValidateVoting(ctx, as, msg.Initiator, ct.VotingSystems[msg.VoteSystem]); err != nil {
+		if err := asset.ValidateVoting(ctx, as, msg.Type, ct.VotingSystems[msg.VoteSystem]); err != nil {
 			node.LogWarn(ctx, "Asset does not allow voting: %x : %s", msg.AssetCode, err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetPermissions)
 		}
@@ -143,7 +148,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
 
-		if msg.Initiator > 0 && holdings.VotingBalance(as, h,
+		if msg.Type == 1 && holdings.VotingBalance(as, h,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				w.Config.Net)
@@ -168,8 +173,9 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			ac.AssetRevision = as.Revision + 1
 			ac.Timestamp = v.Now.Nano()
 
+			// Verify that included amendments are valid and have necessary permission.
 			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments, true,
-				msg.Initiator, msg.VoteSystem); err != nil {
+				msg.Type, msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Asset amendments failed : %s", err)
 				code, ok := node.ErrorCode(err)
 				if ok {
@@ -180,7 +186,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		}
 	} else {
 		// Contract does not allow voting
-		if err := contract.ValidateVoting(ctx, ct, msg.Initiator); err != nil {
+		if err := contract.ValidateVoting(ctx, ct, msg.Type); err != nil {
 			node.LogWarn(ctx, "Contract does not allow voting : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractPermissions)
 		}
@@ -204,7 +210,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			cf.ContractRevision = ct.Revision + 1 // Bump the revision
 			cf.Timestamp = v.Now.Nano()
 
-			if err := applyContractAmendments(&cf, msg.ProposedAmendments, true, msg.Initiator,
+			// Verify that included amendments are valid and have necessary permission.
+			if err := applyContractAmendments(&cf, msg.ProposedAmendments, true, msg.Type,
 				msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Contract amendments failed : %s", err)
 				code, ok := node.ErrorCode(err)
@@ -216,7 +223,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Sender does not have any balance of the asset
-		if msg.Initiator > 0 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
+		if msg.Type == 1 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			node.LogWarn(ctx, "Requestor is not a holder : %x", msg.AssetCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
@@ -270,7 +277,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	w.AddOutput(ctx, rk.Address, 0)
 
 	feeAmount := ct.ContractFee
-	if msg.Initiator > 0 {
+	if msg.Type == 1 {
 		feeAmount += ct.VotingSystems[msg.VoteSystem].HolderProposalFee
 	}
 	w.AddContractFee(ctx, feeAmount)
@@ -387,7 +394,6 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 // BallotCastRequest handles an incoming BallotCast request and prepares a BallotCounted response
 func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
-
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.BallotCastRequest")
 	defer span.End()
 
@@ -476,7 +482,28 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	quantity := uint64(0)
 
 	// Add applicable holdings
-	if len(proposal.AssetCode) > 0 && !vt.ContractWideVote {
+	if proposal.Type == 2 { // Administrative Token holders only
+		if ct.AdminMemberAsset.IsZero() {
+			node.LogWarn(ctx, "Admin Member Asset not defined : %s", proposal.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		}
+
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		if err != nil {
+			node.LogWarn(ctx, "Admin Member Asset not found : %s", proposal.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		}
+
+		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address, &ct.AdminMemberAsset,
+			itx.Inputs[0].Address, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get requestor admin member holding")
+		}
+
+		quantity = holdings.VotingBalance(as, h,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+	} else if len(proposal.AssetCode) > 0 && !vt.ContractWideVote {
 		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
 			protocol.AssetCodeFromBytes(proposal.AssetCode))
 		if err != nil {
@@ -500,7 +527,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	if quantity == 0 {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			w.Config.Net)
-		node.LogWarn(ctx, "User PKH doesn't hold any voting tokens : %s", address.String())
+		node.LogWarn(ctx, "Ballot sender doesn't hold any voting tokens : %s", address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 	}
 

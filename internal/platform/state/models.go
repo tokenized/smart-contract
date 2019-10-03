@@ -20,6 +20,8 @@ type Contract struct {
 	MasterAddress         bitcoin.RawAddress `json:"MasterAddress,omitempty"`
 	MovedTo               bitcoin.RawAddress `json:"MovedTo,omitempty"`
 
+	AdminMemberAsset protocol.AssetCode `json:"AdminMemberAsset,omitempty"`
+
 	ContractName              string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType       uint32                       `json:"BodyOfAgreementType,omitempty"`
 	BodyOfAgreement           []byte                       `json:"BodyOfAgreement,omitempty"`
@@ -43,7 +45,7 @@ type Contract struct {
 	HolderProposal            bool                         `json:"HolderProposal,omitempty"`
 	Oracles                   []*actions.OracleField       `json:"Oracles,omitempty"`
 
-	AssetCodes []*protocol.AssetCode `json:"AssetCodes,omitempty"`
+	AssetCodes       []*protocol.AssetCode `json:"AssetCodes,omitempty"`
 
 	FullOracles []bitcoin.PublicKey `json:"_,omitempty"`
 }
@@ -96,7 +98,7 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Initiator          uint32                    `json:"Initiator,omitempty"`
+	Type          uint32                    `json:"Type,omitempty"`
 	VoteSystem         uint32                    `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                      `json:"ContractWideVote,omitempty"`
 	AssetType          string                    `json:"AssetType,omitempty"`
