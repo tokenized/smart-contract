@@ -634,7 +634,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 			isAdminMemberAsset := membership.MembershipClass == "Owner" ||
-			membership.MembershipClass == "Administrator"
+				membership.MembershipClass == "Administrator"
 
 			if isAdminMemberAsset && !assetCode.Equal(ct.AdminMemberAsset) {
 				// Set contract AdminMemberAsset

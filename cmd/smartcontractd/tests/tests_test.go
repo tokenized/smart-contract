@@ -39,7 +39,7 @@ var testTokenQty uint64
 var testToken2Qty uint64
 var testAssetType string
 var testAsset2Type string
-var testAssetCode protocol.AssetCode
+var testAssetCodes []protocol.AssetCode
 var testAsset2Code protocol.AssetCode
 var testVoteTxId protocol.TxId
 var testVoteResultTxId protocol.TxId

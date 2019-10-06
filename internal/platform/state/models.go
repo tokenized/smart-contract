@@ -45,7 +45,7 @@ type Contract struct {
 	HolderProposal            bool                         `json:"HolderProposal,omitempty"`
 	Oracles                   []*actions.OracleField       `json:"Oracles,omitempty"`
 
-	AssetCodes       []*protocol.AssetCode `json:"AssetCodes,omitempty"`
+	AssetCodes []*protocol.AssetCode `json:"AssetCodes,omitempty"`
 
 	FullOracles []bitcoin.PublicKey `json:"_,omitempty"`
 }
@@ -98,7 +98,7 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Type          uint32                    `json:"Type,omitempty"`
+	Type               uint32                    `json:"Type,omitempty"`
 	VoteSystem         uint32                    `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                      `json:"ContractWideVote,omitempty"`
 	AssetType          string                    `json:"AssetType,omitempty"`

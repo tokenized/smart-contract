@@ -8,7 +8,7 @@ import (
 
 // NewVote defines what information may be provided to create a Vote.
 type NewVote struct {
-	Type          uint32                   `json:"Type,omitempty"`
+	Type               uint32                   `json:"Type,omitempty"`
 	VoteSystem         uint32                   `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                     `json:"ContractWideVote,omitempty"`
 	AssetType          string                   `json:"AssetType,omitempty"`
