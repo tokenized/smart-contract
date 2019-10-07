@@ -23,9 +23,6 @@ type NewAsset struct {
 	HolderProposal              bool     `json:"HolderProposal,omitempty"`
 	AssetModificationGovernance uint32   `json:"AssetModificationGovernance,omitempty"`
 	TokenQty                    uint64   `json:"TokenQty,omitempty"`
-	ContractFeeCurrency         string   `json:"ContractFeeCurrency,omitempty"`
-	ContractFeeVar              float32  `json:"ContractFeeVar,omitempty"`
-	ContractFeeFixed            float32  `json:"ContractFeeFixed,omitempty"`
 	AssetPayload                []byte   `json:"AssetPayload,omitempty"`
 }
 
@@ -39,7 +36,6 @@ type UpdateAsset struct {
 	Revision  *uint32             `json:"Revision,omitempty"`
 	Timestamp *protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AssetType                   *string             `json:"AssetType,omitempty"`
 	AssetPermissions            *[]byte             `json:"AssetPermissions,omitempty"`
 	TransfersPermitted          *bool               `json:"TransfersPermitted,omitempty"`
 	TradeRestrictions           *[]string           `json:"TradeRestrictions,omitempty"`

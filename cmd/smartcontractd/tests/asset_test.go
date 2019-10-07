@@ -898,7 +898,6 @@ func mockUpAssetHolding(ctx context.Context, address bitcoin.RawAddress, assetCo
 	return nil
 }
 
-
 func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	h := state.Holding{
 		Address:          address,

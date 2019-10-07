@@ -95,8 +95,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		a.Timestamp = *upd.Timestamp
 	}
 
-	if upd.AssetType != nil {
-		a.AssetType = *upd.AssetType
+	if upd.AssetPermissions != nil {
+		a.AssetPermissions = *upd.AssetPermissions
 	}
 	if upd.TransfersPermitted != nil {
 		a.TransfersPermitted = *upd.TransfersPermitted

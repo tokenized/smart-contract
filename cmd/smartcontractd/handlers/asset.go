@@ -509,9 +509,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 	} else {
-		// Required pointers
-		stringPointer := func(s string) *string { return &s }
-
 		// Prepare update object
 		ts := protocol.NewTimestamp(msg.Timestamp)
 		ua := asset.UpdateAsset{
@@ -519,10 +516,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			Timestamp: &ts,
 		}
 
-		if as.AssetType != msg.AssetType {
-			ua.AssetType = stringPointer(string(msg.AssetType))
-			node.Log(ctx, "Updating asset type (%x) : %s", msg.AssetCode, *ua.AssetType)
-		}
 		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
 			ua.AssetPermissions = &msg.AssetPermissions
 			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode, *ua.AssetPermissions)
