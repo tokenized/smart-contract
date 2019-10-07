@@ -60,14 +60,18 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter,
 
 	// Check if message is addressed to contract.
 	found := false
-	for _, outputIndex := range msg.AddressIndexes {
-		if int(outputIndex) >= len(itx.Outputs) {
-			return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
-		}
+	if len(msg.ReceiverIndexes) == 0 {
+		found = itx.Outputs[0].Address.Equal(rk.Address)
+	} else {
+		for _, outputIndex := range msg.ReceiverIndexes {
+			if int(outputIndex) >= len(itx.Outputs) {
+				return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
+			}
 
-		if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
-			found = true
-			break
+			if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
+				found = true
+				break
+			}
 		}
 	}
 
@@ -195,9 +199,9 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to serialize revert payload")
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First receiver is administration
-		MessageCode:    messagePayload.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First receiver is administration
+		MessageCode:     messagePayload.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
@@ -215,7 +219,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	if !ct.OperatorAddress.IsEmpty() {
 		// Add operator
 		tx.AddDustOutput(ct.OperatorAddress, false)
-		message.AddressIndexes = append(message.AddressIndexes, uint32(1))
+		message.ReceiverIndexes = append(message.ReceiverIndexes, uint32(1))
 		outputAmount += uint64(m.Config.DustLimit)
 	}
 
@@ -375,10 +379,10 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
 		settlement, m.Headers, assetUpdates)
 	if err != nil {
-		reject, ok := err.(rejectError)
+		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
-			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, reject.code)
+			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, rejectCode)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -522,11 +526,11 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	err = verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx,
 		settlement, m.Headers)
 	if err != nil {
-		reject, ok := err.(rejectError)
+		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
 			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-				reject.code)
+				rejectCode)
 		} else {
 			return errors.Wrap(err, "Failed to verify settlement data")
 		}
@@ -643,9 +647,9 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 		return err
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First output is receiver of message
-		MessageCode:    messagePayload.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First output is receiver of message
+		MessageCode:     messagePayload.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	return node.RespondSuccess(ctx, w, itx, rk, &message)
@@ -725,7 +729,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				continue // This asset is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectionsContractFrozen}
+				return node.NewError(actions.RejectionsContractFrozen, "")
 			}
 
 			// Locate Asset
@@ -734,10 +738,10 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				return fmt.Errorf("Asset code not found : %x : %s", assetTransfer.AssetCode, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
-				return rejectError{code: actions.RejectionsAssetFrozen}
+				return node.NewError(actions.RejectionsAssetFrozen, "")
 			}
 			if !as.TransfersPermitted {
-				return rejectError{code: actions.RejectionsAssetNotPermitted}
+				return node.NewError(actions.RejectionsAssetNotPermitted, "")
 			}
 		}
 
@@ -796,7 +800,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						config.Net)
 					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
 						address.String(), err)
-					return rejectError{code: actions.RejectionsMsgMalformed}
+					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
 
@@ -845,7 +849,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 						config.Net)
 					node.LogWarn(ctx, "Receive invalid : %x %s : %s",
 						assetTransfer.AssetCode, address.String(), err)
-					return rejectError{code: actions.RejectionsMsgMalformed}
+					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
 

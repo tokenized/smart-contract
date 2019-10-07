@@ -224,7 +224,7 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *actions.Pro
 
 func ValidateVotingSystem(system *actions.VotingSystemField) error {
 	if system.VoteType != "R" && system.VoteType != "A" && system.VoteType != "P" {
-		return fmt.Errorf("Threshold Percentage out of range : %s", system.VoteType)
+		return fmt.Errorf("Unsupported vote type : %s", system.VoteType)
 	}
 	if system.ThresholdPercentage == 0 || system.ThresholdPercentage >= 100 {
 		return fmt.Errorf("Threshold Percentage out of range : %d", system.ThresholdPercentage)

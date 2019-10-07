@@ -119,7 +119,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, as.AssetIndex); err != nil {
 		return nil, err
 	}
-	if err := serializeString(&buf, as.AssetAuthFlags); err != nil {
+	if err := serializeString(&buf, as.AssetPermissions); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(&buf, binary.LittleEndian, as.TransfersPermitted); err != nil {
@@ -222,7 +222,7 @@ func deserializeAsset(buf *bytes.Reader, as *state.Asset) error {
 	if err := binary.Read(buf, binary.LittleEndian, &as.AssetIndex); err != nil {
 		return err
 	}
-	as.AssetAuthFlags, err = deserializeString(buf)
+	as.AssetPermissions, err = deserializeString(buf)
 	if err != nil {
 		return err
 	}

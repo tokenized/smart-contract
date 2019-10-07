@@ -42,25 +42,6 @@ type Transfer struct {
 	HoldingsChannel *holdings.CacheChannel
 }
 
-type rejectError struct {
-	code uint32
-	text string
-}
-
-func (err rejectError) Error() string {
-	if err.code == 0 {
-		return err.text
-	}
-	value := actions.RejectionsData(err.code)
-	if value == nil {
-		return err.text
-	}
-	if len(err.text) == 0 {
-		return value.Label
-	}
-	return fmt.Sprintf("%s - %s", value.Label, err.text)
-}
-
 // TransferRequest handles an incoming Transfer request.
 func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
@@ -199,10 +180,10 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement,
 		t.Headers, assetUpdates)
 	if err != nil {
-		reject, ok := err.(rejectError)
+		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
-			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, reject.code, false)
+			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, rejectCode, false)
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -593,8 +574,8 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
-	transferTx *inspector.Transaction, transfer *actions.Transfer,
-	settleTx *txbuilder.TxBuilder, settlement *actions.Settlement, headers node.BitcoinHeaders,
+	transferTx *inspector.Transaction, transfer *actions.Transfer, settleTx *txbuilder.TxBuilder,
+	settlement *actions.Settlement, headers node.BitcoinHeaders,
 	updates map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
@@ -608,7 +589,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		return rejectError{code: actions.RejectionsContractFrozen}
+		return node.NewError(actions.RejectionsContractFrozen, "")
 	}
 
 	// Generate public key hashes for all the outputs
@@ -662,9 +643,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		if err != nil {
 			return fmt.Errorf("Asset ID not found : %x : %s", assetTransfer.AssetCode, err)
 		}
-		if as.FreezePeriod.Nano() > v.Now.Nano() {
-			node.LogWarn(ctx, "Asset frozen until %s", as.FreezePeriod.String())
-			return rejectError{code: actions.RejectionsAssetFrozen}
+
+		if err := asset.IsTransferable(ctx, as, v.Now); err != nil {
+			return err
 		}
 
 		// Find contract input
@@ -732,7 +713,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					config.Net)
 				node.LogWarn(ctx, "Duplicate sender entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectionsMsgMalformed}
+				return node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
 			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
@@ -753,16 +734,16 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
-					return rejectError{code: actions.RejectionsInsufficientQuantity}
+					return node.NewError(actions.RejectionsInsufficientQuantity, "")
 				}
 				if err == holdings.ErrHoldingsFrozen {
 					node.LogWarn(ctx, "Frozen funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
-					return rejectError{code: actions.RejectionsHoldingsFrozen}
+					return node.NewError(actions.RejectionsHoldingsFrozen, "")
 				}
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectionsMsgMalformed}
+				return node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
 			// Update total send balance
@@ -803,7 +784,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					config.Net)
 				node.LogWarn(ctx, "Duplicate receiver entry: asset=%x party=%s",
 					assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectionsMsgMalformed}
+				return node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
 			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode, receiverAddress, v.Now)
@@ -822,7 +803,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					config.Net)
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
-				return rejectError{code: actions.RejectionsMsgMalformed}
+				return node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
 			// Update asset balance
@@ -841,12 +822,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			if fromNonAdministration > toAdministration {
 				node.LogWarn(ctx, "Transfers not permitted. Sending tokens not all to administration : %d/%d",
 					fromNonAdministration, toAdministration)
-				return rejectError{code: actions.RejectionsAssetNotPermitted}
+				return node.NewError(actions.RejectionsAssetNotPermitted, "")
 			}
 			if toNonAdministration > fromAdministration {
 				node.LogWarn(ctx, "Transfers not permitted. Receiving tokens not all from administration : %d/%d",
 					toNonAdministration, fromAdministration)
-				return rejectError{code: actions.RejectionsAssetNotPermitted}
+				return node.NewError(actions.RejectionsAssetNotPermitted, "")
 			}
 		}
 
@@ -1037,9 +1018,9 @@ func sendToNextSettlementContract(ctx context.Context,
 		return err
 	}
 	message := actions.Message{
-		AddressIndexes: []uint32{0}, // First output is receiver of message
-		MessageCode:    settlementRequest.Code(),
-		MessagePayload: payBuf.Bytes(),
+		ReceiverIndexes: []uint32{0}, // First output is receiver of message
+		MessageCode:     settlementRequest.Code(),
+		MessagePayload:  payBuf.Bytes(),
 	}
 
 	if err := node.RespondSuccess(ctx, w, itx, rk, &message); err != nil {

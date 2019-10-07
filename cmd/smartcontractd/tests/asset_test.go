@@ -15,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -25,6 +26,7 @@ func TestAssets(t *testing.T) {
 	defer tests.Recover(t)
 
 	t.Run("create", createAsset)
+	t.Run("adminMemberAsset", adminMemberAsset)
 	t.Run("index", assetIndex)
 	t.Run("amendment", assetAmendment)
 	t.Run("proposalAmendment", assetProposalAmendment)
@@ -49,7 +51,7 @@ func createAsset(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
+	testAssetCodes = []protocol.AssetCode{*protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
@@ -70,19 +72,21 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = true               // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
 	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
+	t.Logf("Asset Permissions : 0x%x", assetData.AssetPermissions)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	// Build asset definition transaction
@@ -127,13 +131,13 @@ func createAsset(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check issuer balance
-	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode)
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
@@ -151,6 +155,176 @@ func createAsset(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified asset type : %s", tests.Success, as.AssetType)
+}
+
+func adminMemberAsset(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
+
+	testAssetType = assets.CodeShareCommon
+	testAssetCodes[0] = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
+
+	// Create AssetDefinition message
+	assetData := actions.AssetDefinition{
+		AssetType:                  "MEM",
+		TransfersPermitted:         true,
+		EnforcementOrdersPermitted: true,
+		VotingRights:               true,
+		TokenQty:                   5,
+	}
+
+	assetPayloadData := assets.Membership{
+		MembershipClass: "Administrator",
+		MembershipType:  "Board Member",
+		Description:     "Administrative Matter Voting Token",
+	}
+	assetData.AssetPayload, err = assetPayloadData.Bytes()
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
+	}
+
+	// Define permissions for asset fields
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
+	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	assetData.AssetPermissions, err = permissions.Bytes()
+	t.Logf("Asset Permissions : 0x%x", assetData.AssetPermissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
+	}
+
+	// Build asset definition transaction
+	assetTx := wire.NewMsgTx(2)
+
+	assetInputHash := fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ := test.ContractKey.Address.LockingScript()
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
+
+	assetItx, err := inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx : %v", tests.Failed, err)
+	}
+
+	err = assetItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, assetTx)
+
+	err = a.Trigger(ctx, "SEE", assetItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept asset definition : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAsset definition accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "A2")
+
+	// Check issuer balance
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+		issuerKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
+	}
+	if h.PendingBalance != assetData.TokenQty {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance,
+			assetData.TokenQty)
+	}
+
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
+
+	if as.AssetType != assetData.AssetType {
+		t.Fatalf("\t%s\tAsset type incorrect : %s != %s", tests.Failed, as.AssetType,
+			assetData.AssetType)
+	}
+
+	t.Logf("\t%s\tVerified asset type : %s", tests.Success, as.AssetType)
+
+	/********************************* Attempt Second Token ***************************************/
+	assetPayloadData.MembershipClass = "Owner"
+
+	// Build asset definition transaction
+	asset2Tx := wire.NewMsgTx(2)
+
+	asset2InputHash := fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	asset2Tx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(asset2InputHash, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	asset2Tx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+	}
+	asset2Tx.TxOut = append(asset2Tx.TxOut, wire.NewTxOut(0, script))
+
+	asset2Itx, err := inspector.NewTransactionFromWire(ctx, asset2Tx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx : %v", tests.Failed, err)
+	}
+
+	err = asset2Itx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, asset2Tx)
+
+	err = a.Trigger(ctx, "SEE", asset2Itx)
+	if err == nil {
+		t.Fatalf("\t%s\tFailed to reject asset definition : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tDuplicate Administrative asset definition rejected", tests.Success)
+
+	// Check the response
+	checkResponse(t, "M2")
 }
 
 func assetIndex(t *testing.T) {
@@ -173,7 +347,7 @@ func assetIndex(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
+	testAssetCodes[0] = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
@@ -194,19 +368,20 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = true               // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = false // Issuer can update field with a proposal
-		permissions[i].HolderProposal = false         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
 	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset auth flags : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	// Build asset definition transaction
@@ -251,7 +426,7 @@ func assetIndex(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check issuer balance
-	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode)
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
@@ -265,7 +440,7 @@ func assetIndex(t *testing.T) {
 	// Create another asset --------------------------------------------------
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100021, issuerKey.Address)
 
-	testAssetCode = *protocol.AssetCodeFromContract(test.ContractKey.Address, 1)
+	testAssetCodes = append(testAssetCodes, *protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
 
 	// Build asset definition transaction
 	assetTx = wire.NewMsgTx(2)
@@ -309,7 +484,7 @@ func assetIndex(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check issuer balance
-	as, err = asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode)
+	as, err = asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[1])
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset 2 : %v", tests.Failed, err)
 	}
@@ -331,7 +506,7 @@ func assetAmendment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -340,7 +515,7 @@ func assetAmendment(t *testing.T) {
 
 	amendmentData := actions.AssetModification{
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 		AssetRevision: 0,
 	}
 
@@ -352,9 +527,11 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
+	fip := actions.FieldIndexPath{actions.AssetFieldTokenQty}
+	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
-		FieldIndex: actions.AssetFieldTokenQty,
-		Data:       buf.Bytes(),
+		FieldIndexPath: fipBytes,
+		Data:           buf.Bytes(),
 	})
 
 	// Build amendment transaction
@@ -399,7 +576,7 @@ func assetAmendment(t *testing.T) {
 	checkResponse(t, "A2")
 
 	// Check balance status
-	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode)
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
@@ -411,7 +588,7 @@ func assetAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified token quantity : %d", tests.Success, as.TokenQty)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
@@ -435,22 +612,16 @@ func assetProposalAmendment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, false, true, true)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, true, true)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
-	assetPayload := assets.ShareCommon{
-		Ticker:      "TST  ",
-		Description: "Test new common shares",
-	}
-	payloadData, err := assetPayload.Bytes()
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
-	}
+	fip := actions.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
+	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
-		FieldIndex: actions.AssetFieldAssetPayload,
-		Data:       payloadData,
+		FieldIndexPath: fipBytes,
+		Data:           []byte("Test new common shares"),
 	}
 	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)
 	if err != nil {
@@ -466,7 +637,7 @@ func assetProposalAmendment(t *testing.T) {
 
 	amendmentData := actions.AssetModification{
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 		AssetRevision: 0,
 		RefTxID:       testVoteResultTxId.Bytes(),
 	}
@@ -514,7 +685,7 @@ func assetProposalAmendment(t *testing.T) {
 	// Check the response
 	checkResponse(t, "A2")
 
-	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode)
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
@@ -536,21 +707,30 @@ func assetProposalAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified new payload description : %s", tests.Success, sharePayload.Description)
 }
 
+var currentTimestamp = protocol.CurrentTimestamp()
+
 var sampleAssetPayload = assets.ShareCommon{
-	Ticker:      "TST  ",
-	Description: "Test common shares",
+	Ticker:          "TST  ",
+	Description:     "Test common shares",
+	TransferLockout: currentTimestamp.Nano(),
 }
 
 var sampleAssetPayload2 = assets.ShareCommon{
-	Ticker:      "TS2  ",
-	Description: "Test common shares 2",
+	Ticker:          "TS2  ",
+	Description:     "Test common shares 2",
+	TransferLockout: currentTimestamp.Nano(),
+}
+
+var sampleAdminAssetPayload = assets.Membership{
+	MembershipClass: "Owner",
+	Description:     "Test admin token",
 }
 
 func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
-	payload assets.Asset, permitted, issuer, holder bool) error {
+	index uint64, payload assets.Asset, permitted, issuer, holder bool) error {
 
 	var assetData = state.Asset{
-		Code:                       protocol.AssetCodeFromContract(test.ContractKey.Address, 0),
+		Code:                       protocol.AssetCodeFromContract(test.ContractKey.Address, index),
 		AssetType:                  payload.Code(),
 		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
@@ -561,7 +741,10 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	testAssetType = payload.Code()
-	testAssetCode = *assetData.Code
+	for uint64(len(testAssetCodes)) <= index {
+		testAssetCodes = append(testAssetCodes, protocol.AssetCode{})
+	}
+	testAssetCodes[index] = *assetData.Code
 	testTokenQty = quantity
 
 	var err error
@@ -571,17 +754,17 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, 2)
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+			VotingSystemsAllowed:   []bool{true, false},
+		},
 	}
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -594,7 +777,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 		UpdatedAt:        assetData.UpdatedAt,
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode, &issuerHolding)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
 		return err
 	}
@@ -612,6 +795,14 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 
 	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
+
+	if payload.Code() == "MEM" {
+		membership, _ := payload.(*assets.Membership)
+		if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+			ct.AdminMemberAsset = *assetData.Code
+		}
+	}
+
 	return contract.Save(ctx, test.MasterDB, ct)
 }
 
@@ -640,17 +831,17 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 
 	// Define permissions for asset fields
-	permissions := make([]protocol.Permission, actions.AssetFieldCount)
-	for i, _ := range permissions {
-		permissions[i].Permitted = permitted           // Issuer can update field without proposal
-		permissions[i].AdministrationProposal = issuer // Issuer can update field with a proposal
-		permissions[i].HolderProposal = holder         // Holder's can initiate proposals to update field
-
-		permissions[i].VotingSystemsAllowed = make([]bool, 2)
-		permissions[i].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+			VotingSystemsAllowed:   []bool{true, false}, // Enable this voting system for proposals on this field.
+		},
 	}
 
-	assetData.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
+	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
 		return err
 	}
@@ -663,7 +854,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 		UpdatedAt:        assetData.UpdatedAt,
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAssetCode, &issuerHolding)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
 		return err
 	}
@@ -685,6 +876,12 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 }
 
 func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
+	return mockUpAssetHolding(ctx, address, testAssetCodes[0], quantity)
+}
+
+func mockUpAssetHolding(ctx context.Context, address bitcoin.RawAddress, assetCode protocol.AssetCode,
+	quantity uint64) error {
+
 	h := state.Holding{
 		Address:          address,
 		PendingBalance:   quantity,
@@ -693,7 +890,7 @@ func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uin
 		UpdatedAt:        protocol.CurrentTimestamp(),
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
-	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode, &h)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &assetCode, &h)
 	if err != nil {
 		return err
 	}

@@ -66,7 +66,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -83,7 +83,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode.Bytes(),
+			AssetCode:     testAssetCodes[0].Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -208,7 +208,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 	// Check balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -230,7 +230,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -265,7 +265,7 @@ func separateTransfersBenchmark(b *testing.B) {
 		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode.Bytes(),
+			AssetCode:     testAssetCodes[0].Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -391,7 +391,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	// Check balance
 	for _, sender := range senders {
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 			sender.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get sender holding : %s", tests.Failed, err)
@@ -403,7 +403,7 @@ func separateTransfersBenchmark(b *testing.B) {
 
 	for _, receiver := range receivers {
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 			receiver.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get receiver holding : %s", tests.Failed, err)
@@ -425,7 +425,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -446,7 +446,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		assetTransferData := actions.AssetTransferField{
 			ContractIndex: 0, // first output
 			AssetType:     testAssetType,
-			AssetCode:     testAssetCode.Bytes(),
+			AssetCode:     testAssetCodes[0].Bytes(),
 		}
 
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -458,7 +458,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-			testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash, 1)
+			testAssetCodes[0].Bytes(), userKey.Address, transferAmount, blockHash, 1)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -592,7 +592,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	// Check balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -637,7 +637,7 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -731,7 +731,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	}
 	// fmt.Printf("Using %d tree levels for %d transfers\n", levels, nodes)
 
-	err = mockUpAsset(ctx, true, true, true, uint64(nodes)*2, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, uint64(nodes)*2, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -835,7 +835,7 @@ func treeTransfersBenchmark(b *testing.B) {
 
 	// Check balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCode,
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -856,7 +856,7 @@ func sendTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -870,7 +870,7 @@ func sendTokens(t *testing.T) {
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -981,7 +981,7 @@ func sendTokens(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, issuerKey.Address, v.Now)
+		&testAssetCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -993,7 +993,7 @@ func sendTokens(t *testing.T) {
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, userKey.Address, v.Now)
+		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1075,7 +1075,7 @@ func sendTokens(t *testing.T) {
 
 	// Check issuer and user balance
 	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, issuerKey.Address, v.Now)
+		&testAssetCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1087,7 +1087,7 @@ func sendTokens(t *testing.T) {
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, userKey.Address, v.Now)
+		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1110,7 +1110,7 @@ func multiExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -1146,7 +1146,7 @@ func multiExchange(t *testing.T) {
 	assetTransfer1Data := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
@@ -1305,7 +1305,7 @@ func multiExchange(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, userKey.Address, v.Now)
+		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1317,7 +1317,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, user2Key.Address, v.Now)
+		&testAssetCodes[0], user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1365,7 +1365,7 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -1383,7 +1383,7 @@ func oracleTransfer(t *testing.T) {
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -1395,7 +1395,7 @@ func oracleTransfer(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCode.Bytes(), userKey.Address, transferAmount, blockHash, 1)
+		testAssetCodes[0].Bytes(), userKey.Address, transferAmount, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1459,7 +1459,7 @@ func oracleTransfer(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, issuerKey.Address, v.Now)
+		&testAssetCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1471,7 +1471,7 @@ func oracleTransfer(t *testing.T) {
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, userKey.Address, v.Now)
+		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1494,7 +1494,7 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
 	}
-	err = mockUpAsset(ctx, true, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -1513,7 +1513,7 @@ func oracleTransferBad(t *testing.T) {
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -1525,7 +1525,7 @@ func oracleTransferBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCode.Bytes(), userKey.Address, transferAmount+1, blockHash, 1)
+		testAssetCodes[0].Bytes(), userKey.Address, transferAmount+1, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -1646,7 +1646,7 @@ func permitted(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 	// TransfersPermitted = false
-	err = mockUpAsset(ctx, false, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -1660,7 +1660,7 @@ func permitted(t *testing.T) {
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
@@ -1715,7 +1715,7 @@ func permitted(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, issuerKey.Address, v.Now)
+		&testAssetCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1727,7 +1727,7 @@ func permitted(t *testing.T) {
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCode, userKey.Address, v.Now)
+		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1751,7 +1751,7 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
 	}
 	// TransfersPermitted = false
-	err = mockUpAsset(ctx, false, true, true, 1000, &sampleAssetPayload, true, false, false)
+	err = mockUpAsset(ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
@@ -1771,7 +1771,7 @@ func permittedBad(t *testing.T) {
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
-		AssetCode:     testAssetCode.Bytes(),
+		AssetCode:     testAssetCodes[0].Bytes(),
 	}
 
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,

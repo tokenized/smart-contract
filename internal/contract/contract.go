@@ -42,7 +42,6 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 // Create the contract
 func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, nu *NewContract,
 	now protocol.Timestamp) error {
-
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
@@ -102,6 +101,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.OperatorAddress = *upd.OperatorAddress
 	}
 
+	if upd.AdminMemberAsset != nil {
+		c.AdminMemberAsset = *upd.AdminMemberAsset
+	}
+
 	if upd.ContractName != nil {
 		c.ContractName = *upd.ContractName
 	}
@@ -138,8 +141,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.ContractOperator != nil {
 		c.ContractOperator = upd.ContractOperator
 	}
-	if upd.ContractAuthFlags != nil {
-		c.ContractAuthFlags = *upd.ContractAuthFlags
+	if upd.ContractPermissions != nil {
+		c.ContractPermissions = *upd.ContractPermissions
 	}
 	if upd.ContractFee != nil {
 		c.ContractFee = *upd.ContractFee
@@ -239,7 +242,8 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 }
 
 // AddAssetCode adds an asset code to a contract
-func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode, now protocol.Timestamp) error {
+func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *protocol.AssetCode, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
@@ -278,7 +282,8 @@ func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract.
-func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userAddress bitcoin.RawAddress) bool {
+func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
+	userAddress bitcoin.RawAddress) bool {
 	for _, a := range ct.AssetCodes {
 		h, err := holdings.Fetch(ctx, dbConn, ct.Address, a, userAddress)
 		if err != nil {
@@ -294,7 +299,8 @@ func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract, userA
 }
 
 // GetTokenQty returns the token quantities for all assets.
-func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract, applyMultiplier bool) uint64 {
+func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract,
+	applyMultiplier bool) uint64 {
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
 		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
@@ -322,6 +328,9 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
+		if a.Equal(ct.AdminMemberAsset) {
+			continue // Administrative tokens don't count for holder votes.
+		}
 		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
 		if err != nil {
 			continue

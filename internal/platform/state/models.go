@@ -20,6 +20,8 @@ type Contract struct {
 	MasterAddress         bitcoin.RawAddress `json:"MasterAddress,omitempty"`
 	MovedTo               bitcoin.RawAddress `json:"MovedTo,omitempty"`
 
+	AdminMemberAsset protocol.AssetCode `json:"AdminMemberAsset,omitempty"`
+
 	ContractName              string                       `json:"ContractName,omitempty"`
 	BodyOfAgreementType       uint32                       `json:"BodyOfAgreementType,omitempty"`
 	BodyOfAgreement           []byte                       `json:"BodyOfAgreement,omitempty"`
@@ -35,7 +37,7 @@ type Contract struct {
 	AdminOracle               *actions.OracleField         `json:"AdminOracle,omitempty"`
 	AdminOracleSignature      []byte                       `json:"AdminOracleSignature,omitempty"`
 	AdminOracleSigBlockHeight uint32                       `json:"AdminOracleSigBlockHeight,omitempty"`
-	ContractAuthFlags         []byte                       `json:"ContractAuthFlags,omitempty"`
+	ContractPermissions       []byte                       `json:"ContractPermissions,omitempty"`
 	ContractFee               uint64                       `json:"ContractFee,omitempty"`
 	VotingSystems             []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	RestrictedQtyAssets       uint64                       `json:"RestrictedQtyAssets,omitempty"`
@@ -57,7 +59,7 @@ type Asset struct {
 
 	AssetType                   string             `json:"AssetType,omitempty"`
 	AssetIndex                  uint64             `json:"AssetIndex,omitempty"`
-	AssetAuthFlags              []byte             `json:"AssetAuthFlags,omitempty"`
+	AssetPermissions            []byte             `json:"AssetPermissions,omitempty"`
 	TransfersPermitted          bool               `json:"TransfersPermitted,omitempty"`
 	TradeRestrictions           []string           `json:"TradeRestrictions,omitempty"`
 	EnforcementOrdersPermitted  bool               `json:"EnforcementOrdersPermitted,omitempty"`
@@ -96,13 +98,11 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Initiator          uint32                    `json:"Initiator,omitempty"`
+	Type               uint32                    `json:"Type,omitempty"`
 	VoteSystem         uint32                    `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                      `json:"ContractWideVote,omitempty"`
-	AssetSpecificVote  bool                      `json:"AssetSpecificVote,omitempty"`
 	AssetType          string                    `json:"AssetType,omitempty"`
 	AssetCode          *protocol.AssetCode       `json:"AssetCode,omitempty"`
-	Specific           bool                      `json:"Specific,omitempty"`
 	ProposedAmendments []*actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
 	VoteTxId     *protocol.TxId     `json:"VoteTxId,omitempty"`

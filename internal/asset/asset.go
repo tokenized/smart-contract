@@ -2,12 +2,15 @@ package asset
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -92,8 +95,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		a.Timestamp = *upd.Timestamp
 	}
 
-	if upd.AssetType != nil {
-		a.AssetType = *upd.AssetType
+	if upd.AssetPermissions != nil {
+		a.AssetPermissions = *upd.AssetPermissions
 	}
 	if upd.TransfersPermitted != nil {
 		a.TransfersPermitted = *upd.TransfersPermitted
@@ -143,6 +146,64 @@ func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint32,
 	case 1: // Holder
 		if !as.HolderProposal {
 			return errors.New("Holder proposals not allowed")
+		}
+	}
+
+	return nil
+}
+
+func timeString(t uint64) string {
+	return time.Unix(int64(t)/1000000000, 0).String()
+}
+
+// IsTransferable returns an error if the asset is non-transferable.
+func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp) error {
+	if as.FreezePeriod.Nano() > now.Nano() {
+		return node.NewError(actions.RejectionsAssetFrozen,
+			fmt.Sprintf("Asset frozen until %s", as.FreezePeriod.String()))
+	}
+
+	assetData, err := assets.Deserialize([]byte(as.AssetType), as.AssetPayload)
+	if err != nil {
+		return node.NewError(actions.RejectionsMsgMalformed, err.Error())
+	}
+
+	switch data := assetData.(type) {
+	case *assets.Membership:
+		if data.ExpirationTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("Membership expired at %s", timeString(data.ExpirationTimestamp)))
+		}
+
+	case *assets.ShareCommon:
+		if data.TransferLockout > now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("ShareCommon not transferable until %s",
+					timeString(data.TransferLockout)))
+		}
+
+	case *assets.CasinoChip:
+		if data.ExpirationTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("CasinoChip expired at %s", timeString(data.ExpirationTimestamp)))
+		}
+
+	case *assets.Coupon:
+		if data.ExpiryDate < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpiryDate)))
+		}
+
+	case *assets.LoyaltyPoints:
+		if data.ExpirationTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("LoyaltyPoints expired at %s", timeString(data.ExpirationTimestamp)))
+		}
+
+	case *assets.TicketAdmission:
+		if data.ExpirationTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 	}
 

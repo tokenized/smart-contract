@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/asset"
@@ -72,9 +71,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = protocol.ReadAuthFlags(msg.AssetAuthFlags, actions.AssetFieldCount,
-		len(ct.VotingSystems)); err != nil {
-		node.LogWarn(ctx, "Invalid asset auth flags : %s", err)
+	if _, err = actions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
+		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -108,21 +106,28 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Validate payload
-	payload := assets.NewAssetFromCode(msg.AssetType)
-	if payload == nil {
-		node.LogWarn(ctx, "Asset payload type unknown : %s", msg.AssetType)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-	}
-
-	asset, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+	assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
 	if err != nil {
 		node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if err := asset.Validate(); err != nil {
+	if err := assetPayload.Validate(); err != nil {
 		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
+	// Only one Owner/Administrator Membership asset allowed
+	if msg.AssetType == "MEM" && !ct.AdminMemberAsset.IsZero() {
+		membership, ok := assetPayload.(*assets.Membership)
+		if !ok {
+			node.LogWarn(ctx, "Membership payload is wrong type")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+		if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+			node.LogWarn(ctx, "Only one Owner/Administrator Membership asset allowed")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
+		}
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
@@ -211,7 +216,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Check proposal if there was one
 	proposed := false
-	proposalInitiator := uint32(0)
+	proposalType := uint32(0)
 	votingSystem := uint32(0)
 
 	if len(msg.RefTxID) != 0 { // Vote Result Action allowing these amendments
@@ -256,12 +261,12 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.Specific {
+		if len(vt.ProposedAmendments) == 0 {
 			node.LogWarn(ctx, "Vote was not for specific amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.AssetSpecificVote || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
+		if vt.AssetCode.IsZero() || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
 			node.LogWarn(ctx, "Vote was not for this asset code")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -280,14 +285,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		proposalInitiator = vt.Initiator
+		proposalType = vt.Type
 		votingSystem = vt.VoteSystem
-	}
-
-	if err := checkAssetAmendmentsPermissions(as, ct.VotingSystems, msg.Amendments, proposed,
-		proposalInitiator, votingSystem); err != nil {
-		node.LogWarn(ctx, "Asset amendments not permitted : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetAuthFlags)
 	}
 
 	// Asset Creation <- Asset Modification
@@ -304,8 +303,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	node.Log(ctx, "Amending asset : %x", msg.AssetCode)
 
-	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments); err != nil {
+	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
+		proposalType, votingSystem); err != nil {
 		node.LogWarn(ctx, "Asset amendments failed : %s", err)
+		code, ok := node.ErrorCode(err)
+		if ok {
+			return node.RespondReject(ctx, w, itx, rk, code)
+		}
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -315,7 +319,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		updateHoldings = true
 
 		// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
-		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode, ct.AdministrationAddress, v.Now)
+		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
+			ct.AdministrationAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
@@ -480,10 +485,30 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to save holdings")
 		}
 		a.HoldingsChannel.Add(cacheItem)
-	} else {
-		// Required pointers
-		stringPointer := func(s string) *string { return &s }
 
+		// Update Owner/Administrator Membership asset in contract
+		if msg.AssetType == "MEM" {
+			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+
+			membership, ok := assetPayload.(*assets.Membership)
+			if !ok {
+				node.LogWarn(ctx, "Membership payload is wrong type")
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+			if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: assetCode,
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			}
+		}
+	} else {
 		// Prepare update object
 		ts := protocol.NewTimestamp(msg.Timestamp)
 		ua := asset.UpdateAsset{
@@ -491,13 +516,9 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			Timestamp: &ts,
 		}
 
-		if as.AssetType != msg.AssetType {
-			ua.AssetType = stringPointer(string(msg.AssetType))
-			node.Log(ctx, "Updating asset type (%x) : %s", msg.AssetCode, *ua.AssetType)
-		}
-		if !bytes.Equal(as.AssetAuthFlags[:], msg.AssetAuthFlags[:]) {
-			ua.AssetAuthFlags = &msg.AssetAuthFlags
-			node.Log(ctx, "Updating asset auth flags (%x) : %x", msg.AssetCode, *ua.AssetAuthFlags)
+		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
+			ua.AssetPermissions = &msg.AssetPermissions
+			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode, *ua.AssetPermissions)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
@@ -591,46 +612,40 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
-	}
 
-	return nil
-}
+		// Update Owner/Administrator Membership asset in contract
+		if msg.AssetType == "MEM" {
+			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+			if err != nil {
+				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
 
-// checkAssetAmendmentsPermissions verifies that the amendments are permitted based on the auth flags.
-func checkAssetAmendmentsPermissions(as *state.Asset, votingSystems []*actions.VotingSystemField,
-	amendments []*actions.AmendmentField, proposed bool, proposalInitiator, votingSystem uint32) error {
+			membership, ok := assetPayload.(*assets.Membership)
+			if !ok {
+				node.LogWarn(ctx, "Membership payload is wrong type")
+				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			}
+			isAdminMemberAsset := membership.MembershipClass == "Owner" ||
+				membership.MembershipClass == "Administrator"
 
-	permissions, err := protocol.ReadAuthFlags(as.AssetAuthFlags, actions.AssetFieldCount, len(votingSystems))
-	if err != nil {
-		return fmt.Errorf("Invalid asset auth flags : %s", err)
-	}
-
-	for _, amendment := range amendments {
-		if int(amendment.FieldIndex) >= len(permissions) {
-			return fmt.Errorf("Amendment field index out of range : %d", amendment.FieldIndex)
-		}
-		if proposed {
-			switch proposalInitiator {
-			case 0: // Administration
-				if !permissions[amendment.FieldIndex].AdministrationProposal {
-					return fmt.Errorf("Field %d amendment not permitted by administration proposal", amendment.FieldIndex)
+			if isAdminMemberAsset && !assetCode.Equal(ct.AdminMemberAsset) {
+				// Set contract AdminMemberAsset
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: assetCode,
 				}
-			case 1: // Holder
-				if !permissions[amendment.FieldIndex].HolderProposal {
-					return fmt.Errorf("Field %d amendment not permitted by holder proposal", amendment.FieldIndex)
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
 				}
-			default:
-				return fmt.Errorf("Invalid proposal initiator type : %d", proposalInitiator)
+			} else if !isAdminMemberAsset && assetCode.Equal(ct.AdminMemberAsset) {
+				// Clear contract AdminMemberAsset
+				updateContract := &contract.UpdateContract{
+					AdminMemberAsset: &protocol.AssetCode{}, // zero asset code
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
 			}
-
-			if int(votingSystem) >= len(permissions[amendment.FieldIndex].VotingSystemsAllowed) {
-				return fmt.Errorf("Field %d amendment voting system out of range : %d", amendment.FieldIndex, votingSystem)
-			}
-			if !permissions[amendment.FieldIndex].VotingSystemsAllowed[votingSystem] {
-				return fmt.Errorf("Field %d amendment not allowed using voting system %d", amendment.FieldIndex, votingSystem)
-			}
-		} else if !permissions[amendment.FieldIndex].Permitted {
-			return fmt.Errorf("Field %d amendment not permitted without proposal", amendment.FieldIndex)
 		}
 	}
 
@@ -638,147 +653,128 @@ func checkAssetAmendmentsPermissions(as *state.Asset, votingSystems []*actions.V
 }
 
 func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
-	amendments []*actions.AmendmentField) error {
-	authFieldsUpdated := false
-	for _, amendment := range amendments {
-		switch amendment.FieldIndex {
-		case actions.AssetFieldAssetType:
-			return fmt.Errorf("Asset amendment attempting to update asset type")
+	amendments []*actions.AmendmentField, proposed bool, proposalType, votingSystem uint32) error {
 
-		case actions.AssetFieldAssetAuthFlags:
-			ac.AssetAuthFlags = amendment.Data
-			authFieldsUpdated = true
+	permissions, err := actions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
+	if err != nil {
+		return fmt.Errorf("Invalid asset permissions : %s", err)
+	}
 
-		case actions.AssetFieldTransfersPermitted:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("TransfersPermitted amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TransfersPermitted); err != nil {
-				return fmt.Errorf("TransfersPermitted amendment value failed to deserialize : %s", err)
-			}
+	for i, amendment := range amendments {
+		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		if err != nil {
+			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
+		}
+		if len(fip) == 0 {
+			return fmt.Errorf("Amendment %d has no field specified", i)
+		}
 
-		case actions.AssetFieldTradeRestrictions:
-			switch amendment.Operation {
-			case 0: // Modify
-				if int(amendment.Element) >= len(ac.TradeRestrictions) {
-					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						amendment.Element)
+		permission := permissions.PermissionOf(fip)
+
+		if proposed {
+			switch proposalType {
+			case 0: // Administration
+				if !permission.AdministrationProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
+							fip.String()))
 				}
-
-				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
+			case 1: // Holder
+				if !permission.HolderProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
+							fip.String()))
 				}
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := binary.Read(buf, protocol.DefaultEndian, &ac.TradeRestrictions[amendment.Element]); err != nil {
-					return fmt.Errorf("TradeRestrictions amendment value failed to deserialize : %s", err)
+			case 2: // Administrative Matter
+				if !permission.AdministrativeMatter {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
+							fip.String()))
 				}
-
-			case 1: // Add element
-				var newPolity [3]byte
-				if len(amendment.Data) != 3 {
-					return fmt.Errorf("TradeRestrictions amendment value is wrong size : %d", len(amendment.Data))
-				}
-				buf := bytes.NewBuffer(amendment.Data)
-				if err := binary.Read(buf, protocol.DefaultEndian, &newPolity); err != nil {
-					return fmt.Errorf("Contract amendment addition to TradeRestrictions failed to deserialize : %s", err)
-				}
-
-				ac.TradeRestrictions = append(ac.TradeRestrictions, string(newPolity[:]))
-
-			case 2: // Delete element
-				if int(amendment.Element) >= len(ac.TradeRestrictions) {
-					return fmt.Errorf("Asset amendment element out of range for TradeRestrictions : %d",
-						amendment.Element)
-				}
-				ac.TradeRestrictions = append(ac.TradeRestrictions[:amendment.Element],
-					ac.TradeRestrictions[amendment.Element+1:]...)
-
 			default:
-				return fmt.Errorf("Invalid asset amendment operation for TradeRestrictions : %d", amendment.Operation)
+				return fmt.Errorf("Invalid proposal type : %d", proposalType)
 			}
 
-		case actions.AssetFieldEnforcementOrdersPermitted:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("EnforcementOrdersPermitted amendment value is wrong size : %d", len(amendment.Data))
+			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
+				return fmt.Errorf("Field %s amendment voting system out of range : %d",
+					fip.String(), votingSystem)
 			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.EnforcementOrdersPermitted); err != nil {
-				return fmt.Errorf("EnforcementOrdersPermitted amendment value failed to deserialize : %s", err)
+			if !permission.VotingSystemsAllowed[votingSystem] {
+				return node.NewError(actions.RejectionsAssetPermissions,
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
+						fip.String(), votingSystem))
 			}
+		} else if !permission.Permitted {
+			return node.NewError(actions.RejectionsAssetPermissions,
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip.String()))
+		}
 
-		case actions.AssetFieldVotingRights:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VotingRights amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VotingRights); err != nil {
-				return fmt.Errorf("VotingRights amendment value failed to deserialize : %s", err)
-			}
+		switch fip[0] {
+		case actions.AssetFieldAssetCode:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"AssetCode amendments prohibited")
 
-		case actions.AssetFieldVoteMultiplier:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("VoteMultiplier amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.VoteMultiplier); err != nil {
-				return fmt.Errorf("VoteMultiplier amendment value failed to deserialize : %s", err)
-			}
+		case actions.AssetFieldAssetIndex:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"AssetIndex amendments prohibited")
 
-		case actions.AssetFieldAdministrationProposal:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AdministrationProposal amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AdministrationProposal); err != nil {
-				return fmt.Errorf("AdministrationProposal amendment value failed to deserialize : %s", err)
-			}
+		case actions.AssetFieldAssetType:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Asset type amendments prohibited")
 
-		case actions.AssetFieldHolderProposal:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("HolderProposal amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.HolderProposal); err != nil {
-				return fmt.Errorf("HolderProposal amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldAssetModificationGovernance:
-			if len(amendment.Data) != 1 {
-				return fmt.Errorf("AssetModificationGovernance amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.AssetModificationGovernance); err != nil {
-				return fmt.Errorf("AssetModificationGovernance amendment value failed to deserialize : %s", err)
-			}
-
-		case actions.AssetFieldTokenQty:
-			if len(amendment.Data) != 8 {
-				return fmt.Errorf("TokenQty amendment value is wrong size : %d", len(amendment.Data))
-			}
-			buf := bytes.NewBuffer(amendment.Data)
-			if err := binary.Read(buf, protocol.DefaultEndian, &ac.TokenQty); err != nil {
-				return fmt.Errorf("TokenQty amendment value failed to deserialize : %s", err)
+		case actions.AssetFieldAssetPermissions:
+			if _, err := actions.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
+				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
 			}
 
 		case actions.AssetFieldAssetPayload:
-			// Validate payload
-			_, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
+			if len(fip) == 1 {
+				return node.NewError(actions.RejectionsAssetNotPermitted,
+					"Amendments on complex fields (AssetPayload) prohibited")
+			}
+
+			// Get payload object
+			assetPayload, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
 			if err != nil {
 				return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
 			}
 
-			ac.AssetPayload = amendment.Data
+			if err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data); err != nil {
+				return err
+			}
 
-		default:
-			return fmt.Errorf("Asset amendment field offset out of range : %d", amendment.FieldIndex)
+			if err = assetPayload.Validate(); err != nil {
+				return err
+			}
+
+			switch assetPayload.(type) {
+			case *assets.Membership:
+				if fip[1] == assets.MembershipFieldMembershipClass {
+					return node.NewError(actions.RejectionsAssetNotPermitted,
+						"Amendments on MembershipClass prohibited")
+				}
+			}
+
+			newPayload, err := assetPayload.Bytes()
+			if err != nil {
+				return err
+			}
+
+			ac.AssetPayload = newPayload
+			continue // Amendment already applied
+
+		case actions.AssetFieldAssetRevision:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Revision amendments prohibited")
+
+		case actions.AssetFieldTimestamp:
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				"Timestamp amendments prohibited")
 		}
-	}
 
-	if authFieldsUpdated {
-		if _, err := protocol.ReadAuthFlags(ac.AssetAuthFlags, actions.AssetFieldCount,
-			len(votingSystems)); err != nil {
-			return fmt.Errorf("Invalid asset auth flags : %s", err)
+		err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+		if err != nil {
+			return err
 		}
 	}
 

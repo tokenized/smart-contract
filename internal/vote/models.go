@@ -8,13 +8,11 @@ import (
 
 // NewVote defines what information may be provided to create a Vote.
 type NewVote struct {
-	Initiator          uint32                   `json:"Initiator,omitempty"`
+	Type               uint32                   `json:"Type,omitempty"`
 	VoteSystem         uint32                   `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                     `json:"ContractWideVote,omitempty"`
-	AssetSpecificVote  bool                     `json:"AssetSpecificVote,omitempty"`
 	AssetType          string                   `json:"AssetType,omitempty"`
 	AssetCode          protocol.AssetCode       `json:"AssetCode,omitempty"`
-	Specific           bool                     `json:"Specific,omitempty"`
 	ProposedAmendments []actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
 	VoteTxId     protocol.TxId      `json:"VoteTxId,omitempty"`

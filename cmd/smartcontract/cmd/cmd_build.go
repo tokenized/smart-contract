@@ -88,30 +88,9 @@ func buildAction(c *cobra.Command, args []string) error {
 	switch m := action.(type) {
 	case *actions.ContractOffer:
 		fmt.Printf("Checking Contract Offer\n")
-		_, err := protocol.ReadAuthFlags(m.ContractAuthFlags, actions.ContractFieldCount, len(m.VotingSystems))
+		_, err := actions.PermissionsFromBytes(m.ContractPermissions, len(m.VotingSystems))
 		if err != nil {
-			fmt.Printf("Setting default auth flags\n")
-			permissions := make([]protocol.Permission, actions.ContractFieldCount)
-			votingSystems := make([]bool, len(m.VotingSystems))
-			for i, _ := range votingSystems {
-				votingSystems[i] = true
-			}
-			permission := protocol.Permission{
-				Permitted:              true,
-				AdministrationProposal: true,
-				HolderProposal:         true,
-				VotingSystemsAllowed:   votingSystems,
-			}
-			for i, _ := range permissions {
-				permissions[i] = permission
-				fmt.Printf("Field %d : %+v\n", i, permissions[i])
-			}
-
-			m.ContractAuthFlags, err = protocol.WriteAuthFlags(permissions)
-			if err != nil {
-				fmt.Printf("Error: %s\n", err)
-				return nil
-			}
+			fmt.Printf("Invalid permissions\n")
 		}
 
 	case *actions.AssetDefinition:
@@ -128,29 +107,9 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 		fmt.Printf("Checking Asset Definition\n")
-		_, err = protocol.ReadAuthFlags(m.AssetAuthFlags, actions.AssetFieldCount, votingSystemCount)
+		_, err = actions.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
 		if err != nil {
-			fmt.Printf("Setting default auth flags\n")
-			permissions := make([]protocol.Permission, actions.AssetFieldCount)
-			votingSystems := make([]bool, votingSystemCount)
-			for i, _ := range votingSystems {
-				votingSystems[i] = true
-			}
-			permission := protocol.Permission{
-				Permitted:              true,
-				AdministrationProposal: true,
-				HolderProposal:         true,
-				VotingSystemsAllowed:   votingSystems,
-			}
-			for i, _ := range permissions {
-				permissions[i] = permission
-				fmt.Printf("Field %d : %+v\n", i, permissions[i])
-			}
-			m.AssetAuthFlags, err = protocol.WriteAuthFlags(permissions)
-			if err != nil {
-				fmt.Printf("Error: %s\n", err)
-				return nil
-			}
+			fmt.Printf("Invalid permissions\n")
 		}
 
 	}
