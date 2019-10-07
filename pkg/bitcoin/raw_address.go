@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	ScriptTypePKH      = 0x30 // Public Key Hash
-	ScriptTypeSH       = 0x31 // Script Hash
-	ScriptTypeMultiPKH = 0x32 // Multi-PKH
-	ScriptTypeRPH      = 0x33 // RPH
+	ScriptTypePKH      = 0x20 // Public Key Hash
+	ScriptTypeSH       = 0x21 // Script Hash
+	ScriptTypeMultiPKH = 0x22 // Multi-PKH
+	ScriptTypeRPH      = 0x23 // RPH
 
 	ScriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
 )
