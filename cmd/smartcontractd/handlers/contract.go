@@ -784,43 +784,6 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			return fmt.Errorf("Amendment %d has no field specified", i)
 		}
 
-		permission := permissions.PermissionOf(fip)
-
-		if proposed {
-			switch proposalType {
-			case 0: // Administration
-				if !permission.AdministrationProposal {
-					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
-							fip))
-				}
-			case 1: // Holder
-				if !permission.HolderProposal {
-					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
-				}
-			case 2: // Administrative Matter
-				if !permission.AdministrativeMatter {
-					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by administrative vote", fip))
-				}
-			default:
-				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
-			}
-
-			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
-				return fmt.Errorf("Field %s amendment voting system out of range : %d", fip,
-					votingSystem)
-			}
-			if !permission.VotingSystemsAllowed[votingSystem] {
-				return node.NewError(actions.RejectionsContractPermissions,
-					fmt.Sprintf("Field %s amendment not allowed using voting system %d", fip,
-						votingSystem))
-			}
-		} else if !permission.Permitted {
-			return node.NewError(actions.RejectionsContractPermissions,
-				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
-		}
 
 		switch fip[0] {
 		case actions.ContractFieldContractPermissions:
@@ -841,9 +804,47 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 				"Timestamp amendments prohibited")
 		}
 
-		err = cf.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+		adjustedFIP, err := cf.ApplyAmendment(fip, amendment.Operation, amendment.Data)
 		if err != nil {
 			return err
+		}
+
+		// adjustedFIP has element indexes removed, which is how permissions are specified.
+		permission := permissions.PermissionOf(adjustedFIP)
+		if proposed {
+			switch proposalType {
+			case 0: // Administration
+				if !permission.AdministrationProposal {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
+							adjustedFIP))
+				}
+			case 1: // Holder
+				if !permission.HolderProposal {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal", adjustedFIP))
+				}
+			case 2: // Administrative Matter
+				if !permission.AdministrativeMatter {
+					return node.NewError(actions.RejectionsContractPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote", adjustedFIP))
+				}
+			default:
+				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
+			}
+
+			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
+				return fmt.Errorf("Field %s amendment voting system out of range : %d", adjustedFIP,
+					votingSystem)
+			}
+			if !permission.VotingSystemsAllowed[votingSystem] {
+				return node.NewError(actions.RejectionsContractPermissions,
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d", adjustedFIP,
+						votingSystem))
+			}
+		} else if !permission.Permitted {
+			return node.NewError(actions.RejectionsContractPermissions,
+				fmt.Sprintf("Field %s amendment not permitted without proposal", adjustedFIP))
 		}
 	}
 

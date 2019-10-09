@@ -661,52 +661,14 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 	}
 
 	for i, amendment := range amendments {
+		applied := false
+		adjustedFIP := actions.FieldIndexPath{}
 		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
 		if len(fip) == 0 {
 			return fmt.Errorf("Amendment %d has no field specified", i)
-		}
-
-		permission := permissions.PermissionOf(fip)
-
-		if proposed {
-			switch proposalType {
-			case 0: // Administration
-				if !permission.AdministrationProposal {
-					return node.NewError(actions.RejectionsAssetPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
-							fip.String()))
-				}
-			case 1: // Holder
-				if !permission.HolderProposal {
-					return node.NewError(actions.RejectionsAssetPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
-							fip.String()))
-				}
-			case 2: // Administrative Matter
-				if !permission.AdministrativeMatter {
-					return node.NewError(actions.RejectionsAssetPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
-							fip.String()))
-				}
-			default:
-				return fmt.Errorf("Invalid proposal type : %d", proposalType)
-			}
-
-			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
-				return fmt.Errorf("Field %s amendment voting system out of range : %d",
-					fip.String(), votingSystem)
-			}
-			if !permission.VotingSystemsAllowed[votingSystem] {
-				return node.NewError(actions.RejectionsAssetPermissions,
-					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
-						fip.String(), votingSystem))
-			}
-		} else if !permission.Permitted {
-			return node.NewError(actions.RejectionsAssetPermissions,
-				fmt.Sprintf("Field %s amendment not permitted without proposal", fip.String()))
 		}
 
 		switch fip[0] {
@@ -739,9 +701,11 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
 			}
 
-			if err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data); err != nil {
+			adjustedFIP, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data)
+			if err != nil {
 				return err
 			}
+			adjustedFIP = append(fip[1:], adjustedFIP...)
 
 			if err = assetPayload.Validate(); err != nil {
 				return err
@@ -761,7 +725,7 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			}
 
 			ac.AssetPayload = newPayload
-			continue // Amendment already applied
+			applied = true // Amendment already applied
 
 		case actions.AssetFieldAssetRevision:
 			return node.NewError(actions.RejectionsAssetNotPermitted,
@@ -772,9 +736,51 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				"Timestamp amendments prohibited")
 		}
 
-		err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data)
-		if err != nil {
-			return err
+		if !applied {
+			adjustedFIP, err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+			if err != nil {
+				return err
+			}
+		}
+
+		permission := permissions.PermissionOf(adjustedFIP)
+		if proposed {
+			switch proposalType {
+			case 0: // Administration
+				if !permission.AdministrationProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
+							adjustedFIP.String()))
+				}
+			case 1: // Holder
+				if !permission.HolderProposal {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
+							adjustedFIP.String()))
+				}
+			case 2: // Administrative Matter
+				if !permission.AdministrativeMatter {
+					return node.NewError(actions.RejectionsAssetPermissions,
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
+							adjustedFIP.String()))
+				}
+			default:
+				return fmt.Errorf("Invalid proposal type : %d", proposalType)
+			}
+
+			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
+				return fmt.Errorf("Field %s amendment voting system out of range : %d",
+					adjustedFIP.String(), votingSystem)
+			}
+			if !permission.VotingSystemsAllowed[votingSystem] {
+				return node.NewError(actions.RejectionsAssetPermissions,
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
+						adjustedFIP.String(), votingSystem))
+			}
+		} else if !permission.Permitted {
+			return node.NewError(actions.RejectionsAssetPermissions,
+				fmt.Sprintf("Field %s amendment not permitted without proposal",
+					adjustedFIP.String()))
 		}
 	}
 
