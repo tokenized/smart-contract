@@ -31,6 +31,7 @@ func TestContracts(t *testing.T) {
 	t.Run("create", createContract)
 	t.Run("oracle", oracleContract)
 	t.Run("amendment", contractAmendment)
+	t.Run("listAmendment", contractListAmendment)
 	t.Run("oracleAmendment", contractOracleAmendment)
 	t.Run("proposalAmendment", contractProposalAmendment)
 }
@@ -525,6 +526,185 @@ func contractAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified contract name : %s", tests.Success, ct.ContractName)
 }
 
+func contractListAmendment(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              false, // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+		},
+		actions.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			Fields: []actions.FieldIndexPath{
+				actions.FieldIndexPath{actions.ContractFieldOracles, actions.OracleFieldName},
+			},
+		},
+	}
+
+	err := mockUpContractWithPermissions(ctx, "Test Contract",
+		"This is a mock contract and means nothing.", "I", 1, "John Bitcoin", permissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address)
+
+	amendmentData := actions.ContractAmendment{
+		ContractRevision: 0,
+	}
+
+	fip := actions.FieldIndexPath{
+		actions.ContractFieldOracles,
+		1, // Oracles list index to second item
+		actions.OracleFieldName,
+	}
+	fipBytes, _ := fip.Bytes()
+	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
+		FieldIndexPath: fipBytes,
+		Operation:      0, // Modify element
+		Data:           []byte("KYC 2 Updated"),
+	})
+
+	// Build amendment transaction
+	amendmentTx := wire.NewMsgTx(2)
+
+	amendmentInputHash := fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ := test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err := inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, amendmentTx)
+	t.Logf("Contract Oracle Amendment Tx : %s", amendmentTx.TxHash().String())
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept amendment : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAmendment accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "C2")
+
+	// Check oracle name
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.Oracles[1].Name != "KYC 2 Updated" {
+		t.Fatalf("\t%s\tContract oracle 2 name incorrect : \"%s\" != \"%s\"", tests.Failed,
+			ct.Oracles[1].Name, "KYC 2 Updated")
+	}
+
+	t.Logf("\t%s\tVerified contract oracle 2 name : %s", tests.Success, ct.Oracles[1].Name)
+
+	// Try to modify URL, which should not be allowed
+	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
+
+	amendmentData = actions.ContractAmendment{
+		ContractRevision: 0,
+	}
+
+	fip = actions.FieldIndexPath{
+		actions.ContractFieldOracles,
+		1, // Oracles list index to second item
+		actions.OracleFieldURL,
+	}
+	fipBytes, _ = fip.Bytes()
+	amendmentData.Amendments = []*actions.AmendmentField{
+		&actions.AmendmentField{
+			FieldIndexPath: fipBytes,
+			Operation:      0, // Modify element
+			Data:           []byte("bsv2.updated.kyc.com"),
+		},
+	}
+
+	// Build amendment transaction
+	amendmentTx = wire.NewMsgTx(2)
+
+	amendmentInputHash = fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	amendmentItx, err = inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, amendmentTx)
+	t.Logf("Contract Oracle Amendment Tx : %s", amendmentTx.TxHash().String())
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err == nil {
+		t.Fatalf("\t%s\tFailed to reject amendment : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAmendment rejected", tests.Success)
+
+	// Check the response
+	checkResponse(t, "M2")
+
+	// Check oracle name
+	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.Oracles[1].URL != "bsv2.kyc.com" {
+		t.Fatalf("\t%s\tContract oracle 2 URL incorrect : \"%s\" != \"%s\"", tests.Failed,
+			ct.Oracles[1].URL, "bsv2.kyc.com")
+	}
+
+	t.Logf("\t%s\tVerified contract oracle 2 URL : %s", tests.Success, ct.Oracles[1].URL)
+}
+
 func contractOracleAmendment(t *testing.T) {
 	ctx := test.Context
 
@@ -926,4 +1106,53 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 	}
 
 	return &contractData, contract.Save(ctx, test.MasterDB, &contractData)
+}
+
+func mockUpContractWithPermissions(ctx context.Context, name, agreement string, issuerType string,
+	issuerRole uint32, issuerName string, permissions actions.Permissions) error {
+
+	var contractData = state.Contract{
+		Address:             test.ContractKey.Address,
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
+		Issuer: &actions.EntityField{
+			Type:           issuerType,
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		AdministrationProposal: false,
+		HolderProposal:         false,
+		ContractFee:            1000,
+
+		CreatedAt:             protocol.CurrentTimestamp(),
+		UpdatedAt:             protocol.CurrentTimestamp(),
+		AdministrationAddress: issuerKey.Address,
+		MasterAddress:         test.MasterKey.Address,
+		Oracles: []*actions.OracleField{
+			&actions.OracleField{
+				Name:      "KYC 1, Inc.",
+				URL:       "bsv1.kyc.com",
+				PublicKey: oracleKey.Key.PublicKey().Bytes(),
+			},
+			&actions.OracleField{
+				Name:      "KYC 2, Inc.",
+				URL:       "bsv2.kyc.com",
+				PublicKey: oracleKey.Key.PublicKey().Bytes(),
+			},
+		},
+	}
+
+	var err error
+	contractData.ContractPermissions, err = permissions.Bytes()
+	if err != nil {
+		return err
+	}
+
+	if err := contract.ExpandOracles(ctx, &contractData); err != nil {
+		return err
+	}
+
+	return contract.Save(ctx, test.MasterDB, &contractData)
 }
