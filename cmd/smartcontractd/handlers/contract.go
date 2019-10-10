@@ -784,7 +784,6 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			return fmt.Errorf("Amendment %d has no field specified", i)
 		}
 
-
 		switch fip[0] {
 		case actions.ContractFieldContractPermissions:
 			if _, err := actions.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems)); err != nil {
