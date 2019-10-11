@@ -124,17 +124,13 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	node.Log(ctx, "Node is in sync")
 	server.inSync = true
 
-	// Send pending responses
-	pending := server.pendingResponses
-	server.pendingResponses = nil
-
+	// Process pending requests
+	pending := server.pendingRequests
+	server.pendingRequests = nil
 	for _, pendingTx := range pending {
-		node.Log(ctx, "Sending pending response: %s", pendingTx.TxHash().String())
-		if err := server.sendTx(ctx, pendingTx); err != nil {
-			if err != nil {
-				node.LogWarn(ctx, "Failed to send tx : %s", err)
-			}
-			return nil // TODO Probably a fatal error
+		node.Log(ctx, "Processing pending request: %s", pendingTx.Itx.Hash.String())
+		if err := server.Handler.Trigger(ctx, "SEE", pendingTx.Itx); err != nil {
+			node.LogError(ctx, "Failed to handle pending request tx : %s", err)
 		}
 	}
 
