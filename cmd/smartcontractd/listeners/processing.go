@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 )
 
@@ -32,19 +33,32 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		}
 
 		// Save tx to cache so it can be used to process the response
-		for _, output := range ptx.Itx.Outputs {
+		for index, output := range ptx.Itx.Outputs {
 			for _, address := range server.contractAddresses {
 				if address.Equal(output.Address) {
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
+					}
+					if !server.inSync && ptx.Itx.IsIncomingMessageType() {
+						server.pendingRequests = append(server.pendingRequests, pendingRequest{
+							Itx:           ptx.Itx,
+							ContractIndex: index,
+						})
 					}
 					break
 				}
 			}
 		}
 
-		if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
-			node.LogError(ctx, "Failed to handle tx : %s", err)
+		if server.inSync || ptx.Itx.IsOutgoingMessageType() {
+			if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
+				node.LogError(ctx, "Failed to handle tx : %s", err)
+			}
+		} else {
+			// Save tx for response processing
+			if err := transactions.AddTx(ctx, server.MasterDB, ptx.Itx); err != nil {
+				node.LogError(ctx, "Failed to save tx : %s", err)
+			}
 		}
 
 		server.walletLock.RUnlock()

@@ -36,7 +36,7 @@ type Server struct {
 	contractAddresses []bitcoin.RawAddress // Used to determine which txs will be needed again
 	walletLock        sync.RWMutex
 	txFilter          *filters.TxFilter
-	pendingResponses  []*wire.MsgTx
+	pendingRequests   []pendingRequest
 	revertedTxs       []*bitcoin.Hash32
 	blockHeight       int // track current block height for confirm messages
 	inSync            bool
@@ -54,6 +54,11 @@ type Server struct {
 	AlternateResponder protomux.ResponderFunc
 }
 
+type pendingRequest struct {
+	Itx           *inspector.Transaction
+	ContractIndex int // Index of output that goes to contract address
+}
+
 func NewServer(
 	wallet wallet.WalletInterface,
 	handler protomux.Handler,
@@ -69,22 +74,22 @@ func NewServer(
 	holdingsChannel *holdings.CacheChannel,
 ) *Server {
 	result := Server{
-		wallet:           wallet,
-		Config:           config,
-		MasterDB:         masterDB,
-		RpcNode:          rpcNode,
-		SpyNode:          spyNode,
-		Headers:          headers,
-		Scheduler:        sch,
-		Tracer:           tracer,
-		Handler:          handler,
-		utxos:            utxos,
-		txFilter:         txFilter,
-		pendingTxs:       make(map[bitcoin.Hash32]*IncomingTxData),
-		pendingResponses: make([]*wire.MsgTx, 0),
-		blockHeight:      0,
-		inSync:           false,
-		holdingsChannel:  holdingsChannel,
+		wallet:          wallet,
+		Config:          config,
+		MasterDB:        masterDB,
+		RpcNode:         rpcNode,
+		SpyNode:         spyNode,
+		Headers:         headers,
+		Scheduler:       sch,
+		Tracer:          tracer,
+		Handler:         handler,
+		utxos:           utxos,
+		txFilter:        txFilter,
+		pendingTxs:      make(map[bitcoin.Hash32]*IncomingTxData),
+		pendingRequests: make([]pendingRequest, 0),
+		blockHeight:     0,
+		inSync:          false,
+		holdingsChannel: holdingsChannel,
 	}
 
 	keys := wallet.ListAll()
@@ -266,14 +271,7 @@ func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
 
 // respondTx is an internal method used as the responder
 func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
-	if server.inSync {
-		return server.sendTx(ctx, tx)
-	}
-
-	// Append to pending so it can be monitored
-	node.Log(ctx, "Saving pending response tx : %s", tx.TxHash().String())
-	server.pendingResponses = append(server.pendingResponses, tx)
-	return nil
+	return server.sendTx(ctx, tx)
 }
 
 func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
@@ -284,16 +282,12 @@ func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transactio
 // Contract responses use the tx output from the request to the contract as a tx input in the response tx.
 // So if that contract request output is spent by another tx, then the contract has already responded.
 func (server *Server) removeConflictingPending(ctx context.Context, itx *inspector.Transaction) error {
-	for i, pendingTx := range server.pendingResponses {
-		for _, pendingInput := range pendingTx.TxIn {
-			for _, input := range itx.Inputs {
-				if pendingInput.PreviousOutPoint.Hash.Equal(&input.UTXO.Hash) &&
-					pendingInput.PreviousOutPoint.Index == input.UTXO.Index {
-					node.Log(ctx, "Canceling pending response tx : %s", pendingTx.TxHash().String())
-					server.pendingResponses = append(server.pendingResponses[:i], server.pendingResponses[i+1:]...)
-					return nil
-				}
-			}
+	for i, pendingTx := range server.pendingRequests {
+		if pendingTx.ContractIndex < len(itx.MsgTx.TxIn) &&
+			itx.MsgTx.TxIn[pendingTx.ContractIndex].PreviousOutPoint.Hash.Equal(pendingTx.Itx.Hash) {
+			node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash.String())
+			server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
+			return nil
 		}
 	}
 
