@@ -249,7 +249,9 @@ func oracleContract(t *testing.T) {
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
 		},
 		AdminOracle: &actions.OracleField{
-			Name:      "KYC, Inc.",
+			Entity: &actions.EntityField{
+				Name: "KYC, Inc.",
+			},
 			URL:       "bsv.kyc.com",
 			PublicKey: oracleKey.Key.PublicKey().Bytes()},
 		AdminOracleSigBlockHeight: uint32(test.Headers.LastHeight(ctx) - 5),
@@ -346,6 +348,7 @@ func oracleContract(t *testing.T) {
 
 	time.Sleep(time.Second)
 
+	t.Logf("Contract offer tx : %s", offerTx.TxHash().String())
 	if _, err := server.HandleTx(ctx, offerTx); err != nil {
 		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
 	}
@@ -407,6 +410,7 @@ func oracleContract(t *testing.T) {
 	}
 	offerTx.TxOut[len(offerTx.TxOut)-1] = wire.NewTxOut(0, script)
 
+	t.Logf("Contract offer tx : %s", offerTx.TxHash().String())
 	if _, err := server.HandleTx(ctx, offerTx); err != nil {
 		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
 	}
@@ -544,7 +548,7 @@ func contractListAmendment(t *testing.T) {
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
 			Fields: []actions.FieldIndexPath{
-				actions.FieldIndexPath{actions.ContractFieldOracles, actions.OracleFieldName},
+				actions.FieldIndexPath{actions.ContractFieldOracles, actions.OracleFieldEntity},
 			},
 		},
 	}
@@ -564,7 +568,8 @@ func contractListAmendment(t *testing.T) {
 	fip := actions.FieldIndexPath{
 		actions.ContractFieldOracles,
 		1, // Oracles list index to second item
-		actions.OracleFieldName,
+		actions.OracleFieldEntity,
+		actions.EntityFieldName,
 	}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
@@ -621,12 +626,12 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
-	if ct.Oracles[1].Name != "KYC 2 Updated" {
+	if ct.Oracles[1].Entity.Name != "KYC 2 Updated" {
 		t.Fatalf("\t%s\tContract oracle 2 name incorrect : \"%s\" != \"%s\"", tests.Failed,
-			ct.Oracles[1].Name, "KYC 2 Updated")
+			ct.Oracles[1].Entity.Name, "KYC 2 Updated")
 	}
 
-	t.Logf("\t%s\tVerified contract oracle 2 name : %s", tests.Success, ct.Oracles[1].Name)
+	t.Logf("\t%s\tVerified contract oracle 2 name : %s", tests.Success, ct.Oracles[1].Entity.Name)
 
 	// Try to modify URL, which should not be allowed
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
@@ -1012,7 +1017,15 @@ func mockUpContractWithOracle(ctx context.Context, name, agreement string, issue
 		UpdatedAt:             protocol.CurrentTimestamp(),
 		AdministrationAddress: issuerKey.Address,
 		MasterAddress:         test.MasterKey.Address,
-		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
+		Oracles: []*actions.OracleField{
+			&actions.OracleField{
+				Entity: &actions.EntityField{
+					Name: "KYC, Inc.",
+				},
+				URL:       "bsv.kyc.com",
+				PublicKey: oracleKey.Key.PublicKey().Bytes(),
+			},
+		},
 	}
 
 	// Define permissions for contract fields
@@ -1053,7 +1066,9 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
 		},
 		AdminOracle: &actions.OracleField{
-			Name:      "KYC, Inc.",
+			Entity: &actions.EntityField{
+				Name: "KYC, Inc.",
+			},
 			URL:       "bsv.kyc.com",
 			PublicKey: oracleKey.Key.PublicKey().Bytes()},
 		AdminOracleSigBlockHeight: uint32(test.Headers.LastHeight(ctx) - 5),
@@ -1069,7 +1084,15 @@ func mockUpContractWithAdminOracle(ctx context.Context, name, agreement string, 
 		UpdatedAt:             protocol.CurrentTimestamp(),
 		AdministrationAddress: issuerKey.Address,
 		MasterAddress:         test.MasterKey.Address,
-		Oracles:               []*actions.OracleField{&actions.OracleField{Name: "KYC, Inc.", URL: "bsv.kyc.com", PublicKey: oracleKey.Key.PublicKey().Bytes()}},
+		Oracles: []*actions.OracleField{
+			&actions.OracleField{
+				Entity: &actions.EntityField{
+					Name: "KYC, Inc.",
+				},
+				URL:       "bsv.kyc.com",
+				PublicKey: oracleKey.Key.PublicKey().Bytes(),
+			},
+		},
 	}
 
 	blockHash, err := test.Headers.Hash(ctx, int(contractData.AdminOracleSigBlockHeight))
@@ -1132,12 +1155,16 @@ func mockUpContractWithPermissions(ctx context.Context, name, agreement string, 
 		MasterAddress:         test.MasterKey.Address,
 		Oracles: []*actions.OracleField{
 			&actions.OracleField{
-				Name:      "KYC 1, Inc.",
+				Entity: &actions.EntityField{
+					Name: "KYC 1, Inc.",
+				},
 				URL:       "bsv1.kyc.com",
 				PublicKey: oracleKey.Key.PublicKey().Bytes(),
 			},
 			&actions.OracleField{
-				Name:      "KYC 2, Inc.",
+				Entity: &actions.EntityField{
+					Name: "KYC 2, Inc.",
+				},
 				URL:       "bsv2.kyc.com",
 				PublicKey: oracleKey.Key.PublicKey().Bytes(),
 			},
