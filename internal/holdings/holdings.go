@@ -60,26 +60,10 @@ func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
 		return 0
 	}
 
-	unfrozenBalance := h.FinalizedBalance
-	for _, status := range h.HoldingStatuses {
-		if status.Code != FreezeCode {
-			continue
-		}
-		if statusExpired(status, now) {
-			continue
-		}
-		if status.Amount > unfrozenBalance {
-			unfrozenBalance = 0
-			break
-		} else {
-			unfrozenBalance -= status.Amount
-		}
-	}
-
 	if applyMultiplier {
-		return unfrozenBalance * uint64(as.VoteMultiplier)
+		return h.FinalizedBalance * uint64(as.VoteMultiplier)
 	}
-	return unfrozenBalance
+	return h.FinalizedBalance
 }
 
 func SafeBalance(h *state.Holding) uint64 {
