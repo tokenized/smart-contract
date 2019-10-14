@@ -32,14 +32,18 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			continue
 		}
 
+		found := false
+
 		// Save tx to cache so it can be used to process the response
 		for index, output := range ptx.Itx.Outputs {
 			for _, address := range server.contractAddresses {
 				if address.Equal(output.Address) {
+					found = true
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
 					if !server.inSync && ptx.Itx.IsIncomingMessageType() {
+						// Save pending request to ensure it has a response, and process it if not.
 						server.pendingRequests = append(server.pendingRequests, pendingRequest{
 							Itx:           ptx.Itx,
 							ContractIndex: index,
@@ -50,14 +54,37 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
-		if server.inSync || ptx.Itx.IsOutgoingMessageType() {
-			if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
-				node.LogError(ctx, "Failed to handle tx : %s", err)
+		// Save pending responses so they can be processed in proper order, which may not be on
+		//   chain order.
+		if !server.inSync && ptx.Itx.IsOutgoingMessageType() {
+			responseAdded := false
+			for _, input := range ptx.Itx.Inputs {
+				for _, address := range server.contractAddresses {
+					if address.Equal(input.Address) {
+						found = true
+						responseAdded = true
+						server.pendingResponses = append(server.pendingResponses, ptx.Itx)
+						break
+					}
+				}
+				if responseAdded {
+					break
+				}
 			}
-		} else {
-			// Save tx for response processing
-			if err := transactions.AddTx(ctx, server.MasterDB, ptx.Itx); err != nil {
-				node.LogError(ctx, "Failed to save tx : %s", err)
+		}
+
+		if found { // Tx is associated with one of our contracts.
+			if server.inSync {
+				// Process this tx
+				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
+					node.LogError(ctx, "Failed to handle tx : %s", err)
+				}
+			} else {
+				// Save tx for response processing after smart contract is in sync with on chain
+				//   data.
+				if err := transactions.AddTx(ctx, server.MasterDB, ptx.Itx); err != nil {
+					node.LogError(ctx, "Failed to save tx : %s", err)
+				}
 			}
 		}
 

@@ -10,6 +10,43 @@ type Balance struct {
 	Frozen uint64
 }
 
+// GetProtocolTimestamp returns the timestamp of the action. It is only valid for "outgoing" actions.
+func GetProtocolTimestamp(itx *Transaction, m actions.Action) *uint64 {
+	switch msg := m.(type) {
+	case *actions.AssetCreation:
+		return &msg.Timestamp
+
+	case *actions.ContractFormation:
+		return &msg.Timestamp
+
+	// Enforcement
+	case *actions.Freeze:
+		return &msg.Timestamp
+	case *actions.Thaw:
+		return &msg.Timestamp
+	case *actions.Confiscation:
+		return &msg.Timestamp
+	case *actions.Reconciliation:
+		return &msg.Timestamp
+
+	// Governance
+	case *actions.Vote:
+		return &msg.Timestamp
+	case *actions.BallotCounted:
+		return &msg.Timestamp
+	case *actions.Result:
+		return &msg.Timestamp
+
+	case *actions.Rejection:
+		return &msg.Timestamp
+
+	case *actions.Settlement:
+		return &msg.Timestamp
+	}
+
+	return nil
+}
+
 func GetProtocolContractAddresses(itx *Transaction, m actions.Action) []bitcoin.RawAddress {
 	if !itx.IsTokenized() {
 		return nil
