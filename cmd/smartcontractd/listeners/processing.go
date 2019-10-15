@@ -56,14 +56,16 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		// Save pending responses so they can be processed in proper order, which may not be on
 		//   chain order.
-		if !server.inSync && ptx.Itx.IsOutgoingMessageType() {
+		if ptx.Itx.IsOutgoingMessageType() {
 			responseAdded := false
 			for _, input := range ptx.Itx.Inputs {
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
 						found = true
 						responseAdded = true
-						server.pendingResponses = append(server.pendingResponses, ptx.Itx)
+						if !server.inSync {
+							server.pendingResponses = append(server.pendingResponses, ptx.Itx)
+						}
 						break
 					}
 				}
