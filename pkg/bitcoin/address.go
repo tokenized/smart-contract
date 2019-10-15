@@ -15,15 +15,15 @@ var (
 )
 
 const (
-	AddressTypeMainPKH      = 0x00 // Public Key Hash
-	AddressTypeMainSH       = 0x05 // Script Hash
-	AddressTypeMainMultiPKH = 0x10 // Multi-PKH - Experimental value. Not standard
-	AddressTypeMainRPH      = 0x20 // RPH - Experimental value. Not standard
+	AddressTypeMainPKH      = 0x00 // Public Key Hash (starts with 1)
+	AddressTypeMainSH       = 0x05 // Script Hash (starts with 3)
+	AddressTypeMainMultiPKH = 0x76 // Multi-PKH (starts with p) - Experimental value. Not standard
+	AddressTypeMainRPH      = 0x7b // RPH (starts with r) - Experimental value. Not standard
 
-	AddressTypeTestPKH      = 0x6f // Testnet Public Key Hash
-	AddressTypeTestSH       = 0xc4 // Testnet Script Hash
-	AddressTypeTestMultiPKH = 0xd0 // Multi-PKH - Experimental value. Not standard
-	AddressTypeTestRPH      = 0xe0 // RPH - Experimental value. Not standard
+	AddressTypeTestPKH      = 0x6f // Testnet Public Key Hash (starts with m or n)
+	AddressTypeTestSH       = 0xc4 // Testnet Script Hash (starts with 2)
+	AddressTypeTestMultiPKH = 0x78 // Multi-PKH (starts with q) - Experimental value. Not standard
+	AddressTypeTestRPH      = 0x7d // RPH (starts with s) - Experimental value. Not standard
 )
 
 type Address struct {
