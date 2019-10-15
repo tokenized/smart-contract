@@ -37,6 +37,7 @@ type Server struct {
 	walletLock        sync.RWMutex
 	txFilter          *filters.TxFilter
 	pendingRequests   []pendingRequest
+	pendingResponses  inspector.TransactionList
 	revertedTxs       []*bitcoin.Hash32
 	blockHeight       int // track current block height for confirm messages
 	inSync            bool
@@ -74,22 +75,23 @@ func NewServer(
 	holdingsChannel *holdings.CacheChannel,
 ) *Server {
 	result := Server{
-		wallet:          wallet,
-		Config:          config,
-		MasterDB:        masterDB,
-		RpcNode:         rpcNode,
-		SpyNode:         spyNode,
-		Headers:         headers,
-		Scheduler:       sch,
-		Tracer:          tracer,
-		Handler:         handler,
-		utxos:           utxos,
-		txFilter:        txFilter,
-		pendingTxs:      make(map[bitcoin.Hash32]*IncomingTxData),
-		pendingRequests: make([]pendingRequest, 0),
-		blockHeight:     0,
-		inSync:          false,
-		holdingsChannel: holdingsChannel,
+		wallet:           wallet,
+		Config:           config,
+		MasterDB:         masterDB,
+		RpcNode:          rpcNode,
+		SpyNode:          spyNode,
+		Headers:          headers,
+		Scheduler:        sch,
+		Tracer:           tracer,
+		Handler:          handler,
+		utxos:            utxos,
+		txFilter:         txFilter,
+		pendingTxs:       make(map[bitcoin.Hash32]*IncomingTxData),
+		pendingRequests:  make([]pendingRequest, 0),
+		pendingResponses: make(inspector.TransactionList, 0),
+		blockHeight:      0,
+		inSync:           false,
+		holdingsChannel:  holdingsChannel,
 	}
 
 	keys := wallet.ListAll()

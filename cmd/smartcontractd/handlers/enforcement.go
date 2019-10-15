@@ -1007,7 +1007,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(h, txid, timestamp)
+		err = holdings.FinalizeTx(h, txid, quantity.Quantity, timestamp)
 		if err != nil {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
 				w.Config.Net)
@@ -1031,7 +1031,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to get deposit holding")
 	}
 
-	err = holdings.FinalizeTx(h, txid, timestamp)
+	err = holdings.FinalizeTx(h, txid, msg.DepositQty, timestamp)
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(itx.Outputs[highestIndex+1].Address,
 			w.Config.Net)
@@ -1124,7 +1124,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(h, txid, timestamp)
+		err = holdings.FinalizeTx(h, txid, quantity.Quantity, timestamp)
 		if err != nil {
 			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
 				w.Config.Net)

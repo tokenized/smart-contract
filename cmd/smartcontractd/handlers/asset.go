@@ -479,7 +479,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		}
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
 		holdings.AddDeposit(h, txid, msg.TokenQty, protocol.NewTimestamp(msg.Timestamp))
-		holdings.FinalizeTx(h, txid, protocol.NewTimestamp(msg.Timestamp))
+		holdings.FinalizeTx(h, txid, msg.TokenQty, protocol.NewTimestamp(msg.Timestamp))
 		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
 		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
@@ -559,14 +559,18 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 			txid := protocol.TxIdFromBytes(itx.Hash[:])
 
-			holdings.FinalizeTx(h, txid, protocol.NewTimestamp(msg.Timestamp))
-			updateHoldings = true
-
 			if msg.TokenQty > as.TokenQty {
-				node.Log(ctx, "Increasing token quantity by %d to %d : %x", msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode)
+				node.Log(ctx, "Increasing token quantity by %d to %d : %x",
+					msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode)
+				holdings.FinalizeTx(h, txid, h.FinalizedBalance+(msg.TokenQty-as.TokenQty),
+					protocol.NewTimestamp(msg.Timestamp))
 			} else {
-				node.Log(ctx, "Decreasing token quantity by %d to %d : %x", as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode)
+				node.Log(ctx, "Decreasing token quantity by %d to %d : %x",
+					as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode)
+				holdings.FinalizeTx(h, txid, h.FinalizedBalance-(as.TokenQty-msg.TokenQty),
+					protocol.NewTimestamp(msg.Timestamp))
 			}
+			updateHoldings = true
 			if err != nil {
 				node.LogWarn(ctx, "Failed to update administration holding : %x", msg.AssetCode)
 				return err

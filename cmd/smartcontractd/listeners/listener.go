@@ -3,6 +3,7 @@ package listeners
 import (
 	"bytes"
 	"context"
+	"sort"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
@@ -123,13 +124,26 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	node.Log(ctx, "Node is in sync")
 	server.inSync = true
+	pendingResponses := server.pendingResponses
+	server.pendingResponses = nil
+	pendingRequests := server.pendingRequests
+	server.pendingRequests = nil
+
+	// Sort pending responses by timestamp, so they are handled in the same order as originally.
+	sort.Sort(&pendingResponses)
+
+	// Process pending responses
+	for _, itx := range pendingResponses {
+		node.Log(ctx, "Processing pending response: %s", itx.Hash.String())
+		if err := server.Handler.Trigger(ctx, "SEE", itx); err != nil {
+			node.LogError(ctx, "Failed to handle pending response tx : %s", err)
+		}
+	}
 
 	// Process pending requests
-	pending := server.pendingRequests
-	server.pendingRequests = nil
-	for _, pendingTx := range pending {
-		node.Log(ctx, "Processing pending request: %s", pendingTx.Itx.Hash.String())
-		if err := server.Handler.Trigger(ctx, "SEE", pendingTx.Itx); err != nil {
+	for _, tx := range pendingRequests {
+		node.Log(ctx, "Processing pending request: %s", tx.Itx.Hash.String())
+		if err := server.Handler.Trigger(ctx, "SEE", tx.Itx); err != nil {
 			node.LogError(ctx, "Failed to handle pending request tx : %s", err)
 		}
 	}

@@ -97,13 +97,18 @@ func UnfrozenBalance(h *state.Holding, now protocol.Timestamp) uint64 {
 }
 
 // FinalizeTx finalizes any pending changes involved with a tx.
-func FinalizeTx(h *state.Holding, txid *protocol.TxId, now protocol.Timestamp) error {
+// When a holding status does not exist to finalize, like when in recovery mode, the balance is just
+//   set to the specified balance.
+func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now protocol.Timestamp) error {
+	h.UpdatedAt = now
+
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
-		return fmt.Errorf("Missing status to finalize : %s", txid.String())
+		// Status may not exist during recovery, but the settlement is valid either way.
+		h.FinalizedBalance = balance
+		h.PendingBalance = balance
+		return nil
 	}
-
-	h.UpdatedAt = now
 
 	switch hs.Code {
 	case DebitCode:

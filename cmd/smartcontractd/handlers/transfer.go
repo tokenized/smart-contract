@@ -1123,7 +1123,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 				return errors.Wrap(err, "Failed to get holding")
 			}
 
-			err = holdings.FinalizeTx(h, txid, timestamp)
+			err = holdings.FinalizeTx(h, txid, settlementQuantity.Quantity, timestamp)
 			if err != nil {
 				address := bitcoin.NewAddressFromRawAddress(itx.Outputs[settlementQuantity.Index].Address,
 					w.Config.Net)
