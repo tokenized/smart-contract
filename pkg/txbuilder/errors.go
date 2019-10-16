@@ -7,6 +7,7 @@ const (
 	ErrorCodeWrongPrivateKey     = 2
 	ErrorCodeMissingPrivateKey   = 3
 	ErrorCodeWrongScriptTemplate = 4
+	ErrorCodeBelowDustValue      = 5
 )
 
 func IsErrorCode(err error, code int) bool {

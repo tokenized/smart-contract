@@ -56,6 +56,9 @@ func (tx *TxBuilder) SetChangeAddress(address bitcoin.RawAddress, keyID string) 
 //   specified address.
 // isChange marks the output to receive remaining bitcoin.
 func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isRemainder bool) error {
+	if value < tx.DustLimit {
+		return newError(ErrorCodeBelowDustValue, "")
+	}
 	script, err := address.LockingScript()
 	if err != nil {
 		return err
@@ -103,6 +106,9 @@ func (tx *TxBuilder) AddValueToOutput(index uint32, value uint64) error {
 	}
 
 	if tx.Outputs[index].IsDust {
+		if value < tx.DustLimit {
+			return newError(ErrorCodeBelowDustValue, "")
+		}
 		tx.Outputs[index].IsDust = false
 		tx.MsgTx.TxOut[index].Value = value
 	} else {
