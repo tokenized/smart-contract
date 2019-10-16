@@ -161,7 +161,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 	logger.Info(ctx, "Loaded wallet with %d outputs, %d unspent, and balance of %.08f",
 		len(wallet.outputs), unspentCount, BitcoinsFromSatoshis(wallet.Balance()))
 
-	logger.Info(ctx, "Wallet address : %x", wallet.Address.Bytes())
+	logger.Info(ctx, "Wallet address : %s", bitcoin.NewAddressFromRawAddress(wallet.Address, net).String())
 	return nil
 }
 
