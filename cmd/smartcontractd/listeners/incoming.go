@@ -247,7 +247,7 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 	transfer *actions.Transfer, headers node.BitcoinHeaders) error {
 
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "CUR" && assetTransfer.AssetCode == nil {
+		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 

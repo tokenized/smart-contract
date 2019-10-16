@@ -716,7 +716,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 	for assetOffset, assetTransfer := range transfer.Assets {
 		assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
-		assetIsBitcoin := assetTransfer.AssetType == "CUR" && assetCode.IsZero()
+		assetIsBitcoin := assetTransfer.AssetType == "BSV" && assetCode.IsZero()
 
 		var as *state.Asset
 		if !assetIsBitcoin {
@@ -978,7 +978,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 	// Add refund amounts for all bitcoin senders
 	refundBalance := uint64(0)
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "CUR" && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
 			// Process bitcoin senders refunds
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
@@ -1091,7 +1091,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 	// Add refund amounts for all bitcoin senders
 	refundBalance := uint64(0)
 	for _, assetTransfer := range transferMsg.Assets {
-		if assetTransfer.AssetType == "CUR" && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
 			// Process bitcoin senders refunds
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
