@@ -24,7 +24,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -298,24 +297,13 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 //   responsible for creating the initial settlement data and passing it to the next contract if
 //   there are more than one.
 func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField, itx *inspector.Transaction) uint32 {
-	transferIndex := uint16(0)
 	for _, asset := range assetTransfers {
-		if asset.ContractIndex != 0x0000ffff {
-			break
+		if asset.AssetType != "BSV" && len(asset.AssetCode) != 0 && int(asset.ContractIndex) < len(itx.Outputs) {
+			return asset.ContractIndex
 		}
-		// Asset transfer doesn't have a contract (probably bitcoin transfer).
-		transferIndex++
 	}
 
-	if int(transferIndex) >= len(assetTransfers) {
-		return 0x0000ffff
-	}
-
-	if int(assetTransfers[transferIndex].ContractIndex) >= len(itx.Outputs) {
-		return 0x0000ffff
-	}
-
-	return assetTransfers[transferIndex].ContractIndex
+	return 0x0000ffff
 }
 
 // buildSettlementTx builds the tx for a settlement action.
@@ -1207,7 +1195,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Co
 
 	refundBalance := uint64(0)
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == assets.CodeCurrency && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
 			// Process bitcoin senders refunds
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
