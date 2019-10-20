@@ -104,6 +104,9 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.AdminMemberAsset != nil {
 		c.AdminMemberAsset = *upd.AdminMemberAsset
 	}
+	if upd.OwnerMemberAsset != nil {
+		c.OwnerMemberAsset = *upd.OwnerMemberAsset
+	}
 
 	if upd.ContractName != nil {
 		c.ContractName = *upd.ContractName
