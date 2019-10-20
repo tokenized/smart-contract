@@ -118,14 +118,18 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Only one Owner/Administrator Membership asset allowed
-	if msg.AssetType == "MEM" && !ct.AdminMemberAsset.IsZero() {
+	if msg.AssetType == "MEM" && (!ct.AdminMemberAsset.IsZero() || !ct.OwnerMemberAsset.IsZero()) {
 		membership, ok := assetPayload.(*assets.Membership)
 		if !ok {
 			node.LogWarn(ctx, "Membership payload is wrong type")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
-		if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
-			node.LogWarn(ctx, "Only one Owner/Administrator Membership asset allowed")
+		if membership.MembershipClass == "Owner" && !ct.OwnerMemberAsset.IsZero() {
+			node.LogWarn(ctx, "Only one Owner Membership asset allowed")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
+		}
+		if membership.MembershipClass == "Administrator" && !ct.AdminMemberAsset.IsZero() {
+			node.LogWarn(ctx, "Only one Administrator Membership asset allowed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
 		}
 	}
@@ -499,7 +503,15 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				node.LogWarn(ctx, "Membership payload is wrong type")
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
-			if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
+			if membership.MembershipClass == "Owner" {
+				updateContract := &contract.UpdateContract{
+					OwnerMemberAsset: assetCode,
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			}
+			if membership.MembershipClass == "Administrator" {
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: assetCode,
 				}
@@ -630,10 +642,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				node.LogWarn(ctx, "Membership payload is wrong type")
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
-			isAdminMemberAsset := membership.MembershipClass == "Owner" ||
-				membership.MembershipClass == "Administrator"
 
-			if isAdminMemberAsset && !assetCode.Equal(ct.AdminMemberAsset) {
+			if membership.MembershipClass == "Administrator" && !assetCode.Equal(ct.AdminMemberAsset) {
 				// Set contract AdminMemberAsset
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: assetCode,
@@ -641,10 +651,28 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
-			} else if !isAdminMemberAsset && assetCode.Equal(ct.AdminMemberAsset) {
+			} else if membership.MembershipClass != "Administrator" && assetCode.Equal(ct.AdminMemberAsset) {
 				// Clear contract AdminMemberAsset
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: &protocol.AssetCode{}, // zero asset code
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			}
+
+			if membership.MembershipClass == "Owner" && !assetCode.Equal(ct.OwnerMemberAsset) {
+				// Set contract OwnerMemberAsset
+				updateContract := &contract.UpdateContract{
+					OwnerMemberAsset: assetCode,
+				}
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+					return errors.Wrap(err, "updating contract")
+				}
+			} else if membership.MembershipClass != "Owner" && assetCode.Equal(ct.OwnerMemberAsset) {
+				// Clear contract OwnerMemberAsset
+				updateContract := &contract.UpdateContract{
+					OwnerMemberAsset: &protocol.AssetCode{}, // zero asset code
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")

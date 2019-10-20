@@ -20,7 +20,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -1548,7 +1547,7 @@ func oracleTransferBad(t *testing.T) {
 	bitcoinTransferAmount := uint64(50000)
 	bitcoinTransferData := actions.AssetTransferField{
 		ContractIndex: uint32(0x0000ffff),
-		AssetType:     assets.CodeCurrency,
+		AssetType:     "BSV",
 	}
 
 	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders,
