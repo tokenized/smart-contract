@@ -722,7 +722,7 @@ var sampleAssetPayload2 = assets.ShareCommon{
 }
 
 var sampleAdminAssetPayload = assets.Membership{
-	MembershipClass: "Owner",
+	MembershipClass: "Administrator",
 	Description:     "Test admin token",
 }
 
