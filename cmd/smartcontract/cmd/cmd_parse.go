@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -18,39 +20,47 @@ import (
 )
 
 var cmdParse = &cobra.Command{
-	Use:   "parse <hex> [isTest boolean optional]",
+	Use:   "parse <hex>",
 	Short: "Parse a hexadecimal representation of a TX or OP_RETURN script, and output the result.",
 	Long:  "Parse a hexadecimal representation of a TX or OP_RETURN script, and output the result.",
 	RunE: func(c *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return errors.New("Missing hex input")
+
+		var input string
+		var err error
+		if len(args) == 1 {
+			input = args[0]
+		} else if len(args) > 1 {
+			fmt.Printf("Too many arguments\n")
+			return nil
+		} else {
+			fmt.Printf("Enter hex to decode: ")
+			reader := bufio.NewReader(os.Stdin)
+			input, err = reader.ReadString('\n') // Get input from stdin
+			if err != nil {
+				fmt.Printf("Failed to read user input : %s\n", err)
+				return nil
+			}
 		}
 
-		input := strings.Trim(string(args[0]), "\n ")
-
-		// optional isTest argument
-		isTest := false
-		if len(args) == 2 && args[1] == "true" {
-			fmt.Printf("Using test\n")
-			isTest = true
-		}
+		input = strings.TrimSpace(input)
 
 		data, err := hex.DecodeString(input)
 		if err != nil {
 			fmt.Printf("Failed to decode hex : %s\n", err)
-		}
-
-		if parseTx(c, data, isTest) == nil {
 			return nil
 		}
 
-		parseScript(c, data, isTest)
+		if parseTx(c, data) == nil {
+			return nil
+		}
+
+		parseScript(c, data)
 
 		return nil
 	},
 }
 
-func parseTx(c *cobra.Command, rawtx []byte, isTest bool) error {
+func parseTx(c *cobra.Command, rawtx []byte) error {
 
 	tx := wire.MsgTx{}
 	buf := bytes.NewReader(rawtx)
@@ -59,10 +69,11 @@ func parseTx(c *cobra.Command, rawtx []byte, isTest bool) error {
 		return errors.Wrap(err, "decode tx")
 	}
 
+	fmt.Printf("\nTx (%d bytes) : %s\n", tx.SerializeSize(), tx.TxHash().String())
 	dumpJSON(tx)
 
 	for _, txOut := range tx.TxOut {
-		if parseScript(c, txOut.PkScript, isTest) == nil {
+		if parseScript(c, txOut.PkScript) == nil {
 			return nil
 		}
 	}
@@ -70,14 +81,30 @@ func parseTx(c *cobra.Command, rawtx []byte, isTest bool) error {
 	return nil
 }
 
-func parseScript(c *cobra.Command, script []byte, isTest bool) error {
+func parseScript(c *cobra.Command, script []byte) error {
 
+	isTest := false
 	message, err := protocol.Deserialize(script, isTest)
 	if err != nil {
-		return errors.Wrap(err, "decode op return")
+		if err == protocol.ErrNotTokenized {
+			// Check is test protocol signature
+			isTest = true
+			message, err = protocol.Deserialize(script, isTest)
+			if err != nil {
+				return errors.Wrap(err, "decode op return")
+			}
+		} else {
+			return errors.Wrap(err, "decode op return")
+		}
 	}
 
-	fmt.Printf("type : %s\n\n", message.Code())
+	fmt.Printf("\n")
+
+	if isTest {
+		fmt.Printf("Uses Test Protocol Signature\n")
+	}
+
+	fmt.Printf("Action type : %s\n\n", message.Code())
 
 	if err := dumpJSON(message); err != nil {
 		return err
