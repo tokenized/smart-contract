@@ -79,9 +79,9 @@ func Context() context.Context {
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
 
-func NewClient(ctx context.Context, network string) (*Client, error) {
-	if len(network) == 0 {
-		return nil, errors.New("No Bitcoin network specified")
+func NewClient(ctx context.Context, network bitcoin.Network) (*Client, error) {
+	if network == bitcoin.InvalidNet {
+		return nil, errors.New("Invalid Bitcoin network specified")
 	}
 	client := Client{}
 
@@ -91,7 +91,7 @@ func NewClient(ctx context.Context, network string) (*Client, error) {
 		return nil, err
 	}
 
-	client.Config.Net = bitcoin.NetworkFromString(network)
+	client.Config.Net = network
 
 	// -------------------------------------------------------------------------
 	// Wallet

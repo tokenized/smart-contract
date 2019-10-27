@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/json"
 
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -47,12 +48,14 @@ func Context() context.Context {
 }
 
 // network returns the network string. It is necessary because cobra default values don't seem to work.
-func network(c *cobra.Command) string {
+func network(c *cobra.Command) bitcoin.Network {
 	network := os.Getenv("BITCOIN_CHAIN")
 	if len(network) == 0 {
-		fmt.Printf("WARNING!! No Bitcoin network specified. Set environment value BITCOIN_CHAIN=testnet\n")
+		fmt.Printf("WARNING!! No Bitcoin network specified. Defaulting to mainnet. To change set environment value BITCOIN_CHAIN=testnet\n")
+		return bitcoin.MainNet
 	}
-	return network
+
+	return bitcoin.NetworkFromString(network)
 }
 
 // dumpJSON pretty prints a JSON representation of a struct.

@@ -19,18 +19,18 @@ var cmdGen = &cobra.Command{
 		}
 
 		network := network(c)
-		if len(network) == 0 {
+		if network == bitcoin.InvalidNet {
+			fmt.Printf("Invalid network specified")
 			return nil
 		}
-		net := bitcoin.NetworkFromString(network)
 
-		key, err := bitcoin.GenerateKeyS256(net)
+		key, err := bitcoin.GenerateKeyS256(network)
 		if err != nil {
 			fmt.Printf("Failed to generate key : %s\n", err)
 			return nil
 		}
 
-		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), net)
+		address, err := bitcoin.NewAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()), network)
 		if err != nil {
 			fmt.Printf("Failed to generate address : %s\n", err)
 			return nil
