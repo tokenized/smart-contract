@@ -13,6 +13,7 @@ const (
 	MainNet       Network = 0xe8f3e1e3
 	TestNet       Network = 0xf4f3e5f4
 	StressTestNet Network = 0xf9c4cefb
+	InvalidNet    Network = 0x00000000
 )
 
 var (
@@ -36,7 +37,7 @@ func NetworkFromString(name string) Network {
 		return StressTestNet
 	}
 
-	return TestNet
+	return InvalidNet
 }
 
 func NetworkName(net Network) string {

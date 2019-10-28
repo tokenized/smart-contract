@@ -18,10 +18,10 @@ var cmdConvert = &cobra.Command{
 		}
 
 		network := network(c)
-		if len(network) == 0 {
+		if network == bitcoin.InvalidNet {
+			fmt.Printf("Invalid network specified")
 			return nil
 		}
-		net := bitcoin.NetworkFromString(network)
 
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err == nil {
@@ -46,7 +46,7 @@ var cmdConvert = &cobra.Command{
 			return nil
 		}
 		if n == 20 {
-			address, err = bitcoin.NewAddressPKH(hash[:20], net)
+			address, err = bitcoin.NewAddressPKH(hash[:20], network)
 			if err != nil {
 				fmt.Printf("Invalid hash : %s\n", err)
 				return nil
@@ -60,7 +60,7 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Invalid hash : %s\n", err)
 				return nil
 			}
-			address := bitcoin.NewAddressFromRawAddress(rawAddress, net)
+			address := bitcoin.NewAddressFromRawAddress(rawAddress, network)
 			fmt.Printf("Address : %s\n", address.String())
 			return nil
 		}
