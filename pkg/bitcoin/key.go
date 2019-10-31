@@ -1,14 +1,19 @@
 package bitcoin
 
 import (
+	"bytes"
 	"crypto/elliptic"
-	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/pkg/errors"
 )
 
 var (
+	curveS256       = btcec.S256()
+	curveS256Params = curveS256.Params()
+
 	ErrBadKeyLength = errors.New("Key has invalid length")
 )
 
@@ -97,7 +102,7 @@ func GenerateKeyS256(net Network) (*KeyS256, error) {
 
 // KeyS256FromBytes creates a key from a set of bytes that represents a 256 bit big-endian integer.
 func KeyS256FromBytes(key []byte, net Network) (*KeyS256, error) {
-	privkey, _ := btcec.PrivKeyFromBytes(btcec.S256(), key)
+	privkey, _ := btcec.PrivKeyFromBytes(curveS256, key)
 	return &KeyS256{key: privkey, net: net}, nil
 }
 
@@ -146,4 +151,37 @@ func (k *KeyS256) Sign(hash []byte) (Signature, error) {
 		return nil, err
 	}
 	return SignatureS256FromBTCEC(signature), nil
+}
+
+var zeroKeyValue [32]byte
+
+func privateKeyIsValid(b []byte) error {
+	// Check for zero private key
+	if bytes.Equal(b, zeroKeyValue[:]) {
+		return errors.New("Zero private key")
+	}
+
+	// Check for key outside curve
+	if bytes.Compare(b, curveS256Params.N.Bytes()) >= 0 {
+		return errors.New("Out of range private key")
+	}
+
+	return nil
+}
+
+func addPrivateKeys(key1 []byte, key2 []byte) []byte {
+	var key1Int big.Int
+	var key2Int big.Int
+	key1Int.SetBytes(key1)
+	key2Int.SetBytes(key2)
+
+	key1Int.Add(&key1Int, &key2Int)
+	key1Int.Mod(&key1Int, curveS256Params.N)
+
+	b := key1Int.Bytes()
+	if len(b) < 32 {
+		extra := make([]byte, 32-len(b))
+		b = append(extra, b...)
+	}
+	return b
 }
