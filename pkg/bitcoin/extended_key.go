@@ -8,41 +8,41 @@ import (
 	bip32 "github.com/tyler-smith/go-bip32"
 )
 
-type BIP32Key struct {
+type ExtendedKey struct {
 	key *bip32.Key
 }
 
-// GenerateBIP32Key creates a key from random data.
-func GenerateMasterBIP32Key() (*BIP32Key, error) {
+// GenerateExtendedKey creates a key from random data.
+func GenerateMasterExtendedKey() (*ExtendedKey, error) {
 	seed := make([]byte, 64)
 	rand.Read(seed)
 	key, err := bip32.NewMasterKey(seed)
 	if err != nil {
 		return nil, err
 	}
-	return &BIP32Key{key: key}, nil
+	return &ExtendedKey{key: key}, nil
 }
 
-// BIP32KeyFromBytes creates a key from bytes.
-func BIP32KeyFromBytes(b []byte) (*BIP32Key, error) {
+// ExtendedKeyFromBytes creates a key from bytes.
+func ExtendedKeyFromBytes(b []byte) (*ExtendedKey, error) {
 	key, err := bip32.Deserialize(b)
 	if err != nil {
 		return nil, err
 	}
-	return &BIP32Key{key: key}, nil
+	return &ExtendedKey{key: key}, nil
 }
 
-// BIP32KeyFromStr creates a key from a string.
-func BIP32KeyFromStr(s string) (*BIP32Key, error) {
+// ExtendedKeyFromStr creates a key from a string.
+func ExtendedKeyFromStr(s string) (*ExtendedKey, error) {
 	key, err := bip32.B58Deserialize(s)
 	if err != nil {
 		return nil, err
 	}
-	return &BIP32Key{key: key}, nil
+	return &ExtendedKey{key: key}, nil
 }
 
 // SetBytes decodes the key from bytes.
-func (k *BIP32Key) SetBytes(b []byte) error {
+func (k *ExtendedKey) SetBytes(b []byte) error {
 	key, err := bip32.Deserialize(b)
 	if err != nil {
 		return err
@@ -52,7 +52,7 @@ func (k *BIP32Key) SetBytes(b []byte) error {
 }
 
 // Bytes returns the key data.
-func (k BIP32Key) Bytes() []byte {
+func (k ExtendedKey) Bytes() []byte {
 	if k.key == nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func (k BIP32Key) Bytes() []byte {
 }
 
 // String returns the key formatted as text.
-func (k *BIP32Key) String() string {
+func (k *ExtendedKey) String() string {
 	if k.key == nil {
 		return ""
 	}
@@ -69,7 +69,7 @@ func (k *BIP32Key) String() string {
 }
 
 // SetString decodes a key from text.
-func (k *BIP32Key) SetString(s string) error {
+func (k *ExtendedKey) SetString(s string) error {
 	key, err := bip32.B58Deserialize(s)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (k *BIP32Key) SetString(s string) error {
 }
 
 // Equal returns true if the other key has the same value
-func (k *BIP32Key) Equal(other *BIP32Key) bool {
+func (k *ExtendedKey) Equal(other *ExtendedKey) bool {
 	if k.key == nil {
 		return other.key == nil
 	}
@@ -90,7 +90,7 @@ func (k *BIP32Key) Equal(other *BIP32Key) bool {
 }
 
 // IsPrivate returns true if the key is a private key.
-func (k *BIP32Key) IsPrivate() bool {
+func (k *ExtendedKey) IsPrivate() bool {
 	if k.key == nil {
 		return false
 	}
@@ -98,7 +98,7 @@ func (k *BIP32Key) IsPrivate() bool {
 }
 
 // Key returns the (private) key associated with this key.
-func (k *BIP32Key) Key(net Network) Key {
+func (k *ExtendedKey) Key(net Network) Key {
 	if k.key == nil {
 		return nil
 	}
@@ -110,7 +110,7 @@ func (k *BIP32Key) Key(net Network) Key {
 }
 
 // PublicKey returns the public version of this key (xpub).
-func (k *BIP32Key) PublicKey() PublicKey {
+func (k *ExtendedKey) PublicKey() PublicKey {
 	if k.key == nil {
 		return nil
 	}
@@ -122,16 +122,16 @@ func (k *BIP32Key) PublicKey() PublicKey {
 	return pub
 }
 
-// BIP32PublicKey returns the public version of this key (xpub).
-func (k *BIP32Key) BIP32PublicKey() *BIP32Key {
+// ExtendedPublicKey returns the public version of this key.
+func (k *ExtendedKey) ExtendedPublicKey() *ExtendedKey {
 	if k.key == nil {
 		return nil
 	}
-	return &BIP32Key{key: k.key.PublicKey()}
+	return &ExtendedKey{key: k.key.PublicKey()}
 }
 
 // ChildKey returns the child key at the specified index.
-func (k *BIP32Key) ChildKey(index uint32) (*BIP32Key, error) {
+func (k *ExtendedKey) ChildKey(index uint32) (*ExtendedKey, error) {
 	if k.key == nil {
 		return nil, errors.New("Nil can't create child")
 	}
@@ -139,11 +139,11 @@ func (k *BIP32Key) ChildKey(index uint32) (*BIP32Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BIP32Key{key: child}, nil
+	return &ExtendedKey{key: child}, nil
 }
 
 // MarshalJSON converts to json.
-func (k *BIP32Key) MarshalJSON() ([]byte, error) {
+func (k *ExtendedKey) MarshalJSON() ([]byte, error) {
 	if k.key == nil {
 		return nil, nil
 	}
@@ -151,15 +151,15 @@ func (k *BIP32Key) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON converts from json.
-func (k *BIP32Key) UnmarshalJSON(data []byte) error {
+func (k *ExtendedKey) UnmarshalJSON(data []byte) error {
 	return k.SetString(string(data[1 : len(data)-1]))
 }
 
 // Scan converts from a database column.
-func (k *BIP32Key) Scan(data interface{}) error {
+func (k *ExtendedKey) Scan(data interface{}) error {
 	b, ok := data.([]byte)
 	if !ok {
-		return errors.New("BIP32Key db column not bytes")
+		return errors.New("ExtendedKey db column not bytes")
 	}
 
 	c := make([]byte, len(b))
