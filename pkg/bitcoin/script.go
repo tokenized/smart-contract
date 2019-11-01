@@ -10,6 +10,7 @@ import (
 
 const (
 	OP_FALSE              = 0x00
+	OP_TRUE               = 0x51
 	OP_1NEGATE            = 0x4f
 	OP_1                  = 0x51
 	OP_3                  = 0x53
