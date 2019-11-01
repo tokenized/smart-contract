@@ -2,16 +2,15 @@ package bitcoin
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/pkg/errors"
 )
 
 const (
-	ExtendedKeysHeader = 0x41
+	ExtendedKeysHeader    = 0x41
+	ExtendedKeysURLPrefix = "bitcoin-xkeys"
 )
 
 type ExtendedKeys []ExtendedKey
@@ -45,36 +44,50 @@ func ExtendedKeysFromBytes(b []byte) (ExtendedKeys, error) {
 	return result, nil
 }
 
-// ExtendedKeysFromStr creates a list of keys from a string.
+// ExtendedKeysFromStr creates a list of keys from a hex string.
 func ExtendedKeysFromStr(s string) (ExtendedKeys, error) {
-	if len(s) < 4 {
-		return ExtendedKeys{}, errors.New("Too Short")
-	}
-	hash := DoubleSha256([]byte(s[:len(s)-4]))
-	check := hex.EncodeToString(hash[:4])
-	if check != s[len(s)-4:] {
-		return ExtendedKeys{}, errors.New("Invalid check hash")
-	}
-
-	parts := strings.Split(s, ":")
-
-	if len(parts) > 2 {
-		return ExtendedKeys{}, errors.New("To many colons in xkey")
-	}
-
-	if len(parts) == 2 {
-		if parts[0] != "bitcoin-xkeys" {
-			return ExtendedKeys{}, fmt.Errorf("Invalid xkey prefix : %s", parts[0])
-		}
-		s = parts[1]
-	}
-
-	b, err := hex.DecodeString(s)
+	net, prefix, data, err := BIP0276Decode(s)
 	if err != nil {
-		return ExtendedKeys{}, errors.Wrap(err, "decode xkey hex")
+		return ExtendedKeys{}, errors.Wrap(err, "decode xkeys hex string")
 	}
 
-	return ExtendedKeysFromBytes(b)
+	if prefix != ExtendedKeysURLPrefix {
+		return ExtendedKeys{}, fmt.Errorf("Wrong prefix : %s", prefix)
+	}
+
+	result, err := ExtendedKeysFromBytes(data)
+	if err != nil {
+		return ExtendedKeys{}, err
+	}
+
+	for i, _ := range result {
+		result[i].Network = net
+	}
+
+	return result, nil
+}
+
+// ExtendedKeysFromStr58 creates a list of keys from a base 58 string.
+func ExtendedKeysFromStr58(s string) (ExtendedKeys, error) {
+	net, prefix, data, err := BIP0276Decode58(s)
+	if err != nil {
+		return ExtendedKeys{}, errors.Wrap(err, "decode xkeys base58 string")
+	}
+
+	if prefix != ExtendedKeysURLPrefix {
+		return ExtendedKeys{}, fmt.Errorf("Wrong prefix : %s", prefix)
+	}
+
+	result, err := ExtendedKeysFromBytes(data)
+	if err != nil {
+		return ExtendedKeys{}, err
+	}
+
+	for i, _ := range result {
+		result[i].Network = net
+	}
+
+	return result, nil
 }
 
 // SetBytes decodes the list of keys from bytes.
@@ -109,13 +122,22 @@ func (k ExtendedKeys) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// String returns the list of keys formatted as text.
+// String returns the list of keys formatted as hex text.
 func (k ExtendedKeys) String() string {
-	result := "bitcoin-xkeys:0100" + hex.EncodeToString(k.Bytes())
+	var net Network
+	if len(k) > 0 {
+		net = k[0].Network
+	}
+	return BIP0276Encode(net, ExtendedKeysURLPrefix, k.Bytes())
+}
 
-	// Append first 4 bytes of double SHA256 of hash of preceding text
-	check := DoubleSha256([]byte(result))
-	return result + hex.EncodeToString(check[:4])
+// String58 returns the list of keys formatted as base58 text.
+func (k ExtendedKeys) String58() string {
+	var net Network
+	if len(k) > 0 {
+		net = k[0].Network
+	}
+	return BIP0276Encode58(net, ExtendedKeysURLPrefix, k.Bytes())
 }
 
 // SetString decodes a list of keys from text.

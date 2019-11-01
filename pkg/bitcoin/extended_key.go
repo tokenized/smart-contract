@@ -6,24 +6,45 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 )
 
 const (
-	Hardened          = uint32(0x80000000) // Hardened child index offset
-	ExtendedKeyHeader = 0x40
+	Hardened             = uint32(0x80000000) // Hardened child index offset
+	ExtendedKeyHeader    = 0x40
+	ExtendedKeyURLPrefix = "bitcoin-xkey"
 )
 
 type ExtendedKey struct {
+	Network     Network
 	Depth       byte
 	FingerPrint [4]byte
 	Index       uint32
 	ChainCode   [32]byte
 	KeyValue    [33]byte
+}
+
+// LoadMasterExtendedKey creates a key from random data.
+func LoadMasterExtendedKey(seed []byte) (ExtendedKey, error) {
+	var result ExtendedKey
+
+	hmac := hmac.New(sha512.New, []byte("Bitcoin seed"))
+	_, err := hmac.Write(seed)
+	if err != nil {
+		return result, err
+	}
+	sum := hmac.Sum(nil)
+
+	if err := privateKeyIsValid(sum[:32]); err != nil {
+		return result, err
+	}
+
+	copy(result.KeyValue[1:], sum[:32])
+	copy(result.ChainCode[:], sum[32:])
+
+	return result, nil
 }
 
 // GenerateExtendedKey creates a key from random data.
@@ -44,8 +65,8 @@ func GenerateMasterExtendedKey() (ExtendedKey, error) {
 		return result, err
 	}
 
-	copy(result.KeyValue[:], sum[:32])
-	copy(result.ChainCode[1:], sum[32:])
+	copy(result.KeyValue[1:], sum[:32])
+	copy(result.ChainCode[:], sum[32:])
 
 	return result, nil
 }
@@ -65,36 +86,44 @@ func ExtendedKeyFromBytes(b []byte) (ExtendedKey, error) {
 	return readExtendedKey(buf)
 }
 
-// ExtendedKeyFromStr creates a key from a string.
+// ExtendedKeyFromStr creates a key from a hex string.
 func ExtendedKeyFromStr(s string) (ExtendedKey, error) {
-	if len(s) < 4 {
-		return ExtendedKey{}, errors.New("Too Short")
-	}
-	hash := DoubleSha256([]byte(s[:len(s)-4]))
-	check := hex.EncodeToString(hash[:4])
-	if check != s[len(s)-4:] {
-		return ExtendedKey{}, errors.New("Invalid check hash")
-	}
-
-	parts := strings.Split(s, ":")
-
-	if len(parts) > 2 {
-		return ExtendedKey{}, errors.New("To many colons in xkey")
-	}
-
-	if len(parts) == 2 {
-		if parts[0] != "bitcoin-xkey" {
-			return ExtendedKey{}, fmt.Errorf("Invalid xkey prefix : %s", parts[0])
-		}
-		s = parts[1]
-	}
-
-	b, err := hex.DecodeString(s)
+	net, prefix, data, err := BIP0276Decode(s)
 	if err != nil {
-		return ExtendedKey{}, errors.Wrap(err, "decode xkey hex")
+		return ExtendedKey{}, errors.Wrap(err, "decode xkey hex string")
 	}
 
-	return ExtendedKeyFromBytes(b)
+	if prefix != ExtendedKeyURLPrefix {
+		return ExtendedKey{}, fmt.Errorf("Wrong prefix : %s", prefix)
+	}
+
+	result, err := ExtendedKeyFromBytes(data)
+	if err != nil {
+		return ExtendedKey{}, err
+	}
+
+	result.Network = net
+	return result, nil
+}
+
+// ExtendedKeyFromStr58 creates a key from a base 58 string.
+func ExtendedKeyFromStr58(s string) (ExtendedKey, error) {
+	net, prefix, data, err := BIP0276Decode58(s)
+	if err != nil {
+		return ExtendedKey{}, errors.Wrap(err, "decode xkey base58 string")
+	}
+
+	if prefix != ExtendedKeyURLPrefix {
+		return ExtendedKey{}, fmt.Errorf("Wrong prefix : %s", prefix)
+	}
+
+	result, err := ExtendedKeyFromBytes(data)
+	if err != nil {
+		return ExtendedKey{}, err
+	}
+
+	result.Network = net
+	return result, nil
 }
 
 // SetBytes decodes the key from bytes.
@@ -125,11 +154,12 @@ func (k ExtendedKey) Bytes() []byte {
 
 // String returns the key formatted as text.
 func (k ExtendedKey) String() string {
-	result := "bitcoin-xkey:0100" + hex.EncodeToString(k.Bytes())
+	return BIP0276Encode(k.Network, ExtendedKeyURLPrefix, k.Bytes())
+}
 
-	// Append first 4 bytes of double SHA256 of hash of preceding text
-	check := DoubleSha256([]byte(result))
-	return result + hex.EncodeToString(check[:4])
+// String58 returns the key formatted as text.
+func (k ExtendedKey) String58() string {
+	return BIP0276Encode58(k.Network, ExtendedKeyURLPrefix, k.Bytes())
 }
 
 // SetString decodes a key from text.
@@ -178,7 +208,7 @@ func (k ExtendedKey) ExtendedPublicKey() ExtendedKey {
 	}
 
 	result := k
-	copy(k.KeyValue[:], k.Key(MainNet).PublicKey().Bytes())
+	copy(result.KeyValue[:], k.Key(MainNet).PublicKey().Bytes())
 
 	return result
 }
@@ -195,19 +225,21 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 	}
 
 	// Calculate fingerprint
-	var hash []byte
+	var fingerPrint []byte
 	if k.IsPrivate() {
-		hash = Hash160(k.PublicKey().Bytes())
+		fingerPrint = Hash160(k.PublicKey().Bytes())
 	} else {
-		hash = Hash160(k.KeyValue[:])
+		fingerPrint = Hash160(k.KeyValue[:])
 	}
-	copy(result.FingerPrint[:], hash[:4])
+	copy(result.FingerPrint[:], fingerPrint[:4])
 
 	// Calculate child
 	hmac := hmac.New(sha512.New, k.ChainCode[:])
-	if index >= Hardened {
+	if index >= Hardened { // Hardened child
+		// Write private key with leading zero
 		hmac.Write(k.KeyValue[:])
 	} else {
+		// Write compressed public key
 		if k.IsPrivate() {
 			hmac.Write(k.PublicKey().Bytes())
 		} else {
@@ -215,7 +247,7 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 		}
 	}
 
-	err := binary.Write(hmac, binary.LittleEndian, index)
+	err := binary.Write(hmac, binary.BigEndian, index)
 	if err != nil {
 		return result, errors.Wrap(err, "write index to hmac")
 	}
