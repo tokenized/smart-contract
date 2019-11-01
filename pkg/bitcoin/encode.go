@@ -10,6 +10,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	ErrCheckHashInvalid = errors.New("Check Hash Invalid")
+	ErrInvalidVersion   = errors.New("Invalid Version")
+	ErrInvalidNetwork   = errors.New("Invalid Network")
+)
+
 // Base64 returns the Bas64 encoding of the input.
 //
 // See https://en.wikipedia.org/wiki/Base64
@@ -73,7 +79,7 @@ func BIP0276Decode(url string) (Network, string, []byte, error) {
 	hash := DoubleSha256([]byte(url[:len(url)-8]))
 	check := hex.EncodeToString(hash[:4])
 	if check != url[len(url)-8:] {
-		return InvalidNet, "", nil, fmt.Errorf("Invalid check hash : %s != %s", check, url[len(url)-8:])
+		return InvalidNet, "", nil, ErrCheckHashInvalid
 	}
 
 	parts := strings.Split(url, ":")
@@ -89,7 +95,8 @@ func BIP0276Decode(url string) (Network, string, []byte, error) {
 
 	// BIP-0276 Version
 	if b[0] != 1 {
-		return InvalidNet, "", nil, fmt.Errorf("Invalid BIP-0276 version : %x", b[0])
+		return InvalidNet, "", nil,
+			errors.Wrap(ErrInvalidVersion, fmt.Sprintf("Invalid BIP-0276 version : %x", b[0]))
 	}
 	b = b[1:] // Drop version
 
@@ -103,7 +110,8 @@ func BIP0276Decode(url string) (Network, string, []byte, error) {
 	case 2:
 		net = TestNet
 	default:
-		return InvalidNet, "", nil, fmt.Errorf("Invalid BIP-0276 network : %x", b[0])
+		return InvalidNet, "", nil,
+			errors.Wrap(ErrInvalidVersion, fmt.Sprintf("Invalid BIP-0276 network : %x", b[0]))
 	}
 	b = b[1:] // Drop network
 
@@ -160,12 +168,13 @@ func BIP0276Decode58(url string) (Network, string, []byte, error) {
 	hash := DoubleSha256([]byte(checkValue[:len(checkValue)-8]))
 	check := hex.EncodeToString(hash[:4])
 	if check != checkValue[len(checkValue)-8:] {
-		return InvalidNet, "", nil, fmt.Errorf("Invalid check hash : %s != %s", check, checkValue[len(checkValue)-8:])
+		return InvalidNet, "", nil, ErrCheckHashInvalid
 	}
 
 	// BIP-0276 Version
 	if b[0] != 1 {
-		return InvalidNet, "", nil, fmt.Errorf("Invalid BIP-0276 version : %x", b[0])
+		return InvalidNet, "", nil,
+			errors.Wrap(ErrInvalidVersion, fmt.Sprintf("Invalid BIP-0276 version : %x", b[0]))
 	}
 	b = b[1:] // Drop version
 
@@ -179,7 +188,8 @@ func BIP0276Decode58(url string) (Network, string, []byte, error) {
 	case 2:
 		net = TestNet
 	default:
-		return InvalidNet, "", nil, fmt.Errorf("Invalid BIP-0276 network : %x", b[0])
+		return InvalidNet, "", nil,
+			errors.Wrap(ErrInvalidVersion, fmt.Sprintf("Invalid BIP-0276 network : %x", b[0]))
 	}
 	b = b[1:] // Drop network
 

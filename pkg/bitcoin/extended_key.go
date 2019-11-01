@@ -26,7 +26,7 @@ type ExtendedKey struct {
 	KeyValue    [33]byte
 }
 
-// LoadMasterExtendedKey creates a key from random data.
+// LoadMasterExtendedKey creates a key from a seed.
 func LoadMasterExtendedKey(seed []byte) (ExtendedKey, error) {
 	var result ExtendedKey
 
@@ -152,17 +152,17 @@ func (k ExtendedKey) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// String returns the key formatted as text.
+// String returns the key formatted as hex text.
 func (k ExtendedKey) String() string {
 	return BIP0276Encode(k.Network, ExtendedKeyURLPrefix, k.Bytes())
 }
 
-// String58 returns the key formatted as text.
+// String58 returns the key formatted as base 58 text.
 func (k ExtendedKey) String58() string {
 	return BIP0276Encode58(k.Network, ExtendedKeyURLPrefix, k.Bytes())
 }
 
-// SetString decodes a key from text.
+// SetString decodes a key from hex text.
 func (k *ExtendedKey) SetString(s string) error {
 	nk, err := ExtendedKeyFromStr(s)
 	if err != nil {
@@ -171,6 +171,21 @@ func (k *ExtendedKey) SetString(s string) error {
 
 	*k = nk
 	return nil
+}
+
+// SetString58 decodes a key from base 58 text.
+func (k *ExtendedKey) SetString58(s string) error {
+	nk, err := ExtendedKeyFromStr(s)
+	if err != nil {
+		return err
+	}
+
+	*k = nk
+	return nil
+}
+
+func (k *ExtendedKey) SetNetwork(net Network) {
+	k.Network = net
 }
 
 // Equal returns true if the other key has the same value
@@ -220,8 +235,9 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 	}
 
 	result := ExtendedKey{
-		Depth: k.Depth + 1,
-		Index: index,
+		Network: k.Network,
+		Depth:   k.Depth + 1,
+		Index:   index,
 	}
 
 	// Calculate fingerprint
@@ -282,12 +298,12 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 
 // MarshalJSON converts to json.
 func (k *ExtendedKey) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + k.String() + "\""), nil
+	return []byte("\"" + k.String58() + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
 func (k *ExtendedKey) UnmarshalJSON(data []byte) error {
-	return k.SetString(string(data[1 : len(data)-1]))
+	return k.SetString58(string(data[1 : len(data)-1]))
 }
 
 // Scan converts from a database column.

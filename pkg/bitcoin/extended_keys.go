@@ -140,9 +140,20 @@ func (k ExtendedKeys) String58() string {
 	return BIP0276Encode58(net, ExtendedKeysURLPrefix, k.Bytes())
 }
 
-// SetString decodes a list of keys from text.
+// SetString decodes a list of keys from hex text.
 func (k *ExtendedKeys) SetString(s string) error {
 	nk, err := ExtendedKeysFromStr(s)
+	if err != nil {
+		return err
+	}
+
+	*k = nk
+	return nil
+}
+
+// SetString58 decodes a list of keys from base 58 text.
+func (k *ExtendedKeys) SetString58(s string) error {
+	nk, err := ExtendedKeysFromStr58(s)
 	if err != nil {
 		return err
 	}
@@ -175,12 +186,12 @@ func (k ExtendedKeys) ExtendedPublicKeys() ExtendedKeys {
 
 // MarshalJSON converts to json.
 func (k *ExtendedKeys) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + k.String() + "\""), nil
+	return []byte("\"" + k.String58() + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
 func (k *ExtendedKeys) UnmarshalJSON(data []byte) error {
-	return k.SetString(string(data[1 : len(data)-1]))
+	return k.SetString58(string(data[1 : len(data)-1]))
 }
 
 // Scan converts from a database column.
