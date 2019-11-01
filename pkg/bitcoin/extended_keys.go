@@ -175,7 +175,16 @@ func (k ExtendedKeys) Equal(other ExtendedKeys) bool {
 	return true
 }
 
-// ExtendedPublicKey returns the public version of this key.
+// RawAddress returns a raw address for this list of keys.
+func (k ExtendedKeys) RawAddress(requiredSigners uint16) (RawAddress, error) {
+	pkhs := make([][]byte, 0, len(k))
+	for _, key := range k {
+		pkhs = append(pkhs, Hash160(key.PublicKey().Bytes()))
+	}
+	return NewRawAddressMultiPKH(requiredSigners, pkhs)
+}
+
+// ExtendedPublicKeys returns the public version of this list of keys.
 func (k ExtendedKeys) ExtendedPublicKeys() ExtendedKeys {
 	result := make(ExtendedKeys, 0, len(k))
 	for _, key := range k {

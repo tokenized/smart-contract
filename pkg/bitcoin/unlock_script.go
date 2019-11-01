@@ -14,7 +14,7 @@ func AddressFromUnlockingScript(unlockingScript []byte, net Network) (Address, e
 	return NewAddressFromRawAddress(ra, net), nil
 }
 
-// RawAddressFromUnlockingScript returns the address associated with the specified unlocking
+// RawAddressFromUnlockingScript returns the raw address associated with the specified unlocking
 //   script.
 func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 	var result RawAddress
@@ -24,6 +24,8 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 	}
 
 	buf := bytes.NewReader(unlockingScript)
+
+	// TODO Implement checking for multi-pkh
 
 	// First push
 	_, firstPush, err := ParsePushDataScript(buf)

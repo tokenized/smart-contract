@@ -216,6 +216,11 @@ func (k ExtendedKey) PublicKey() PublicKey {
 	return pub
 }
 
+// RawAddress returns a raw address for this key.
+func (k ExtendedKey) RawAddress() (RawAddress, error) {
+	return NewRawAddressPKH(Hash160(k.PublicKey().Bytes()))
+}
+
 // ExtendedPublicKey returns the public version of this key.
 func (k ExtendedKey) ExtendedPublicKey() ExtendedKey {
 	if !k.IsPrivate() {

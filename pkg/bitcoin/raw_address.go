@@ -247,7 +247,7 @@ func NewRawAddressMultiPKH(required uint16, pkhs [][]byte) (RawAddress, error) {
 // SetMultiPKH sets the type as ScriptTypeMultiPKH and puts the required count and Public Key Hashes into data.
 func (ra *RawAddress) SetMultiPKH(required uint16, pkhs [][]byte) error {
 	ra.scriptType = ScriptTypeMultiPKH
-	buf := bytes.NewBuffer(make([]byte, 0, 2+(len(pkhs)*ScriptHashLength)))
+	buf := bytes.NewBuffer(make([]byte, 0, 4+(len(pkhs)*ScriptHashLength)))
 	if err := binary.Write(buf, binary.LittleEndian, required); err != nil {
 		return err
 	}
