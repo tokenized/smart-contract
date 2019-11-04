@@ -9,12 +9,17 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	bip32 "github.com/tyler-smith/go-bip32"
 )
 
 const (
 	Hardened             = uint32(0x80000000) // Hardened child index offset
 	ExtendedKeyHeader    = 0x40
 	ExtendedKeyURLPrefix = "bitcoin-xkey"
+)
+
+var (
+	ErrNotExtendedKey = errors.New("Data not an xkey")
 )
 
 type ExtendedKey struct {
@@ -80,7 +85,13 @@ func ExtendedKeyFromBytes(b []byte) (ExtendedKey, error) {
 		return ExtendedKey{}, errors.Wrap(err, "read header")
 	}
 	if header != ExtendedKeyHeader {
-		return ExtendedKey{}, errors.New("Not an xkey")
+		// Fall back to BIP-0032 format
+		bip32Key, err := bip32.Deserialize(b)
+		if err != nil {
+			return ExtendedKey{}, err
+		}
+
+		return fromBIP32(bip32Key)
 	}
 
 	return readExtendedKey(buf)
@@ -90,7 +101,13 @@ func ExtendedKeyFromBytes(b []byte) (ExtendedKey, error) {
 func ExtendedKeyFromStr(s string) (ExtendedKey, error) {
 	net, prefix, data, err := BIP0276Decode(s)
 	if err != nil {
-		return ExtendedKey{}, errors.Wrap(err, "decode xkey hex string")
+		// Fall back to BIP-0032 format
+		bip32Key, b32err := bip32.B58Deserialize(s)
+		if b32err != nil {
+			return ExtendedKey{}, errors.Wrap(err, "decode xkey hex string")
+		}
+
+		return fromBIP32(bip32Key)
 	}
 
 	if prefix != ExtendedKeyURLPrefix {
@@ -110,7 +127,13 @@ func ExtendedKeyFromStr(s string) (ExtendedKey, error) {
 func ExtendedKeyFromStr58(s string) (ExtendedKey, error) {
 	net, prefix, data, err := BIP0276Decode58(s)
 	if err != nil {
-		return ExtendedKey{}, errors.Wrap(err, "decode xkey base58 string")
+		// Fall back to BIP-0032 format
+		bip32Key, b32err := bip32.B58Deserialize(s)
+		if b32err != nil {
+			return ExtendedKey{}, errors.Wrap(err, "decode xkey base58 string")
+		}
+
+		return fromBIP32(bip32Key)
 	}
 
 	if prefix != ExtendedKeyURLPrefix {
@@ -322,6 +345,30 @@ func (k *ExtendedKey) Scan(data interface{}) error {
 	c := make([]byte, len(b))
 	copy(c, b)
 	return k.SetBytes(c)
+}
+
+// fromBIP32 creates an extended key from a bip32 key.
+func fromBIP32(old *bip32.Key) (ExtendedKey, error) {
+	result := ExtendedKey{}
+	err := result.setFromBIP32(old)
+	return result, err
+}
+
+// setFromBIP32 assigns the extended key to the same value as the bip32 key.
+func (k *ExtendedKey) setFromBIP32(old *bip32.Key) error {
+	k.Network = InvalidNet
+	k.Depth = old.Depth
+	copy(k.FingerPrint[:], old.FingerPrint)
+	k.Index = binary.BigEndian.Uint32(old.ChildNumber)
+	copy(k.ChainCode[:], old.ChainCode)
+	if old.IsPrivate {
+		k.KeyValue[0] = 0
+		copy(k.KeyValue[1:], old.Key)
+	} else {
+		copy(k.KeyValue[:], old.Key)
+	}
+
+	return nil
 }
 
 // readExtendedKey reads just the basic data of the extended key.

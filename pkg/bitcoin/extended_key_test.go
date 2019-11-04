@@ -355,3 +355,49 @@ func TestExtendedKeys(t *testing.T) {
 		})
 	}
 }
+
+// TestOldExtendedKey tests conversion from old BIP-0032 format.
+func TestOldExtendedKey(t *testing.T) {
+	tests := []struct {
+		key string
+	}{
+		{key: "xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB"},
+		{key: "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH"},
+		{key: "xpub6ASuArnXKPbfEwhqN6e3mwBcDTgzisQN1wXN9BJcM47sSikHjJf3UFHKkNAWbWMiGj7Wf5uMash7SyYq527Hqck2AxYysAA7xmALppuCkwQ"},
+		{key: "xpub6D4BDPcP2GT577Vvch3R8wDkScZWzQzMMUm3PWbmWvVJrZwQY4VUNgqFJPMM3No2dFDFGTsxxpG5uJh7n7epu4trkrX7x7DogT5Uv6fcLW5"},
+	}
+
+	for tindex, tt := range tests {
+		t.Run(fmt.Sprintf("%d", tindex), func(t *testing.T) {
+			bip32Key, err := bip32.B58Deserialize(tt.key)
+			if err != nil {
+				t.Fatalf("Failed to deserialize old key : %s", err)
+			}
+
+			newKey, err := ExtendedKeyFromStr(tt.key)
+			if err != nil {
+				t.Fatalf("Failed to deserialize new key : %s", err)
+			}
+
+			if !bytes.Equal(newKey.KeyValue[:], bip32Key.Key) {
+				t.Fatalf("Imported keys not equal :\n  got  : %x\n  want : %x", newKey.KeyValue[:],
+					bip32Key.Key)
+			}
+
+			child32, err := bip32Key.NewChildKey(1)
+			if err != nil {
+				t.Fatalf("Failed to generate old child : %s", err)
+			}
+
+			child, err := newKey.ChildKey(1)
+			if err != nil {
+				t.Fatalf("Failed to generate new child : %s", err)
+			}
+
+			if !bytes.Equal(child.KeyValue[:], child32.Key) {
+				t.Fatalf("Children not equal :\n  got  : %x\n  want : %x", child.KeyValue[:],
+					child32.Key)
+			}
+		})
+	}
+}
