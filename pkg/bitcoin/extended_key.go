@@ -386,7 +386,7 @@ func readExtendedKey(buf *bytes.Reader) (ExtendedKey, error) {
 		return result, errors.Wrap(err, "reading xkey fingerprint")
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &result.Index)
+	err = binary.Read(buf, binary.BigEndian, &result.Index)
 	if err != nil {
 		return result, errors.Wrap(err, "reading xkey index")
 	}
@@ -416,7 +416,7 @@ func writeExtendedKey(ek ExtendedKey, buf *bytes.Buffer) error {
 		return errors.Wrap(err, "writing xkey fingerprint")
 	}
 
-	err = binary.Write(buf, binary.LittleEndian, ek.Index)
+	err = binary.Write(buf, binary.BigEndian, ek.Index)
 	if err != nil {
 		return errors.Wrap(err, "writing xkey index")
 	}
