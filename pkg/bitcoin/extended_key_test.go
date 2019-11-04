@@ -95,13 +95,10 @@ func TestExtendedKeyVsBIP0032(t *testing.T) {
 			}
 			t.Logf("Master Key : %s", xkey.String())
 
-			child := xkey
-			for _, index := range tt.path {
-				t.Logf("Deriving child %d", index)
-				child, err = child.ChildKey(index)
-				if err != nil {
-					t.Fatalf("Failed to derive child : %s", err)
-				}
+			t.Logf("Deriving child %v", tt.path)
+			child, err := xkey.ChildKeyForPath(tt.path)
+			if err != nil {
+				t.Fatalf("Failed to generate child key : %s", err)
 			}
 			t.Logf("Key : %s", child.String())
 

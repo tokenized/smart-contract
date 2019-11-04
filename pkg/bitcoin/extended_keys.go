@@ -6,11 +6,16 @@ import (
 	"io"
 
 	"github.com/pkg/errors"
+	bip32 "github.com/tyler-smith/go-bip32"
 )
 
 const (
 	ExtendedKeysHeader    = 0x41
 	ExtendedKeysURLPrefix = "bitcoin-xkeys"
+)
+
+var (
+	ErrNotExtendedKeys = errors.New("Data not an xkeys")
 )
 
 type ExtendedKeys []ExtendedKey
@@ -24,7 +29,17 @@ func ExtendedKeysFromBytes(b []byte) (ExtendedKeys, error) {
 		return nil, errors.Wrap(err, "read header")
 	}
 	if header != ExtendedKeysHeader {
-		return nil, errors.New("Not an extended key list")
+		// Fall back to BIP-0032 format
+		bip32Key, err := bip32.Deserialize(b)
+		if err != nil {
+			return ExtendedKeys{}, ErrNotExtendedKeys
+		}
+
+		result, err := fromBIP32(bip32Key)
+		if err != nil {
+			return ExtendedKeys{}, err
+		}
+		return ExtendedKeys{result}, nil
 	}
 
 	count, err := readBase128VarInt(buf)
@@ -48,7 +63,17 @@ func ExtendedKeysFromBytes(b []byte) (ExtendedKeys, error) {
 func ExtendedKeysFromStr(s string) (ExtendedKeys, error) {
 	net, prefix, data, err := BIP0276Decode(s)
 	if err != nil {
-		return ExtendedKeys{}, errors.Wrap(err, "decode xkeys hex string")
+		// Fall back to BIP-0032 format
+		bip32Key, b32err := bip32.B58Deserialize(s)
+		if b32err != nil {
+			return ExtendedKeys{}, errors.Wrap(err, "decode xkeys hex string")
+		}
+
+		result, err := fromBIP32(bip32Key)
+		if err != nil {
+			return ExtendedKeys{}, err
+		}
+		return ExtendedKeys{result}, nil
 	}
 
 	if prefix != ExtendedKeysURLPrefix {
@@ -71,7 +96,17 @@ func ExtendedKeysFromStr(s string) (ExtendedKeys, error) {
 func ExtendedKeysFromStr58(s string) (ExtendedKeys, error) {
 	net, prefix, data, err := BIP0276Decode58(s)
 	if err != nil {
-		return ExtendedKeys{}, errors.Wrap(err, "decode xkeys base58 string")
+		// Fall back to BIP-0032 format
+		bip32Key, b32err := bip32.B58Deserialize(s)
+		if b32err != nil {
+			return ExtendedKeys{}, errors.Wrap(err, "decode xkeys base58 string")
+		}
+
+		result, err := fromBIP32(bip32Key)
+		if err != nil {
+			return ExtendedKeys{}, err
+		}
+		return ExtendedKeys{result}, nil
 	}
 
 	if prefix != ExtendedKeysURLPrefix {
@@ -177,6 +212,10 @@ func (k ExtendedKeys) Equal(other ExtendedKeys) bool {
 
 // RawAddress returns a raw address for this list of keys.
 func (k ExtendedKeys) RawAddress(requiredSigners uint16) (RawAddress, error) {
+	if len(k) == 1 {
+		return k[0].RawAddress()
+	}
+
 	pkhs := make([][]byte, 0, len(k))
 	for _, key := range k {
 		pkhs = append(pkhs, Hash160(key.PublicKey().Bytes()))
@@ -191,6 +230,33 @@ func (k ExtendedKeys) ExtendedPublicKeys() ExtendedKeys {
 		result = append(result, key.ExtendedPublicKey())
 	}
 	return result
+}
+
+// ChildKeys returns the child keys at the specified index.
+func (k ExtendedKeys) ChildKeys(index uint32) (ExtendedKeys, error) {
+	result := make(ExtendedKeys, 0, len(k))
+	for _, key := range k {
+		child, err := key.ChildKey(index)
+		if err != nil {
+			return result, err
+		}
+		result = append(result, child)
+	}
+	return result, nil
+}
+
+// ChildKeysForPath returns the child key at the specified index path.
+func (k ExtendedKeys) ChildKeysForPath(path []uint32) (ExtendedKeys, error) {
+	var err error
+	result := k
+	for _, index := range path {
+		result, err = result.ChildKeys(index)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	return result, nil
 }
 
 // MarshalJSON converts to json.

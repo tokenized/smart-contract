@@ -88,7 +88,7 @@ func ExtendedKeyFromBytes(b []byte) (ExtendedKey, error) {
 		// Fall back to BIP-0032 format
 		bip32Key, err := bip32.Deserialize(b)
 		if err != nil {
-			return ExtendedKey{}, err
+			return ExtendedKey{}, ErrNotExtendedKey
 		}
 
 		return fromBIP32(bip32Key)
@@ -319,6 +319,20 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 
 		if err := publicKeyIsValid(result.KeyValue[:]); err != nil {
 			return result, errors.Wrap(err, "child add public")
+		}
+	}
+
+	return result, nil
+}
+
+// ChildKeyForPath returns the child key at the specified index path.
+func (k ExtendedKey) ChildKeyForPath(path []uint32) (ExtendedKey, error) {
+	var err error
+	result := k
+	for _, index := range path {
+		result, err = result.ChildKey(index)
+		if err != nil {
+			return result, err
 		}
 	}
 
