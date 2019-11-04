@@ -69,14 +69,14 @@ func (k *PublicKeyS256) Numbers() ([]byte, []byte) {
 }
 
 func compressPublicKey(x *big.Int, y *big.Int) []byte {
-	result := make([]byte, 32)
+	result := make([]byte, 33)
 
 	// Header byte is 0x02 for even y value and 0x03 for odd
 	result[0] = byte(0x02) + byte(y.Bit(0))
 
 	// Put x at end so it is zero padded in front
 	b := x.Bytes()
-	offset := 32 - len(b)
+	offset := 33 - len(b)
 	copy(result[offset:], b)
 
 	return result

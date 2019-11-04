@@ -287,6 +287,22 @@ func TestExtendedKey(t *testing.T) {
 			if !b58Key.Equal(child) {
 				t.Fatalf("Base 58 key not equal :\ngot :\n%+v\nwant :\n%+v", b58Key, child)
 			}
+
+			// Verify same child key generated from private and public keys
+			privGrandChild, err := child.ChildKey(1000)
+			if err != nil {
+				t.Fatalf("Failed to generate private grand child : %s", err)
+			}
+
+			pubGrandChild, err := child.ExtendedPublicKey().ChildKey(1000)
+			if err != nil {
+				t.Fatalf("Failed to generate public grand child : %s", err)
+			}
+
+			if !privGrandChild.ExtendedPublicKey().Equal(pubGrandChild) {
+				t.Fatalf("Grand children not equal :\n  got  : %x\n  want : %x",
+					privGrandChild.PublicKey().Bytes(), pubGrandChild.PublicKey().Bytes())
+			}
 		})
 	}
 }

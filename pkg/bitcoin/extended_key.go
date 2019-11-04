@@ -290,8 +290,9 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 		if err != nil {
 			return result, errors.Wrap(err, "parse child private key")
 		}
+		publicKey := privateKey.PublicKey().Bytes()
 
-		copy(result.KeyValue[:], addPublicKeys(privateKey.Number(), k.KeyValue[:]))
+		copy(result.KeyValue[:], addPublicKeys(publicKey, k.KeyValue[:]))
 
 		if err := publicKeyIsValid(result.KeyValue[:]); err != nil {
 			return result, errors.Wrap(err, "child add public")
