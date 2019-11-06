@@ -2,7 +2,6 @@ package txbuilder
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
@@ -132,11 +131,11 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 	if amount > int64(0) {
 		// Increase fee, transfer from change
 		if changeOutputIndex == 0xffffffff {
-			return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("No existing change for tx fee"))
+			return false, newError(ErrorCodeInsufficientValue, "No existing change for tx fee")
 		}
 
 		if tx.MsgTx.TxOut[changeOutputIndex].Value < uint64(amount) {
-			return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
+			return false, newError(ErrorCodeInsufficientValue, "Not enough change for tx fee")
 		}
 
 		// Decrease change, thereby increasing the fee
@@ -146,7 +145,7 @@ func (tx *TxBuilder) adjustFee(amount int64) (bool, error) {
 		if tx.MsgTx.TxOut[changeOutputIndex].Value < tx.DustLimit {
 			if !tx.Outputs[changeOutputIndex].addedForFee {
 				// Don't remove outputs unless they were added by fee adjustment
-				return false, newError(ErrorCodeInsufficientValue, fmt.Sprintf("Not enough change for tx fee"))
+				return false, newError(ErrorCodeInsufficientValue, "Not enough change for tx fee")
 			}
 			// Remove change output since it is less than dust. Dust will go to miner.
 			tx.MsgTx.TxOut = append(tx.MsgTx.TxOut[:changeOutputIndex], tx.MsgTx.TxOut[changeOutputIndex+1:]...)

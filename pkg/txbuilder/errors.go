@@ -19,6 +19,14 @@ func IsErrorCode(err error, code int) bool {
 	return er.code == code
 }
 
+func ErrorMessage(err error) string {
+	er, ok := err.(*txBuilderError)
+	if !ok {
+		return ""
+	}
+	return er.message
+}
+
 type txBuilderError struct {
 	code    int
 	message string

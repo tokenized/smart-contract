@@ -48,7 +48,14 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 //   receivers based on the transfer request data. We will need to analyze the transfer request
 //   data to determine which inputs were to have funded sending bitcoins, and return the bitcoins
 //   to them.
-func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key, code uint32) error {
+func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction,
+	wk *wallet.Key, code uint32) error {
+	return RespondRejectText(ctx, w, itx, wk, code, "")
+}
+
+func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction,
+	wk *wallet.Key, code uint32, text string) error {
+
 	rejectionCode := actions.RejectionsData(code)
 	if rejectionCode == nil {
 		Error(ctx, w, fmt.Errorf("Rejection code %d not found", code))
@@ -62,6 +69,10 @@ func RespondReject(ctx context.Context, w *ResponseWriter, itx *inspector.Transa
 		RejectionCode: code,
 		Message:       rejectionCode.Label,
 		Timestamp:     v.Now.Nano(),
+	}
+
+	if len(text) > 0 {
+		rejection.Message += ": " + text
 	}
 
 	// Contract address
@@ -205,7 +216,8 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	if err != nil {
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
-			return RespondReject(ctx, w, itx, wk, actions.RejectionsInsufficientTxFeeFunding)
+			return RespondRejectText(ctx, w, itx, wk, actions.RejectionsInsufficientTxFeeFunding,
+				txbuilder.ErrorMessage(err))
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse
