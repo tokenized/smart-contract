@@ -54,7 +54,7 @@ func (tx *TxBuilder) SetChangeAddress(address bitcoin.RawAddress, keyID string) 
 
 // AddPaymentOutput adds an output to TxBuilder with the specified value and a script paying the
 //   specified address.
-// isChange marks the output to receive remaining bitcoin.
+// isRemainder marks the output to receive remaining bitcoin after fees are taken.
 func (tx *TxBuilder) AddPaymentOutput(address bitcoin.RawAddress, value uint64, isRemainder bool) error {
 	if value < tx.DustLimit {
 		return newError(ErrorCodeBelowDustValue, "")
@@ -80,8 +80,19 @@ func (tx *TxBuilder) AddDustOutput(address bitcoin.RawAddress, isRemainder bool)
 	return tx.AddOutput(script, tx.DustLimit, isRemainder, true)
 }
 
+// AddMaxOutput adds an output to TxBuilder with a script paying the specified address and the
+//   remainder flag set so that it gets all remaining value after fees are taken.
+func (tx *TxBuilder) AddMaxOutput(address bitcoin.RawAddress) error {
+	tx.SendMax = true
+	script, err := address.LockingScript()
+	if err != nil {
+		return err
+	}
+	return tx.AddOutput(script, 0, true, false)
+}
+
 // AddOutput adds an output to TxBuilder with the specified script and value.
-// isChange marks the output to receive remaining bitcoin.
+// isRemainder marks the output to receive remaining bitcoin after fees are taken.
 // isDust marks the output as a dust amount which will be replaced by any non-dust amount if an
 //    amount is added later.
 func (tx *TxBuilder) AddOutput(lockScript []byte, value uint64, isRemainder bool, isDust bool) error {

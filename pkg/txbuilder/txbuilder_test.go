@@ -391,9 +391,8 @@ func TestSendMax(t *testing.T) {
 	}
 
 	tx.AddPaymentOutput(toAddress, 1000, false)
-	tx.AddOutput(toScript2, 0, true, false)
+	tx.AddMaxOutput(toAddress2)
 
-	tx.SetSendMax()
 	err = tx.AddFunding(utxos[:1])
 	if err != nil {
 		t.Fatalf("Failed to add funding : %s", err)
@@ -425,9 +424,8 @@ func TestSendMax(t *testing.T) {
 		t.Fatalf("Failed to build max send tx : %s", err)
 	}
 
-	tx.AddOutput(toScript, 0, true, false)
+	tx.AddMaxOutput(toAddress)
 
-	tx.SetSendMax()
 	err = tx.AddFunding(utxos)
 	if err != nil {
 		t.Fatalf("Failed to add funding : %s", err)
@@ -460,9 +458,8 @@ func TestSendMax(t *testing.T) {
 	}
 
 	tx.AddPaymentOutput(toAddress, 5000, false)
-	tx.AddOutput(toScript2, 0, true, false)
+	tx.AddMaxOutput(toAddress2)
 
-	tx.SetSendMax()
 	err = tx.AddFunding(utxos)
 	if err != nil {
 		t.Fatalf("Failed to add funding : %s", err)
