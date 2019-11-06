@@ -192,9 +192,15 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if settlementIsComplete(ctx, msg, &settlement) {
 		node.Log(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
-			node.LogWarn(ctx, "Failed to sign settle tx : %s", err)
-			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-				actions.RejectionsInsufficientValue, false)
+			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+				node.LogWarn(ctx, "Insufficient settlement tx funding : %s", err)
+				return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
+					actions.RejectionsInsufficientTxFeeFunding, false)
+			} else {
+				node.LogWarn(ctx, "Failed to sign settlement tx : %s", err)
+				return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
+					actions.RejectionsMsgMalformed, false)
+			}
 		}
 
 		err := node.Respond(ctx, w, settleTx.MsgTx)
