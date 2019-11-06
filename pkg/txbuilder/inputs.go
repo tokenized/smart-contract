@@ -62,12 +62,6 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 	return nil
 }
 
-// SetSendMax sets the SendMax flag so AddFunding will add all UTXOs as inputs, even if they are not
-//   needed to fund outputs.
-func (tx *TxBuilder) SetSendMax() {
-	tx.SendMax = true
-}
-
 // AddFunding adds inputs spending the specified UTXOs until the transaction has enough funding to
 //   cover the fees and outputs.
 // If SendMax is set then all UTXOs are added as inputs.
