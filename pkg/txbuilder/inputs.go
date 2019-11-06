@@ -28,6 +28,14 @@ func (tx *TxBuilder) InputAddress(index int) (bitcoin.RawAddress, error) {
 
 // AddInput adds an input to TxBuilder.
 func (tx *TxBuilder) AddInputUTXO(utxo bitcoin.UTXO) error {
+	// Check that utxo isn't already an input.
+	for _, input := range tx.MsgTx.TxIn {
+		if input.PreviousOutPoint.Hash.Equal(&utxo.Hash) &&
+			input.PreviousOutPoint.Index == utxo.Index {
+			return newError(ErrorCodeDuplicateInput, "")
+		}
+	}
+
 	input := InputSupplement{
 		LockingScript: utxo.LockingScript,
 		Value:         utxo.Value,
@@ -48,6 +56,14 @@ func (tx *TxBuilder) AddInputUTXO(utxo bitcoin.UTXO) error {
 //   lockScript is the script from the output being spent.
 //   value is the number of satoshis from the output being spent.
 func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value uint64) error {
+	// Check that outpoint isn't already an input.
+	for _, input := range tx.MsgTx.TxIn {
+		if input.PreviousOutPoint.Hash.Equal(&outpoint.Hash) &&
+			input.PreviousOutPoint.Index == outpoint.Index {
+			return newError(ErrorCodeDuplicateInput, "")
+		}
+	}
+
 	input := InputSupplement{
 		LockingScript: lockScript,
 		Value:         value,
@@ -66,7 +82,6 @@ func (tx *TxBuilder) AddInput(outpoint wire.OutPoint, lockScript []byte, value u
 //   cover the fees and outputs.
 // If SendMax is set then all UTXOs are added as inputs.
 func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
-
 	inputValue := tx.InputValue()
 	outputValue := tx.OutputValue(true)
 	feeValue := tx.Fee()
@@ -100,6 +115,9 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 	for _, utxo := range utxos {
 		err = tx.AddInputUTXO(utxo)
 		if err != nil {
+			if IsErrorCode(err, ErrorCodeDuplicateInput) {
+				continue
+			}
 			return errors.Wrap(err, "adding input")
 		}
 

@@ -85,6 +85,10 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	currentFee := int64(inputValue) - int64(outputValue)
 	done, err = tx.adjustFee(estimatedFee - currentFee)
 	if err != nil {
+		if IsErrorCode(err, ErrorCodeInsufficientValue) {
+			return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue,
+				outputValue+uint64(estimatedFee)))
+		}
 		return err
 	}
 
@@ -152,6 +156,10 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 
 		done, err = tx.adjustFee(targetFee - currentFee)
 		if err != nil {
+			if IsErrorCode(err, ErrorCodeInsufficientValue) {
+				return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", inputValue,
+					outputValue+uint64(targetFee)))
+			}
 			return err
 		}
 

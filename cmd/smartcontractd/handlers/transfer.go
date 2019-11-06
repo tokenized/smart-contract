@@ -73,24 +73,26 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Transfer request invalid")
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode,
+			false, "")
 	}
 
 	// Check pre-processing reject code
 	if itx.RejectCode != 0 {
-		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode, false)
+		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, itx.RejectCode,
+			false, "")
 	}
 
 	if msg.OfferExpiry != 0 && v.Now.Nano() > msg.OfferExpiry {
 		node.LogWarn(ctx, "Transfer expired : %d", msg.OfferExpiry)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsTransferExpired, false)
+			actions.RejectionsTransferExpired, false, "")
 	}
 
 	if len(msg.Assets) == 0 {
 		node.LogWarn(ctx, "Transfer has no asset transfers")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsTransferExpired, false)
+			actions.RejectionsMsgMalformed, false, "No transfers")
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
@@ -110,19 +112,19 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractMoved, false)
+			actions.RejectionsContractMoved, false, "")
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractFrozen, false)
+			actions.RejectionsContractFrozen, false, "")
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractExpired, false)
+			actions.RejectionsContractExpired, false, "")
 	}
 
 	// Transfer Outputs
@@ -148,7 +150,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		node.LogWarn(ctx, "Failed to build settlement tx : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsMsgMalformed, false)
+			actions.RejectionsMsgMalformed, false, "")
 	}
 
 	// Update outputs to pay bitcoin receivers.
@@ -156,7 +158,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		node.LogWarn(ctx, "Failed to add bitcoin settlements : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-			actions.RejectionsMsgMalformed, false)
+			actions.RejectionsMsgMalformed, false, "")
 	}
 
 	// Create initial settlement data
@@ -182,7 +184,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
-			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, rejectCode, false)
+			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, rejectCode,
+				false, "")
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -192,9 +195,15 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if settlementIsComplete(ctx, msg, &settlement) {
 		node.Log(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
-			node.LogWarn(ctx, "Failed to sign settle tx : %s", err)
-			return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
-				actions.RejectionsInsufficientValue, false)
+			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+				node.LogWarn(ctx, "Insufficient settlement tx funding : %s", err)
+				return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
+					actions.RejectionsInsufficientTxFeeFunding, false, txbuilder.ErrorMessage(err))
+			} else {
+				node.LogWarn(ctx, "Failed to sign settlement tx : %s", err)
+				return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
+					actions.RejectionsMsgMalformed, false, "")
+			}
 		}
 
 		err := node.Respond(ctx, w, settleTx.MsgTx)
@@ -290,7 +299,8 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	node.LogWarn(ctx, "Transfer timed out")
-	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk, actions.RejectionsTimeout, true)
+	return respondTransferReject(ctx, t.MasterDB, t.Config, w, itx, msg, rk,
+		actions.RejectionsTimeout, true, "")
 }
 
 // firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the one
@@ -1143,8 +1153,9 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 // respondTransferReject sends a reject to all parties involved with a transfer request and refunds
 //   any bitcoin involved. This can only be done by the first contract, because they hold the
 //   bitcoin to be distributed.
-func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Config, w *node.ResponseWriter,
-	transferTx *inspector.Transaction, transfer *actions.Transfer, rk *wallet.Key, code uint32, removeBoomerang bool) error {
+func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Config,
+	w *node.ResponseWriter, transferTx *inspector.Transaction, transfer *actions.Transfer,
+	rk *wallet.Key, code uint32, removeBoomerang bool, text string) error {
 
 	// Determine UTXOs to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
@@ -1229,5 +1240,5 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB, config *node.Co
 		w.ClearRejectOutputValues(ct.AdministrationAddress)
 	}
 
-	return node.RespondReject(ctx, w, transferTx, rk, code)
+	return node.RespondRejectText(ctx, w, transferTx, rk, code, text)
 }
