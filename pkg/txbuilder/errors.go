@@ -8,6 +8,7 @@ const (
 	ErrorCodeMissingPrivateKey   = 3
 	ErrorCodeWrongScriptTemplate = 4
 	ErrorCodeBelowDustValue      = 5
+	ErrorCodeDuplicateInput      = 6
 )
 
 func IsErrorCode(err error, code int) bool {
@@ -40,6 +41,8 @@ func errorCodeString(code int) string {
 		return "Missing Private Key"
 	case ErrorCodeWrongScriptTemplate:
 		return "Wrong Script Template"
+	case ErrorCodeDuplicateInput:
+		return "Duplicate Input"
 	default:
 		return "Unknown Error Code"
 	}
