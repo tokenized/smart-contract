@@ -28,10 +28,10 @@ func (tx *TxBuilder) AllInputsAreSigned() bool {
 	return true
 }
 
-// SignPKHInput sets the signature script on the specified PKH input.
+// SignP2PKHInput sets the signature script on the specified PKH input.
 // This should only be used when you aren't signing for all inputs and the fee is overestimated, so
 //   it needs no adjustement.
-func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCache) error {
+func (tx *TxBuilder) SignP2PKHInput(index int, key bitcoin.Key, hashCache *SigHashCache) error {
 	if index >= len(tx.Inputs) {
 		return errors.New("Input index out of range")
 	}
@@ -53,7 +53,7 @@ func (tx *TxBuilder) SignInput(index int, key bitcoin.Key, hashCache *SigHashCac
 		return newError(ErrorCodeWrongPrivateKey, fmt.Sprintf("Required : %x", hash.Bytes()))
 	}
 
-	tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(key, tx.MsgTx, index,
+	tx.MsgTx.TxIn[index].SignatureScript, err = P2PKHUnlockingScript(key, tx.MsgTx, index,
 		tx.Inputs[index].LockingScript, tx.Inputs[index].Value, SigHashAll+SigHashForkID, hashCache)
 
 	return err
@@ -111,7 +111,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 						continue
 					}
 
-					tx.MsgTx.TxIn[index].SignatureScript, err = PKHUnlockingScript(keys[i], tx.MsgTx,
+					tx.MsgTx.TxIn[index].SignatureScript, err = P2PKHUnlockingScript(keys[i], tx.MsgTx,
 						index, tx.Inputs[index].LockingScript, tx.Inputs[index].Value,
 						SigHashAll+SigHashForkID, &shc)
 
@@ -161,7 +161,7 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	return nil
 }
 
-func PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
+func P2PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
 	lockScript []byte, value uint64, hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
 	// <Signature> <PublicKey>
 	sig, err := InputSignature(key, tx, index, lockScript, value, hashType, hashCache)
@@ -176,23 +176,59 @@ func PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
 	if err != nil {
 		return nil, err
 	}
+
 	err = bitcoin.WritePushDataScript(buf, pubkey)
 	if err != nil {
 		return nil, err
 	}
+
 	return buf.Bytes(), nil
 }
 
-func SHUnlockingScript(script []byte) ([]byte, error) {
-	// <RedeemScript>
+func P2SHUnlockingScript(script []byte) ([]byte, error) {
+	// <RedeemScript>...
 	return nil, errors.New("SH Unlocking Script Not Implemented") // TODO Implement SH unlocking script
 }
 
-func MultiPKHUnlockingScript(keys [][]byte) ([]byte, error) {
-	return nil, errors.New("MultiPKH Unlocking Script Not Implemented") // TODO Implement MultiPKH unlocking script
+// P2MultiPKHUnlockingScript returns an unlocking script for a P2MultiPKH locking script.
+// Provide all public keys in order. Signatures should be the same length as the public keys and
+//   have empty entries when that key didn't sign.
+func P2MultiPKHUnlockingScript(required uint16, pubKeys [][]byte, sigs [][]byte) ([]byte, error) {
+	if len(pubKeys) != len(sigs) {
+		return nil, errors.New("Same number of public keys and signatures required")
+	}
+
+	// For each signer : OP_TRUE + PublicKey + Signature
+	// For each non-signer : OP_FALSE
+	const persigentry int = 74 + 34 + 1
+	buf := bytes.NewBuffer(make([]byte, 0, (int(required)*persigentry)+(len(pubKeys)-int(required))))
+
+	// Add everything in reverse because it will be pushed into the stack (LIFO) and popped out in reverse.
+	total := len(pubKeys)
+	for i := total - 1; i >= 0; i-- {
+		if len(sigs[i]) > 0 {
+			if err := bitcoin.WritePushDataScript(buf, sigs[i]); err != nil {
+				return nil, err
+			}
+
+			if err := bitcoin.WritePushDataScript(buf, pubKeys[i]); err != nil {
+				return nil, err
+			}
+
+			if err := buf.WriteByte(bitcoin.OP_TRUE); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := buf.WriteByte(bitcoin.OP_FALSE); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
-func RPHUnlockingScript(k []byte) ([]byte, error) {
+func P2RPHUnlockingScript(k []byte) ([]byte, error) {
 	// <PublicKey> <Signature(containing r)>
 	// k is 256 bit number used to calculate sig with r
 	return nil, errors.New("RPH Unlocking Script Not Implemented") // TODO Implement RPH unlocking script

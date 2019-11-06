@@ -41,7 +41,7 @@ type SignatureS256 struct {
 
 // SignatureS256FromBytes creates a key from a serialized signature.
 func SignatureS256FromBytes(sig []byte) (*SignatureS256, error) {
-	signature, err := btcec.ParseSignature(sig, btcec.S256())
+	signature, err := btcec.ParseSignature(sig, curveS256)
 	return &SignatureS256{sig: signature}, err
 }
 

@@ -404,7 +404,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		signed := false
 		var sigHashCache txbuilder.SigHashCache
 		for i, _ := range settleTx.Inputs {
-			err = settleTx.SignInput(i, rk.Key, &sigHashCache)
+			err = settleTx.SignP2PKHInput(i, rk.Key, &sigHashCache)
 			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 				continue
 			}
@@ -549,7 +549,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	signed := false
 	var hashCache txbuilder.SigHashCache
 	for i, _ := range settleTx.Inputs {
-		err = settleTx.SignInput(i, rk.Key, &hashCache)
+		err = settleTx.SignP2PKHInput(i, rk.Key, &hashCache)
 		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
 			continue
 		}
