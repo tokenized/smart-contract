@@ -26,7 +26,7 @@ func NewTxFilter(contractPubKeys [][]byte, tracer *Tracer, isTest bool) *TxFilte
 		pubkeys: contractPubKeys,
 	}
 
-	result.pubkeys = make([][]byte, 0, len(contractPubKeys))
+	result.pkhs = make([][]byte, 0, len(contractPubKeys))
 	for _, pubkey := range contractPubKeys {
 		result.pkhs = append(result.pkhs, bitcoin.Hash160(pubkey))
 	}

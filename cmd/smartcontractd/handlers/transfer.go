@@ -18,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/pkg/wallet"
@@ -726,9 +727,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 			updatedHoldings[*hash] = h
 
+			address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
+				config.Net)
 			if err := holdings.AddDebit(h, txid, sender.Quantity, v.Now); err != nil {
-				address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					config.Net)
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
@@ -742,6 +743,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
 				return node.NewError(actions.RejectionsMsgMalformed, "")
+			} else {
+				logger.Info(ctx, "Debit %d %x to %s", sender.Quantity, assetTransfer.AssetCode,
+					address.String())
 			}
 
 			// Update total send balance
@@ -796,12 +800,14 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 			updatedHoldings[*hash] = h
 
+			address := bitcoin.NewAddressFromRawAddress(receiverAddress, config.Net)
 			if err := holdings.AddDeposit(h, txid, receiver.Quantity, v.Now); err != nil {
-				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					config.Net)
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
 				return node.NewError(actions.RejectionsMsgMalformed, "")
+			} else {
+				logger.Info(ctx, "Deposit %d %x to %s", receiver.Quantity, assetTransfer.AssetCode,
+					address.String())
 			}
 
 			// Update asset balance
@@ -1122,11 +1128,14 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			}
 
 			err = holdings.FinalizeTx(h, txid, settlementQuantity.Quantity, timestamp)
+			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[settlementQuantity.Index].Address,
+				w.Config.Net)
 			if err != nil {
-				address := bitcoin.NewAddressFromRawAddress(itx.Outputs[settlementQuantity.Index].Address,
-					w.Config.Net)
 				return fmt.Errorf("Failed settlement finalize for holding : %x %s : %s",
 					assetSettlement.AssetCode, address.String(), err)
+			} else {
+				logger.Info(ctx, "Settled balance for %x %s", assetSettlement.AssetCode,
+					address.String())
 			}
 
 			hash, err := itx.Outputs[settlementQuantity.Index].Address.Hash()
