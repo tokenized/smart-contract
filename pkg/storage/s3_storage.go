@@ -202,10 +202,11 @@ func (s S3Storage) findKeys(ctx context.Context,
 
 	svc := s3.New(s.Session)
 
+	fmt.Printf("Bucket : %s\n", s.Config.Bucket)
+	fmt.Printf("Find keys : %s\n", path)
 	input := &s3.ListObjectsV2Input{
-		Bucket:    aws.String(s.Config.Bucket),
-		Prefix:    &path,
-		Delimiter: aws.String("/"),
+		Bucket: aws.String(s.Config.Bucket),
+		Prefix: &path,
 	}
 
 	out, err := svc.ListObjectsV2(input)
