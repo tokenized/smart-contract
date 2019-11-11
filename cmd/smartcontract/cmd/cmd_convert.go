@@ -23,6 +23,13 @@ var cmdConvert = &cobra.Command{
 			return nil
 		}
 
+		if len(args[0]) == 66 {
+			hash, _ := hex.DecodeString(args[0])
+			ra, _ := bitcoin.NewRawAddressPKH(bitcoin.Hash160(hash))
+			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, bitcoin.MainNet).String())
+			return nil
+		}
+
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err == nil {
 			h, err := address.Hash()
