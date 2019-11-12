@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -875,6 +876,75 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	return contract.Save(ctx, test.MasterDB, ct)
 }
 
+func mockUpOtherAsset(ctx context.Context, key *wallet.Key, transfers, enforcement, voting bool,
+	quantity uint64, payload assets.Asset, permitted, issuer, holder bool) error {
+
+	var assetData = state.Asset{
+		Code:                       protocol.AssetCodeFromContract(key.Address, 0),
+		AssetType:                  payload.Code(),
+		TransfersPermitted:         transfers,
+		EnforcementOrdersPermitted: enforcement,
+		VotingRights:               voting,
+		TokenQty:                   quantity,
+		CreatedAt:                  protocol.CurrentTimestamp(),
+		UpdatedAt:                  protocol.CurrentTimestamp(),
+	}
+
+	testAsset2Type = payload.Code()
+	testAsset2Code = *assetData.Code
+	testToken2Qty = quantity
+
+	var err error
+	assetData.AssetPayload, err = payload.Bytes()
+	if err != nil {
+		return err
+	}
+
+	// Define permissions for asset fields
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+			VotingSystemsAllowed:   []bool{true, false}, // Enable this voting system for proposals on this field.
+		},
+	}
+
+	assetData.AssetPermissions, err = permissions.Bytes()
+	if err != nil {
+		return err
+	}
+
+	issuerHolding := state.Holding{
+		Address:          issuerKey.Address,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        assetData.CreatedAt,
+		UpdatedAt:        assetData.UpdatedAt,
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+	}
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAssetCodes[0], &issuerHolding)
+	if err != nil {
+		return err
+	}
+	test.HoldingsChannel.Add(cacheItem)
+
+	err = asset.Save(ctx, test.MasterDB, key.Address, &assetData)
+	if err != nil {
+		return err
+	}
+
+	// Add to contract
+	ct, err := contract.Retrieve(ctx, test.MasterDB, key.Address)
+	if err != nil {
+		return err
+	}
+
+	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
+	return contract.Save(ctx, test.MasterDB, ct)
+}
+
 func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
 	return mockUpAssetHolding(ctx, address, testAssetCodes[0], quantity)
 }
@@ -908,6 +978,25 @@ func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity ui
 		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAsset2Code, &h)
+	if err != nil {
+		return err
+	}
+	test.HoldingsChannel.Add(cacheItem)
+	return nil
+}
+
+func mockUpOtherHolding(ctx context.Context, key *wallet.Key, address bitcoin.RawAddress,
+	quantity uint64) error {
+
+	h := state.Holding{
+		Address:          address,
+		PendingBalance:   quantity,
+		FinalizedBalance: quantity,
+		CreatedAt:        protocol.CurrentTimestamp(),
+		UpdatedAt:        protocol.CurrentTimestamp(),
+		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+	}
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAsset2Code, &h)
 	if err != nil {
 		return err
 	}

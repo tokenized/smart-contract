@@ -178,9 +178,10 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Add this contract's data to the settlement op return data
+	isSingleContract := transferIsSingleContract(ctx, itx, msg, rk)
 	assetUpdates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement,
-		t.Headers, assetUpdates)
+		t.Headers, assetUpdates, isSingleContract)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -193,7 +194,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Check if settlement data is complete. No other contracts involved
-	if settlementIsComplete(ctx, msg, &settlement) {
+	if isSingleContract {
 		node.Log(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
 			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
@@ -209,7 +210,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 		err := node.Respond(ctx, w, settleTx.MsgTx)
 		if err == nil {
-			if err = t.saveHoldings(ctx, assetUpdates, rk.Address); err != nil {
+			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates, rk.Address); err != nil {
 				return err
 			}
 		}
@@ -241,31 +242,31 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to schedule transfer timeout")
 	}
 
-	if err := t.saveHoldings(ctx, assetUpdates, rk.Address); err != nil {
+	if err := saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates, rk.Address); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (t *Transfer) saveHoldings(ctx context.Context,
+func saveHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holdings.CacheChannel,
 	updates map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding,
 	contractAddress bitcoin.RawAddress) error {
 
 	for assetCode, hds := range updates {
 		for _, h := range hds {
-			cacheItem, err := holdings.Save(ctx, t.MasterDB, contractAddress, &assetCode, h)
+			cacheItem, err := holdings.Save(ctx, masterDB, contractAddress, &assetCode, h)
 			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
-			t.HoldingsChannel.Add(cacheItem)
+			holdingsChannel.Add(cacheItem)
 		}
 	}
 
 	return nil
 }
 
-func (t *Transfer) revertHoldings(ctx context.Context,
+func revertHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holdings.CacheChannel,
 	updates map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding,
 	contractAddress bitcoin.RawAddress, txid *protocol.TxId) error {
 
@@ -277,7 +278,7 @@ func (t *Transfer) revertHoldings(ctx context.Context,
 		}
 	}
 
-	return t.saveHoldings(ctx, updates, contractAddress)
+	return saveHoldings(ctx, masterDB, holdingsChannel, updates, contractAddress)
 }
 
 // TransferTimeout is called when a multi-contract transfer times out because the other contracts are not responding.
@@ -575,7 +576,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *actions.Transfer, settleTx *txbuilder.TxBuilder,
 	settlement *actions.Settlement, headers node.BitcoinHeaders,
-	updates map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding) error {
+	updates map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding, isSingleContract bool) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -729,7 +730,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
 				config.Net)
-			if err := holdings.AddDebit(h, txid, sender.Quantity, v.Now); err != nil {
+			if err := holdings.AddDebit(h, txid, sender.Quantity, isSingleContract, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
@@ -739,6 +740,11 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					node.LogWarn(ctx, "Frozen funds: asset=%x party=%s",
 						assetTransfer.AssetCode, address.String())
 					return node.NewError(actions.RejectionsHoldingsFrozen, "")
+				}
+				if err == holdings.ErrHoldingsLocked {
+					node.LogWarn(ctx, "Locked funds: asset=%x party=%s",
+						assetTransfer.AssetCode, address.String())
+					return node.NewError(actions.RejectionsHoldingsLocked, "")
 				}
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
@@ -801,7 +807,12 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			updatedHoldings[*hash] = h
 
 			address := bitcoin.NewAddressFromRawAddress(receiverAddress, config.Net)
-			if err := holdings.AddDeposit(h, txid, receiver.Quantity, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, txid, receiver.Quantity, isSingleContract, v.Now); err != nil {
+				if err == holdings.ErrHoldingsLocked {
+					node.LogWarn(ctx, "Locked funds: asset=%x party=%s",
+						assetTransfer.AssetCode, address.String())
+					return node.NewError(actions.RejectionsHoldingsLocked, "")
+				}
 				node.LogWarn(ctx, "Send failed : %s : asset=%x party=%s",
 					err, assetTransfer.AssetCode, address.String())
 				return node.NewError(actions.RejectionsMsgMalformed, "")
@@ -1038,24 +1049,23 @@ func sendToNextSettlementContract(ctx context.Context,
 	return nil
 }
 
-// settlementIsComplete returns true if the settlement accounts for all assets in the transfer.
-func settlementIsComplete(ctx context.Context, transfer *actions.Transfer, settlement *actions.Settlement) bool {
-	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.settlementIsComplete")
+// transferIsSingleContract returns true if this contract can settle all assets in the transfer.
+func transferIsSingleContract(ctx context.Context, itx *inspector.Transaction,
+	transfer *actions.Transfer, rk *wallet.Key) bool {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.transferIsSingleContract")
 	defer span.End()
 
 	for _, assetTransfer := range transfer.Assets {
-		found := false
-		for _, assetSettle := range settlement.Assets {
-			if assetTransfer.AssetType == assetSettle.AssetType &&
-				bytes.Equal(assetTransfer.AssetCode, assetSettle.AssetCode) {
-				node.LogVerbose(ctx, "Found settlement data for asset : %x", assetTransfer.AssetCode)
-				found = true
-				break
-			}
+		if assetTransfer.AssetType == "BSV" {
+			continue // All contracts can handle bitcoin transfers
 		}
 
-		if !found {
-			return false // No settlement for this asset yet
+		if int(assetTransfer.ContractIndex) >= len(itx.Outputs) {
+			return false // Invalid contract index
+		}
+
+		if !itx.Outputs[assetTransfer.ContractIndex].Address.Equal(rk.Address) {
+			return false // Another contract is involved
 		}
 	}
 

@@ -332,7 +332,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
 
 		if ac.TokenQty < as.TokenQty {
-			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, true, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
 				if err == holdings.ErrInsufficientHoldings {
 					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
@@ -341,7 +341,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 				}
 			}
 		} else {
-			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, true, v.Now); err != nil {
 				node.LogWarn(ctx, "%s : Failed to increase administration holdings : %s", v.TraceID, err)
 				return errors.Wrap(err, "Failed to increase holdings")
 			}
@@ -482,7 +482,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
 		txid := protocol.TxIdFromBytes(itx.Hash[:])
-		holdings.AddDeposit(h, txid, msg.TokenQty, protocol.NewTimestamp(msg.Timestamp))
+		holdings.AddDeposit(h, txid, msg.TokenQty, true, protocol.NewTimestamp(msg.Timestamp))
 		holdings.FinalizeTx(h, txid, msg.TokenQty, protocol.NewTimestamp(msg.Timestamp))
 		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"runtime/pprof"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
@@ -30,6 +31,7 @@ func TestTransfers(t *testing.T) {
 
 	t.Run("sendTokens", sendTokens)
 	t.Run("multiExchange", multiExchange)
+	t.Run("multiExchangeLock", multiExchangeLock)
 	t.Run("oracle", oracleTransfer)
 	t.Run("oracleBad", oracleTransferBad)
 	t.Run("permitted", permitted)
@@ -1351,6 +1353,401 @@ func multiExchange(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Holding.FinalizedBalance)
+}
+
+func multiExchangeLock(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	user1HoldingBalance := uint64(150)
+	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	otherContractKey, err := tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
+	}
+	err = mockUpOtherContract(ctx, otherContractKey,
+		"Test Contract 2", "This is a mock contract and means nothing.", "I",
+		1, "Karl Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpOtherAsset(ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
+		true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
+	}
+	user2HoldingBalance := uint64(200)
+	err = mockUpOtherHolding(ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
+	}
+
+	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
+	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
+
+	// Create Transfer message
+	transferData := actions.Transfer{}
+
+	// Transfer asset 1 from user1 to user2
+	transfer1Amount := uint64(50)
+	assetTransfer1Data := actions.AssetTransferField{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCodes[0].Bytes(),
+	}
+
+	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
+	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
+		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+			Quantity: transfer1Amount})
+
+	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+
+	// Transfer asset 2 from user2 to user1
+	transfer2Amount := uint64(150)
+	assetTransfer2Data := actions.AssetTransferField{
+		ContractIndex: 1, // first output
+		AssetType:     testAsset2Type,
+		AssetCode:     testAsset2Code.Bytes(),
+	}
+
+	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
+	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+			Quantity: transfer2Amount})
+
+	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+
+	// Build transfer transaction
+	transferTx := wire.NewMsgTx(2)
+
+	// From user1
+	transferInputHash := funding1Tx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+
+	// From user2
+	transferInputHash = funding2Tx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+
+	// To contract1
+	script1, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script1))
+	// To contract2
+	script2, _ := otherContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(1000, script2))
+	// To contract1 boomerang
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(5000, script1))
+
+	// Data output
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, transferTx)
+
+	err = a.Trigger(ctx, "SEE", transferItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept transfer : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tTransfer accepted", tests.Success)
+
+	if len(responses) == 0 {
+		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
+	}
+
+	response := responses[0]
+	responses = nil
+
+	responseItx, err := inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
+	}
+
+	err = responseItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
+	}
+
+	if responseItx.MsgProto.Code() != actions.CodeMessage {
+		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
+	}
+
+	settlementRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
+	if !ok {
+		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
+	}
+
+	if settlementRequestMessage.MessageCode != messages.CodeSettlementRequest {
+		t.Fatalf("\t%s\tResponse itx is not Settlement Request : %d", tests.Failed,
+			settlementRequestMessage.MessageCode)
+	}
+
+	test.RPCNode.SaveTX(ctx, response)
+
+	/****************************** Attempt single contract transfer ******************************/
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100014, userKey.Address)
+
+	// Create Transfer message
+	transferOtherData := actions.Transfer{}
+
+	// Transfer asset 1 from user1 to user2
+	transferOtherAmount := uint64(75)
+	assetTransferOtherData := actions.AssetTransferField{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCodes[0].Bytes(),
+	}
+
+	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
+	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
+		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+			Quantity: transferOtherAmount})
+
+	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+
+	// Build transfer transaction
+	transferOtherTx := wire.NewMsgTx(2)
+
+	// From user
+	transferOtherTx.TxIn = append(transferOtherTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(fundingTx.TxHash(), 0), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	transferOtherTx.TxOut = append(transferOtherTx.TxOut, wire.NewTxOut(3000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&transferOtherData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferOtherTx.TxOut = append(transferOtherTx.TxOut, wire.NewTxOut(0, script))
+
+	transferOtherItx, err := inspector.NewTransactionFromWire(ctx, transferOtherTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, transferOtherTx)
+
+	err = a.Trigger(ctx, "SEE", transferOtherItx)
+	if err == nil {
+		t.Fatalf("\t%s\tFailed to reject transfer of locked funds", tests.Failed)
+	}
+
+	t.Logf("\t%s\tTransfer rejected", tests.Success)
+
+	if len(responses) == 0 {
+		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
+	}
+
+	response = responses[0]
+	responses = nil
+
+	responseItx, err = inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
+	}
+
+	err = responseItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
+	}
+
+	if responseItx.MsgProto.Code() != actions.CodeRejection {
+		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
+	}
+
+	rejectMessage, ok := responseItx.MsgProto.(*actions.Rejection)
+	if !ok {
+		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
+	}
+
+	if rejectMessage.RejectionCode != actions.RejectionsHoldingsLocked {
+		t.Fatalf("\t%s\tReject code is not holdings locked : %d", tests.Failed,
+			rejectMessage.RejectionCode)
+	}
+
+	t.Logf("\t%s\tTransfer rejected with locked code", tests.Success)
+
+	/***************************** Send cancel from other contract ********************************/
+
+	// Create reject message
+	rejectOtherData := actions.Rejection{
+		RejectionCode:  actions.RejectionsAssetNotPermitted,
+		Timestamp:      uint64(time.Now().UnixNano()),
+		AddressIndexes: []uint32{0},
+	}
+
+	// Build transfer transaction
+	rejectOtherTx := wire.NewMsgTx(2)
+
+	// From other contract (second output of multi-contract transfer request)
+	rejectOtherTx.TxIn = append(rejectOtherTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(transferTx.TxHash(), 1), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	rejectOtherTx.TxOut = append(rejectOtherTx.TxOut, wire.NewTxOut(3000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&rejectOtherData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize rejection : %v", tests.Failed, err)
+	}
+	rejectOtherTx.TxOut = append(rejectOtherTx.TxOut, wire.NewTxOut(0, script))
+
+	rejectOtherItx, err := inspector.NewTransactionFromWire(ctx, rejectOtherTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = rejectOtherItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, rejectOtherTx)
+
+	err = a.Trigger(ctx, "SEE", rejectOtherItx)
+	if err == nil {
+		t.Fatalf("\t%s\tFailed to handle reject of multi-contract transfer", tests.Failed)
+	}
+
+	t.Logf("\t%s\tTransfer reject processed", tests.Success)
+
+	if len(responses) == 0 {
+		t.Fatalf("\t%s\tFailed to create transfer reject", tests.Failed)
+	}
+
+	response = responses[0]
+	responses = nil
+
+	responseItx, err = inspector.NewTransactionFromWire(ctx, response, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
+	}
+
+	err = responseItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
+	}
+
+	if responseItx.MsgProto.Code() != actions.CodeRejection {
+		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
+	}
+
+	rejectMessage, ok = responseItx.MsgProto.(*actions.Rejection)
+	if !ok {
+		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
+	}
+
+	if rejectMessage.RejectionCode != actions.RejectionsAssetNotPermitted {
+		t.Fatalf("\t%s\tReject code is not holdings locked : %d", tests.Failed,
+			rejectMessage.RejectionCode)
+	}
+
+	t.Logf("\t%s\tTransfer rejected with locked code", tests.Success)
+
+	/******************* Check that a transfer can now process successfully ***********************/
+	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100018, userKey.Address)
+
+	// Create Transfer message
+	transferOtherData = actions.Transfer{}
+
+	// Transfer asset 1 from user1 to user2
+	transferOtherAmount = uint64(100)
+	assetTransferOtherData = actions.AssetTransferField{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCodes[0].Bytes(),
+	}
+
+	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
+	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
+		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+			Quantity: transferOtherAmount})
+
+	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+
+	// Build transfer transaction
+	transferOtherTx = wire.NewMsgTx(1)
+
+	// From user
+	transferOtherTx.TxIn = append(transferOtherTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(fundingTx.TxHash(), 0), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	transferOtherTx.TxOut = append(transferOtherTx.TxOut, wire.NewTxOut(3000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&transferOtherData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferOtherTx.TxOut = append(transferOtherTx.TxOut, wire.NewTxOut(0, script))
+
+	transferOtherItx, err = inspector.NewTransactionFromWire(ctx, transferOtherTx,
+		test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, transferOtherTx)
+
+	err = a.Trigger(ctx, "SEE", transferOtherItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept transfer after funds should be unlocked : %s",
+			tests.Failed, err)
+	}
+
+	// Check the response
+	checkResponse(t, "T2")
+
+	t.Logf("\t%s\tTransfer accepted", tests.Success)
 }
 
 func oracleTransfer(t *testing.T) {

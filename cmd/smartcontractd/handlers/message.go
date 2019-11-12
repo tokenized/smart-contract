@@ -121,15 +121,19 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 
 	// Check if message is addressed to this contract.
 	found := false
-	for _, outputIndex := range msg.AddressIndexes {
-		if int(outputIndex) >= len(itx.Outputs) {
-			return fmt.Errorf("Reject message output index out of range : %d/%d", outputIndex,
-				len(itx.Outputs))
-		}
+	if len(msg.AddressIndexes) == 0 {
+		found = itx.Outputs[0].Address.Equal(rk.Address)
+	} else {
+		for _, outputIndex := range msg.AddressIndexes {
+			if int(outputIndex) >= len(itx.Outputs) {
+				return fmt.Errorf("Reject message output index out of range : %d/%d", outputIndex,
+					len(itx.Outputs))
+			}
 
-		if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
-			found = true
-			break
+			if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
+				found = true
+				break
+			}
 		}
 	}
 
@@ -162,8 +166,8 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	switch problemMsg := problemTx.MsgProto.(type) {
 	case *actions.Transfer:
 		// Refund any funds from the transfer tx that were sent to the this contract.
-		return refundTransferFromReject(ctx, m.MasterDB, m.Scheduler, w, itx, msg,
-			problemTx, problemMsg, rk)
+		return refundTransferFromReject(ctx, m.MasterDB, m.HoldingsChannel, m.Scheduler, w, itx,
+			msg, problemTx, problemMsg, rk)
 
 	default:
 	}
@@ -377,7 +381,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	// Add this contract's data to the settlement op return data
 	assetUpdates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
-		settlement, m.Headers, assetUpdates)
+		settlement, m.Headers, assetUpdates, false)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -445,6 +449,30 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	// Send to next contract
 	return sendToNextSettlementContract(ctx, w, rk, itx, transferTx, transfer, settleTx, settlement, settlementRequest, m.Tracer)
+}
+
+// settlementIsComplete returns true if the settlement accounts for all assets in the transfer.
+func settlementIsComplete(ctx context.Context, transfer *actions.Transfer, settlement *actions.Settlement) bool {
+	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.settlementIsComplete")
+	defer span.End()
+
+	for _, assetTransfer := range transfer.Assets {
+		found := false
+		for _, assetSettle := range settlement.Assets {
+			if assetTransfer.AssetType == assetSettle.AssetType &&
+				bytes.Equal(assetTransfer.AssetCode, assetSettle.AssetCode) {
+				node.LogVerbose(ctx, "Found settlement data for asset : %x", assetTransfer.AssetCode)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false // No settlement for this asset yet
+		}
+	}
+
+	return true
 }
 
 // processSigRequest handles an incoming Message SignatureRequest payload.
@@ -1016,12 +1044,17 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 // refundTransferFromReject responds to an M2 Reject, from another contract involved in a multi-contract
 //   transfer with a tx refunding any bitcoin sent to the contract that was requested to be
 //   transferred.
-func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *scheduler.Scheduler,
-	w *node.ResponseWriter, rejectionTx *inspector.Transaction, rejection *actions.Rejection,
+func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
+	holdingsChannel *holdings.CacheChannel, sch *scheduler.Scheduler, w *node.ResponseWriter,
+	rejectionTx *inspector.Transaction, rejection *actions.Rejection,
 	transferTx *inspector.Transaction, transferMsg *actions.Transfer, rk *wallet.Key) error {
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	transferTxId := protocol.TxIdFromBytes(transferTx.Hash[:])
+
 	// Remove pending transfer
-	if err := transfer.Remove(ctx, masterDB, rk.Address, protocol.TxIdFromBytes(transferTx.Hash[:])); err != nil {
+	if err := transfer.Remove(ctx, masterDB, rk.Address, transferTxId); err != nil {
 		return errors.Wrap(err, "Failed to save pending transfer")
 	}
 
@@ -1041,35 +1074,36 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		return errors.New("First contract output index not found")
 	}
 
-	// Determine if this contract is the first contract an needs to send a refund.
-	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
-		return nil
-	}
-
 	// Determine UTXOs from transfer tx to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
 	if err != nil {
 		return errors.Wrap(err, "Transfer UTXOs not found")
 	}
 
-	// Remove utxo spent by boomerang
-	boomerangIndex := findBoomerangIndex(transferTx, transferMsg, rk.Address)
-	if boomerangIndex == 0xffffffff {
-		return errors.New("Boomerang output index not found")
-	}
+	// Determine if this contract is the first contract and needs to send a refund.
+	refund := false
+	if transferTx.Outputs[first].Address.Equal(rk.Address) {
+		refund = true
 
-	if transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
-		found := false
-		for i, utxo := range utxos {
-			if utxo.Index == boomerangIndex {
-				found = true
-				utxos = append(utxos[:i], utxos[i+1:]...) // Remove
-				break
-			}
+		// Remove utxo spent by boomerang
+		boomerangIndex := findBoomerangIndex(transferTx, transferMsg, rk.Address)
+		if boomerangIndex == 0xffffffff {
+			return errors.New("Boomerang output index not found")
 		}
 
-		if !found {
-			return errors.New("Boomerang output not found")
+		if transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
+			found := false
+			for i, utxo := range utxos {
+				if utxo.Index == boomerangIndex {
+					found = true
+					utxos = append(utxos[:i], utxos[i+1:]...) // Remove
+					break
+				}
+			}
+
+			if !found {
+				return errors.New("Boomerang output not found")
+			}
 		}
 	}
 
@@ -1086,22 +1120,38 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 		balance += uint64(utxo.Value)
 	}
 
+	updates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
+
 	w.SetRejectUTXOs(ctx, utxos)
 
 	// Add refund amounts for all bitcoin senders
 	refundBalance := uint64(0)
-	for _, assetTransfer := range transferMsg.Assets {
+	for assetOffset, assetTransfer := range transferMsg.Assets {
 		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
-			// Process bitcoin senders refunds
-			for _, sender := range assetTransfer.AssetSenders {
-				if int(sender.Index) >= len(transferTx.Inputs) {
-					continue
-				}
+			if refund {
+				// Process bitcoin senders refunds
+				for _, sender := range assetTransfer.AssetSenders {
+					if int(sender.Index) >= len(transferTx.Inputs) {
+						continue
+					}
 
-				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
-				refundBalance += sender.Quantity
+					w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
+					refundBalance += sender.Quantity
+				}
 			}
 		} else {
+			if len(transferTx.Outputs) <= int(assetTransfer.ContractIndex) {
+				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
+			}
+
+			if !transferTx.Outputs[assetTransfer.ContractIndex].Address.Equal(rk.Address) {
+				continue // This asset is not ours. Skip it.
+			}
+
+			assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
+			updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
+			updates[*assetCode] = updatedHoldings
+
 			// Add all other senders to be notified
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
@@ -1109,11 +1159,60 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB, sch *schedul
 				}
 
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, 0)
+
+				// Revert holding status
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
+					transferTx.Inputs[sender.Index].Address, v.Now)
+				if err != nil {
+					return errors.Wrap(err, "get holding")
+				}
+
+				hash, err := transferTx.Inputs[sender.Index].Address.Hash()
+				if err != nil {
+					return errors.Wrap(err, "sender address hash")
+				}
+				updatedHoldings[*hash] = h
+
+				// Revert holding status
+				err = holdings.RevertStatus(h, transferTxId)
+				if err != nil {
+					return errors.Wrap(err, "revert status")
+				}
+			}
+
+			for _, receiver := range assetTransfer.AssetReceivers {
+				receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
+				if err != nil {
+					return err
+				}
+
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
+					receiverAddress, v.Now)
+				if err != nil {
+					return errors.Wrap(err, "get holding")
+				}
+
+				hash, err := receiverAddress.Hash()
+				if err != nil {
+					return errors.Wrap(err, "receiver address hash")
+				}
+				updatedHoldings[*hash] = h
+
+				// Revert holding status
+				err = holdings.RevertStatus(h, transferTxId)
+				if err != nil {
+					return errors.Wrap(err, "revert status")
+				}
 			}
 		}
 	}
 
-	if refundBalance > balance {
+	err = saveHoldings(ctx, masterDB, holdingsChannel, updates, rk.Address)
+	if err != nil {
+		return errors.Wrap(err, "save holdings")
+	}
+
+	if refund && refundBalance > balance {
 		ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")

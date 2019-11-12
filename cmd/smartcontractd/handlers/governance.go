@@ -524,7 +524,6 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
 	}
 
-	fmt.Printf("Ballot Quantity %d\n", quantity)
 	if quantity == 0 {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			w.Config.Net)

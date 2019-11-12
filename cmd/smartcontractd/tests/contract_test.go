@@ -18,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
+	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -956,6 +957,52 @@ func mockUpContract2(ctx context.Context, name, agreement string, issuerType str
 
 	var contractData = state.Contract{
 		Address:             test.Contract2Key.Address,
+		ContractName:        name,
+		BodyOfAgreementType: 1,
+		BodyOfAgreement:     []byte(agreement),
+		Issuer: &actions.EntityField{
+			Type:           issuerType,
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000}},
+		AdministrationProposal: issuerProposal,
+		HolderProposal:         holderProposal,
+		ContractFee:            1000,
+
+		CreatedAt:             protocol.CurrentTimestamp(),
+		UpdatedAt:             protocol.CurrentTimestamp(),
+		AdministrationAddress: issuerKey.Address,
+		MasterAddress:         test.Master2Key.Address,
+	}
+
+	// Define permissions for contract fields
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+		},
+	}
+
+	permissions[0].VotingSystemsAllowed = make([]bool, len(contractData.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	var err error
+	contractData.ContractPermissions, err = permissions.Bytes()
+	if err != nil {
+		return err
+	}
+
+	return contract.Save(ctx, test.MasterDB, &contractData)
+}
+
+func mockUpOtherContract(ctx context.Context, key *wallet.Key, name, agreement string,
+	issuerType string, issuerRole uint32, issuerName string,
+	issuerProposal, holderProposal, permitted, issuer, holder bool) error {
+
+	var contractData = state.Contract{
+		Address:             key.Address,
 		ContractName:        name,
 		BodyOfAgreementType: 1,
 		BodyOfAgreement:     []byte(agreement),

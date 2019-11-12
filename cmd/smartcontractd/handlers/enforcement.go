@@ -447,7 +447,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.AddDebit(h, txid, target.Quantity, v.Now)
+		err = holdings.AddDebit(h, txid, target.Quantity, true, v.Now)
 		if err != nil {
 			node.LogWarn(ctx, "Failed confiscation for holding : %x %s : %s", msg.AssetCode,
 				address.String(), err)
@@ -489,7 +489,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	if err != nil {
 		return errors.Wrap(err, "Failed to get holding")
 	}
-	err = holdings.AddDeposit(depositHolding, txid, depositAmount, v.Now)
+	err = holdings.AddDeposit(depositHolding, txid, depositAmount, true, v.Now)
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(depositAddress,
 			w.Config.Net)
@@ -613,7 +613,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.AddDebit(h, txid, target.Quantity, v.Now)
+		err = holdings.AddDebit(h, txid, target.Quantity, true, v.Now)
 		if err != nil {
 			node.LogWarn(ctx, "Failed reconciliation for holding : %x %s : %s", msg.AssetCode,
 				address.String(), err)
