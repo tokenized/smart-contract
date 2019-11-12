@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -120,6 +121,11 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 		return
 	}
 
+	// Broadcast to ensure it is accepted by the network.
+	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
+		node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+	}
+
 	intx.IsReady = true
 	if !intx.InReady {
 		intx.InReady = true
@@ -175,6 +181,11 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
 		return
+	}
+
+	// Broadcast to ensure it is accepted by the network.
+	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
+		node.LogWarn(ctx, "Failed to re-broadcast confirmed incoming : %s", err)
 	}
 
 	intx.IsReady = true
