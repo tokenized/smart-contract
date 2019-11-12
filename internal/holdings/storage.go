@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 var (

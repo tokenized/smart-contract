@@ -95,6 +95,8 @@ type HoldingStatus struct {
 	SettleQuantity uint64             `json:"SettleQuantity,omitempty"`
 
 	// Balance has been posted to the chain and is not reversible without a reconcile.
+	// Note: This is currently not used as address balances are locked during multi-contract
+	//   transfers so a bad state can never be posted.
 	Posted bool `json:"Posted,omitempty"`
 }
 

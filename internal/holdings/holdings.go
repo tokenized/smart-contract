@@ -21,14 +21,19 @@ var (
 	// ErrHoldingsFrozen occurs when the address holdings are frozen.
 	ErrHoldingsFrozen = errors.New("Holdings are frozen")
 
+	// ErrHoldingsLocked occurs when the address holdings are locked for a multi-contract transfer.
+	ErrHoldingsLocked = errors.New("Holdings are locked")
+
 	// ErrDuplicateEntry occurs when more than one send or receive is specified for an address.
 	ErrDuplicateEntry = errors.New("Holdings duplicate entry")
 )
 
 const (
-	FreezeCode  = byte('F')
-	DebitCode   = byte('S')
-	DepositCode = byte('R')
+	FreezeCode               = byte('F')
+	DebitCode                = byte('S')
+	DepositCode              = byte('R')
+	MultiContractDebitCode   = byte('-')
+	MultiContractDepositCode = byte('+')
 )
 
 // GetHolding returns the holding data for a PKH.
@@ -112,9 +117,13 @@ func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now proto
 
 	switch hs.Code {
 	case DebitCode:
+		fallthrough
+	case MultiContractDebitCode:
 		h.FinalizedBalance -= hs.Amount
 		delete(h.HoldingStatuses, *txid)
 	case DepositCode:
+		fallthrough
+	case MultiContractDepositCode:
 		h.FinalizedBalance += hs.Amount
 		delete(h.HoldingStatuses, *txid)
 	default:
@@ -125,7 +134,9 @@ func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now proto
 }
 
 // AddDebit adds a pending send amount to a holding.
-func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol.Timestamp) error {
+func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleContract bool,
+	now protocol.Timestamp) error {
+
 	_, exists := h.HoldingStatuses[*txid]
 	if exists {
 		return ErrDuplicateEntry
@@ -139,6 +150,13 @@ func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol
 		return ErrHoldingsFrozen
 	}
 
+	// Check if there is a pending multi-contract holding status.
+	for _, status := range h.HoldingStatuses {
+		if status.Code == MultiContractDepositCode || status.Code == MultiContractDebitCode {
+			return ErrHoldingsLocked
+		}
+	}
+
 	h.PendingBalance -= amount
 	h.UpdatedAt = now
 
@@ -148,15 +166,29 @@ func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol
 		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
 	}
+
+	if !isSingleContract {
+		hs.Code = MultiContractDebitCode
+	}
+
 	h.HoldingStatuses[*txid] = &hs
 	return nil
 }
 
 // AddDeposit adds a pending receive amount to a holding.
-func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, now protocol.Timestamp) error {
+func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleContract bool,
+	now protocol.Timestamp) error {
+
 	_, exists := h.HoldingStatuses[*txid]
 	if exists {
 		return ErrDuplicateEntry
+	}
+
+	// Check if there is a pending multi-contract holding status.
+	for _, status := range h.HoldingStatuses {
+		if status.Code == MultiContractDepositCode || status.Code == MultiContractDebitCode {
+			return ErrHoldingsLocked
+		}
 	}
 
 	h.PendingBalance += amount
@@ -168,6 +200,11 @@ func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, now protoc
 		TxId:           txid,
 		SettleQuantity: h.PendingBalance,
 	}
+
+	if !isSingleContract {
+		hs.Code = MultiContractDepositCode
+	}
+
 	h.HoldingStatuses[*txid] = &hs
 	return nil
 }
@@ -201,7 +238,7 @@ func CheckDebit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64, e
 		return 0, errors.New("Missing settlement")
 	}
 
-	if hs.Code != DebitCode {
+	if hs.Code != DebitCode && hs.Code != MultiContractDebitCode {
 		return 0, errors.New("Wrong settlement type")
 	}
 
@@ -219,7 +256,7 @@ func CheckDeposit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64,
 		return 0, errors.New("Missing settlement")
 	}
 
-	if hs.Code != DepositCode {
+	if hs.Code != DepositCode && hs.Code != MultiContractDepositCode {
 		return 0, errors.New("Wrong settlement type")
 	}
 
@@ -256,8 +293,12 @@ func RevertStatus(h *state.Holding, txid *protocol.TxId) error {
 
 	switch hs.Code {
 	case DebitCode:
+		fallthrough
+	case MultiContractDebitCode:
 		h.PendingBalance += hs.Amount
 	case DepositCode:
+		fallthrough
+	case MultiContractDepositCode:
 		h.PendingBalance -= hs.Amount
 	}
 
