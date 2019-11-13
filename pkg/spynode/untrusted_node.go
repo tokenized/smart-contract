@@ -36,6 +36,7 @@ type UntrustedNode struct {
 	stopping       bool
 	active         bool // Set to false when connection is closed
 	shotgunned     bool
+	shotgunLoaded  bool
 	scanning       bool
 	readyAnnounced bool
 	lock           sync.Mutex
@@ -288,14 +289,19 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		return nil
 	}
 
-	if node.config.ShotgunTx != nil {
+	if len(node.config.ShotgunTxs) != 0 {
 		if node.shotgunned {
 			node.Stop(ctx)
 			return nil
 		}
 
-		logger.Info(ctx, "(%s) Sending shotgun tx : %s", node.address, node.config.ShotgunTx.TxHash().String())
-		node.outgoing.Add(node.config.ShotgunTx)
+		if !node.shotgunLoaded {
+			for _, tx := range node.config.ShotgunTxs {
+				logger.Info(ctx, "(%s) Sending shotgun tx : %s", node.address, tx.TxHash().String())
+				node.outgoing.Add(tx)
+			}
+			node.shotgunLoaded = true
+		}
 	}
 
 	if !node.state.MemPoolRequested() {
@@ -342,10 +348,6 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 // in a goroutine.
 func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 	for msg := range node.outgoing.Channel {
-		if node.config.ShotgunTx != nil && msg == node.config.ShotgunTx {
-			node.shotgunned = true
-		}
-
 		node.sendLock.Lock()
 		if node.connection == nil {
 			node.sendLock.Unlock()
@@ -356,6 +358,12 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}
 		node.sendLock.Unlock()
+
+		if len(node.config.ShotgunTxs) > 0 {
+			if node.config.ShotgunTxs[len(node.config.ShotgunTxs)-1] == msg {
+				node.shotgunned = true
+			}
+		}
 	}
 
 	return nil

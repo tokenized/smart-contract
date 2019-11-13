@@ -50,6 +50,7 @@ func main() {
 			StartHash      string `envconfig:"START_HASH"`
 			UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
 			SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
+			ShotgunCount   int    `default:"100" envconfig:"SHOTGUN_COUNT"`
 		}
 		NodeStorage struct {
 			Region    string `default:"ap-southeast-2" envconfig:"NODE_STORAGE_REGION"`
@@ -94,8 +95,9 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Node Config
-	nodeConfig, err := data.NewConfig(bitcoin.NetworkFromString(cfg.Network), cfg.Node.Address, cfg.Node.UserAgent,
-		cfg.Node.StartHash, cfg.Node.UntrustedNodes, cfg.Node.SafeTxDelay)
+	nodeConfig, err := data.NewConfig(bitcoin.NetworkFromString(cfg.Network), cfg.Node.Address,
+		cfg.Node.UserAgent, cfg.Node.StartHash, cfg.Node.UntrustedNodes, cfg.Node.SafeTxDelay,
+		cfg.Node.ShotgunCount)
 	if err != nil {
 		logger.Error(ctx, "Failed to create node config : %s\n", err)
 		return

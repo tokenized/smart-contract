@@ -26,6 +26,7 @@ type Config struct {
 		StartHash      string `envconfig:"START_HASH"`
 		UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
 		SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
+		ShotgunCount   int    `default:"100" envconfig:"SHOTGUN_COUNT"`
 	}
 	RpcNode struct {
 		Host     string `envconfig:"RPC_HOST"`

@@ -358,8 +358,14 @@ func oracleContract(t *testing.T) {
 		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
 	}
 
+	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
+		if firstResponse == nil {
+			firstResponse = getResponse()
+			time.Sleep(time.Millisecond)
+			continue
+		}
 		response = getResponse()
 		if response != nil {
 			break
@@ -420,7 +426,13 @@ func oracleContract(t *testing.T) {
 		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
 	}
 
+	firstResponse = nil // Request is re-broadcast
 	for {
+		if firstResponse == nil {
+			firstResponse = getResponse()
+			time.Sleep(time.Millisecond)
+			continue
+		}
 		response = getResponse()
 		if response != nil {
 			break
