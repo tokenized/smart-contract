@@ -314,6 +314,43 @@ func (msg *MsgTx) String() string {
 	return result
 }
 
+func (msg *MsgTx) StringWithAddresses(net bitcoin.Network) string {
+	result := fmt.Sprintf("TxId: %s\n", msg.TxHash().String())
+	result += fmt.Sprintf("  Version: %d\n", msg.Version)
+	result += "  Inputs:\n\n"
+	for _, input := range msg.TxIn {
+		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
+			input.PreviousOutPoint.Hash.String())
+		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Sequence: %x\n", input.Sequence)
+
+		// Address
+		ra, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
+		if err == nil {
+			ad := bitcoin.NewAddressFromRawAddress(ra, net)
+			result += fmt.Sprintf("    Address: %s\n", ad.String())
+		}
+
+		result += "\n"
+	}
+	result += "  Outputs:\n\n"
+	for _, output := range msg.TxOut {
+		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
+		result += fmt.Sprintf("    Script: %x\n", output.PkScript)
+
+		// Address
+		ra, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		if err == nil {
+			ad := bitcoin.NewAddressFromRawAddress(ra, net)
+			result += fmt.Sprintf("    Address: %s\n", ad.String())
+		}
+
+		result += "\n"
+	}
+	result += fmt.Sprintf("  LockTime: %d\n", msg.LockTime)
+	return result
+}
+
 // Copy creates a deep copy of a transaction so that the original does not get
 // modified when the copy is manipulated.
 func (msg *MsgTx) Copy() *MsgTx {

@@ -218,7 +218,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			fmt.Printf("%x\n", buf.Bytes())
 		} else {
-			fmt.Println(tx.MsgTx.String())
+			fmt.Println(tx.MsgTx.StringWithAddresses(network(c)))
 		}
 
 		send, _ := c.Flags().GetBool(FlagSend)
