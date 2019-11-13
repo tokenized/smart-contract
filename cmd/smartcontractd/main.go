@@ -84,7 +84,8 @@ func main() {
 	}
 
 	spyConfig, err := data.NewConfig(appConfig.Net, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
-		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay)
+		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay,
+		cfg.SpyNode.ShotgunCount)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
 		return

@@ -70,7 +70,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 	}
 
 	fmt.Printf("\nTx (%d bytes) : %s\n", tx.SerializeSize(), tx.TxHash().String())
-	dumpJSON(tx)
+	fmt.Printf(tx.StringWithAddresses(network(c)))
 
 	for _, txOut := range tx.TxOut {
 		if parseScript(c, txOut.PkScript) == nil {

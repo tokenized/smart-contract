@@ -311,6 +311,8 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 		return errors.New("Node inactive")
 	}
 
+	count := 1
+
 	// Send to trusted node
 	if !node.queueOutgoing(tx) {
 		return errors.New("Node inactive")
@@ -318,13 +320,32 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 
 	// Send to untrusted nodes
 	node.untrustedLock.Lock()
-	defer node.untrustedLock.Unlock()
-
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
-			untrusted.BroadcastTx(ctx, tx)
+			if err := untrusted.BroadcastTx(ctx, tx); err != nil {
+				logger.Warn(ctx, "Failed to broadcast tx to untrusted : %s", err)
+			} else {
+				count++
+			}
 		}
 	}
+	node.untrustedLock.Unlock()
+
+	// Broadcast to as many known nodes as possible
+	node.config.Lock.Lock()
+	node.config.ShotgunTxs = append(node.config.ShotgunTxs, tx)
+	node.config.Lock.Unlock()
+	wg := sync.WaitGroup{}
+
+	// Try for peers with a good score
+	for !node.isStopping() && count < node.config.ShotgunCount {
+		if node.addUntrustedNode(ctx, &wg, 2) {
+			count++
+		} else {
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -392,7 +413,9 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 		return err
 	}
 
-	node.config.ShotgunTx = tx
+	node.config.Lock.Lock()
+	node.config.ShotgunTxs = append(node.config.ShotgunTxs, tx)
+	node.config.Lock.Unlock()
 	wg := sync.WaitGroup{}
 	count := 0
 
@@ -677,7 +700,8 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		if node.isStopping() {
 			break
 		}
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.Net))
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion,
+			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
 			if ok {
@@ -705,7 +729,8 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Warn(ctx, "Reject message from %s : %s - %s", node.config.NodeAddress, reject.Reason, reject.Hash.String())
+				logger.Warn(ctx, "Reject message from %s : %s - %s", node.config.NodeAddress,
+					reject.Reason, reject.Hash.String())
 			}
 		}
 	}
@@ -896,8 +921,9 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 		peers = append(peers[:random], peers[random+1:]...)
 
 		// Attempt connection
-		newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-			node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, true)
+		newNode := NewUntrustedNode(address, node.config.Copy(), node.store, node.peers,
+			node.blocks, node.txs, node.memPool, &node.unconfTxChannel, node.listeners,
+			node.txFilters, true)
 		nodes = append(nodes, newNode)
 		wg.Add(1)
 		go func() {
@@ -1054,8 +1080,8 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	}
 
 	// Attempt connection
-	newNode := NewUntrustedNode(address, node.config, node.store, node.peers, node.blocks, node.txs,
-		node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, false)
+	newNode := NewUntrustedNode(address, node.config.Copy(), node.store, node.peers, node.blocks,
+		node.txs, node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, false)
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
 	wg.Add(1)

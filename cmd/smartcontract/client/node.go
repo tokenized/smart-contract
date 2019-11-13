@@ -53,6 +53,7 @@ type Config struct {
 		StartHash        string `envconfig:"CLIENT_START_HASH"`
 		UntrustedClients int    `default:"16" envconfig:"CLIENT_UNTRUSTED_NODES"`
 		SafeTxDelay      int    `default:"10" envconfig:"CLIENT_SAFE_TX_DELAY"`
+		ShotgunCount     int    `default:"100" envconfig:"SHOTGUN_COUNT"`
 	}
 }
 
@@ -120,7 +121,8 @@ func (client *Client) setupSpyNode(ctx context.Context) error {
 
 	spyConfig, err := data.NewConfig(client.Config.Net, client.Config.SpyNode.Address,
 		client.Config.SpyNode.UserAgent, client.Config.SpyNode.StartHash,
-		client.Config.SpyNode.UntrustedClients, client.Config.SpyNode.SafeTxDelay)
+		client.Config.SpyNode.UntrustedClients, client.Config.SpyNode.SafeTxDelay,
+		client.Config.SpyNode.ShotgunCount)
 	if err != nil {
 		logger.Warn(ctx, "Failed to create spynode config : %s", err)
 		return err
