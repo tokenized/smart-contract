@@ -1050,7 +1050,6 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
 	transferTx *inspector.Transaction, transferMsg *actions.Transfer, rk *wallet.Key) error {
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	transferTxId := protocol.TxIdFromBytes(transferTx.Hash[:])
 
 	// Remove pending transfer
@@ -1087,11 +1086,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
 
 		// Remove utxo spent by boomerang
 		boomerangIndex := findBoomerangIndex(transferTx, transferMsg, rk.Address)
-		if boomerangIndex == 0xffffffff {
-			return errors.New("Boomerang output index not found")
-		}
-
-		if transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
+		if boomerangIndex != 0xffffffff && transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
 			found := false
 			for i, utxo := range utxos {
 				if utxo.Index == boomerangIndex {
@@ -1153,6 +1148,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
 			updates[*assetCode] = updatedHoldings
 
 			// Add all other senders to be notified
+			// Revert sender pending statuses
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
 					continue
@@ -1180,6 +1176,7 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
 				}
 			}
 
+			// Revert receiver pending statuses
 			for _, receiver := range assetTransfer.AssetReceivers {
 				receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 				if err != nil {
