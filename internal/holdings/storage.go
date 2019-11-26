@@ -204,7 +204,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 
 	asset[*addressHash] = &cacheUpdate{h: readResult, modified: false}
 
-	return readResult, nil
+	return copyHolding(readResult), nil
 }
 
 // ProcessCacheItems waits for items on the cache channel and writes them to storage. It exits when
