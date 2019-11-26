@@ -853,6 +853,15 @@ func sendTokens(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
+
+	test.HoldingsChannel.Open(10)
+	go func() {
+		if err := holdings.ProcessCacheItems(ctx, test.MasterDB, test.HoldingsChannel); err != nil {
+			node.LogError(ctx, "Process holdings cache failed : %s", err)
+		}
+		node.LogVerbose(ctx, "Process holdings cache thread finished")
+	}()
+
 	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	if err != nil {
@@ -863,10 +872,14 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
 	}
 
+	// Let holdings cache update
+	time.Sleep(500 * time.Millisecond)
+	holdings.Reset(ctx) // Clear cache
+
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 
 	// Create Transfer message
-	transferAmount := uint64(250)
+	transferAmount := uint64(750)
 	transferData := actions.Transfer{}
 
 	assetTransferData := actions.AssetTransferField{
@@ -913,6 +926,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx)
+	t.Logf("\tUnderfunded asset transfer : %s", transferTx.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {
@@ -928,8 +942,66 @@ func sendTokens(t *testing.T) {
 
 	t.Logf("\t%s\tUnderfunded asset transfer rejected with no response", tests.Success)
 
+	// Let holdings cache update
+	time.Sleep(500 * time.Millisecond)
+
+	// Check issuer and user balance
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], issuerKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if issuerHolding.PendingBalance != 1000 {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.PendingBalance, 1000)
+	}
+
+	// Adjust amount to contract to be low, but enough for a reject
+	transferTx.TxOut[0].Value = 1000
+	t.Logf("\tLow funding asset transfer : %s", transferTx.TxHash().String())
+
+	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, transferTx)
+
+	err = a.Trigger(ctx, "SEE", transferItx)
+	if err == nil {
+		t.Fatalf("\t%s\tAccepted transfer with insufficient funds", tests.Failed)
+	}
+	if err != node.ErrRejected {
+		t.Fatalf("\t%s\tFailed to reject transfer with insufficient funds : %v", tests.Failed, err)
+	}
+
+	checkResponse(t, "M2")
+
+	t.Logf("\t%s\tUnderfunded asset transfer rejected with response", tests.Success)
+
+	// Let holdings cache update
+	time.Sleep(500 * time.Millisecond)
+
+	// Check issuer and user balance
+	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], issuerKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if issuerHolding.PendingBalance != 1000 {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
+			issuerHolding.PendingBalance, 1000)
+	}
+
 	// Adjust amount to contract to be appropriate
 	transferTx.TxOut[0].Value = 2000
+	t.Logf("\tFunded asset transfer : %s", transferTx.TxHash().String())
 
 	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -981,8 +1053,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	// Check issuer and user balance
-	v := ctx.Value(node.KeyValues).(*node.Values)
-	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
 		&testAssetCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -1006,7 +1077,10 @@ func sendTokens(t *testing.T) {
 
 	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
 
-	// Send a second transfer
+	// Let holdings cache update
+	time.Sleep(500 * time.Millisecond)
+
+	// Send a second transfer ----------------------------------------------------------------------
 	fundingTx2 := tests.MockFundingTx(ctx, test.RPCNode, 100022, issuerKey.Address)
 
 	// Build transfer transaction
@@ -1015,13 +1089,16 @@ func sendTokens(t *testing.T) {
 	transferInputHash = fundingTx2.TxHash()
 
 	// From issuer
-	transferTx2.TxIn = append(transferTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx2.TxIn = append(transferTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ = test.ContractKey.Address.LockingScript()
 	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
+	transferData.Assets[0].AssetSenders[0].Quantity = 250
+	transferData.Assets[0].AssetReceivers[0].Quantity = 250
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
@@ -1039,6 +1116,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx2)
+	t.Logf("\tSecond asset transfer : %s", transferTx2.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", transferItx2)
 	if err != nil {
@@ -1065,14 +1143,14 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tResponse isn't a settlement", tests.Failed)
 	}
 
-	if settlement.Assets[0].Settlements[0].Quantity != testTokenQty-(transferAmount*2) {
+	if settlement.Assets[0].Settlements[0].Quantity != 0 {
 		t.Fatalf("\t%s\tIssuer token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[0].Quantity, testTokenQty-(transferAmount*2))
+			settlement.Assets[0].Settlements[0].Quantity, 0)
 	}
 
-	if settlement.Assets[0].Settlements[1].Quantity != transferAmount*2 {
+	if settlement.Assets[0].Settlements[1].Quantity != 1000 {
 		t.Fatalf("\t%s\tUser token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[1].Quantity, transferAmount*2)
+			settlement.Assets[0].Settlements[1].Quantity, 1000)
 	}
 
 	// Check issuer and user balance
@@ -1081,9 +1159,9 @@ func sendTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
-	if issuerHolding.FinalizedBalance != testTokenQty-(transferAmount*2) {
+	if issuerHolding.FinalizedBalance != 0 {
 		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
-			issuerHolding.FinalizedBalance, testTokenQty-(transferAmount*2))
+			issuerHolding.FinalizedBalance, 0)
 	}
 
 	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
@@ -1093,12 +1171,14 @@ func sendTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
-	if userHolding.FinalizedBalance != transferAmount*2 {
+	if userHolding.FinalizedBalance != 1000 {
 		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed,
-			userHolding.FinalizedBalance, transferAmount)
+			userHolding.FinalizedBalance, 1000)
 	}
 
 	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
+
+	test.HoldingsChannel.Close()
 }
 
 func multiExchange(t *testing.T) {

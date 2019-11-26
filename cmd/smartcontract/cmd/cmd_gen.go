@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -37,7 +37,7 @@ var cmdGen = &cobra.Command{
 		}
 
 		fmt.Printf("WIF : %s\n", key.String())
-		fmt.Printf("PubKey : %s\n", base64.StdEncoding.EncodeToString(key.PublicKey().Bytes()))
+		fmt.Printf("PubKey : %s\n", hex.EncodeToString(key.PublicKey().Bytes()))
 		fmt.Printf("Addr : %s\n", address.String())
 		return nil
 	},

@@ -4,10 +4,12 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 // CacheItem is a reference to an item in the cache that needs to be written to storage.

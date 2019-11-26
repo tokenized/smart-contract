@@ -115,7 +115,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		}
 
 		if !handled {
-			Log(ctx, "Unrelated tx")
+			Log(ctx, "Unrelated tx : %s", itx.Hash.String())
 		}
 
 		return nil

@@ -24,7 +24,7 @@ const (
 	// Size of output not including script
 	OutputBaseSize = 8
 
-	// P2PKH/P2SH output size 33
+	// P2PKH/P2SH output size 34
 	//   amount = 8 bytes
 	//   script size = 1 byte
 	//   Script (25 bytes) OP_DUP OP_HASH160 <Push Data byte, PUB KEY/SCRIPT HASH (20 bytes)> OP_EQUALVERIFY
