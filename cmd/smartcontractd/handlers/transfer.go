@@ -734,8 +734,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				config.Net)
 			if err := holdings.AddDebit(h, txid, sender.Quantity, isSingleContract, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
-					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s",
-						assetTransfer.AssetCode, address.String())
+					node.LogWarn(ctx, "Insufficient funds: asset=%x party=%s : %d/%d",
+						assetTransfer.AssetCode, address.String(), sender.Quantity,
+						holdings.SafeBalance(h))
 					return node.NewError(actions.RejectionsInsufficientQuantity, "")
 				}
 				if err == holdings.ErrHoldingsFrozen {
