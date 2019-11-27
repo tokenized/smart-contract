@@ -346,6 +346,17 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 		}
 	}
 
+	// Remove tx from list
+	node.config.Lock.Lock()
+	for i, stx := range node.config.ShotgunTxs {
+		if tx == stx {
+			node.config.ShotgunTxs =
+				append(node.config.ShotgunTxs[:i], node.config.ShotgunTxs[i+1:]...)
+			break
+		}
+	}
+	node.config.Lock.Unlock()
+
 	return nil
 }
 
@@ -438,6 +449,17 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 	}
 
 	node.sleepUntilStop(30) // Wait for handshake
+
+	// Remove tx from list
+	node.config.Lock.Lock()
+	for i, stx := range node.config.ShotgunTxs {
+		if tx == stx {
+			node.config.ShotgunTxs =
+				append(node.config.ShotgunTxs[:i], node.config.ShotgunTxs[i+1:]...)
+			break
+		}
+	}
+	node.config.Lock.Unlock()
 
 	// Stop all
 	node.untrustedLock.Lock()
