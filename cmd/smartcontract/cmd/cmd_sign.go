@@ -88,7 +88,7 @@ func transferSign(c *cobra.Command, args []string) error {
 		return nil
 	}
 
-	key, err := bitcoin.DecodeKeyString(args[4])
+	key, err := bitcoin.KeyFromStr(args[4])
 	if err != nil {
 		fmt.Printf("Invalid key : %s\n", err)
 		return nil

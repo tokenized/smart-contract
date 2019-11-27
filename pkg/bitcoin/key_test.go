@@ -36,7 +36,7 @@ func TestKey(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			key, err := KeyS256FromBytes(data, tt.net)
+			key, err := KeyFromNumber(data, tt.net)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -54,7 +54,7 @@ func TestKey(t *testing.T) {
 				t.Errorf("Ext WIF encode: got %x, want %x", extwif.PrivKey.Serialize(), data)
 			}
 
-			reverseKey, err := DecodeKeyString(tt.wif)
+			reverseKey, err := KeyFromStr(tt.wif)
 			if err != nil {
 				t.Fatal(err)
 			}

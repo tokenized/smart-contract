@@ -24,7 +24,7 @@ var cmdGen = &cobra.Command{
 			return nil
 		}
 
-		key, err := bitcoin.GenerateKeyS256(network)
+		key, err := bitcoin.GenerateKey(network)
 		if err != nil {
 			fmt.Printf("Failed to generate key : %s\n", err)
 			return nil

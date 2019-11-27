@@ -224,9 +224,9 @@ func (k ExtendedKey) IsPrivate() bool {
 // Key returns the (private) key associated with this key.
 func (k ExtendedKey) Key(net Network) Key {
 	if !k.IsPrivate() {
-		return nil
+		return Key{}
 	}
-	result, _ := KeyS256FromBytes(k.KeyValue[1:], net) // Skip first zero byte. We just want the 32 byte key value.
+	result, _ := KeyFromNumber(k.KeyValue[1:], net) // Skip first zero byte. We just want the 32 byte key value.
 	return result
 }
 
@@ -235,13 +235,13 @@ func (k ExtendedKey) PublicKey() PublicKey {
 	if k.IsPrivate() {
 		return k.Key(MainNet).PublicKey()
 	}
-	pub, _ := DecodePublicKeyBytes(k.KeyValue[:])
+	pub, _ := PublicKeyFromBytes(k.KeyValue[:])
 	return pub
 }
 
 // RawAddress returns a raw address for this key.
 func (k ExtendedKey) RawAddress() (RawAddress, error) {
-	return NewRawAddressPKH(Hash160(k.PublicKey().Bytes()))
+	return k.PublicKey().RawAddress()
 }
 
 // ExtendedPublicKey returns the public version of this key.
@@ -251,8 +251,7 @@ func (k ExtendedKey) ExtendedPublicKey() ExtendedKey {
 	}
 
 	result := k
-	copy(result.KeyValue[:], k.Key(MainNet).PublicKey().Bytes())
-
+	copy(result.KeyValue[:], k.Key(InvalidNet).PublicKey().Bytes())
 	return result
 }
 
@@ -309,7 +308,7 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 			return result, errors.Wrap(err, "child add private")
 		}
 	} else {
-		privateKey, err := KeyS256FromBytes(sum[:32], MainNet)
+		privateKey, err := KeyFromNumber(sum[:32], MainNet)
 		if err != nil {
 			return result, errors.Wrap(err, "parse child private key")
 		}

@@ -858,13 +858,13 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 func validateContractAmendOracleSig(ctx context.Context, updatedContract *state.Contract,
 	headers node.BitcoinHeaders) error {
 
-	oracle, err := bitcoin.DecodePublicKeyBytes(updatedContract.AdminOracle.PublicKey)
+	oracle, err := bitcoin.PublicKeyFromBytes(updatedContract.AdminOracle.PublicKey)
 	if err != nil {
 		return err
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.DecodeSignatureBytes(updatedContract.AdminOracleSignature)
+	oracleSig, err := bitcoin.SignatureFromBytes(updatedContract.AdminOracleSignature)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}

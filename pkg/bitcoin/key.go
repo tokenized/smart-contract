@@ -2,7 +2,8 @@ package bitcoin
 
 import (
 	"bytes"
-	"crypto/elliptic"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
 	"math/big"
 
@@ -13,8 +14,11 @@ import (
 var (
 	curveS256       = btcec.S256()
 	curveS256Params = curveS256.Params()
+	curveHalfOrder  = new(big.Int).Rsh(curveS256.N, 1)
 
 	ErrBadKeyLength = errors.New("Key has invalid length")
+
+	zeroBigInt big.Int
 )
 
 const (
@@ -24,31 +28,21 @@ const (
 	typeIntPrivKey = 0x40
 )
 
-type Key interface {
-	// String returns the type followed by the key data with a checksum, encoded with Base58.
-	String() string
+var (
+	ErrBadKeyType = errors.New("Key type unknown")
+)
 
-	// Network returns the network id for the address.
-	Network() Network
-
-	// Bytes returns non-network specific type followed by the key data.
-	Bytes() []byte
-
-	// Number returns the numeric value of the key.
-	Number() []byte
-
-	// PublicKey returns the public key.
-	PublicKey() PublicKey
-
-	// Sign creates a signature from a hash.
-	Sign([]byte) (Signature, error)
+// Key is an elliptic curve private key using the secp256k1 elliptic curve.
+type Key struct {
+	value big.Int
+	net   Network
 }
 
-// DecodeKeyString converts WIF (Wallet Import Format) key text to a key.
-func DecodeKeyString(s string) (Key, error) {
+// KeyFromStr converts WIF (Wallet Import Format) key text to a key.
+func KeyFromStr(s string) (Key, error) {
 	b, err := decodeAddress(s)
 	if err != nil {
-		return nil, err
+		return Key{}, err
 	}
 
 	var network Network
@@ -58,56 +52,52 @@ func DecodeKeyString(s string) (Key, error) {
 	case typeTestPrivKey:
 		network = TestNet
 	default:
-		return nil, ErrBadType
+		return Key{}, ErrBadKeyType
 	}
 
 	if len(b) == 34 {
 		if b[len(b)-1] != 0x01 {
-			return nil, fmt.Errorf("Key not for compressed public : %x", b[len(b)-1:])
+			return Key{}, fmt.Errorf("Key not for compressed public : %x", b[len(b)-1:])
 		}
-		return KeyS256FromBytes(b[1:33], network)
+		return KeyFromNumber(b[1:33], network)
 	} else if len(b) == 33 {
-		return KeyS256FromBytes(b[1:], network)
+		return KeyFromNumber(b[1:], network)
 	}
 
-	return nil, fmt.Errorf("Key unknown format length %d", len(b))
+	return Key{}, fmt.Errorf("Key unknown format length %d", len(b))
 }
 
-// DecodeKeyBytes decodes a binary bitcoin key. It returns the key and an error if there was an
+// KeyFromBytes decodes a binary bitcoin key. It returns the key and an error if there was an
 //   issue.
-func DecodeKeyBytes(b []byte, net Network) (Key, error) {
+func KeyFromBytes(b []byte, net Network) (Key, error) {
 	if b[0] != typeIntPrivKey {
-		return nil, ErrBadType
+		return Key{}, ErrBadKeyType
 	}
 
-	return KeyS256FromBytes(b[1:], net)
+	result := Key{net: net}
+	result.value.SetBytes(b)
+	return result, nil
 }
 
-/****************************************** S256 **************************************************
-/* An elliptic curve private key using the secp256k1 elliptic curve.
-*/
-type KeyS256 struct {
-	key *btcec.PrivateKey
-	net Network
+// KeyFromNumber creates a key from a byte representation of a big number.
+func KeyFromNumber(b []byte, net Network) (Key, error) {
+	result := Key{net: net}
+	result.value.SetBytes(b)
+	return result, nil
 }
 
-// GenerateKeyS256 randomly generates a new key.
-func GenerateKeyS256(net Network) (*KeyS256, error) {
-	privkey, err := btcec.NewPrivateKey(elliptic.P256())
+// GenerateKey randomly generates a new key.
+func GenerateKey(net Network) (Key, error) {
+	key, err := ecdsa.GenerateKey(curveS256, rand.Reader)
 	if err != nil {
-		return nil, err
+		return Key{}, err
 	}
-	return KeyS256FromBytes(privkey.Serialize(), net)
-}
 
-// KeyS256FromBytes creates a key from a set of bytes that represents a 256 bit big-endian integer.
-func KeyS256FromBytes(key []byte, net Network) (*KeyS256, error) {
-	privkey, _ := btcec.PrivKeyFromBytes(curveS256, key)
-	return &KeyS256{key: privkey, net: net}, nil
+	return Key{net: net, value: *key.D}, nil
 }
 
 // String returns the type followed by the key data with a checksum, encoded with Base58.
-func (k *KeyS256) String() string {
+func (k Key) String() string {
 	var keyType byte
 
 	// Add key type byte in front
@@ -118,39 +108,101 @@ func (k *KeyS256) String() string {
 		keyType = typeTestPrivKey
 	}
 
-	b := append([]byte{keyType}, k.key.Serialize()...)
+	b := append([]byte{keyType}, k.value.Bytes()...)
 	//b = append(b, 0x01) // compressed public key // Don't know if we want this or not.
 	return encodeAddress(b)
 }
 
 // Numbers returns the 32 byte values representing the 256 bit big-endian integer of the x and y coordinates.
 // Network returns the network id for the key.
-func (k *KeyS256) Network() Network {
+func (k Key) Network() Network {
 	return k.net
 }
 
+// SetString decodes a key from hex text.
+func (k *Key) SetString(s string) error {
+	nk, err := KeyFromStr(s)
+	if err != nil {
+		return err
+	}
+
+	*k = nk
+	return nil
+}
+
+// SetBytes decodes the key from bytes.
+func (k *Key) SetBytes(b []byte) error {
+	nk, err := KeyFromBytes(b, typeIntPrivKey)
+	if err != nil {
+		return err
+	}
+
+	*k = nk
+	return nil
+}
+
 // Bytes returns type followed by the key data.
-func (k *KeyS256) Bytes() []byte {
-	return append([]byte{typeIntPrivKey}, k.key.Serialize()...)
+func (k Key) Bytes() []byte {
+	b := k.value.Bytes()
+	if len(b) < 32 {
+		extra := make([]byte, 32-len(b))
+		b = append(extra, b...)
+	}
+
+	return append([]byte{typeIntPrivKey}, b...)
 }
 
 // Number returns 32 bytes representing the 256 bit big-endian integer of the private key.
-func (k *KeyS256) Number() []byte {
-	return k.key.Serialize()
+func (k Key) Number() []byte {
+	b := k.value.Bytes()
+	if len(b) < 32 {
+		extra := make([]byte, 32-len(b))
+		b = append(extra, b...)
+	}
+	return b
 }
 
 // PublicKey returns the public key.
-func (k *KeyS256) PublicKey() PublicKey {
-	return publicKeyS256FromBTCEC(k.key.PubKey())
+func (k Key) PublicKey() PublicKey {
+	x, y := curveS256.ScalarBaseMult(k.value.Bytes())
+	return PublicKey{X: *x, Y: *y}
+}
+
+// RawAddress returns a raw address for this key.
+func (k Key) RawAddress() (RawAddress, error) {
+	return k.PublicKey().RawAddress()
+}
+
+// IsEmpty returns true if the value is zero.
+func (k Key) IsEmpty() bool {
+	return k.value.Cmp(&zeroBigInt) == 0
 }
 
 // Sign returns the serialized signature of the hash for the private key.
-func (k *KeyS256) Sign(hash []byte) (Signature, error) {
-	signature, err := k.key.Sign(hash)
-	if err != nil {
-		return nil, err
+func (k Key) Sign(hash []byte) (Signature, error) {
+	return signRFC6979(k.value, hash)
+}
+
+// MarshalJSON converts to json.
+func (k *Key) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + k.String() + "\""), nil
+}
+
+// UnmarshalJSON converts from json.
+func (k *Key) UnmarshalJSON(data []byte) error {
+	return k.SetString(string(data[1 : len(data)-1]))
+}
+
+// Scan converts from a database column.
+func (k *Key) Scan(data interface{}) error {
+	b, ok := data.([]byte)
+	if !ok {
+		return errors.New("Key db column not bytes")
 	}
-	return SignatureS256FromBTCEC(signature), nil
+
+	c := make([]byte, len(b))
+	copy(c, b)
+	return k.SetBytes(c)
 }
 
 var zeroKeyValue [32]byte

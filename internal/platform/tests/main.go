@@ -230,7 +230,7 @@ func NewContext() context.Context {
 
 // GenerateKey generates a new wallet key.
 func GenerateKey(net bitcoin.Network) (*wallet.Key, error) {
-	key, err := bitcoin.GenerateKeyS256(net)
+	key, err := bitcoin.GenerateKey(net)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to generate key")
 	}
@@ -239,7 +239,7 @@ func GenerateKey(net bitcoin.Network) (*wallet.Key, error) {
 		Key: key,
 	}
 
-	result.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.PublicKey().Bytes()))
+	result.Address, err = key.RawAddress()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create key address")
 	}

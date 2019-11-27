@@ -303,7 +303,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.DecodeSignatureBytes(assetReceiver.OracleConfirmationSig)
+	oracleSig, err := bitcoin.SignatureFromBytes(assetReceiver.OracleConfirmationSig)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
@@ -354,13 +354,13 @@ func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
 		return nil
 	}
 
-	oracle, err := bitcoin.DecodePublicKeyBytes(contractOffer.AdminOracle.PublicKey)
+	oracle, err := bitcoin.PublicKeyFromBytes(contractOffer.AdminOracle.PublicKey)
 	if err != nil {
 		return err
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.DecodeSignatureBytes(contractOffer.AdminOracleSignature)
+	oracleSig, err := bitcoin.SignatureFromBytes(contractOffer.AdminOracleSignature)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	key, err := bitcoin.GenerateKeyS256(bitcoin.TestNet)
+	key, err := bitcoin.GenerateKey(bitcoin.TestNet)
 	if err != nil {
 		t.Errorf("Failed to create private key : %s", err)
 	}
@@ -22,7 +22,7 @@ func TestBasic(t *testing.T) {
 		t.Errorf("Failed to create pkh address : %s", err)
 	}
 
-	key2, err := bitcoin.GenerateKeyS256(bitcoin.TestNet)
+	key2, err := bitcoin.GenerateKey(bitcoin.TestNet)
 	if err != nil {
 		t.Errorf("Failed to create private key 2 : %s", err)
 	}
@@ -101,7 +101,7 @@ func TestBasic(t *testing.T) {
 func TestSample(t *testing.T) {
 	// Load your private key
 	wif := "cQDgbH4C7HP3LSJevMSb1dPMCviCPoLwJ28mxnDRJueMSCa72xjm"
-	key, err := bitcoin.DecodeKeyString(wif)
+	key, err := bitcoin.KeyFromStr(wif)
 	if err != nil {
 		t.Fatalf("Failed to decode key : %s", err)
 	}

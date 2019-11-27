@@ -90,7 +90,7 @@ func ExpandOracles(ctx context.Context, data *state.Contract) error {
 	// Expand oracle public keys
 	data.FullOracles = make([]bitcoin.PublicKey, 0, len(data.Oracles))
 	for _, key := range data.Oracles {
-		fullKey, err := bitcoin.DecodePublicKeyBytes(key.PublicKey)
+		fullKey, err := bitcoin.PublicKeyFromBytes(key.PublicKey)
 		if err != nil {
 			return err
 		}

@@ -61,7 +61,7 @@ func (w Wallet) Register(wif string, net bitcoin.Network) error {
 	}
 
 	// load the WIF if we have one
-	key, err := bitcoin.DecodeKeyString(wif)
+	key, err := bitcoin.KeyFromStr(wif)
 	if err != nil {
 		return err
 	}
