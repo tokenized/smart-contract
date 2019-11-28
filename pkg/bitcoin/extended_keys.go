@@ -211,7 +211,7 @@ func (k ExtendedKeys) Equal(other ExtendedKeys) bool {
 }
 
 // RawAddress returns a raw address for this list of keys.
-func (k ExtendedKeys) RawAddress(requiredSigners uint16) (RawAddress, error) {
+func (k ExtendedKeys) RawAddress(requiredSigners int) (RawAddress, error) {
 	if len(k) == 1 {
 		return k[0].RawAddress()
 	}

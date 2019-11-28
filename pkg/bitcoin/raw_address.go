@@ -2,7 +2,6 @@ package bitcoin
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -64,24 +63,26 @@ func (ra *RawAddress) Decode(b []byte) error {
 		// Validate data
 		b = b[1:] // remove type
 		// Parse required count
-		buf := bytes.NewBuffer(b[:4])
-		var required uint16
-		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+		buf := bytes.NewBuffer(b)
+		var required int
+		var err error
+		if required, err = readBase128VarInt(buf); err != nil {
 			return err
 		}
 		// Parse hash count
-		var count uint16
-		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+		var count int
+		if count, err = readBase128VarInt(buf); err != nil {
 			return err
 		}
-		b = b[4:] // remove counts
-		for i := uint16(0); i < count; i++ {
-			if len(b) < ScriptHashLength {
-				return ErrBadScriptHashLength
+		pkhs := make([][]byte, 0, count)
+		for i := 0; i < count; i++ {
+			pkh := make([]byte, ScriptHashLength)
+			if _, err := buf.Read(pkh); err != nil {
+				return err
 			}
-			b = b[ScriptHashLength:]
+			pkhs = append(pkhs, pkh)
 		}
-		return nil
+		return ra.SetMultiPKH(required, pkhs)
 
 	// R Puzzle Hash
 	case AddressTypeMainRPH:
@@ -134,17 +135,18 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 		fallthrough
 	case ScriptTypeMultiPKH:
 		// Parse required count
-		var required uint16
-		if err := binary.Read(buf, binary.LittleEndian, &required); err != nil {
+		var required int
+		var err error
+		if required, err = readBase128VarInt(buf); err != nil {
 			return err
 		}
 		// Parse hash count
-		var count uint16
-		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+		var count int
+		if count, err = readBase128VarInt(buf); err != nil {
 			return err
 		}
 		pkhs := make([][]byte, 0, count)
-		for i := uint16(0); i < count; i++ {
+		for i := 0; i < count; i++ {
 			pkh := make([]byte, ScriptHashLength)
 			if _, err := buf.Read(pkh); err != nil {
 				return err
@@ -238,20 +240,21 @@ func (ra *RawAddress) SetSH(sh []byte) error {
 /**************************************** MultiPKH ************************************************/
 
 // NewRawAddressMultiPKH creates an address from multiple public key hashes.
-func NewRawAddressMultiPKH(required uint16, pkhs [][]byte) (RawAddress, error) {
+func NewRawAddressMultiPKH(required int, pkhs [][]byte) (RawAddress, error) {
 	var result RawAddress
 	err := result.SetMultiPKH(required, pkhs)
 	return result, err
 }
 
 // SetMultiPKH sets the type as ScriptTypeMultiPKH and puts the required count and Public Key Hashes into data.
-func (ra *RawAddress) SetMultiPKH(required uint16, pkhs [][]byte) error {
+func (ra *RawAddress) SetMultiPKH(required int, pkhs [][]byte) error {
 	ra.scriptType = ScriptTypeMultiPKH
 	buf := bytes.NewBuffer(make([]byte, 0, 4+(len(pkhs)*ScriptHashLength)))
-	if err := binary.Write(buf, binary.LittleEndian, required); err != nil {
+
+	if err := writeBase128VarInt(buf, required); err != nil {
 		return err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, uint16(len(pkhs))); err != nil {
+	if err := writeBase128VarInt(buf, len(pkhs)); err != nil {
 		return err
 	}
 	for _, pkh := range pkhs {
