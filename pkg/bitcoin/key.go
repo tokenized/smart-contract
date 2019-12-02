@@ -30,6 +30,7 @@ const (
 
 var (
 	ErrBadKeyType = errors.New("Key type unknown")
+	ErrOutOfRangeKey = errors.New("Out of range key")
 )
 
 // Key is an elliptic curve private key using the secp256k1 elliptic curve.
@@ -210,12 +211,12 @@ var zeroKeyValue [32]byte
 func privateKeyIsValid(b []byte) error {
 	// Check for zero private key
 	if bytes.Equal(b, zeroKeyValue[:]) {
-		return errors.New("Zero private key")
+		return ErrOutOfRangeKey
 	}
 
 	// Check for key outside curve
 	if bytes.Compare(b, curveS256Params.N.Bytes()) >= 0 {
-		return errors.New("Out of range private key")
+		return ErrOutOfRangeKey
 	}
 
 	return nil

@@ -145,7 +145,7 @@ func publicKeyIsValid(k []byte) error {
 	x, y := expandPublicKey(k)
 
 	if x.Sign() == 0 || y.Sign() == 0 {
-		return errors.New("invalid public key")
+		return ErrOutOfRangeKey
 	}
 
 	return nil
