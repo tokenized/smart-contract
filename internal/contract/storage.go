@@ -74,6 +74,8 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return nil, err
 	}
 
+	cache[*contractHash] = &contract
+
 	return &contract, nil
 }
 
@@ -89,8 +91,8 @@ func buildStoragePath(contractHash *bitcoin.Hash20) string {
 func ExpandOracles(ctx context.Context, data *state.Contract) error {
 	// Expand oracle public keys
 	data.FullOracles = make([]bitcoin.PublicKey, 0, len(data.Oracles))
-	for _, key := range data.Oracles {
-		fullKey, err := bitcoin.PublicKeyFromBytes(key.PublicKey)
+	for _, oracle := range data.Oracles {
+		fullKey, err := bitcoin.PublicKeyFromBytes(oracle.PublicKey)
 		if err != nil {
 			return err
 		}
