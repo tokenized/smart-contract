@@ -74,8 +74,10 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return nil, err
 	}
 
+	if cache == nil {
+		cache = make(map[bitcoin.Hash20]*state.Contract)
+	}
 	cache[*contractHash] = &contract
-
 	return &contract, nil
 }
 
