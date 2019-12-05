@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -308,10 +309,9 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	// Check if block time is beyond expiration
-	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
+	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
+	expire := uint32((time.Now().Unix())) - 3600 // Hour ago, unix timestamp in seconds
 	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
