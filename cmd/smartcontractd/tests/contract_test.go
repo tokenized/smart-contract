@@ -322,18 +322,17 @@ func oracleContract(t *testing.T) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
 	holdingsChannel := &holdings.CacheChannel{}
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
-	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		holdingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		t.Fatalf("Failed to load wallet : %s", err)
+	}
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()

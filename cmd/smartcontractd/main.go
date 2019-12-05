@@ -121,13 +121,8 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Tx Filter
 
-	walletKeys := masterWallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(pubKeys, tracer, appConfig.IsTest)
+	txFilter := filters.NewTxFilter(tracer, appConfig.IsTest)
 	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
@@ -177,6 +172,10 @@ func main() {
 		txFilter,
 		holdingsChannel,
 	)
+
+	if err := node.SyncWallet(ctx); err != nil {
+		logger.Fatal(ctx, "Load Wallet : %s", err)
+	}
 
 	// -------------------------------------------------------------------------
 	// Start Node Service

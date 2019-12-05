@@ -97,16 +97,6 @@ func NewServer(
 		holdingsChannel:  holdingsChannel,
 	}
 
-	keys := wallet.ListAll()
-	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
-	for _, key := range keys {
-		address, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		if err != nil {
-			return nil
-		}
-		result.contractAddresses = append(result.contractAddresses, address)
-	}
-
 	return &result
 }
 

@@ -124,17 +124,16 @@ func simpleTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
-	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		b.Fatalf("Failed to load wallet : %s", err)
+	}
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -306,17 +305,16 @@ func separateTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
-	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		b.Fatalf("Failed to load wallet : %s", err)
+	}
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -508,17 +506,16 @@ func oracleTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
-	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		b.Fatalf("Failed to load wallet : %s", err)
+	}
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()
@@ -748,17 +745,16 @@ func treeTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	walletKeys := test.Wallet.ListAll()
-	pubKeys := make([][]byte, 0, len(walletKeys))
-	for _, walletKey := range walletKeys {
-		pubKeys = append(pubKeys, walletKey.Key.PublicKey().Bytes())
-	}
-	txFilter := filters.NewTxFilter(pubKeys, tracer, true)
+	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		b.Fatalf("Failed to load wallet : %s", err)
+	}
 
 	server.SetAlternateResponder(respondTx)
 	server.SetInSync()

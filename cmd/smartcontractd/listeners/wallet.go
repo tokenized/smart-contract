@@ -104,5 +104,23 @@ func (server *Server) LoadWallet(ctx context.Context) error {
 		return errors.Wrap(err, "deserialize wallet")
 	}
 
+	return server.SyncWallet(ctx)
+}
+
+func (server *Server) SyncWallet(ctx context.Context) error {
+	node.Log(ctx, "Syncing wallet")
+
+	// Refresh node for wallet.
+	keys := server.wallet.ListAll()
+
+	server.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
+	for _, key := range keys {
+		// Contract address
+		server.contractAddresses = append(server.contractAddresses, key.Address)
+
+		// Tx Filter
+		server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
+	}
+
 	return nil
 }
