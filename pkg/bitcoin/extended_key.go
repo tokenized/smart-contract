@@ -94,7 +94,32 @@ func ExtendedKeyFromBytes(b []byte) (ExtendedKey, error) {
 		return fromBIP32(bip32Key)
 	}
 
-	return readExtendedKey(buf)
+	var result ExtendedKey
+	err = result.read(buf)
+	return result, err
+}
+
+// ExtendedKeyFromBytes creates a key from bytes.
+func (k *ExtendedKey) Deserialize(buf *bytes.Reader) error {
+	header, err := buf.ReadByte()
+	if err != nil {
+		return errors.Wrap(err, "read header")
+	}
+	if header != ExtendedKeyHeader {
+		// Fall back to BIP-0032 format
+		b := make([]byte, 82)
+		if _, err := buf.Read(b); err != nil {
+			return err
+		}
+		bip32Key, err := bip32.Deserialize(b)
+		if err != nil {
+			return ErrNotExtendedKey
+		}
+
+		return k.setFromBIP32(bip32Key)
+	}
+
+	return k.read(buf)
 }
 
 // ExtendedKeyFromStr creates a key from a hex string.
@@ -163,16 +188,21 @@ func (k *ExtendedKey) SetBytes(b []byte) error {
 // Bytes returns the key data.
 func (k ExtendedKey) Bytes() []byte {
 	var buf bytes.Buffer
-
-	if err := buf.WriteByte(ExtendedKeyHeader); err != nil {
-		return nil
-	}
-
-	if err := writeExtendedKey(k, &buf); err != nil {
-		return nil
-	}
-
+	k.Serialize(&buf)
 	return buf.Bytes()
+}
+
+// Serialize writes the key data.
+func (k ExtendedKey) Serialize(buf *bytes.Buffer) error {
+	if err := buf.WriteByte(ExtendedKeyHeader); err != nil {
+		return err
+	}
+
+	if err := k.write(buf); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // String returns the key formatted as hex text.
@@ -224,9 +254,9 @@ func (k ExtendedKey) IsPrivate() bool {
 // Key returns the (private) key associated with this key.
 func (k ExtendedKey) Key(net Network) Key {
 	if !k.IsPrivate() {
-		return nil
+		return Key{}
 	}
-	result, _ := KeyS256FromBytes(k.KeyValue[1:], net) // Skip first zero byte. We just want the 32 byte key value.
+	result, _ := KeyFromNumber(k.KeyValue[1:], net) // Skip first zero byte. We just want the 32 byte key value.
 	return result
 }
 
@@ -235,13 +265,13 @@ func (k ExtendedKey) PublicKey() PublicKey {
 	if k.IsPrivate() {
 		return k.Key(MainNet).PublicKey()
 	}
-	pub, _ := DecodePublicKeyBytes(k.KeyValue[:])
+	pub, _ := PublicKeyFromBytes(k.KeyValue[:])
 	return pub
 }
 
 // RawAddress returns a raw address for this key.
 func (k ExtendedKey) RawAddress() (RawAddress, error) {
-	return NewRawAddressPKH(Hash160(k.PublicKey().Bytes()))
+	return k.PublicKey().RawAddress()
 }
 
 // ExtendedPublicKey returns the public version of this key.
@@ -251,8 +281,7 @@ func (k ExtendedKey) ExtendedPublicKey() ExtendedKey {
 	}
 
 	result := k
-	copy(result.KeyValue[:], k.Key(MainNet).PublicKey().Bytes())
-
+	copy(result.KeyValue[:], k.Key(InvalidNet).PublicKey().Bytes())
 	return result
 }
 
@@ -309,7 +338,7 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 			return result, errors.Wrap(err, "child add private")
 		}
 	} else {
-		privateKey, err := KeyS256FromBytes(sum[:32], MainNet)
+		privateKey, err := KeyFromNumber(sum[:32], MainNet)
 		if err != nil {
 			return result, errors.Wrap(err, "parse child private key")
 		}
@@ -385,62 +414,61 @@ func (k *ExtendedKey) setFromBIP32(old *bip32.Key) error {
 	return nil
 }
 
-// readExtendedKey reads just the basic data of the extended key.
-func readExtendedKey(buf *bytes.Reader) (ExtendedKey, error) {
-	var result ExtendedKey
+// read reads just the basic data of the extended key.
+func (k *ExtendedKey) read(buf *bytes.Reader) error {
 	var err error
 
-	result.Depth, err = buf.ReadByte()
+	k.Depth, err = buf.ReadByte()
 	if err != nil {
-		return result, errors.Wrap(err, "reading xkey depth")
+		return errors.Wrap(err, "reading xkey depth")
 	}
 
-	_, err = buf.Read(result.FingerPrint[:])
+	_, err = buf.Read(k.FingerPrint[:])
 	if err != nil {
-		return result, errors.Wrap(err, "reading xkey fingerprint")
+		return errors.Wrap(err, "reading xkey fingerprint")
 	}
 
-	err = binary.Read(buf, binary.BigEndian, &result.Index)
+	err = binary.Read(buf, binary.BigEndian, &k.Index)
 	if err != nil {
-		return result, errors.Wrap(err, "reading xkey index")
+		return errors.Wrap(err, "reading xkey index")
 	}
 
-	_, err = buf.Read(result.ChainCode[:])
+	_, err = buf.Read(k.ChainCode[:])
 	if err != nil {
-		return result, errors.Wrap(err, "reading xkey chaincode")
+		return errors.Wrap(err, "reading xkey chaincode")
 	}
 
-	_, err = buf.Read(result.KeyValue[:])
+	_, err = buf.Read(k.KeyValue[:])
 	if err != nil {
-		return result, errors.Wrap(err, "reading xkey key")
+		return errors.Wrap(err, "reading xkey key")
 	}
 
-	return result, nil
+	return nil
 }
 
-// writeExtendedKey writes just the basic data of the extended key.
-func writeExtendedKey(ek ExtendedKey, buf *bytes.Buffer) error {
-	err := buf.WriteByte(ek.Depth)
+// write writes just the basic data of the extended key.
+func (k ExtendedKey) write(buf *bytes.Buffer) error {
+	err := buf.WriteByte(k.Depth)
 	if err != nil {
 		return errors.Wrap(err, "writing xkey depth")
 	}
 
-	_, err = buf.Write(ek.FingerPrint[:])
+	_, err = buf.Write(k.FingerPrint[:])
 	if err != nil {
 		return errors.Wrap(err, "writing xkey fingerprint")
 	}
 
-	err = binary.Write(buf, binary.BigEndian, ek.Index)
+	err = binary.Write(buf, binary.BigEndian, k.Index)
 	if err != nil {
 		return errors.Wrap(err, "writing xkey index")
 	}
 
-	_, err = buf.Write(ek.ChainCode[:])
+	_, err = buf.Write(k.ChainCode[:])
 	if err != nil {
 		return errors.Wrap(err, "writing xkey chaincode")
 	}
 
-	_, err = buf.Write(ek.KeyValue[:])
+	_, err = buf.Write(k.KeyValue[:])
 	if err != nil {
 		return errors.Wrap(err, "writing xkey key")
 	}

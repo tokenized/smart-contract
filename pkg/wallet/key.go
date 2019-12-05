@@ -3,7 +3,6 @@ package wallet
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
@@ -18,15 +17,11 @@ func NewKey(key bitcoin.Key) *Key {
 		Key: key,
 	}
 
-	s256, ok := key.(*bitcoin.KeyS256)
-	if !ok {
-		return nil
-	}
-	result.Address, _ = bitcoin.NewRawAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
+	result.Address, _ = key.RawAddress()
 	return &result
 }
 
-func (rk *Key) Read(buf *bytes.Buffer, net bitcoin.Network) error {
+func (rk *Key) Read(buf *bytes.Reader, net bitcoin.Network) error {
 	var length uint8
 	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
 		return err
@@ -38,16 +33,12 @@ func (rk *Key) Read(buf *bytes.Buffer, net bitcoin.Network) error {
 	}
 
 	var err error
-	rk.Key, err = bitcoin.DecodeKeyBytes(data, net)
+	rk.Key, err = bitcoin.KeyFromBytes(data, net)
 	if err != nil {
 		return err
 	}
 
-	s256, ok := rk.Key.(*bitcoin.KeyS256)
-	if !ok {
-		return errors.New("Key is not S256")
-	}
-	rk.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(s256.PublicKey().Bytes()))
+	rk.Address, _ = rk.Key.RawAddress()
 	return err
 }
 

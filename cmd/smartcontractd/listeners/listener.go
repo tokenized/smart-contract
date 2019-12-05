@@ -123,6 +123,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	node.Log(ctx, "Node is in sync")
+	node.Log(ctx, "Processing pending : %d responses, %d requests", len(server.pendingResponses),
+		len(server.pendingRequests))
 	server.inSync = true
 	pendingResponses := server.pendingResponses
 	server.pendingResponses = nil

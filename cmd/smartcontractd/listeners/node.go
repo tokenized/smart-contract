@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
-	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -19,6 +18,10 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/pkg/errors"
+)
+
+const (
+	walletKey = "wallet" // storage path for wallet
 )
 
 type Server struct {
@@ -92,16 +95,6 @@ func NewServer(
 		blockHeight:      0,
 		inSync:           false,
 		holdingsChannel:  holdingsChannel,
-	}
-
-	keys := wallet.ListAll()
-	result.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
-	for _, key := range keys {
-		address, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
-		if err != nil {
-			return nil
-		}
-		result.contractAddresses = append(result.contractAddresses, address)
 	}
 
 	return &result
@@ -218,10 +211,6 @@ func (server *Server) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
-		return err
-	}
-
 	return server.Tracer.Save(ctx, server.MasterDB)
 }
 
@@ -313,68 +302,4 @@ func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) 
 
 func (server *Server) ReprocessTx(ctx context.Context, itx *inspector.Transaction) error {
 	return server.Handler.Trigger(ctx, "END", itx)
-}
-
-// AddContractKey adds a new contract key to those being monitored.
-func (server *Server) AddContractKey(ctx context.Context, k bitcoin.Key) error {
-	server.walletLock.Lock()
-	defer server.walletLock.Unlock()
-
-	rawAddress, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
-	if err != nil {
-		return err
-	}
-	newKey := wallet.Key{
-		Address: rawAddress,
-		Key:     k,
-	}
-
-	address, _ := bitcoin.NewAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()), k.Network())
-	node.Log(ctx, "Adding key : %s", address.String())
-	server.wallet.Add(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
-		return err
-	}
-	server.contractAddresses = append(server.contractAddresses, rawAddress)
-
-	server.txFilter.AddPubKey(ctx, k.PublicKey().Bytes())
-	return nil
-}
-
-// RemoveContractKeyIfUnused removes a contract key from those being monitored if it hasn't been used yet.
-func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.Key) error {
-	server.walletLock.Lock()
-	defer server.walletLock.Unlock()
-
-	rawAddress, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(k.PublicKey().Bytes()))
-	if err != nil {
-		return err
-	}
-	newKey := wallet.Key{
-		Address: rawAddress,
-		Key:     k,
-	}
-
-	// Check if contract exists
-	_, err = contract.Retrieve(ctx, server.MasterDB, rawAddress)
-	if err != contract.ErrNotFound {
-		return nil
-	}
-
-	stringAddress := bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net)
-	node.Log(ctx, "Removing key : %s", stringAddress.String())
-	server.wallet.Remove(&newKey)
-	if err := server.wallet.Save(ctx, server.MasterDB, server.Config.Net); err != nil {
-		return err
-	}
-
-	for i, caddress := range server.contractAddresses {
-		if rawAddress.Equal(caddress) {
-			server.contractAddresses = append(server.contractAddresses[:i], server.contractAddresses[i+1:]...)
-			break
-		}
-	}
-
-	server.txFilter.RemovePubKey(ctx, k.PublicKey().Bytes())
-	return nil
 }

@@ -78,13 +78,13 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		authorityPubKey, err := bitcoin.DecodePublicKeyBytes(msg.AuthorityPublicKey)
+		authorityPubKey, err := bitcoin.PublicKeyFromBytes(msg.AuthorityPublicKey)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to parse authority pub key : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		authoritySig, err := bitcoin.DecodeSignatureBytes(msg.OrderSignature)
+		authoritySig, err := bitcoin.SignatureFromBytes(msg.OrderSignature)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to parse authority signature : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)

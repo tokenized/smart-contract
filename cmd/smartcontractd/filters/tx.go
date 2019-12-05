@@ -19,19 +19,11 @@ type TxFilter struct {
 	lock    sync.RWMutex
 }
 
-func NewTxFilter(contractPubKeys [][]byte, tracer *Tracer, isTest bool) *TxFilter {
-	result := TxFilter{
-		tracer:  tracer,
-		isTest:  isTest,
-		pubkeys: contractPubKeys,
+func NewTxFilter(tracer *Tracer, isTest bool) *TxFilter {
+	return &TxFilter{
+		tracer: tracer,
+		isTest: isTest,
 	}
-
-	result.pkhs = make([][]byte, 0, len(contractPubKeys))
-	for _, pubkey := range contractPubKeys {
-		result.pkhs = append(result.pkhs, bitcoin.Hash160(pubkey))
-	}
-
-	return &result
 }
 
 func (filter *TxFilter) AddPubKey(ctx context.Context, contractPubKey []byte) {

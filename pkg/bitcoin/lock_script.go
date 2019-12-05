@@ -246,7 +246,7 @@ func RawAddressFromLockingScript(lockingScript []byte) (RawAddress, error) {
 		}
 		script = script[1:]
 
-		err = result.SetMultiPKH(uint16(required), pkhs)
+		err = result.SetMultiPKH(int(required), pkhs)
 		return result, err
 	}
 

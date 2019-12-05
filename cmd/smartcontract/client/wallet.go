@@ -122,7 +122,7 @@ func (wallet *Wallet) RemoveUTXO(txid *bitcoin.Hash32, index uint32, script []by
 func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin.Network) error {
 	// Private Key
 	var err error
-	wallet.Key, err = bitcoin.DecodeKeyString(wifKey)
+	wallet.Key, err = bitcoin.KeyFromStr(wifKey)
 	if err != nil {
 		return err
 	}

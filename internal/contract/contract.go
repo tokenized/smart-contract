@@ -62,12 +62,8 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if contract.VotingSystems == nil {
 		contract.VotingSystems = []*actions.VotingSystemField{}
 	}
-	if contract.Oracles == nil {
-		contract.Oracles = []*actions.OracleField{}
-
-		if err := ExpandOracles(ctx, &contract); err != nil {
-			return err
-		}
+	if err := ExpandOracles(ctx, &contract); err != nil {
+		return err
 	}
 
 	return Save(ctx, dbConn, &contract)

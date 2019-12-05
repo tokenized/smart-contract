@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
@@ -15,6 +14,8 @@ import (
 	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 type UntrustedNode struct {
@@ -94,7 +95,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	defer func() {
 		node.lock.Lock()
 		node.active = false
-		logger.Verbose(ctx, "(%s) Stopped", node.address)
+		logger.Debug(ctx, "(%s) Stopped", node.address)
 		node.lock.Unlock()
 	}()
 
@@ -198,7 +199,7 @@ func (node *UntrustedNode) connect() error {
 func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
-			logger.Verbose(ctx, "(%s) Check failed : %s", node.address, err.Error())
+			logger.Debug(ctx, "(%s) Check failed : %s", node.address, err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -213,16 +214,16 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 			wireError, ok := err.(*wire.MessageError)
 			if ok {
 				if wireError.Type == wire.MessageErrorUnknownCommand {
-					logger.Verbose(ctx, "(%s) %s", node.address, wireError)
+					logger.Debug(ctx, "(%s) %s", node.address, wireError)
 					continue
 				} else {
-					logger.Verbose(ctx, "(%s) %s", node.address, wireError)
+					logger.Debug(ctx, "(%s) %s", node.address, wireError)
 					node.Stop(ctx)
 					break
 				}
 
 			} else {
-				logger.Verbose(ctx, "(%s) Failed to read message : %s", node.address, err.Error())
+				logger.Debug(ctx, "(%s) Failed to read message : %s", node.address, err.Error())
 				node.Stop(ctx)
 				break
 			}
@@ -230,7 +231,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 		if err := node.handleMessage(ctx, msg); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Verbose(ctx, "(%s) Failed to handle [%s] message : %s", node.address, msg.Command(), err.Error())
+			logger.Debug(ctx, "(%s) Failed to handle [%s] message : %s", node.address, msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
@@ -267,7 +268,7 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 	}
 
 	if !node.readyAnnounced {
-		logger.Info(ctx, "(%s) Ready", node.address)
+		logger.Debug(ctx, "(%s) Ready", node.address)
 		node.readyAnnounced = true
 	}
 
@@ -297,7 +298,7 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 
 		if !node.shotgunLoaded {
 			for _, tx := range node.config.ShotgunTxs {
-				logger.Info(ctx, "(%s) Sending shotgun tx : %s", node.address, tx.TxHash().String())
+				logger.Verbose(ctx, "(%s) Sending shotgun tx : %s", node.address, tx.TxHash().String())
 				node.outgoing.Add(tx)
 			}
 			node.shotgunLoaded = true

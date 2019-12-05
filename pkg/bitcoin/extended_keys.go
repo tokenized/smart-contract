@@ -42,15 +42,15 @@ func ExtendedKeysFromBytes(b []byte) (ExtendedKeys, error) {
 		return ExtendedKeys{result}, nil
 	}
 
-	count, err := readBase128VarInt(buf)
+	count, err := ReadBase128VarInt(buf)
 	if err != nil {
 		return nil, errors.Wrap(err, "read count")
 	}
 
 	result := make(ExtendedKeys, 0, count)
 	for i := 0; i < count; i++ {
-		ek, err := readExtendedKey(buf)
-		if err != nil {
+		var ek ExtendedKey
+		if err := ek.read(buf); err != nil {
 			return nil, errors.Wrap(err, "read xkey base")
 		}
 		result = append(result, ek)
@@ -144,12 +144,12 @@ func (k ExtendedKeys) Bytes() []byte {
 		return nil
 	}
 
-	if err := writeBase128VarInt(&buf, len(k)); err != nil {
+	if err := WriteBase128VarInt(&buf, len(k)); err != nil {
 		return nil
 	}
 
 	for _, key := range k {
-		if err := writeExtendedKey(key, &buf); err != nil {
+		if err := key.write(&buf); err != nil {
 			return nil
 		}
 	}
@@ -211,7 +211,7 @@ func (k ExtendedKeys) Equal(other ExtendedKeys) bool {
 }
 
 // RawAddress returns a raw address for this list of keys.
-func (k ExtendedKeys) RawAddress(requiredSigners uint16) (RawAddress, error) {
+func (k ExtendedKeys) RawAddress(requiredSigners int) (RawAddress, error) {
 	if len(k) == 1 {
 		return k[0].RawAddress()
 	}
@@ -281,7 +281,7 @@ func (k *ExtendedKeys) Scan(data interface{}) error {
 	return k.SetBytes(c)
 }
 
-func readBase128VarInt(r io.ByteReader) (int, error) {
+func ReadBase128VarInt(r io.ByteReader) (int, error) {
 	value := uint32(0)
 	done := false
 	bitOffset := uint32(0)
@@ -301,7 +301,7 @@ func readBase128VarInt(r io.ByteReader) (int, error) {
 	return int(value), nil
 }
 
-func writeBase128VarInt(w io.ByteWriter, value int) error {
+func WriteBase128VarInt(w io.ByteWriter, value int) error {
 	v := uint32(value)
 	for {
 		if v < 128 {

@@ -72,14 +72,9 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
-	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Transfer request invalid")
-		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			itx.RejectCode, false, "")
-	}
-
 	// Check pre-processing reject code
 	if itx.RejectCode != 0 {
+		node.LogWarn(ctx, "Transfer request invalid")
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
 			itx.RejectCode, false, "")
 	}

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -52,7 +51,6 @@ func transferSign(c *cobra.Command, args []string) error {
 	}
 
 	// Contract key
-	hash := make([]byte, 20)
 	contractAddress, err := bitcoin.DecodeAddress(args[1])
 	if err != nil {
 		fmt.Printf("Invalid contract address : %s\n", err)
@@ -67,28 +65,13 @@ func transferSign(c *cobra.Command, args []string) error {
 	}
 
 	// Block hash
-	hash = make([]byte, 32)
-	n, err := hex.Decode(hash, []byte(args[3]))
-	if err != nil {
-		fmt.Printf("Failed to parse block hash : %s\n", err)
-		return nil
-	}
-	if n != 32 {
-		fmt.Printf("Invalid block hash size : %d\n", n)
-		return nil
-	}
-	// Reverse hash (make little endian)
-	reverseHash := make([]byte, 32)
-	for i, b := range hash {
-		reverseHash[31-i] = b
-	}
-	blockHash, err := bitcoin.NewHash32(reverseHash)
+	blockHash, err := bitcoin.NewHash32FromStr(args[3])
 	if err != nil {
 		fmt.Printf("Invalid block hash : %s\n", err)
 		return nil
 	}
 
-	key, err := bitcoin.DecodeKeyString(args[4])
+	key, err := bitcoin.KeyFromStr(args[4])
 	if err != nil {
 		fmt.Printf("Invalid key : %s\n", err)
 		return nil
@@ -125,7 +108,7 @@ func transferSign(c *cobra.Command, args []string) error {
 					return nil
 				}
 
-				fmt.Printf("Signature : %x\n", signature)
+				fmt.Printf("Signature : %x\n", signature.Bytes())
 				return nil
 			}
 

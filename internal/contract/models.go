@@ -35,7 +35,7 @@ type NewContract struct {
 	RestrictedQtyAssets       uint64                       `json:"RestrictedQtyAssets,omitempty"`
 	AdministrationProposal    bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal            bool                         `json:"HolderProposal,omitempty"`
-	Oracle                    []*actions.OracleField       `json:"Oracle,omitempty"`
+	Oracles                   []*actions.OracleField       `json:"Oracles,omitempty"`
 }
 
 // UpdateContract defines what information may be provided to modify an existing

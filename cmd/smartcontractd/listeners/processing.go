@@ -4,10 +4,11 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+
+	"github.com/pkg/errors"
 )
 
 // ProcessTxs performs "core" processing on transactions.
@@ -21,6 +22,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		server.walletLock.RLock()
 
 		if !ptx.Itx.IsTokenized() {
+			node.Log(ctx, "Not tokenized : %s", ptx.Itx.Hash)
 			server.utxos.Add(ptx.Itx.MsgTx, server.contractAddresses)
 			server.walletLock.RUnlock()
 			continue
@@ -43,6 +45,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
 					if !server.inSync && ptx.Itx.IsIncomingMessageType() {
+						node.Log(ctx, "Request added to pending : %s", ptx.Itx.Hash)
 						// Save pending request to ensure it has a response, and process it if not.
 						server.pendingRequests = append(server.pendingRequests, pendingRequest{
 							Itx:           ptx.Itx,
@@ -64,6 +67,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 						found = true
 						responseAdded = true
 						if !server.inSync {
+							node.Log(ctx, "Response added to pending : %s", ptx.Itx.Hash)
 							server.pendingResponses = append(server.pendingResponses, ptx.Itx)
 						}
 						break

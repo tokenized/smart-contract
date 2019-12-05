@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -122,8 +123,10 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 
 	// Broadcast to ensure it is accepted by the network.
-	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
-		node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+	if server.inSync {
+		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
+			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+		}
 	}
 
 	intx.IsReady = true
@@ -181,11 +184,6 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
 		return
-	}
-
-	// Broadcast to ensure it is accepted by the network.
-	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
-		node.LogWarn(ctx, "Failed to re-broadcast confirmed incoming : %s", err)
 	}
 
 	intx.IsReady = true
@@ -303,15 +301,14 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.DecodeSignatureBytes(assetReceiver.OracleConfirmationSig)
+	oracleSig, err := bitcoin.SignatureFromBytes(assetReceiver.OracleConfirmationSig)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
 	// Check if block time is beyond expiration
-	expire := (v.Now.Seconds()) - 3600 // Hour ago, unix timestamp in seconds
+	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
+	expire := uint32((time.Now().Unix())) - 3600 // Hour ago, unix timestamp in seconds
 	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
@@ -342,6 +339,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	if oracleSig.Verify(sigHash, oracle) {
+		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}
 
@@ -354,13 +352,13 @@ func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
 		return nil
 	}
 
-	oracle, err := bitcoin.DecodePublicKeyBytes(contractOffer.AdminOracle.PublicKey)
+	oracle, err := bitcoin.PublicKeyFromBytes(contractOffer.AdminOracle.PublicKey)
 	if err != nil {
 		return err
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.DecodeSignatureBytes(contractOffer.AdminOracleSignature)
+	oracleSig, err := bitcoin.SignatureFromBytes(contractOffer.AdminOracleSignature)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
@@ -388,6 +386,7 @@ func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
 	}
 
 	if oracleSig.Verify(sigHash, oracle) {
+		node.Log(ctx, "Contract oracle signature is valid")
 		return nil // Valid signature found
 	}
 
