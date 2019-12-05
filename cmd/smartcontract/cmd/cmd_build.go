@@ -54,6 +54,11 @@ var cmdBuild = &cobra.Command{
 }
 
 func buildAction(c *cobra.Command, args []string) error {
+	ctx := client.Context()
+	if ctx == nil {
+		return nil
+	}
+
 	actionType := strings.ToUpper(args[0])
 
 	// Create struct
@@ -122,19 +127,17 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
 	buildTx, _ := c.Flags().GetBool(FlagTx)
+	var theClient *client.Client
+	var tx *txbuilder.TxBuilder
 	if buildTx {
-		ctx := client.Context()
-		if ctx == nil {
-			return nil
-		}
 
-		theClient, err := client.NewClient(ctx, network(c))
+		theClient, err = client.NewClient(ctx, network(c))
 		if err != nil {
 			fmt.Printf("Failed to create client : %s\n", err)
 			return nil
 		}
 
-		tx := txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		// Add output to contract
@@ -220,13 +223,6 @@ func buildAction(c *cobra.Command, args []string) error {
 		} else {
 			fmt.Println(tx.MsgTx.StringWithAddresses(network(c)))
 		}
-
-		send, _ := c.Flags().GetBool(FlagSend)
-		if send {
-			if err := theClient.ShotgunTx(ctx, tx.MsgTx, 250); err != nil {
-				fmt.Printf("Failed to send tx : %s\n", err)
-			}
-		}
 	}
 
 	fmt.Printf("Action : %s\n", actionType)
@@ -301,6 +297,16 @@ func buildAction(c *cobra.Command, args []string) error {
 				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetCreation.AssetType))
 			}
 			fmt.Printf(string(data) + "\n")
+		}
+	}
+
+	if buildTx {
+		send, _ := c.Flags().GetBool(FlagSend)
+		if send {
+			fmt.Printf("Sending to network\n")
+			if err := theClient.ShotgunTx(ctx, tx.MsgTx, 250); err != nil {
+				fmt.Printf("Failed to send tx : %s\n", err)
+			}
 		}
 	}
 
