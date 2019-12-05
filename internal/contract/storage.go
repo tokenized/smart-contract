@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/logger"
 
 	"github.com/pkg/errors"
 )
@@ -65,20 +66,20 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return nil, errors.Wrap(err, "Failed to fetch contract")
 	}
 
-	contract := state.Contract{}
-	if err := json.Unmarshal(b, &contract); err != nil {
+	result := state.Contract{}
+	if err := json.Unmarshal(b, &result); err != nil {
 		return nil, errors.Wrap(err, "Failed to unmarshal contract")
 	}
 
-	if err := ExpandOracles(ctx, &contract); err != nil {
+	if err := ExpandOracles(ctx, &result); err != nil {
 		return nil, err
 	}
 
 	if cache == nil {
 		cache = make(map[bitcoin.Hash20]*state.Contract)
 	}
-	cache[*contractHash] = &contract
-	return &contract, nil
+	cache[*contractHash] = &result
+	return &result, nil
 }
 
 func Reset(ctx context.Context) {
@@ -91,6 +92,8 @@ func buildStoragePath(contractHash *bitcoin.Hash20) string {
 }
 
 func ExpandOracles(ctx context.Context, data *state.Contract) error {
+	logger.Info(ctx, "Expanding %d oracle public keys", len(data.Oracles))
+
 	// Expand oracle public keys
 	data.FullOracles = make([]bitcoin.PublicKey, 0, len(data.Oracles))
 	for _, oracle := range data.Oracles {
