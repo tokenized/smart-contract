@@ -51,10 +51,12 @@ func (server *Server) RemoveContractKeyIfUnused(ctx context.Context, k bitcoin.K
 
 	// Check if contract exists
 	_, err = contract.Retrieve(ctx, server.MasterDB, rawAddress)
-	if err != nil {
-		if err != contract.ErrNotFound {
-			node.LogWarn(ctx, "Retrieving contract : %s", err)
-		}
+	if err == nil {
+		node.LogWarn(ctx, "Contract found")
+		return nil // Don't remove contract key
+	}
+	if err != contract.ErrNotFound {
+		node.LogWarn(ctx, "Error retrieving contract : %s", err)
 		return nil // Don't remove contract key
 	}
 
