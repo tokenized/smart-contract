@@ -342,6 +342,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	if oracleSig.Verify(sigHash, oracle) {
+		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}
 
@@ -388,6 +389,7 @@ func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
 	}
 
 	if oracleSig.Verify(sigHash, oracle) {
+		node.Log(ctx, "Contract oracle signature is valid")
 		return nil // Valid signature found
 	}
 
