@@ -123,8 +123,10 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 
 	// Broadcast to ensure it is accepted by the network.
-	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
-		node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+	if server.inSync {
+		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
+			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+		}
 	}
 
 	intx.IsReady = true
@@ -182,11 +184,6 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
 		return
-	}
-
-	// Broadcast to ensure it is accepted by the network.
-	if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
-		node.LogWarn(ctx, "Failed to re-broadcast confirmed incoming : %s", err)
 	}
 
 	intx.IsReady = true
