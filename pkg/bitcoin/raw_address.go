@@ -66,12 +66,12 @@ func (ra *RawAddress) Decode(b []byte) error {
 		buf := bytes.NewBuffer(b)
 		var required int
 		var err error
-		if required, err = readBase128VarInt(buf); err != nil {
+		if required, err = ReadBase128VarInt(buf); err != nil {
 			return err
 		}
 		// Parse hash count
 		var count int
-		if count, err = readBase128VarInt(buf); err != nil {
+		if count, err = ReadBase128VarInt(buf); err != nil {
 			return err
 		}
 		pkhs := make([][]byte, 0, count)
@@ -137,12 +137,12 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 		// Parse required count
 		var required int
 		var err error
-		if required, err = readBase128VarInt(buf); err != nil {
+		if required, err = ReadBase128VarInt(buf); err != nil {
 			return err
 		}
 		// Parse hash count
 		var count int
-		if count, err = readBase128VarInt(buf); err != nil {
+		if count, err = ReadBase128VarInt(buf); err != nil {
 			return err
 		}
 		pkhs := make([][]byte, 0, count)
@@ -251,10 +251,10 @@ func (ra *RawAddress) SetMultiPKH(required int, pkhs [][]byte) error {
 	ra.scriptType = ScriptTypeMultiPKH
 	buf := bytes.NewBuffer(make([]byte, 0, 4+(len(pkhs)*ScriptHashLength)))
 
-	if err := writeBase128VarInt(buf, required); err != nil {
+	if err := WriteBase128VarInt(buf, required); err != nil {
 		return err
 	}
-	if err := writeBase128VarInt(buf, len(pkhs)); err != nil {
+	if err := WriteBase128VarInt(buf, len(pkhs)); err != nil {
 		return err
 	}
 	for _, pkh := range pkhs {

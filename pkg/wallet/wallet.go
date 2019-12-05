@@ -8,11 +8,10 @@ package wallet
  */
 
 import (
-	"context"
+	"bytes"
 	"errors"
 	"sync"
 
-	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
@@ -20,10 +19,9 @@ type WalletInterface interface {
 	Get(bitcoin.RawAddress) (*Key, error)
 	List([]bitcoin.RawAddress) ([]*Key, error)
 	ListAll() []*Key
-	Add(*Key) error
 	Remove(*Key) error
-	Load(context.Context, *db.DB, bitcoin.Network) error
-	Save(context.Context, *db.DB, bitcoin.Network) error
+	Serialize(*bytes.Buffer) error
+	Deserialize(*bytes.Reader) error
 }
 
 type Wallet struct {
@@ -106,16 +104,16 @@ func (w Wallet) Get(address bitcoin.RawAddress) (*Key, error) {
 	return w.KeyStore.Get(address)
 }
 
-func (w Wallet) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-
-	return w.KeyStore.Load(ctx, masterDB, net)
-}
-
-func (w Wallet) Save(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
+func (w Wallet) Serialize(buf *bytes.Buffer) error {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
 
-	return w.KeyStore.Save(ctx, masterDB)
+	return w.KeyStore.Serialize(buf)
+}
+
+func (w Wallet) Deserialize(buf *bytes.Reader) error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	return w.KeyStore.Deserialize(buf)
 }

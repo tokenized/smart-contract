@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	ErrBadKeyType = errors.New("Key type unknown")
+	ErrBadKeyType    = errors.New("Key type unknown")
 	ErrOutOfRangeKey = errors.New("Out of range key")
 )
 

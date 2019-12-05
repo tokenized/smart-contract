@@ -2,16 +2,10 @@ package wallet
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 
-	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-)
-
-const (
-	walletKey = "wallet"
 )
 
 var (
@@ -75,19 +69,22 @@ func (k KeyStore) GetAll() []*Key {
 	return result
 }
 
-func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Network) error {
-	k.Keys = make(map[bitcoin.Hash20]*Key)
-
-	data, err := masterDB.Fetch(ctx, walletKey)
-	if err != nil {
-		if err == db.ErrNotFound {
-			return nil // No keys yet
-		}
+func (k *KeyStore) Serialize(buf *bytes.Buffer) error {
+	count := uint32(len(k.Keys))
+	if err := binary.Write(buf, binary.LittleEndian, &count); err != nil {
 		return err
 	}
 
-	buf := bytes.NewBuffer(data)
+	for _, key := range k.Keys {
+		if err := key.Write(buf); err != nil {
+			return err
+		}
+	}
 
+	return nil
+}
+
+func (k *KeyStore) Deserialize(buf *bytes.Reader) error {
 	var count uint32
 	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
 		return err
@@ -95,7 +92,7 @@ func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Networ
 
 	for i := uint32(0); i < count; i++ {
 		var newKey Key
-		if err := newKey.Read(buf, net); err != nil {
+		if err := newKey.Read(buf, bitcoin.InvalidNet); err != nil {
 			return err
 		}
 
@@ -107,21 +104,4 @@ func (k *KeyStore) Load(ctx context.Context, masterDB *db.DB, net bitcoin.Networ
 	}
 
 	return nil
-}
-
-func (k *KeyStore) Save(ctx context.Context, masterDB *db.DB) error {
-	var buf bytes.Buffer
-
-	count := uint32(len(k.Keys))
-	if err := binary.Write(&buf, binary.LittleEndian, &count); err != nil {
-		return err
-	}
-
-	for _, key := range k.Keys {
-		if err := key.Write(&buf); err != nil {
-			return err
-		}
-	}
-
-	return masterDB.Put(ctx, walletKey, buf.Bytes())
 }
