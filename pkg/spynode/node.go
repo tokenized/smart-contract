@@ -921,12 +921,12 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 	if err != nil {
 		return err
 	}
-	logger.Info(ctx, "Found %d peers with no score", len(peers))
+	logger.Verbose(ctx, "Found %d peers with no score", len(peers))
 	if len(peers) < uncheckedCount {
 		return nil // Not enough unchecked peers to run a scan
 	}
 
-	logger.Info(ctx, "Scanning %d peers", connections)
+	logger.Verbose(ctx, "Scanning %d peers", connections)
 
 	count := 0
 	nodes := make([]*UntrustedNode, 0, connections)
@@ -961,10 +961,10 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 		node.Stop(ctx)
 	}
 
-	logger.Info(ctx, "Waiting for %d scanning nodes to stop", len(nodes))
+	logger.Verbose(ctx, "Waiting for %d scanning nodes to stop", len(nodes))
 	wg.Wait()
 	node.scanning = false
-	logger.Info(ctx, "Finished scanning")
+	logger.Verbose(ctx, "Finished scanning")
 	return nil
 }
 
