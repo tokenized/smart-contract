@@ -8,6 +8,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -269,7 +270,7 @@ func (itx *Transaction) ContractAddresses() []bitcoin.RawAddress {
 // 	return GetProtocolContractPKHs(itx, itx.MsgProto)
 // }
 
-// Addresses returns all the PKH addresses involved in the transaction
+// Addresses returns all the addresses involved in the transaction
 func (itx *Transaction) Addresses() []bitcoin.RawAddress {
 	addresses := make([]bitcoin.RawAddress, 0, len(itx.Inputs)+len(itx.Outputs))
 
@@ -288,7 +289,7 @@ func (itx *Transaction) Addresses() []bitcoin.RawAddress {
 	return addresses
 }
 
-// AddressesUnique returns the unique PKH addresses involved in a transaction
+// AddressesUnique returns the unique addresses involved in a transaction
 func (itx *Transaction) AddressesUnique() []bitcoin.RawAddress {
 	return uniqueAddresses(itx.Addresses())
 }
@@ -316,6 +317,74 @@ func uniqueAddresses(addresses []bitcoin.RawAddress) []bitcoin.RawAddress {
 
 		if !seen {
 			result = append(result, address)
+		}
+	}
+
+	return result
+}
+
+// PKHs returns all the PKHs involved in the transaction. This includes hashes of the public keys in
+//   inputs.
+func (itx *Transaction) PKHs() ([]bitcoin.Hash20, error) {
+	result := make([]bitcoin.Hash20, 0)
+
+	for _, input := range itx.MsgTx.TxIn {
+		pubkeys, err := bitcoin.PubKeysFromSigScript(input.SignatureScript)
+		if err != nil {
+			return nil, err
+		}
+		for _, pubkey := range pubkeys {
+			pkh, err := bitcoin.NewHash20FromData(pubkey)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, *pkh)
+		}
+	}
+
+	for _, output := range itx.MsgTx.TxOut {
+		pkhs, err := bitcoin.PKHsFromLockingScript(output.PkScript)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, pkhs...)
+	}
+
+	return result, nil
+}
+
+// PKHsUnique returns the unique PKH addresses involved in a transaction
+func (itx *Transaction) PKHsUnique() ([]bitcoin.Hash20, error) {
+	result, err := itx.PKHs()
+	if err != nil {
+		return nil, err
+	}
+	return uniquePKHs(result), nil
+}
+
+// uniquePKHs is an isolated function used for testing
+func uniquePKHs(pkhs []bitcoin.Hash20) []bitcoin.Hash20 {
+	result := make([]bitcoin.Hash20, 0, len(pkhs))
+
+	// Spin over every address and check if it is found
+	// in the list of unique addresses
+	for _, pkh := range pkhs {
+		if len(result) == 0 {
+			result = append(result, pkh)
+			continue
+		}
+
+		seen := false
+		for _, seenPKH := range result {
+			// We have seen this address
+			if seenPKH.Equal(&pkh) {
+				seen = true
+				break
+			}
+		}
+
+		if !seen {
+			result = append(result, pkh)
 		}
 	}
 

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 
 	"github.com/spf13/cobra"
@@ -22,11 +24,16 @@ var cmdSync = &cobra.Command{
 		}
 		theClient, err := client.NewClient(ctx, network(c))
 		if err != nil {
-			return err
+			fmt.Printf("Failed to create client to sync : %s\n", err)
+			return nil
 		}
 
 		dontStopOnSync, _ := c.Flags().GetBool(FlagNoStop)
-		return theClient.RunSpyNode(ctx, !dontStopOnSync)
+		err = theClient.RunSpyNode(ctx, !dontStopOnSync)
+		if err != nil {
+			fmt.Printf("Failed to run spynode : %s\n", err)
+		}
+		return nil
 	},
 }
 

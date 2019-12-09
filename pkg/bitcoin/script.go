@@ -3,9 +3,10 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -58,7 +59,8 @@ const (
 var (
 	endian = binary.LittleEndian
 
-	ErrNotP2PKH = errors.New("Not P2PKH")
+	ErrNotP2PKH  = errors.New("Not P2PKH")
+	ErrNotPushOp = errors.New("Not Push Op")
 )
 
 // PushDataScriptSize returns the encoded push data script size op codes.
@@ -144,7 +146,7 @@ func ParsePushDataScriptSize(buf io.Reader) (uint64, error) {
 		}
 		return uint64(size), nil
 	default:
-		return 0, fmt.Errorf("Invalid push data op code : 0x%02x", opCode)
+		return 0, errors.Wrap(ErrNotPushOp, fmt.Sprintf("Invalid push data op code : 0x%02x", opCode))
 	}
 }
 
@@ -154,14 +156,16 @@ func ParsePushDataScriptSize(buf io.Reader) (uint64, error) {
 //   the memory to store the push.
 func ParsePushDataScript(buf *bytes.Reader) (uint8, []byte, error) {
 	var opCode byte
-	dataSize := uint64(0)
 	err := binary.Read(buf, endian, &opCode)
 	if err != nil {
 		return 0, nil, err
 	}
 
+	isPushOp := false
+	dataSize := 0
 	if opCode <= OP_MAX_SINGLE_BYTE_PUSH_DATA {
-		dataSize = uint64(opCode)
+		isPushOp = true
+		dataSize = int(opCode)
 	} else if opCode >= OP_1 && opCode <= OP_16 {
 		return opCode, []byte{opCode - OP_1 + 1}, nil
 	} else if opCode == OP_1NEGATE {
@@ -174,29 +178,35 @@ func ParsePushDataScript(buf *bytes.Reader) (uint8, []byte, error) {
 			if err != nil {
 				return 0, nil, err
 			}
-			dataSize = uint64(size)
+			isPushOp = true
+			dataSize = int(size)
 		case OP_PUSH_DATA_2:
 			var size uint16
 			err := binary.Read(buf, endian, &size)
 			if err != nil {
 				return 0, nil, err
 			}
-			dataSize = uint64(size)
+			isPushOp = true
+			dataSize = int(size)
 		case OP_PUSH_DATA_4:
 			var size uint32
 			err := binary.Read(buf, endian, &size)
 			if err != nil {
 				return 0, nil, err
 			}
-			dataSize = uint64(size)
+			isPushOp = true
+			dataSize = int(size)
 		}
 	}
 
+	if !isPushOp {
+		return opCode, nil, ErrNotPushOp
+	}
 	if dataSize == 0 {
 		return opCode, nil, nil
 	}
 
-	if dataSize > uint64(buf.Len()) {
+	if dataSize > buf.Len() { // Check this to prevent trying to allocate a large amount.
 		return 0, nil, fmt.Errorf("Push data size past end of script : %d/%d", dataSize, buf.Len())
 	}
 
@@ -356,4 +366,55 @@ func PubKeyHashFromP2PKHSigScript(script []byte) ([]byte, error) {
 
 	// Hash public key
 	return Hash160(publicKey), nil
+}
+
+func PubKeysFromSigScript(script []byte) ([][]byte, error) {
+	buf := bytes.NewReader(script)
+	result := make([][]byte, 0)
+
+	for {
+		_, pushdata, err := ParsePushDataScript(buf)
+
+		if err == nil {
+			if isPublicKey(pushdata) {
+				result = append(result, pushdata)
+			}
+			continue
+		}
+
+		if err == io.EOF { // finished parsing script
+			break
+		}
+		if err != ErrNotPushOp { // ignore non push op codes
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+func PKHsFromLockingScript(script []byte) ([]Hash20, error) {
+	buf := bytes.NewReader(script)
+	result := make([]Hash20, 0)
+
+	for {
+		_, pushdata, err := ParsePushDataScript(buf)
+
+		if err == nil {
+			if len(pushdata) == Hash20Size {
+				hash, _ := NewHash20(pushdata)
+				result = append(result, *hash)
+			}
+			continue
+		}
+
+		if err == io.EOF { // finished parsing script
+			break
+		}
+		if err != ErrNotPushOp { // ignore non push op codes
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
