@@ -39,6 +39,11 @@ func NewHash20FromStr(s string) (*Hash20, error) {
 	return &result, nil
 }
 
+// NewHash20FromData creates a Hash20 by hashing the data with a Ripemd160(Sha256(b))
+func NewHash20FromData(b []byte) (*Hash20, error) {
+	return NewHash20(Ripemd160(Sha256(b)))
+}
+
 // Bytes returns the data for the hash.
 func (h Hash20) Bytes() []byte {
 	return h[:]

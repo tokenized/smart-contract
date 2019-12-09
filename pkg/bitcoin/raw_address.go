@@ -270,6 +270,36 @@ func (ra *RawAddress) SetMultiPKH(required int, pkhs [][]byte) error {
 	return nil
 }
 
+// GetMultiPKH returns all of the hashes from a ScriptTypeMultiPKH address.
+func (ra *RawAddress) GetMultiPKH() ([][]byte, error) {
+	if ra.scriptType != ScriptTypeMultiPKH {
+		return nil, ErrBadType
+	}
+
+	buf := bytes.NewBuffer(ra.data)
+	var err error
+
+	// Parse required count
+	if _, err = ReadBase128VarInt(buf); err != nil {
+		return nil, err
+	}
+	// Parse hash count
+	var count int
+	if count, err = ReadBase128VarInt(buf); err != nil {
+		return nil, err
+	}
+	pkhs := make([][]byte, 0, count)
+	for i := 0; i < count; i++ {
+		pkh := make([]byte, ScriptHashLength)
+		if _, err := buf.Read(pkh); err != nil {
+			return nil, err
+		}
+		pkhs = append(pkhs, pkh)
+	}
+
+	return pkhs, nil
+}
+
 /******************************************** RPH *************************************************/
 
 // NewRawAddressRPH creates an address from a R puzzle hash.
@@ -341,6 +371,40 @@ func (ra *RawAddress) Hash() (*Hash20, error) {
 	case ScriptTypeRPH:
 		return NewHash20(ra.data)
 	}
+	return nil, ErrUnknownScriptTemplate
+}
+
+// Hashes returns the hashes corresponding to the address. Including the all PKHs in a MultiPKH.
+func (ra *RawAddress) Hashes() ([]Hash20, error) {
+
+	switch ra.scriptType {
+	case ScriptTypePKH:
+		fallthrough
+	case ScriptTypeSH:
+		fallthrough
+	case ScriptTypeRPH:
+		hash, err := NewHash20(ra.data)
+		if err != nil {
+			return nil, err
+		}
+		return []Hash20{*hash}, nil
+
+	case ScriptTypeMultiPKH:
+		pkhs, err := ra.GetMultiPKH()
+		if err != nil {
+			return nil, err
+		}
+		result := make([]Hash20, 0, len(pkhs))
+		for _, pkh := range pkhs {
+			hash, err := NewHash20(pkh)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, *hash)
+		}
+		return result, nil
+	}
+
 	return nil, ErrUnknownScriptTemplate
 }
 
