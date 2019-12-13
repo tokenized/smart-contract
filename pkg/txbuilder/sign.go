@@ -247,7 +247,11 @@ func P2RPHUnlockingScript(k []byte) ([]byte, error) {
 func InputSignature(key bitcoin.Key, tx *wire.MsgTx, index int, lockScript []byte,
 	value uint64, hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
 
-	hash := signatureHash(tx, index, lockScript, value, hashType, hashCache)
+	hash, err := signatureHash(tx, index, lockScript, value, hashType, hashCache)
+	if err != nil {
+		return nil, fmt.Errorf("create tx sig hash: %s", err)
+	}
+
 	sig, err := key.Sign(hash)
 	if err != nil {
 		return nil, fmt.Errorf("cannot sign tx input: %s", err)

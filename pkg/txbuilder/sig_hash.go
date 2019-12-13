@@ -108,13 +108,11 @@ func (shc *SigHashCache) HashOutputs(tx *wire.MsgTx) []byte {
 //   transaction fee. In the case the wallet if fed an invalid input amount, the real sighash will
 //   differ causing the produced signature to be invalid.
 func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
-	hashType SigHashType, hashCache *SigHashCache) []byte {
+	hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
 
 	// As a sanity check, ensure the passed input index for the transaction is valid.
 	if index > len(tx.TxIn)-1 {
-		fmt.Printf("signatureHash error: index %d but %d txins",
-			index, len(tx.TxIn))
-		return nil
+		return nil, fmt.Errorf("signatureHash error: index %d but %d txins", index, len(tx.TxIn))
 	}
 
 	// Buffer for data to be hashed.
@@ -171,5 +169,5 @@ func signatureHash(tx *wire.MsgTx, index int, lockScript []byte, value uint64,
 	binary.Write(&buf, binary.LittleEndian, tx.LockTime)
 	binary.Write(&buf, binary.LittleEndian, uint32(hashType|SigHashForkID))
 
-	return bitcoin.DoubleSha256(buf.Bytes())
+	return bitcoin.DoubleSha256(buf.Bytes()), nil
 }
