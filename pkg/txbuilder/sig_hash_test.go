@@ -49,8 +49,11 @@ func TestSigHash(t *testing.T) {
 			}
 
 			var hashCache SigHashCache
-			gotHash := signatureHash(&tx, tt.input_index, script, tt.value,
+			gotHash, err := signatureHash(&tx, tt.input_index, script, tt.value,
 				SigHashType(tt.hashType), &hashCache)
+			if err != nil {
+				t.Fatalf("Failed to generate signature hash : %s\n", err)
+			}
 
 			if !bytes.Equal(wantHash, gotHash) {
 				t.Fatalf("Invalid Sig Hash\ngot:%x\nwant:%x", gotHash, wantHash)
