@@ -51,7 +51,7 @@ func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 	}
 
 	// Setup inputs
-	for _, input := range result.MsgTx.TxIn {
+	for i, input := range result.MsgTx.TxIn {
 		found := false
 		for _, inputTx := range inputs {
 			txHash := inputTx.TxHash()
@@ -67,8 +67,8 @@ func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("Input tx not found : %s %d", input.PreviousOutPoint.Hash,
-				input.PreviousOutPoint.Index)
+			return nil, fmt.Errorf("Input %d tx not found : %s %d", i,
+				input.PreviousOutPoint.Hash.String(), input.PreviousOutPoint.Index)
 		}
 	}
 
