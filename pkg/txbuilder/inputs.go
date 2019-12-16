@@ -145,7 +145,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 		// More UTXOs required
 		neededFunding += estInputFee // Add cost of next input
-		neededFunding -= utxo.Value // Subtract the value this input added
+		neededFunding -= utxo.Value  // Subtract the value this input added
 	}
 
 	if tx.SendMax {
@@ -155,7 +155,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		for _, input := range tx.Inputs {
 			available += input.Value
 		}
-		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", available - duplicateValue,
+		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", available-duplicateValue,
 			outputValue+tx.EstimatedFee()))
 	}
 

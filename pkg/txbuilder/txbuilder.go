@@ -2,7 +2,6 @@ package txbuilder
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -39,8 +38,7 @@ func NewTxBuilder(dustLimit uint64, feeRate float32) *TxBuilder {
 	return &result
 }
 
-// NewTxBuilderFromWire returns a new TxBuilder from a wire.MsgTx and the additional information
-//   required.
+// NewTxBuilderFromWire returns a new TxBuilder from a wire.MsgTx and the input txs.
 func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 	inputs []*wire.MsgTx) (*TxBuilder, error) {
 
@@ -48,9 +46,11 @@ func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 		MsgTx:     tx,
 		DustLimit: dustLimit,
 		FeeRate:   feeRate,
+		Inputs:    make([]*InputSupplement, len(tx.TxIn)),
 	}
 
 	// Setup inputs
+	var missingErr error
 	for i, input := range result.MsgTx.TxIn {
 		found := false
 		for _, inputTx := range inputs {
@@ -58,17 +58,16 @@ func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 			if bytes.Equal(txHash[:], input.PreviousOutPoint.Hash[:]) &&
 				int(input.PreviousOutPoint.Index) < len(inputTx.TxOut) {
 				// Add input
-				newInput := InputSupplement{
+				result.Inputs[i] = &InputSupplement{
 					LockingScript: inputTx.TxOut[input.PreviousOutPoint.Index].PkScript,
 					Value:         uint64(inputTx.TxOut[input.PreviousOutPoint.Index].Value),
 				}
-				result.Inputs = append(result.Inputs, &newInput)
 				found = true
+				break
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("Input %d tx not found : %s %d", i,
-				input.PreviousOutPoint.Hash.String(), input.PreviousOutPoint.Index)
+			missingErr = newError(ErrorCodeMissingInputData, "")
 		}
 	}
 
@@ -78,7 +77,49 @@ func NewTxBuilderFromWire(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
 		result.Outputs[i] = &OutputSupplement{}
 	}
 
-	return &result, nil
+	return &result, missingErr
+}
+
+// NewTxBuilderFromWireUTXOs returns a new TxBuilder from a wire.MsgTx and the input UTXOs.
+func NewTxBuilderFromWireUTXOs(dustLimit uint64, feeRate float32, tx *wire.MsgTx,
+	utxos []bitcoin.UTXO) (*TxBuilder, error) {
+
+	result := TxBuilder{
+		MsgTx:     tx,
+		DustLimit: dustLimit,
+		FeeRate:   feeRate,
+		Inputs:    make([]*InputSupplement, len(tx.TxIn)),
+	}
+
+	// Setup inputs
+	var missingErr error
+	for i, input := range result.MsgTx.TxIn {
+		found := false
+		for _, utxo := range utxos {
+			if utxo.Hash.Equal(&input.PreviousOutPoint.Hash) &&
+				utxo.Index == input.PreviousOutPoint.Index {
+				// Add input
+				result.Inputs[i] = &InputSupplement{
+					LockingScript: utxo.LockingScript,
+					Value:         utxo.Value,
+					KeyID:         utxo.KeyID,
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingErr = newError(ErrorCodeMissingInputData, "")
+		}
+	}
+
+	// Setup outputs
+	result.Outputs = make([]*OutputSupplement, len(result.MsgTx.TxOut))
+	for i, _ := range result.Outputs {
+		result.Outputs[i] = &OutputSupplement{}
+	}
+
+	return &result, missingErr
 }
 
 // Serialize returns the byte payload of the transaction.
