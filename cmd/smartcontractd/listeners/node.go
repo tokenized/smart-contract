@@ -246,23 +246,39 @@ func (server *Server) SetAlternateResponder(responder protomux.ResponderFunc) {
 
 func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
 	server.TxSentCount++
-	if server.AlternateResponder != nil {
-		server.AlternateResponder(ctx, tx)
-	}
+
 	if server.SpyNode != nil {
 		if err := server.SpyNode.BroadcastTx(ctx, tx); err != nil {
 			return err
 		}
-		if err := server.SpyNode.HandleTx(ctx, tx); err != nil {
-			return err
-		}
 	}
+
+	if server.AlternateResponder != nil {
+		server.AlternateResponder(ctx, tx)
+	}
+
 	return nil
 }
 
 // respondTx is an internal method used as the responder
 func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
-	return server.sendTx(ctx, tx)
+	// Add to spynode and mark as safe so it will be processed now
+	if server.SpyNode != nil {
+		if err := server.SpyNode.HandleTx(ctx, tx); err != nil {
+			return err
+		}
+	}
+
+	// Broadcast to network
+	if err := server.sendTx(ctx, tx); err != nil {
+		return err
+	}
+
+	if server.AlternateResponder != nil {
+		server.AlternateResponder(ctx, tx)
+	}
+
+	return nil
 }
 
 func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transaction) error {

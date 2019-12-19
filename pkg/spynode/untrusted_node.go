@@ -19,28 +19,28 @@ import (
 )
 
 type UntrustedNode struct {
-	address        string
-	config         data.Config
-	state          *data.UntrustedState
-	peers          *handlerstorage.PeerRepository
-	blocks         *handlerstorage.BlockRepository
-	txs            *handlerstorage.TxRepository
-	txTracker      *data.TxTracker
-	memPool        *data.MemPool
-	txChannel      *handlers.TxChannel
-	handlers       map[string]handlers.CommandHandler
-	connection     net.Conn
-	sendLock       sync.Mutex // Lock for sending on connection
-	outgoing       messageChannel
-	listeners      []handlers.Listener
-	txFilters      []handlers.TxFilter
-	stopping       bool
-	active         bool // Set to false when connection is closed
-	shotgunned     bool
-	shotgunLoaded  bool
-	scanning       bool
-	readyAnnounced bool
-	lock           sync.Mutex
+	address         string
+	config          data.Config
+	state           *data.UntrustedState
+	peers           *handlerstorage.PeerRepository
+	blocks          *handlerstorage.BlockRepository
+	txs             *handlerstorage.TxRepository
+	txTracker       *data.TxTracker
+	memPool         *data.MemPool
+	txChannel       *handlers.TxChannel
+	handlers        map[string]handlers.CommandHandler
+	connection      net.Conn
+	sendLock        sync.Mutex // Lock for sending on connection
+	outgoing        messageChannel
+	listeners       []handlers.Listener
+	txFilters       []handlers.TxFilter
+	stopping        bool
+	active          bool // Set to false when connection is closed
+	scanning        bool
+	readyAnnounced  bool
+	pendingLock     sync.Mutex
+	pendingOutgoing []*wire.MsgTx
+	lock            sync.Mutex
 }
 
 func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository,
@@ -170,8 +170,19 @@ func (node *UntrustedNode) IsReady() bool {
 }
 
 // Broadcast a tx to the peer
-func (node *UntrustedNode) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
-	return node.outgoing.Add(tx)
+func (node *UntrustedNode) BroadcastTxs(ctx context.Context, txs []*wire.MsgTx) error {
+	if node.state.IsReady() {
+		for _, tx := range txs {
+			if err := node.outgoing.Add(tx); err != nil {
+				return err
+			}
+		}
+	}
+
+	node.pendingLock.Lock()
+	node.pendingOutgoing = append(node.pendingOutgoing, txs...)
+	node.pendingLock.Unlock()
+	return nil
 }
 
 // ProcessBlock is called when a block is being processed.
@@ -290,20 +301,13 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		return nil
 	}
 
-	if len(node.config.ShotgunTxs) != 0 {
-		if node.shotgunned {
-			node.Stop(ctx)
-			return nil
-		}
-
-		if !node.shotgunLoaded {
-			for _, tx := range node.config.ShotgunTxs {
-				logger.Verbose(ctx, "(%s) Sending shotgun tx : %s", node.address, tx.TxHash().String())
-				node.outgoing.Add(tx)
-			}
-			node.shotgunLoaded = true
+	node.pendingLock.Lock()
+	if len(node.pendingOutgoing) > 0 {
+		for _, tx := range node.pendingOutgoing {
+			node.outgoing.Add(tx)
 		}
 	}
+	node.pendingLock.Unlock()
 
 	if !node.state.MemPoolRequested() {
 		// Send mempool request
@@ -354,17 +358,17 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 			node.sendLock.Unlock()
 			break
 		}
+
+		tx, ok := msg.(*wire.MsgTx)
+		if ok {
+			logger.Verbose(ctx, "(%s) Sending Tx : %s", node.address, tx.TxHash().String())
+		}
+
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
 			node.sendLock.Unlock()
 			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
 		}
 		node.sendLock.Unlock()
-
-		if len(node.config.ShotgunTxs) > 0 {
-			if node.config.ShotgunTxs[len(node.config.ShotgunTxs)-1] == msg {
-				node.shotgunned = true
-			}
-		}
 	}
 
 	return nil

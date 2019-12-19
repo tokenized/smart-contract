@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // Config holds all configuration for the running service.
@@ -17,7 +16,6 @@ type Config struct {
 	StartHash      bitcoin.Hash32 // Hash of first block to start processing on initial run
 	UntrustedCount int            // The number of untrusted nodes to run for double spend monitoring
 	SafeTxDelay    int            // Number of milliseconds without conflict before a tx is "safe"
-	ShotgunTxs     []*wire.MsgTx  // Transmit shotgun txs and stop
 	ShotgunCount   int            // The number of nodes to attempt to send to when broadcasting
 	Lock           sync.Mutex     // Lock for config data
 }
@@ -67,7 +65,5 @@ func (c Config) Copy() Config {
 	defer c.Lock.Unlock()
 
 	result := c
-	result.ShotgunTxs = make([]*wire.MsgTx, len(c.ShotgunTxs))
-	copy(result.ShotgunTxs, c.ShotgunTxs)
 	return result
 }
