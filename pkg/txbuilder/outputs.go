@@ -128,6 +128,17 @@ func (tx *TxBuilder) AddValueToOutput(index uint32, value uint64) error {
 	return nil
 }
 
+// SetOutputToDust sets an outputs value to dust.
+func (tx *TxBuilder) SetOutputToDust(index uint32) error {
+	if int(index) >= len(tx.MsgTx.TxOut) {
+		return errors.New("Output index out of range")
+	}
+
+	tx.Outputs[index].IsDust = true
+	tx.MsgTx.TxOut[index].Value = tx.DustLimit
+	return nil
+}
+
 // UpdateOutput updates the locking script of an output.
 func (tx *TxBuilder) UpdateOutput(index uint32, lockScript []byte) error {
 	if int(index) >= len(tx.MsgTx.TxOut) {

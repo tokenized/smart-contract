@@ -24,7 +24,7 @@ type Config struct {
 		Address        string `default:"127.0.0.1:8333" envconfig:"NODE_ADDRESS"`
 		UserAgent      string `default:"/Tokenized:0.1.0/" envconfig:"NODE_USER_AGENT"`
 		StartHash      string `envconfig:"START_HASH"`
-		UntrustedNodes int    `default:"8" envconfig:"UNTRUSTED_NODES"`
+		UntrustedNodes int    `default:"25" envconfig:"UNTRUSTED_NODES"`
 		SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
 		ShotgunCount   int    `default:"100" envconfig:"SHOTGUN_COUNT"`
 	}

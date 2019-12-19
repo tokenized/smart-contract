@@ -12,6 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -65,7 +66,7 @@ func loadContract(ctx context.Context,
 			return err
 		}
 
-		fmt.Printf("## Asset %x\n\n", a.Code.Bytes())
+		fmt.Printf("## Asset %s\n\n", protocol.AssetID(a.AssetType, *assetCode))
 
 		if err := dumpJSON(a); err != nil {
 			return err

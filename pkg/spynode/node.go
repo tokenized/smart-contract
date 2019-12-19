@@ -22,6 +22,11 @@ const (
 	SubSystem = "SpyNode" // For logger
 )
 
+type TxCount struct {
+	tx    *wire.MsgTx
+	count int
+}
+
 // Node is the main object for spynode.
 type Node struct {
 	config          data.Config                        // Configuration
@@ -42,7 +47,8 @@ type Node struct {
 	addresses       map[string]time.Time               // Recently used peer addresses
 	confTxChannel   handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
 	unconfTxChannel handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
-	broadcastTx     *wire.MsgTx                        // Tx to transmit to nodes upon connection
+	broadcastLock   sync.Mutex
+	broadcastTxs    []TxCount // Txs to transmit to nodes upon connection
 	needsRestart    bool
 	hardStop        bool
 	stopping        bool
@@ -322,7 +328,7 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	node.untrustedLock.Lock()
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
-			if err := untrusted.BroadcastTx(ctx, tx); err != nil {
+			if err := untrusted.BroadcastTxs(ctx, []*wire.MsgTx{tx}); err != nil {
 				logger.Warn(ctx, "Failed to broadcast tx to untrusted : %s", err)
 			} else {
 				count++
@@ -331,39 +337,18 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 	}
 	node.untrustedLock.Unlock()
 
-	// Broadcast to as many known nodes as possible
-	node.config.Lock.Lock()
-	node.config.ShotgunTxs = append(node.config.ShotgunTxs, tx)
-	node.config.Lock.Unlock()
-	wg := sync.WaitGroup{}
-
-	// Try for peers with a good score
-	for !node.isStopping() && count < node.config.ShotgunCount {
-		if node.addUntrustedNode(ctx, &wg, 2) {
-			count++
-		} else {
-			break
-		}
+	if count < node.config.ShotgunCount {
+		node.broadcastLock.Lock()
+		node.broadcastTxs = append(node.broadcastTxs, TxCount{tx: tx, count: count})
+		node.broadcastLock.Unlock()
 	}
-
-	// Remove tx from list
-	node.config.Lock.Lock()
-	for i, stx := range node.config.ShotgunTxs {
-		if tx == stx {
-			node.config.ShotgunTxs =
-				append(node.config.ShotgunTxs[:i], node.config.ShotgunTxs[i+1:]...)
-			break
-		}
-	}
-	node.config.Lock.Unlock()
-
 	return nil
 }
 
 // BroadcastTxUntrustedOnly broadcasts a tx to the network.
 func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Info(ctx, "Broadcasting tx : %s", tx.TxHash())
+	logger.Info(ctx, "Broadcasting tx to untrusted only : %s", tx.TxHash())
 
 	if node.isStopping() { // TODO Resolve issue when node is restarting
 		return errors.New("Node inactive")
@@ -375,8 +360,7 @@ func (node *Node) BroadcastTxUntrustedOnly(ctx context.Context, tx *wire.MsgTx) 
 
 	for _, untrusted := range node.untrustedNodes {
 		if untrusted.IsReady() {
-			logger.Info(ctx, "(%s) Broadcasting tx : %s", untrusted.address, tx.TxHash())
-			untrusted.BroadcastTx(ctx, tx)
+			untrusted.BroadcastTxs(ctx, []*wire.MsgTx{tx})
 		}
 	}
 	return nil
@@ -424,15 +408,12 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 		return err
 	}
 
-	node.config.Lock.Lock()
-	node.config.ShotgunTxs = append(node.config.ShotgunTxs, tx)
-	node.config.Lock.Unlock()
 	wg := sync.WaitGroup{}
 	count := 0
 
 	// Try for peers with a good score
 	for !node.isStopping() && count < sendCount {
-		if node.addUntrustedNode(ctx, &wg, 5) {
+		if node.addUntrustedNode(ctx, &wg, 5, []*wire.MsgTx{tx}) {
 			count++
 		} else {
 			break
@@ -441,25 +422,14 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 
 	// Try for peers with a non negative score
 	for !node.isStopping() && count < sendCount {
-		if node.addUntrustedNode(ctx, &wg, 0) {
+		if node.addUntrustedNode(ctx, &wg, 0, []*wire.MsgTx{tx}) {
 			count++
 		} else {
 			break
 		}
 	}
 
-	node.sleepUntilStop(30) // Wait for handshake
-
-	// Remove tx from list
-	node.config.Lock.Lock()
-	for i, stx := range node.config.ShotgunTxs {
-		if tx == stx {
-			node.config.ShotgunTxs =
-				append(node.config.ShotgunTxs[:i], node.config.ShotgunTxs[i+1:]...)
-			break
-		}
-	}
-	node.config.Lock.Unlock()
+	node.sleepUntilStop(10) // Wait for handshake
 
 	// Stop all
 	node.untrustedLock.Lock()
@@ -478,7 +448,8 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
-	return node.unconfTxChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true, ConfirmedHeight: -1})
+	return node.unconfTxChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true,
+		ConfirmedHeight: -1})
 }
 
 func (node *Node) processConfirmedTx(ctx context.Context, tx *handlers.TxData) error {
@@ -634,6 +605,11 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 	for msg := range node.outgoing {
 		if node.isStopping() {
 			break
+		}
+
+		tx, ok := msg.(*wire.MsgTx)
+		if ok {
+			logger.Verbose(ctx, "Sending Tx : %s", tx.TxHash().String())
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
@@ -1019,17 +995,32 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			}
 		}
 
+		desiredCount := node.config.UntrustedCount
+
 		node.untrustedLock.Unlock()
 
-		if verifiedCount < node.config.UntrustedCount {
+		var txs []*wire.MsgTx
+		sentCount := 0
+		node.broadcastLock.Lock()
+		if len(node.broadcastTxs) > 0 {
+			desiredCount = node.config.ShotgunCount
+			txs = make([]*wire.MsgTx, 0, len(node.broadcastTxs))
+			for _, btx := range node.broadcastTxs {
+				txs = append(txs, btx.tx)
+			}
+		}
+		node.broadcastLock.Unlock()
+
+		if verifiedCount < desiredCount {
 			logger.Debug(ctx, "Untrusted connections : %d", verifiedCount)
 		}
 
-		if count < node.config.UntrustedCount/2 {
+		if count < desiredCount/2 {
 			// Try for peers with a good score
-			for !node.isStopping() && count < node.config.UntrustedCount/2 {
-				if node.addUntrustedNode(ctx, &wg, 5) {
+			for !node.isStopping() && count < desiredCount/2 {
+				if node.addUntrustedNode(ctx, &wg, 5, txs) {
 					count++
+					sentCount++
 				} else {
 					break
 				}
@@ -1037,9 +1028,10 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		}
 
 		// Try for peers with a score above zero
-		for !node.isStopping() && count < node.config.UntrustedCount {
-			if node.addUntrustedNode(ctx, &wg, 1) {
+		for !node.isStopping() && count < desiredCount {
+			if node.addUntrustedNode(ctx, &wg, 1, txs) {
 				count++
+				sentCount++
 			} else {
 				break
 			}
@@ -1047,6 +1039,24 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 		if node.isStopping() {
 			break
+		}
+
+		if sentCount > 0 {
+			for _, tx := range txs {
+				node.broadcastLock.Lock()
+				for i, btx := range node.broadcastTxs {
+					if tx == btx.tx {
+						node.broadcastTxs[i].count += sentCount
+						if node.broadcastTxs[i].count > node.config.ShotgunCount {
+							// tx has been sent to enough nodes. remove it
+							node.broadcastTxs = append(node.broadcastTxs[:1],
+								node.broadcastTxs[i+1:]...)
+						}
+						break
+					}
+				}
+				node.broadcastLock.Unlock()
+			}
 		}
 
 		node.sleepUntilStop(5) // Only check every 5 seconds
@@ -1065,7 +1075,9 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 // addUntrustedNode adds a new untrusted node.
 // Returns true if a new node connection was attempted
-func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minScore int32) bool {
+func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minScore int32,
+	txs []*wire.MsgTx) bool {
+
 	// Get new address
 	// Check we aren't already connected and haven't used it recently
 	peers, err := node.peers.Get(ctx, minScore)
@@ -1104,6 +1116,9 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	// Attempt connection
 	newNode := NewUntrustedNode(address, node.config.Copy(), node.store, node.peers, node.blocks,
 		node.txs, node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters, false)
+	if txs != nil {
+		newNode.BroadcastTxs(ctx, txs)
+	}
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
 	wg.Add(1)

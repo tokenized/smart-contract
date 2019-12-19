@@ -99,11 +99,12 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 
 	neededFunding += estInputFee // Add cost of next input
 
-	var err error
+	duplicateValue := uint64(0)
+
 	for _, utxo := range utxos {
-		err = tx.AddInputUTXO(utxo)
-		if err != nil {
+		if err := tx.AddInputUTXO(utxo); err != nil {
 			if IsErrorCode(err, ErrorCodeDuplicateInput) {
+				duplicateValue += utxo.Value
 				continue
 			}
 			return errors.Wrap(err, "adding input")
@@ -131,8 +132,8 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 					if tx.ChangeAddress.IsEmpty() {
 						return errors.New("Change address needed")
 					}
-					err = tx.AddPaymentOutput(tx.ChangeAddress, change, true)
-					if err != nil {
+
+					if err := tx.AddPaymentOutput(tx.ChangeAddress, change, true); err != nil {
 						return errors.Wrap(err, "adding change")
 					}
 					tx.Outputs[len(tx.Outputs)-1].KeyID = tx.ChangeKeyID
@@ -143,8 +144,8 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		}
 
 		// More UTXOs required
-		neededFunding -= utxo.Value
 		neededFunding += estInputFee // Add cost of next input
+		neededFunding -= utxo.Value  // Subtract the value this input added
 	}
 
 	if tx.SendMax {
@@ -154,7 +155,7 @@ func (tx *TxBuilder) AddFunding(utxos []bitcoin.UTXO) error {
 		for _, input := range tx.Inputs {
 			available += input.Value
 		}
-		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", available,
+		return newError(ErrorCodeInsufficientValue, fmt.Sprintf("%d/%d", available-duplicateValue,
 			outputValue+tx.EstimatedFee()))
 	}
 

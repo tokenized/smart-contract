@@ -123,7 +123,7 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 
 	// Broadcast to ensure it is accepted by the network.
-	if server.inSync {
+	if server.inSync && intx.Itx.IsIncomingMessageType() {
 		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
 			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
 		}

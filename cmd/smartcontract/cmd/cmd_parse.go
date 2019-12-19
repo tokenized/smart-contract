@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -67,6 +68,26 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 
 	if err := tx.Deserialize(buf); err != nil {
 		return errors.Wrap(err, "decode tx")
+	}
+
+	send, _ := c.Flags().GetBool(FlagSend)
+	if send {
+		fmt.Printf("Sending to network\n")
+		ctx := client.Context()
+		if ctx == nil {
+			fmt.Printf("Failed to create client context\n")
+			return nil
+		}
+
+		theClient, err := client.NewClient(ctx, network(c))
+		if err != nil {
+			fmt.Printf("Failed to create client : %s\n", err)
+			return nil
+		}
+
+		if err := theClient.ShotgunTx(ctx, &tx, 250); err != nil {
+			fmt.Printf("Failed to send tx : %s\n", err)
+		}
 	}
 
 	fmt.Printf("\nTx (%d bytes) : %s\n", tx.SerializeSize(), tx.TxHash().String())
@@ -147,4 +168,8 @@ func parseScript(c *cobra.Command, script []byte) error {
 	}
 
 	return nil
+}
+
+func init() {
+	cmdParse.Flags().Bool(FlagSend, false, "send to network")
 }

@@ -9,6 +9,7 @@ const (
 	ErrorCodeWrongScriptTemplate = 4
 	ErrorCodeBelowDustValue      = 5
 	ErrorCodeDuplicateInput      = 6
+	ErrorCodeMissingInputData    = 7
 )
 
 func IsErrorCode(err error, code int) bool {
