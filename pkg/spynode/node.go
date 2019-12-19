@@ -1046,8 +1046,8 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 				node.broadcastLock.Lock()
 				for i, btx := range node.broadcastTxs {
 					if tx == btx.tx {
-						btx.count += sentCount
-						if btx.count > node.config.ShotgunCount {
+						node.broadcastTxs[i].count += sentCount
+						if node.broadcastTxs[i].count > node.config.ShotgunCount {
 							// tx has been sent to enough nodes. remove it
 							node.broadcastTxs = append(node.broadcastTxs[:1],
 								node.broadcastTxs[i+1:]...)
