@@ -307,6 +307,7 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 			node.outgoing.Add(tx)
 		}
 	}
+	node.pendingOutgoing = nil
 	node.pendingLock.Unlock()
 
 	if !node.state.MemPoolRequested() {
