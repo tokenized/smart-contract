@@ -55,9 +55,9 @@ func NewConfigFromEnv(ctx context.Context) *config.Config {
 
 func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 	masterDB, err := db.New(&db.StorageConfig{
-		Region:    cfg.Storage.Region,
-		AccessKey: cfg.Storage.AccessKey,
-		Secret:    cfg.Storage.Secret,
+		Region:    cfg.AWS.Region,
+		AccessKey: cfg.AWS.AccessKeyID,
+		Secret:    cfg.AWS.SecretAccessKey,
 		Bucket:    cfg.Storage.Bucket,
 		Root:      cfg.Storage.Root,
 	})

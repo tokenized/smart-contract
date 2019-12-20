@@ -70,9 +70,9 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// SPY Node
-	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Region,
-		cfg.NodeStorage.AccessKey,
-		cfg.NodeStorage.Secret,
+	spyStorageConfig := storage.NewConfig(cfg.AWS.Region,
+		cfg.AWS.AccessKeyID,
+		cfg.AWS.SecretAccessKey,
 		cfg.NodeStorage.Bucket,
 		cfg.NodeStorage.Root)
 

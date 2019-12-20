@@ -33,19 +33,18 @@ type Config struct {
 		Username string `envconfig:"RPC_USERNAME"`
 		Password string `envconfig:"RPC_PASSWORD"`
 	}
+	AWS struct {
+		Region          string `default:"ap-southeast-2" envconfig:"AWS_REGION" json:"AWS_REGION"`
+		AccessKeyID     string `envconfig:"ACCESS_KEY_ID" json:"ACCESS_KEY_ID"`
+		SecretAccessKey string `envconfig:"SECRET_ACCESS_KEY" json:"SECRET_ACCESS_KEY"`
+	}
 	NodeStorage struct {
-		Region    string `default:"ap-southeast-2" envconfig:"NODE_STORAGE_REGION"`
-		AccessKey string `envconfig:"NODE_STORAGE_ACCESS_KEY"`
-		Secret    string `envconfig:"NODE_STORAGE_SECRET"`
-		Bucket    string `default:"standalone" envconfig:"NODE_STORAGE_BUCKET"`
-		Root      string `default:"./tmp" envconfig:"NODE_STORAGE_ROOT"`
+		Bucket string `default:"standalone" envconfig:"NODE_STORAGE_BUCKET"`
+		Root   string `default:"./tmp" envconfig:"NODE_STORAGE_ROOT"`
 	}
 	Storage struct {
-		Region    string `default:"ap-southeast-2" envconfig:"CONTRACT_STORAGE_REGION"`
-		AccessKey string `envconfig:"CONTRACT_STORAGE_ACCESS_KEY"`
-		Secret    string `envconfig:"CONTRACT_STORAGE_SECRET"`
-		Bucket    string `default:"standalone" envconfig:"CONTRACT_STORAGE_BUCKET"`
-		Root      string `default:"./tmp" envconfig:"CONTRACT_STORAGE_ROOT"`
+		Bucket string `default:"standalone" envconfig:"CONTRACT_STORAGE_BUCKET"`
+		Root   string `default:"./tmp" envconfig:"CONTRACT_STORAGE_ROOT"`
 	}
 }
 
@@ -59,11 +58,11 @@ func SafeConfig(cfg Config) *Config {
 	if len(cfgSafe.RpcNode.Password) > 0 {
 		cfgSafe.RpcNode.Password = "*** Masked ***"
 	}
-	if len(cfgSafe.NodeStorage.Secret) > 0 {
-		cfgSafe.NodeStorage.Secret = "*** Masked ***"
+	if len(cfgSafe.AWS.AccessKeyID) > 0 {
+		cfgSafe.AWS.AccessKeyID = "*** Masked ***"
 	}
-	if len(cfgSafe.Storage.Secret) > 0 {
-		cfgSafe.Storage.Secret = "*** Masked ***"
+	if len(cfgSafe.AWS.SecretAccessKey) > 0 {
+		cfgSafe.AWS.SecretAccessKey = "*** Masked ***"
 	}
 
 	return &cfgSafe
