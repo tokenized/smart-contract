@@ -80,11 +80,7 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// Storage
-	storageConfig := storage.NewConfig(cfg.NodeStorage.Region,
-		cfg.NodeStorage.AccessKey,
-		cfg.NodeStorage.Secret,
-		cfg.NodeStorage.Bucket,
-		cfg.NodeStorage.Root)
+	storageConfig := storage.NewConfig(cfg.NodeStorage.Bucket, cfg.NodeStorage.Root)
 
 	var store storage.Storage
 	if strings.ToLower(storageConfig.Bucket) == "standalone" {

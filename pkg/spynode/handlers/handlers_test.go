@@ -58,7 +58,7 @@ func TestHandlers(test *testing.T) {
 	}
 
 	// Setup storage
-	storageConfig := storage.NewConfig("ap-southeast-2", "", "", "standalone", "./tmp/test")
+	storageConfig := storage.NewConfig("standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
 
 	// Setup config

@@ -117,7 +117,7 @@ func NewClient(ctx context.Context, network bitcoin.Network) (*Client, error) {
 }
 
 func (client *Client) setupSpyNode(ctx context.Context) error {
-	spyStorage := storage.NewFilesystemStorage(storage.NewConfig("", "", "", "standalone", os.Getenv("CLIENT_PATH")))
+	spyStorage := storage.NewFilesystemStorage(storage.NewConfig("standalone", os.Getenv("CLIENT_PATH")))
 
 	spyConfig, err := data.NewConfig(client.Config.Net, client.Config.SpyNode.Address,
 		client.Config.SpyNode.UserAgent, client.Config.SpyNode.StartHash,

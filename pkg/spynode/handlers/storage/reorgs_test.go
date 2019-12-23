@@ -18,7 +18,7 @@ func TestReorgs(test *testing.T) {
 	randGen := rand.New(seed)
 
 	ctx := context.Background()
-	storageConfig := storage.NewConfig("ap-southeast-2", "", "", "standalone", "./tmp/test")
+	storageConfig := storage.NewConfig("standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
 	repo := NewReorgRepository(store)
 
