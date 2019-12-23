@@ -20,14 +20,19 @@ import (
 func NewContextWithDevelopmentLogger() context.Context {
 	ctx := context.Background()
 
-	os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
-	logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		logger.Fatal(ctx, "Failed to open log file : %v\n", err)
-	}
+	logPath := os.Getenv("LOG_FILE_PATH")
+	if len(logPath) > 0 {
+		os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
+		logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			logger.Fatal(ctx, "Failed to open log file : %v\n", err)
+		}
 
-	ctx = node.ContextWithDevelopmentLogger(ctx, logFile)
+		ctx = node.ContextWithDevelopmentLogger(ctx, logFile)
+	} else {
+		ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout)
+	}
 
 	return ctx
 }
