@@ -5,13 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -220,32 +217,9 @@ func (s S3Storage) findKeys(ctx context.Context,
 	return keys, nil
 }
 
-// newAwsSession creates a new AWS Session from the credentials in the
-// Config.
+// newAwsSession creates a new AWS Session from the credentials in the Config.
 func newAWSSession(config Config) *session.Session {
-	// Get the default cred chain
-	awsDefaults := defaults.Get()
-	defaultCredProviders := defaults.CredProviders(awsDefaults.Config, awsDefaults.Handlers)
-
-	// Define custom static cred provider
-	staticCreds := &credentials.StaticProvider{Value: credentials.Value{
-		AccessKeyID:     config.AccessKey,
-		SecretAccessKey: config.Secret,
-		SessionToken:    os.Getenv("AWS_SESSION_TOKEN"),
-	}}
-
-	// Append static creds to the defaults
-	customCredProviders := append([]credentials.Provider{staticCreds}, defaultCredProviders...)
-	creds := credentials.NewChainCredentials(customCredProviders)
-
-	awsConfig := aws.NewConfig().
-		WithCredentials(creds).
-		WithMaxRetries(config.MaxRetries)
-
-	if len(config.Region) > 0 {
-		awsConfig = awsConfig.WithRegion(config.Region)
-	}
-
+	awsConfig := aws.NewConfig().WithMaxRetries(config.MaxRetries)
 	return session.New(awsConfig)
 }
 

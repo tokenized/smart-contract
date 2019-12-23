@@ -29,7 +29,7 @@ func TestBlocks(test *testing.T) {
 	}
 
 	ctx := context.Background()
-	storageConfig := storage.NewConfig("ap-southeast-2", "", "", "standalone", "./tmp/test")
+	storageConfig := storage.NewConfig("standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
 	repo := NewBlockRepository(&config, store)
 

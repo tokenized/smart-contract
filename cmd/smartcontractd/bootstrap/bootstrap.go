@@ -55,11 +55,8 @@ func NewConfigFromEnv(ctx context.Context) *config.Config {
 
 func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 	masterDB, err := db.New(&db.StorageConfig{
-		Region:    cfg.AWS.Region,
-		AccessKey: cfg.AWS.AccessKeyID,
-		Secret:    cfg.AWS.SecretAccessKey,
-		Bucket:    cfg.Storage.Bucket,
-		Root:      cfg.Storage.Root,
+		Bucket: cfg.Storage.Bucket,
+		Root:   cfg.Storage.Root,
 	})
 	if err != nil {
 		logger.Fatal(ctx, "Register DB : %s", err)

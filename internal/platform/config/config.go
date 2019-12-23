@@ -35,8 +35,8 @@ type Config struct {
 	}
 	AWS struct {
 		Region          string `default:"ap-southeast-2" envconfig:"AWS_REGION" json:"AWS_REGION"`
-		AccessKeyID     string `envconfig:"ACCESS_KEY_ID" json:"ACCESS_KEY_ID"`
-		SecretAccessKey string `envconfig:"SECRET_ACCESS_KEY" json:"SECRET_ACCESS_KEY"`
+		AccessKeyID     string `envconfig:"AWS_ACCESS_KEY_ID" json:"AWS_ACCESS_KEY_ID"`
+		SecretAccessKey string `envconfig:"AWS_SECRET_ACCESS_KEY" json:"AWS_SECRET_ACCESS_KEY"`
 	}
 	NodeStorage struct {
 		Bucket string `default:"standalone" envconfig:"NODE_STORAGE_BUCKET"`
