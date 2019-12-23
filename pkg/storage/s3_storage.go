@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -78,9 +78,11 @@ func (s S3Storage) Read(ctx context.Context, key string) ([]byte, error) {
 	})
 
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "NoSuchKey") {
-			// specifically handle the "not found" case
-			return nil, ErrNotFound
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == s3.ErrCodeNoSuchKey {
+				// specifically handle the "not found" case
+				return nil, ErrNotFound
+			}
 		}
 
 		return nil, fmt.Errorf("Failed to read from %v : %v", key, err)
@@ -104,11 +106,12 @@ func (s S3Storage) Remove(ctx context.Context, key string) error {
 	}
 
 	_, err := svc.DeleteObject(do)
-
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "NoSuchKey") {
-			// specifically handle the "not found" case
-			return ErrNotFound
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == s3.ErrCodeNoSuchKey {
+				// specifically handle the "not found" case
+				return ErrNotFound
+			}
 		}
 
 		return fmt.Errorf("Failed to delete object at %v : %v", key, err)
