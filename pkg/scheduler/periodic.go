@@ -5,20 +5,20 @@ import (
 	"time"
 )
 
-type PeriodicProcessInterface interface {
+type PeriodicTaskInterface interface {
 	Run(context.Context)
 }
 
-// PeriodicProcess is a Scheduler job runs a process at a specified frequency.
-type PeriodicProcess struct {
+// PeriodicTask is a Scheduler Task that runs a process at a specified frequency.
+type PeriodicTask struct {
 	name      string
-	process   PeriodicProcessInterface
+	process   PeriodicTaskInterface
 	frequency time.Duration
 	next      time.Time
 }
 
-func NewPeriodicProcess(name string, process PeriodicProcessInterface, frequency time.Duration) *PeriodicProcess {
-	return &PeriodicProcess{
+func NewPeriodicTask(name string, process PeriodicTaskInterface, frequency time.Duration) *PeriodicTask {
+	return &PeriodicTask{
 		name:      name,
 		process:   process,
 		frequency: frequency,
@@ -27,12 +27,12 @@ func NewPeriodicProcess(name string, process PeriodicProcessInterface, frequency
 }
 
 // IsReady returns true when a job should be executed.
-func (pp *PeriodicProcess) IsReady(ctx context.Context) bool {
+func (pp *PeriodicTask) IsReady(ctx context.Context) bool {
 	return time.Now().After(pp.next)
 }
 
 // Run executes the job.
-func (pp *PeriodicProcess) Run(ctx context.Context) {
+func (pp *PeriodicTask) Run(ctx context.Context) {
 	// Schedule next time
 	pp.next = time.Now().Add(pp.frequency)
 
@@ -41,13 +41,13 @@ func (pp *PeriodicProcess) Run(ctx context.Context) {
 }
 
 // IsComplete returns true when a job should be removed from the scheduler.
-func (pp *PeriodicProcess) IsComplete(ctx context.Context) bool {
+func (pp *PeriodicTask) IsComplete(ctx context.Context) bool {
 	return false
 }
 
 // Equal returns true if another job matches it. Used to cancel jobs.
-func (pp *PeriodicProcess) Equal(other Job) bool {
-	otherPP, ok := other.(*PeriodicProcess)
+func (pp *PeriodicTask) Equal(other Task) bool {
+	otherPP, ok := other.(*PeriodicTask)
 	if !ok {
 		return false
 	}

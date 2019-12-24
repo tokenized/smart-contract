@@ -14,19 +14,19 @@ const (
 )
 
 var (
-	NotFound = errors.New("Job not found")
+	NotFound = errors.New("Task not found")
 )
 
 // Scheduler provides the ability to schedule tasks to run at when they are ready.
 type Scheduler struct {
-	jobs          []Job
+	jobs          []Task
 	lock          sync.Mutex
 	isRunning     bool
 	stopRequested bool
 }
 
-// Job provides an interface that tells Scheduler when and how to run the job.
-type Job interface {
+// Task provides an interface that tells Scheduler when and how to do something.
+type Task interface {
 	// IsReady returns true when a job should be executed.
 	IsReady(ctx context.Context) bool
 
@@ -36,25 +36,25 @@ type Job interface {
 	// IsComplete returns true when a job should be removed from the scheduler.
 	IsComplete(ctx context.Context) bool
 
-	// Equal returns true if another job matches it. Used to cancel jobs.
-	Equal(other Job) bool
+	// Equal returns true if another task matches it. Used to cancel jobs.
+	Equal(other Task) bool
 }
 
-// ScheduleJob adds a job to the scheduler. Returns an integer ID for the job.
-func (sch *Scheduler) ScheduleJob(ctx context.Context, job Job) error {
+// ScheduleJob adds a task to the scheduler.
+func (sch *Scheduler) ScheduleJob(ctx context.Context, job Task) error {
 	sch.lock.Lock()
 	defer sch.lock.Unlock()
 	sch.jobs = append(sch.jobs, job)
 	return nil
 }
 
-// CancelJob removes a job from the scheduler. The job passed in just needs to be equivalent based
-//   on the job's Equal function.
-func (sch *Scheduler) CancelJob(ctx context.Context, job Job) error {
+// CancelJob removes a job from the scheduler. The task passed in just needs to be equivalent based
+//   on the task's Equal function.
+func (sch *Scheduler) CancelJob(ctx context.Context, task Task) error {
 	sch.lock.Lock()
 	defer sch.lock.Unlock()
 	for i, existing := range sch.jobs {
-		if existing.Equal(job) {
+		if existing.Equal(task) {
 			sch.jobs = append(sch.jobs[:i], sch.jobs[i+1:]...)
 			return nil
 		}
@@ -62,12 +62,12 @@ func (sch *Scheduler) CancelJob(ctx context.Context, job Job) error {
 	return NotFound
 }
 
-// Run monitors jobs and runs them when they are ready.
+// Run monitors tasks and runs them when they are ready.
 func (sch *Scheduler) Run(ctx context.Context) error {
 	sch.lock.Lock()
 	sch.isRunning = true
 	for !sch.stopRequested {
-		// Check and run jobs
+		// Check and run tasks
 		for i, job := range sch.jobs {
 			if job.IsReady(ctx) {
 				job.Run(ctx)

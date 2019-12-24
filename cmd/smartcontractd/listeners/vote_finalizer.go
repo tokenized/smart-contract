@@ -48,7 +48,7 @@ func (vf *VoteFinalizer) IsComplete(ctx context.Context) bool {
 }
 
 // Equal returns true if another job matches it. Used to cancel jobs.
-func (vf *VoteFinalizer) Equal(other scheduler.Job) bool {
+func (vf *VoteFinalizer) Equal(other scheduler.Task) bool {
 	otherVF, ok := other.(*VoteFinalizer)
 	if !ok {
 		return false
