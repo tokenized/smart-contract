@@ -9,6 +9,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/scheduler"
+
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -47,7 +48,7 @@ func (vf *VoteFinalizer) IsComplete(ctx context.Context) bool {
 }
 
 // Equal returns true if another job matches it. Used to cancel jobs.
-func (vf *VoteFinalizer) Equal(other scheduler.Job) bool {
+func (vf *VoteFinalizer) Equal(other scheduler.Task) bool {
 	otherVF, ok := other.(*VoteFinalizer)
 	if !ok {
 		return false

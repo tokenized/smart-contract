@@ -48,7 +48,7 @@ func (tt *TransferTimeout) IsComplete(ctx context.Context) bool {
 }
 
 // Equal returns true if another job matches it. Used to cancel jobs.
-func (tt *TransferTimeout) Equal(other scheduler.Job) bool {
+func (tt *TransferTimeout) Equal(other scheduler.Task) bool {
 	otherTT, ok := other.(*TransferTimeout)
 	if !ok {
 		return false
