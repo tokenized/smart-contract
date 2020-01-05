@@ -9,6 +9,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -176,11 +177,6 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.ShareCommon:
-		if data.TransferLockout > now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				fmt.Sprintf("ShareCommon not transferable until %s",
-					timeString(data.TransferLockout)))
-		}
 
 	case *assets.CasinoChip:
 		if data.ExpirationTimestamp < now.Nano() {

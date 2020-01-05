@@ -711,15 +711,13 @@ func assetProposalAmendment(t *testing.T) {
 var currentTimestamp = protocol.CurrentTimestamp()
 
 var sampleAssetPayload = assets.ShareCommon{
-	Ticker:          "TST  ",
-	Description:     "Test common shares",
-	TransferLockout: currentTimestamp.Nano(),
+	Ticker:      "TST  ",
+	Description: "Test common shares",
 }
 
 var sampleAssetPayload2 = assets.ShareCommon{
-	Ticker:          "TS2  ",
-	Description:     "Test common shares 2",
-	TransferLockout: currentTimestamp.Nano(),
+	Ticker:      "TS2  ",
+	Description: "Test common shares 2",
 }
 
 var sampleAdminAssetPayload = assets.Membership{
