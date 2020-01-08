@@ -61,9 +61,9 @@ The following configuration values are needed:
 ##### Contract config
 
 - `OPERATOR_NAME` the name of the operator of the smart contract. Eg: _ACME Corporation_
-- `VERSION`
 - `FEE_ADDRESS` public address to earn fees upon every action
-- `FEE_VALUE` the cost in satoshis to perform an action (<2000 at this stage)
+- `FEE_RATE` the cost in satoshis to perform an action (<2000 at this stage)
+- `DUST_LIMIT` dust limit as determined by the network (default: 546)
 
 ##### Node config
 
@@ -73,22 +73,23 @@ The following configuration values are needed:
 - `RPC_USERNAME` username for RPC authentication
 - `RPC_PASSWORD` password for RPC authentication
 - `PRIV_KEY` private key (WIF) used by the smart contract
+- `BITCOIN_CHAIN` bitcoin network as: mainnet, testnet (default: mainnet)
 
 ##### Contract storage
 
-- `CONTRACT_STORAGE_REGION` S3 region for data storage
-- `CONTRACT_STORAGE_ACCESS_KEY` S3 access key for data storage
-- `CONTRACT_STORAGE_SECRET` S3 secret for data storage
-- `CONTRACT_STORAGE_BUCKET` bucket for data storage, use *standalone* for local filesystem
+- `CONTRACT_STORAGE_BUCKET` S3 bucket for data storage, use *standalone* for local filesystem
 - `CONTRACT_STORAGE_ROOT` root directory for storage
 
 ##### Node storage
 
-- `NODE_STORAGE_REGION` S3 region for data storage
-- `NODE_STORAGE_ACCESS_KEY` S3 access key for data storage
-- `NODE_STORAGE_SECRET` S3 secret for data storage
-- `NODE_STORAGE_BUCKET` bucket for data storage, use *standalone* for local filesystem
-- `NODE_STORAGE_ROOT` root directory for storage
+- `NODE_STORAGE_BUCKET` S3 bucket for data storage, use *standalone* for local filesystem
+- `NODE_STORAGE_ROOT` base directory for storage files
+
+##### AWS credentials (optional S3 storage)
+
+- `AWS_REGION` hosted region for data storage
+- `AWS_ACCESS_KEY_ID` access key for data storage
+- `AWS_SECRET_ACCESS_KEY` secret for data storage
 
 ## Running
 
