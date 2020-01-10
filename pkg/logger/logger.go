@@ -61,12 +61,14 @@ func ContextWithLogSubSystem(ctx context.Context, subsystem string) context.Cont
 	return context.WithValue(ctx, subSystemKey, subsystem)
 }
 
-// Returns a context with the logging subsystem cleared. Used when a context is passed back from a subsystem.
+// Returns a context with the logging subsystem cleared. Used when a context is passed back from a
+//   subsystem.
 func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 	return context.WithValue(ctx, subSystemKey, nil)
 }
 
-// Returns a context with the logging subsystem cleared. Used when a context is passed back from a subsystem.
+// Returns a context with the logging subsystem cleared. Used when a context is passed back from a
+//   subsystem.
 func ContextWithLogTrace(ctx context.Context, trace string) context.Context {
 	return context.WithValue(ctx, traceKey, trace)
 }
@@ -163,7 +165,13 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 		// Log to subsystem specific config
 		subConfig, subExists := config.SubSystems[subsystem]
 		if subExists {
-			if err := subConfig.log(subsystem, level, depth, trace, format, values...); err != nil {
+			var err error
+			if config.IsText {
+				err = subConfig.logText(subsystem, level, depth, trace, format, values...)
+			} else {
+				err = subConfig.logJSON(subsystem, level, depth, trace, format, values...)
+			}
+			if err != nil {
 				return err
 			}
 		}
@@ -175,7 +183,11 @@ func LogDepth(ctx context.Context, level Level, depth int, format string, values
 	}
 
 	// Log to main config
-	return config.Main.log(subsystem, level, depth, trace, format, values...)
+	if config.IsText {
+		return config.Main.logText(subsystem, level, depth, trace, format, values...)
+	} else {
+		return config.Main.logJSON(subsystem, level, depth, trace, format, values...)
+	}
 }
 
 // Keys for context key/pairs
