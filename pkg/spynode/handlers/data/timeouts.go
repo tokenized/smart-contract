@@ -41,9 +41,10 @@ func (state *State) CheckTimeouts() error {
 		state.restartCount = 0 // Clear restart count
 	}
 
-	if state.restartCount > maxRestarts {
-		return errors.New(fmt.Sprintf("Restarted %d seconds", headerTimeout))
-	}
+	// TODO This needs to stop the node
+	// if state.restartCount > maxRestarts {
+	// 	return errors.New(fmt.Sprintf("Restarted %d seconds", headerTimeout))
+	// }
 
 	return nil
 }
