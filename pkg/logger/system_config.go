@@ -81,7 +81,7 @@ type LogEntry struct {
 	File         string `json:"file,omitempty"`
 	Level        string `json:"level,omitempty"`
 	Trace        string `json:"trace,omitempty"`
-	Entry        string `json:"entry,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 // Logs a JSON entry based on the system config
@@ -157,7 +157,7 @@ func (config *SystemConfig) logJSON(system string, level Level, depth int, trace
 	}
 
 	// Append actual log entry
-	entry.Entry = fmt.Sprintf(format, values...)
+	entry.Message = fmt.Sprintf(format, values...)
 
 	// Convert to JSON
 	line, err := json.Marshal(&entry)
