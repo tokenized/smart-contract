@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/rpcnode"
@@ -11,7 +12,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/txbuilder"
 )
 
-func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context.Context {
+func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer, format string) context.Context {
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.SetWriter(writer)
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
@@ -19,6 +20,10 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
+
+	if strings.ToUpper(format) == "TEXT" {
+		logConfig.IsText = true
+	}
 
 	// Configure spynode logs
 	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
@@ -29,7 +34,7 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer) context
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
 
-func ContextWithProductionLogger(ctx context.Context, writer io.Writer) context.Context {
+func ContextWithProductionLogger(ctx context.Context, writer io.Writer, format string) context.Context {
 	logConfig := logger.NewProductionConfig()
 	logConfig.Main.SetWriter(writer)
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
@@ -37,6 +42,10 @@ func ContextWithProductionLogger(ctx context.Context, writer io.Writer) context.
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
+
+	if strings.ToUpper(format) == "TEXT" {
+		logConfig.IsText = true
+	}
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

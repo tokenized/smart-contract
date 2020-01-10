@@ -63,7 +63,7 @@ func New(logFileName string) *Test {
 			fmt.Printf("Failed to open log file : %v\n", err)
 			return nil
 		}
-		ctx = node.ContextWithDevelopmentLogger(NewContext(), logFile)
+		ctx = node.ContextWithDevelopmentLogger(NewContext(), logFile, "text")
 	} else {
 		ctx = node.ContextWithNoLogger(NewContext())
 	}

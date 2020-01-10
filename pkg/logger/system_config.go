@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -72,8 +73,114 @@ func (config *SystemConfig) SetWriter(writer io.Writer) {
 	config.Output = writer
 }
 
-// Logs an entry based on the system config
-func (config *SystemConfig) log(system string, level Level, depth int, trace, format string, values ...interface{}) error {
+type LogEntry struct {
+	Date         string `json:"date,omitempty"`
+	Time         string `json:"time,omitempty"`
+	MicroSeconds string `json:"ms,omitempty"`
+	System       string `json:"system,omitempty"`
+	File         string `json:"file,omitempty"`
+	Level        string `json:"level,omitempty"`
+	Trace        string `json:"trace,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+// Logs a JSON entry based on the system config
+func (config *SystemConfig) logJSON(system string, level Level, depth int, trace, format string,
+	values ...interface{}) error {
+
+	if config.MinLevel > level {
+		return nil // Level is below minimum
+	}
+
+	// Create log entry
+	now := time.Now()
+
+	entry := LogEntry{}
+
+	// Append Date
+	if config.Format&IncludeDate != 0 {
+		year, month, day := now.Date()
+		entry.Date = fmt.Sprintf("%04d/%02d/%02d", year, month, day)
+	}
+
+	// Append Time
+	if config.Format&IncludeTime != 0 {
+		hour, min, sec := now.Clock()
+		entry.Time = fmt.Sprintf("%02d:%02d:%02d", hour, min, sec)
+	}
+
+	// Append microseconds
+	if config.Format&IncludeMicro != 0 {
+		entry.MicroSeconds = fmt.Sprintf("%06d", now.Nanosecond()/1e3)
+	}
+
+	// Append System
+	if config.Format&IncludeSystem != 0 {
+		entry.System = system
+	}
+
+	// Append File
+	if config.Format&IncludeFile != 0 {
+		_, file, line, ok := runtime.Caller(2 + depth) // Code of interest is 2 levels up in stack
+		if ok {
+			file = filepath.Base(file)
+		} else {
+			file = "???"
+			line = 0
+		}
+
+		entry.File = fmt.Sprintf("%s:%d", file, line)
+	}
+
+	// Append Level
+	if config.Format&IncludeLevel != 0 {
+		switch level {
+		case LevelDebug:
+			entry.Level = "debug"
+		case LevelVerbose:
+			entry.Level = "verbose"
+		case LevelInfo:
+			entry.Level = "info"
+		case LevelWarn:
+			entry.Level = "warn"
+		case LevelError:
+			entry.Level = "error"
+		case LevelFatal:
+			entry.Level = "fatal"
+		case LevelPanic:
+			entry.Level = "panic"
+		}
+	}
+
+	if len(trace) > 0 {
+		entry.Trace = trace
+	}
+
+	// Append actual log entry
+	entry.Message = fmt.Sprintf(format, values...)
+
+	// Convert to JSON
+	line, err := json.Marshal(&entry)
+	if err != nil {
+		return err
+	}
+
+	// Write to output
+	_, err = config.Output.Write(append(line, '\n'))
+
+	if level == LevelFatal {
+		os.Exit(1)
+	}
+	if level == LevelPanic {
+		panic(entry)
+	}
+	return err
+}
+
+// Logs a text entry based on the system config
+func (config *SystemConfig) logText(system string, level Level, depth int, trace, format string,
+	values ...interface{}) error {
+
 	if config.MinLevel > level {
 		return nil // Level is below minimum
 	}

@@ -50,6 +50,8 @@ func errorCodeString(code int) string {
 		return "Missing Private Key"
 	case ErrorCodeWrongScriptTemplate:
 		return "Wrong Script Template"
+	case ErrorCodeBelowDustValue:
+		return "Below Dust Value"
 	case ErrorCodeDuplicateInput:
 		return "Duplicate Input"
 	default:

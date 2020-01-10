@@ -10,6 +10,7 @@ type Config struct {
 	Main               *SystemConfig
 	IncludedSubSystems map[string]bool          // If true, log in main log
 	SubSystems         map[string]*SystemConfig // SubSystem specific configs
+	IsText             bool                     // If true, log is in plain text, otherwise it is JSON
 	mutex              sync.Mutex
 }
 
