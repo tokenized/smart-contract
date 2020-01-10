@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -76,6 +77,10 @@ func Context() context.Context {
 	// logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
+
+	if strings.ToUpper(os.Getenv("CLIENT_LOG_FORMAT")) == "TEXT" {
+		logConfig.IsText = true
+	}
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

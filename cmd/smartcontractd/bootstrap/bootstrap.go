@@ -29,9 +29,9 @@ func NewContextWithDevelopmentLogger() context.Context {
 			logger.Fatal(ctx, "Failed to open log file : %v\n", err)
 		}
 
-		ctx = node.ContextWithDevelopmentLogger(ctx, logFile)
+		ctx = node.ContextWithDevelopmentLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
 	} else {
-		ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout)
+		ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
 	}
 
 	return ctx
