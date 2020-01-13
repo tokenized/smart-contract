@@ -93,9 +93,11 @@ func main() {
 	// -------------------------------------------------------------------------
 	// RPC Node
 	rpcConfig := &rpcnode.Config{
-		Host:     cfg.RpcNode.Host,
-		Username: cfg.RpcNode.Username,
-		Password: cfg.RpcNode.Password,
+		Host:       cfg.RpcNode.Host,
+		Username:   cfg.RpcNode.Username,
+		Password:   cfg.RpcNode.Password,
+		MaxRetries: cfg.RpcNode.MaxRetries,
+		RetryDelay: cfg.RpcNode.RetryDelay,
 	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)

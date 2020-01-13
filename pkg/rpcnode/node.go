@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	btcwire "github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -37,6 +37,7 @@ const (
 type RPCNode struct {
 	client  *rpcclient.Client
 	txCache map[bitcoin.Hash32]*wire.MsgTx
+	Config  *Config
 	lock    sync.Mutex
 }
 
@@ -55,8 +56,13 @@ func NewNode(config *Config) (*RPCNode, error) {
 		return nil, err
 	}
 
+	if config.RetryDelay == 0 { // default to 1/2 second delay
+		config.RetryDelay = 500
+	}
+
 	n := &RPCNode{
 		client:  client,
+		Config:  config,
 		txCache: make(map[bitcoin.Hash32]*wire.MsgTx),
 	}
 
@@ -80,9 +86,21 @@ func (r *RPCNode) GetTX(ctx context.Context, id *bitcoin.Hash32) (*wire.MsgTx, e
 
 	logger.Verbose(ctx, "Requesting tx from RPC : %s\n", id.String())
 	ch, _ := chainhash.NewHash(id[:])
-	raw, err := r.client.GetRawTransactionVerbose(ch)
+	var err error
+	var raw *btcjson.TxRawResult
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		raw, err = r.client.GetRawTransactionVerbose(ch)
+		if err == nil {
+			break
+		}
+
+		logger.Error(ctx, "RPCCallFailed GetTx %s : %v", id.String(), err)
+		time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+	}
+
 	if err != nil {
-		return nil, err
+		logger.Error(ctx, "RPCCallAborted GetTx %s : %v", id.String(), err)
+		return nil, errors.Wrap(err, fmt.Sprintf("Failed to GetTx %v", id.String()))
 	}
 
 	b, err := hex.DecodeString(raw.Hex)
@@ -106,7 +124,6 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.
 	defer logger.Elapsed(ctx, time.Now(), "GetTXs")
 
 	results := make([]*wire.MsgTx, len(txids))
-	requests := make([]*rpcclient.FutureGetRawTransactionVerboseResult, len(txids))
 
 	r.lock.Lock()
 	for i, txid := range txids {
@@ -115,40 +132,69 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.
 			logger.Verbose(ctx, "Using tx from RPC cache : %s\n", txid.String())
 			delete(r.txCache, *txid)
 			results[i] = msg
-		} else {
-			logger.Verbose(ctx, "Requesting tx from RPC : %s\n", txid.String())
-			ch, _ := chainhash.NewHash(txid[:])
-			request := r.client.GetRawTransactionVerboseAsync(ch)
-			requests[i] = &request
 		}
 	}
 	r.lock.Unlock()
 
-	for i, request := range requests {
-		if request == nil {
-			continue
-		}
-		rawTx, err := request.Receive()
-		if err != nil {
-			return results, err // TODO Determine when error is tx not seen yet
+	var lastError error
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
 		}
 
-		b, err := hex.DecodeString(rawTx.Hex)
-		if err != nil {
-			return results, err
+		requests := make([]*rpcclient.FutureGetRawTransactionVerboseResult, len(txids))
+
+		for i, txid := range txids {
+			if results[i] == nil {
+				logger.Verbose(ctx, "Requesting tx from RPC : %s\n", txid.String())
+				ch, _ := chainhash.NewHash(txid[:])
+				request := r.client.GetRawTransactionVerboseAsync(ch)
+				requests[i] = &request
+			}
 		}
 
-		tx := wire.MsgTx{}
-		buf := bytes.NewReader(b)
+		lastError = nil
+		for i, request := range requests {
+			if request == nil {
+				continue
+			}
 
-		if err := tx.Deserialize(buf); err != nil {
-			return results, err
+			rawTx, err := request.Receive()
+			if err != nil {
+				lastError = err // TODO Determine when error is tx not seen yet
+				logger.Error(ctx, "RPCCallFailed GetTxs receive tx %s : %v", txids[i].String(), err)
+				continue
+			}
+
+			b, err := hex.DecodeString(rawTx.Hex)
+			if err != nil {
+				lastError = err
+				logger.Error(ctx, "RPCCallFailed GetTxs decode tx hex %s : %v", txids[i].String(), err)
+				continue
+			}
+
+			tx := wire.MsgTx{}
+			buf := bytes.NewReader(b)
+
+			if err := tx.Deserialize(buf); err != nil {
+				lastError = err
+				logger.Error(ctx, "RPCCallFailed GetTxs deserialize tx %s : %v", txids[i].String(), err)
+				continue
+			}
+
+			results[i] = &tx
 		}
 
-		results[i] = &tx
+		if lastError == nil {
+			break
+		}
 	}
 
-	return results, nil
+	if lastError != nil {
+		logger.Error(ctx, "RPCCallAborted GetTxs %v : %v", txids, lastError)
+	}
+
+	return results, lastError
 }
 
 // WatchAddress instructs the RPC node to watch an address without rescan
@@ -156,11 +202,26 @@ func (r *RPCNode) WatchAddress(ctx context.Context, address bitcoin.Address) err
 	strAddr := address.String()
 
 	// Make address known to node without rescan
-	if err := r.client.ImportAddressRescan(strAddr, strAddr, false); err != nil {
-		return err
+	var err error
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		err = r.client.ImportAddressRescan(strAddr, strAddr, false)
+		if err == nil {
+			break
+		}
+
+		logger.Error(ctx, "RPCCallFailed WatchAddress %s : %v", address.String(), err)
 	}
 
-	return nil
+	if err != nil {
+		logger.Error(ctx, "RPCCallAborted WatchAddress %s : %v", address.String(), err)
+		return errors.Wrap(err, fmt.Sprintf("Failed to GetTx %s", address.String()))
+	}
+
+	return err
 }
 
 // ListTransactions returns all transactions for watched addresses
@@ -173,32 +234,50 @@ func (r *RPCNode) ListTransactions(ctx context.Context) ([]btcjson.ListTransacti
 		btcjson.Int(0),
 		btcjson.Bool(true))
 
-	id := r.client.NextID()
-	marshalledJSON, err := btcjson.MarshalCmd(id, cmd)
-	if err != nil {
-		return nil, err
+	var err error
+	var marshalledJSON []byte
+	var response json.RawMessage
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		id := r.client.NextID()
+		marshalledJSON, err = btcjson.MarshalCmd(id, cmd)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed ListTransactions MarshalCmd : %v", err)
+			continue
+		}
+
+		// Unmarhsal in to a request to extract the params
+		var request btcjson.Request
+		if err = json.Unmarshal(marshalledJSON, &request); err != nil {
+			logger.Error(ctx, "RPCCallFailed ListTransactions Unmarshal : %v", err)
+			continue
+		}
+
+		// Submit raw request
+		response, err = r.client.RawRequest("listtransactions", request.Params)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed ListTransactions RawRequest : %v", err)
+			continue
+		}
+
+		break
 	}
 
-	// Unmarhsal in to a request to extract the params
-	var request btcjson.Request
-	if err = json.Unmarshal(marshalledJSON, &request); err != nil {
-		return nil, err
-	}
-
-	// Submit raw request
-	out, err := r.client.RawRequest("listtransactions", request.Params)
 	if err != nil {
-		return nil, err
+		logger.Error(ctx, "RPCCallAborted ListTransactions : %v", err)
+		return nil, errors.Wrap(err, "list transactions")
 	}
 
 	// Unmarshal response in to a ListTransactionsResult
-	var response []btcjson.ListTransactionsResult
-
-	if err = json.Unmarshal(out, &response); err != nil {
+	var result []btcjson.ListTransactionsResult
+	if err = json.Unmarshal(response, &result); err != nil {
 		return nil, err
 	}
 
-	return response, nil
+	return result, nil
 }
 
 // ListUnspent returns unspent transactions
@@ -213,13 +292,29 @@ func (r *RPCNode) ListUnspent(ctx context.Context, address bitcoin.Address) ([]b
 		bitcoin.NewChainParams(bitcoin.NetworkName(address.Network())))
 	addresses := []btcutil.Address{btcaddress}
 
-	// out []btcjson.ListUnspentResult
-	out, err := r.client.ListUnspentMinMaxAddresses(0, 999999, addresses)
-	if err != nil {
-		return nil, err
+	var err error
+	var result []btcjson.ListUnspentResult
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		// out []btcjson.ListUnspentResult
+		result, err = r.client.ListUnspentMinMaxAddresses(0, 999999, addresses)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed ListUnspent %s : %v", address.String(), err)
+			continue
+		}
+
+		break
 	}
 
-	return out, nil
+	if err != nil {
+		logger.Error(ctx, "RPCCallAborted ListUnspent %s: %v", address.String(), err)
+		return nil, errors.Wrap(err, fmt.Sprintf("Failed to ListUnspent %s", address.String()))
+	}
+
+	return result, nil
 }
 
 // SendRawTransaction broadcasts a raw transaction
@@ -230,9 +325,28 @@ func (r *RPCNode) SendRawTransaction(ctx context.Context, tx *wire.MsgTx) error 
 		return err
 	}
 
-	_, err = r.client.SendRawTransaction(nx, false)
+	logger.Debug(ctx, "Sending raw tx payload : %s", r.getRawPayload(nx))
 
-	return err
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		_, err = r.client.SendRawTransaction(nx, false)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed SendRawTransaction %s : %v", tx.TxHash().String(), err)
+			continue
+		}
+
+		break
+	}
+
+	if err != nil {
+		logger.Error(ctx, "RPCCallAborted SendRawTransaction %s : %v", tx.TxHash().String(), err)
+		return errors.Wrap(err, fmt.Sprintf("Failed to SendRawTransaction %s", tx.TxHash().String()))
+	}
+
+	return nil
 }
 
 // SaveTX saves a tx to be used later.
@@ -260,29 +374,77 @@ func (r *RPCNode) SendTX(ctx context.Context, tx *wire.MsgTx) (*bitcoin.Hash32, 
 
 	logger.Debug(ctx, "Sending tx payload : %s", r.getRawPayload(nx))
 
-	ch, err := r.client.SendRawTransaction(nx, false)
-	if err != nil {
-		return nil, err
+	var hash *chainhash.Hash
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		hash, err = r.client.SendRawTransaction(nx, false)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed SendTX %s : %v", tx.TxHash().String(), err)
+			continue
+		}
+
+		break
 	}
-	return bitcoin.NewHash32(ch[:])
+
+	if err != nil {
+		logger.Error(ctx, "RPCCallAborted SendTX %s : %v", tx.TxHash().String(), err)
+		return nil, errors.Wrap(err, fmt.Sprintf("Failed to SendRawTransaction %s",
+			tx.TxHash().String()))
+	}
+
+	return bitcoin.NewHash32(hash[:])
 }
 
-func (r *RPCNode) GetLatestBlock() (*bitcoin.Hash32, int32, error) {
-	// Get the best block hash
-	hash, err := r.client.GetBestBlockHash()
+func (r *RPCNode) GetLatestBlock(ctx context.Context) (*bitcoin.Hash32, int32, error) {
+	var err error
+	var hash *chainhash.Hash
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		// Get the best block hash
+		hash, err = r.client.GetBestBlockHash()
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed GetLatestBlock GetBestBlockHash : %v", err)
+			continue
+		}
+
+		break
+	}
+
 	if err != nil {
-		return nil, -1, err
+		logger.Error(ctx, "RPCCallAborted GetLatestBlock GetBestBlockHash : %v", err)
+		return nil, -1, errors.Wrap(err, "GetBestBlockHash")
 	}
 
 	bhash, err := bitcoin.NewHash32(hash[:])
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, errors.Wrap(err, "NewHash32")
 	}
 
-	// The height is in the header
-	header, err := r.client.GetBlockHeaderVerbose(hash)
+	var header *btcjson.GetBlockHeaderVerboseResult
+	for i := 0; i <= r.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
+		}
+
+		// The height is in the header
+		header, err = r.client.GetBlockHeaderVerbose(hash)
+		if err != nil {
+			logger.Error(ctx, "RPCCallFailed GetLatestBlock GetBlockHeaderVerbose : %v", err)
+			continue
+		}
+
+		break
+	}
+
 	if err != nil {
-		return nil, -1, err
+		logger.Error(ctx, "RPCCallAborted GetLatestBlock GetBlockHeaderVerbose : %v", err)
+		return nil, -1, errors.Wrap(err, "GetBlockHeaderVerbose")
 	}
 
 	return bhash, header.Height, nil
@@ -290,12 +452,11 @@ func (r *RPCNode) GetLatestBlock() (*bitcoin.Hash32, int32, error) {
 
 func (r *RPCNode) getRawPayload(tx *btcwire.MsgTx) string {
 	var buf bytes.Buffer
-	tx.Serialize(&buf)
+	if err := tx.Serialize(&buf); err != nil {
+		return ""
+	}
 
-	out := fmt.Sprintf("%#x", buf.Bytes())
-	s := fmt.Sprintf("%s", strings.Replace(out, "0x", "", 1))
-
-	return s
+	return hex.EncodeToString(buf.Bytes())
 }
 
 // txToBtcdTx converts a "pkg/wire".MsgTx to a "btcsuite/btcd/wire".MsgTx".
