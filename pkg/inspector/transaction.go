@@ -147,8 +147,23 @@ func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 
 // ParseInputs sets the Inputs property of the Transaction
 func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
-	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
 
+	// Fetch input transactions from RPC
+	txids := make([]*bitcoin.Hash32, 0, len(itx.MsgTx.TxIn))
+	for _, txin := range itx.MsgTx.TxIn {
+		if txin.PreviousOutPoint.Index != 0xffffffff {
+			txids = append(txids, &txin.PreviousOutPoint.Hash)
+		}
+	}
+
+	txs, err := node.GetTXs(ctx, txids)
+	if err != nil {
+		return err
+	}
+
+	// Build inputs
+	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
+	txOffset := 0
 	for _, txin := range itx.MsgTx.TxIn {
 		if txin.PreviousOutPoint.Index == 0xffffffff {
 			// Empty coinbase input
@@ -160,19 +175,13 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 			continue
 		}
 
-		// Lookup outpoint transaction
-		h := txin.PreviousOutPoint.Hash
-		inputTX, err := node.GetTX(ctx, &h)
-		if err != nil {
-			return err
-		}
-
-		input, err := buildInput(&h, inputTX, txin.PreviousOutPoint.Index)
+		input, err := buildInput(&txin.PreviousOutPoint.Hash, txs[txOffset], txin.PreviousOutPoint.Index)
 		if err != nil {
 			return err
 		}
 
 		inputs = append(inputs, *input)
+		txOffset++
 	}
 
 	itx.Inputs = inputs
