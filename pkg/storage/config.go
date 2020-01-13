@@ -19,7 +19,7 @@ type Config struct {
 	Bucket     string
 	Root       string
 	MaxRetries int
-	RetryDelay int
+	RetryDelay int // Milliseconds between retries
 }
 
 // NewConfig returns a new Config with AWS style options.
@@ -32,13 +32,18 @@ func NewConfig(bucket, root string) Config {
 	}
 }
 
+func (c *Config) SetupRetry(max, delay int) {
+	c.MaxRetries = max
+	c.RetryDelay = delay
+}
+
 func (c Config) String() string {
 	root := ""
 	if len(c.Root) > 0 {
 		root = fmt.Sprintf("Root:%s", c.Root)
 	}
 
-	return fmt.Sprintf("{Bucket:%v %s MaxRetries:%v RetryDelay:%v}",
+	return fmt.Sprintf("{Bucket:%v %s MaxRetries:%v RetryDelay:%v ms}",
 		c.Bucket,
 		root,
 		c.MaxRetries,

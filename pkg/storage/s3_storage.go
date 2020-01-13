@@ -56,7 +56,11 @@ func (s S3Storage) Write(ctx context.Context,
 	}
 
 	var err error
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		if options != nil {
 			if options.TTL > 0 {
 				expiry := time.Now().Add(time.Duration(options.TTL) * time.Second)
@@ -70,7 +74,6 @@ func (s S3Storage) Write(ctx context.Context,
 		}
 
 		logger.Error(ctx, "S3CallFailed to write to %v : %v", key, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -87,7 +90,11 @@ func (s S3Storage) Read(ctx context.Context, key string) ([]byte, error) {
 	var err error
 	var document *s3.GetObjectOutput
 	var b []byte
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		document, err = svc.GetObject(&s3.GetObjectInput{
 			Bucket: aws.String(s.Config.Bucket),
 			Key:    aws.String(key),
@@ -102,14 +109,12 @@ func (s S3Storage) Read(ctx context.Context, key string) ([]byte, error) {
 			}
 
 			logger.Error(ctx, "S3CallFailed to read from %v : %v", key, err)
-			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 			continue
 		}
 
 		b, err = ioutil.ReadAll(document.Body)
 		if err != nil {
 			logger.Error(ctx, "S3CallFailed to read from %v : %v", key, err)
-			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 			continue
 		}
 
@@ -133,7 +138,11 @@ func (s S3Storage) Remove(ctx context.Context, key string) error {
 	}
 
 	var err error
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		_, err = svc.DeleteObject(do)
 		if err != nil {
 			if aerr, ok := err.(awserr.Error); ok {
@@ -144,7 +153,6 @@ func (s S3Storage) Remove(ctx context.Context, key string) error {
 			}
 
 			logger.Error(ctx, "S3CallFailed to delete object at %v : %v", key, err)
-			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 			continue
 		}
 	}
@@ -163,7 +171,7 @@ func (s S3Storage) Search(ctx context.Context,
 
 	var err error
 	var keys []string
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
 		keys, err = s.findKeys(ctx, path)
 		if err == nil {
 			break
@@ -200,14 +208,17 @@ func (s S3Storage) Search(ctx context.Context,
 
 	iter := &s3manager.DownloadObjectsIterator{Objects: objects}
 
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		err = svc.DownloadWithIterator(ctx, iter)
 		if err == nil {
 			break
 		}
 
 		logger.Error(ctx, "S3CallFailed to download with iterator %v : %v", path, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -223,14 +234,17 @@ func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
 
 	var err error
 	var keys []string
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		keys, err = s.findKeys(ctx, path)
 		if err == nil {
 			break
 		}
 
 		logger.Error(ctx, "S3CallFailed to search %v : %v", path, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -257,14 +271,17 @@ func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
 
 	iter := &s3manager.DeleteObjectsIterator{Objects: objects}
 
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		err = svc.Delete(ctx, iter)
 		if err == nil {
 			break
 		}
 
 		logger.Error(ctx, "S3CallFailed to delete %v : %v", path, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -278,22 +295,24 @@ func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
 func (s S3Storage) List(ctx context.Context, path string) ([]string, error) {
 	var err error
 	var keys []string
-	for i := 0; i < s.Config.MaxRetries; i++ {
+	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		keys, err = s.findKeys(ctx, path)
 		if err == nil {
 			return keys, nil
 		}
 
 		logger.Error(ctx, "S3CallFailed to search %v : %v", path, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	logger.Error(ctx, "S3CallAborted search %v : %v", path, err)
 	return nil, errors.Wrap(err, fmt.Sprintf("Failed to search %v", path))
 }
 
-func (s S3Storage) findKeys(ctx context.Context,
-	path string) ([]string, error) {
+func (s S3Storage) findKeys(ctx context.Context, path string) ([]string, error) {
 
 	svc := s3.New(s.Session)
 
@@ -317,7 +336,7 @@ func (s S3Storage) findKeys(ctx context.Context,
 
 // newAwsSession creates a new AWS Session from the credentials in the Config.
 func newAWSSession(config Config) *session.Session {
-	awsConfig := aws.NewConfig().WithMaxRetries(config.MaxRetries)
+	awsConfig := aws.NewConfig()
 	return session.New(awsConfig)
 }
 

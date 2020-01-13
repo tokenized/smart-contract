@@ -33,8 +33,10 @@ type DB struct {
 // StorageConfig is geared towards "bucket" style storage, where you have a
 // specific root (the Bucket).
 type StorageConfig struct {
-	Bucket string
-	Root   string
+	Bucket     string
+	Root       string
+	MaxRetries int
+	RetryDelay int // Milliseconds between retries
 }
 
 // New returns a new DB value for use with document storage based on a
