@@ -35,17 +35,6 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Logging
 
-	// os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
-	// logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-	// logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	// if err != nil {
-	// 	fmt.Printf("Failed to open log file : %v\n", err)
-	// 	return
-	// }
-	// defer logFile.Close()
-
-	// ctx = node.ContextWithDevelopmentLogger(ctx, io.MultiWriter(os.Stdout, logFile))
-
 	ctx := bootstrap.NewContextWithDevelopmentLogger()
 
 	// -------------------------------------------------------------------------
@@ -89,6 +78,8 @@ func main() {
 	}
 
 	spyNode := spynode.NewNode(spyConfig, spyStorage)
+
+	spyNode.SetupRetry(cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
 
 	// -------------------------------------------------------------------------
 	// RPC Node

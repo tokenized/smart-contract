@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/tokenized/smart-contract/pkg/storage"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
