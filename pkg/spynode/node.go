@@ -54,6 +54,7 @@ type Node struct {
 	stopping        bool
 	stopped         bool
 	scanning        bool
+	attempts        int // Count of re-connect attempts without completing handshake.
 	lock            sync.Mutex
 	untrustedLock   sync.Mutex
 }
@@ -96,6 +97,13 @@ func (node *Node) RegisterListener(listener handlers.Listener) {
 // If any of the tx filters return true the tx will be sent to listeners.
 func (node *Node) AddTxFilter(filter handlers.TxFilter) {
 	node.txFilters = append(node.txFilters, filter)
+}
+
+// SetupRetry configures the maximum connection retries and delay in milliseconds between each
+//   attempt.
+func (node *Node) SetupRetry(max, delay int) {
+	node.config.MaxRetries = max
+	node.config.RetryDelay = delay
 }
 
 // load loads the data for the node.
@@ -147,16 +155,23 @@ func (node *Node) Run(ctx context.Context) error {
 
 	initial := true
 	for !node.isStopping() {
+		if node.attempts != 0 {
+			time.Sleep(time.Duration(node.config.RetryDelay) * time.Millisecond)
+		}
+		if node.attempts > node.config.MaxRetries {
+			logger.Error(ctx, "SpyNodeAborted trusted connection to %s", node.config.NodeAddress)
+		}
+		node.attempts++
+
 		if initial {
 			logger.Verbose(ctx, "Connecting to %s", node.config.NodeAddress)
 		} else {
 			logger.Verbose(ctx, "Re-connecting to %s", node.config.NodeAddress)
-			node.state.LogRestart()
 		}
 		initial = false
 		if err = node.connect(ctx); err != nil {
-			logger.Error(ctx, "Trusted connection failed to %s : %s", node.config.NodeAddress, err.Error())
-			time.Sleep(5 * time.Second)
+			logger.Error(ctx, "SpyNodeFailed trusted connection to %s : %s",
+				node.config.NodeAddress, err.Error())
 			continue
 		}
 
@@ -576,7 +591,7 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx *handlers.TxData)
 func (node *Node) processUnconfirmedTxs(ctx context.Context) {
 	for tx := range node.unconfTxChannel.Channel {
 		if err := node.processUnconfirmedTx(ctx, tx); err != nil {
-			logger.Warn(ctx, "Failed to process unconfirmed tx : %s : %s", err,
+			logger.Error(ctx, "SpyNodeAborted to process unconfirmed tx : %s : %s", err,
 				tx.Msg.TxHash().String())
 			node.requestStop(ctx)
 			break
@@ -588,7 +603,7 @@ func (node *Node) processUnconfirmedTxs(ctx context.Context) {
 func (node *Node) processConfirmedTxs(ctx context.Context) {
 	for tx := range node.confTxChannel.Channel {
 		if err := node.processConfirmedTx(ctx, tx); err != nil {
-			logger.Warn(ctx, "Failed to process confirmed tx : %s : %s", err,
+			logger.Error(ctx, "SpyNodeAborted to process confirmed tx : %s : %s", err,
 				tx.Msg.TxHash().String())
 			node.requestStop(ctx)
 			break
@@ -613,7 +628,7 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
-			logger.Warn(ctx, "Failed to send %s message : %s", msg.Command(), err)
+			logger.Error(ctx, "SpyNodeFailed to send %s message : %s", msg.Command(), err)
 			node.restart(ctx)
 			break
 		}
@@ -689,7 +704,7 @@ func (node *Node) connect(ctx context.Context) error {
 func (node *Node) monitorIncoming(ctx context.Context) {
 	for !node.isStopping() {
 		if err := node.check(ctx); err != nil {
-			logger.Warn(ctx, "Check failed : %s", err.Error())
+			logger.Error(ctx, "SpyNodeAborted check : %s", err.Error())
 			node.requestStop(ctx)
 			break
 		}
@@ -707,20 +722,20 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 					logger.Verbose(ctx, wireError.Error())
 					continue
 				} else {
-					logger.Warn(ctx, wireError.Error())
+					logger.Error(ctx, "SpyNodeFailed read message (wireError) : %s", wireError)
 					node.restart(ctx)
 					break
 				}
 
 			} else {
-				logger.Warn(ctx, "Failed to read message : %s", err.Error())
+				logger.Error(ctx, "SpyNodeFailed to read message : %s", err)
 				node.restart(ctx)
 				break
 			}
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			logger.Warn(ctx, "Failed to handle [%s] message : %s", msg.Command(), err.Error())
+			logger.Error(ctx, "SpyNodeAborted to handle [%s] message : %s", msg.Command(), err.Error())
 			node.requestStop(ctx)
 			break
 		}
@@ -774,6 +789,8 @@ func (node *Node) check(ctx context.Context) error {
 
 	// Check sync
 	if node.state.IsReady() {
+		node.attempts = 0
+
 		if !node.state.SentSendHeaders() {
 			// Send sendheaders message to get headers instead of block inventories.
 			sendheaders := wire.NewMsgSendHeaders()
@@ -846,7 +863,7 @@ func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 		node.sleepUntilStop(10) // Only check every 10 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
-			logger.Warn(ctx, err.Error())
+			logger.Error(ctx, "SpyNodeFailed timeouts : %s", err)
 			node.restart(ctx)
 			break
 		}
@@ -871,7 +888,7 @@ func (node *Node) checkTxDelays(ctx context.Context) {
 		cutoffTime := time.Now().Add(time.Millisecond * -time.Duration(node.config.SafeTxDelay))
 		txids, err := node.txs.GetNewSafe(ctx, cutoffTime)
 		if err != nil {
-			logger.Warn(ctx, err.Error())
+			logger.Error(ctx, "SpyNodeFailed GetNewSafe : %s", err)
 			node.restart(ctx)
 			break
 		}

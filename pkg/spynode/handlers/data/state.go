@@ -25,7 +25,6 @@ type State struct {
 	blocksRequested    []*requestedBlock // Blocks that have been requested
 	blocksToRequest    []bitcoin.Hash32  // Blocks that need to be requested
 	pendingSync        bool              // The peer has notified us of all blocks. Now we just have to process to catch up.
-	restartCount       int               // Number of restarts since last clear
 	lock               sync.Mutex
 }
 
@@ -46,7 +45,6 @@ func NewState() *State {
 		blocksRequested:    make([]*requestedBlock, 0, maxRequestedBlocks),
 		blocksToRequest:    make([]bitcoin.Hash32, 0, 2000),
 		pendingSync:        false,
-		restartCount:       0,
 	}
 	return &result
 }
@@ -230,13 +228,6 @@ func (state *State) SetStartHeight(startHeight int) {
 	defer state.lock.Unlock()
 
 	state.startHeight = startHeight
-}
-
-func (state *State) LogRestart() {
-	state.lock.Lock()
-	defer state.lock.Unlock()
-
-	state.restartCount++
 }
 
 func (state *State) HeadersRequested() *time.Time {

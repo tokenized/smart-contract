@@ -27,6 +27,8 @@ type Config struct {
 		UntrustedNodes int    `default:"25" envconfig:"UNTRUSTED_NODES"`
 		SafeTxDelay    int    `default:"2000" envconfig:"SAFE_TX_DELAY"`
 		ShotgunCount   int    `default:"100" envconfig:"SHOTGUN_COUNT"`
+		MaxRetries     int    `default:"25" envconfig:"NODE_MAX_RETRIES"`
+		RetryDelay     int    `default:"5000" envconfig:"NODE_RETRY_DELAY"`
 	}
 	RpcNode struct {
 		Host       string `envconfig:"RPC_HOST"`

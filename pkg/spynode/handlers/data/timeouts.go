@@ -11,9 +11,6 @@ const (
 	handshakeTimeout = 30
 	headerTimeout    = 60
 	blockTimeout     = 600
-
-	// Maximum number of restarts allowed in a minute before stopping
-	maxRestarts = 5 // TODO This needs to stop the node
 )
 
 func (state *State) CheckTimeouts() error {
@@ -36,15 +33,6 @@ func (state *State) CheckTimeouts() error {
 				blockTimeout, blockRequest.hash.String()))
 		}
 	}
-
-	if state.restartCount > 0 && state.connectedTime != nil && now.Sub(*state.connectedTime).Seconds() > 60 {
-		state.restartCount = 0 // Clear restart count
-	}
-
-	// TODO This needs to stop the node
-	// if state.restartCount > maxRestarts {
-	// 	return errors.New(fmt.Sprintf("Restarted %d seconds", headerTimeout))
-	// }
 
 	return nil
 }
