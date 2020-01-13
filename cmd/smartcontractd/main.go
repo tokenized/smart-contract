@@ -70,8 +70,8 @@ func main() {
 
 	// -------------------------------------------------------------------------
 	// SPY Node
-	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Bucket,
-		cfg.NodeStorage.Root)
+	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Bucket, cfg.NodeStorage.Root)
+	spyStorageConfig.SetupRetry(cfg.AWS.MaxRetries, cfg.AWS.RetryDelay)
 
 	var spyStorage storage.Storage
 	if strings.ToLower(spyStorageConfig.Bucket) == "standalone" {
