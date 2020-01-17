@@ -83,8 +83,8 @@ type StateReady interface {
 func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State,
 	peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
 	reorgRepo *storage.ReorgRepository, tracker *data.TxTracker, memPool *data.MemPool,
-	confTxChannel *TxChannel, unconfTxChannel *TxChannel, listeners []Listener, txFilters []TxFilter,
-	blockProcessor BlockProcessor) map[string]CommandHandler {
+	confTxChannel *TxChannel, unconfTxChannel *TxChannel, txStateChannel *TxStateChannel,
+	listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
@@ -92,10 +92,11 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewInvHandler(state, txRepo, tracker, memPool),
 		wire.CmdTx:      NewTXHandler(state, unconfTxChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdBlock: NewBlockHandler(state, confTxChannel, memPool, blockRepo, txRepo, listeners,
-			txFilters, blockProcessor),
-		wire.CmdHeaders: NewHeadersHandler(config, state, blockRepo, txRepo, reorgRepo, listeners),
-		wire.CmdReject:  NewRejectHandler(),
+		wire.CmdBlock: NewBlockHandler(state, confTxChannel, txStateChannel, memPool, blockRepo,
+			txRepo, listeners, txFilters, blockProcessor),
+		wire.CmdHeaders: NewHeadersHandler(config, state, txStateChannel, blockRepo, txRepo,
+			reorgRepo, listeners),
+		wire.CmdReject: NewRejectHandler(),
 	}
 }
 

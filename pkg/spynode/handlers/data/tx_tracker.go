@@ -37,24 +37,32 @@ func NewTxTracker() *TxTracker {
 }
 
 // Adds a txid to tracker to be monitored for expired requests
-func (tracker *TxTracker) Add(txid *bitcoin.Hash32) {
+func (tracker *TxTracker) Add(txid bitcoin.Hash32) {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
-	if _, exists := tracker.txids[*txid]; !exists {
-		tracker.txids[*txid] = time.Now()
+	if _, exists := tracker.txids[txid]; !exists {
+		tracker.txids[txid] = time.Now()
 	}
 }
 
-// Call when a tx is received to cancel tracking
-func (tracker *TxTracker) Remove(ctx context.Context, txids []*bitcoin.Hash32) {
+// Remove removes the tx from the tracker.
+func (tracker *TxTracker) Remove(ctx context.Context, txid bitcoin.Hash32) {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
-	// Iterate tracker ids first since that list should be much smaller
+	if _, exists := tracker.txids[txid]; exists {
+		delete(tracker.txids, txid)
+	}
+}
+
+// RemoveList removes all the txs from the tracker.
+func (tracker *TxTracker) RemoveList(ctx context.Context, txids []*bitcoin.Hash32) {
+	tracker.mutex.Lock()
+	defer tracker.mutex.Unlock()
+
 	for _, removeid := range txids {
-		if time, exists := tracker.txids[*removeid]; exists {
-			logger.Verbose(ctx, "Removing tracking for tx (%s) : %s", time.Format("15:04:05.999999"), removeid.String())
+		if _, exists := tracker.txids[*removeid]; exists {
 			delete(tracker.txids, *removeid)
 		}
 	}
@@ -67,32 +75,31 @@ func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool) ([]wire.M
 
 	response := []wire.Message{}
 	invRequest := wire.NewMsgGetData()
-	for txid, _ := range tracker.txids {
-		newTxId := txid // Make a copy to ensure the value isn't overwritten by the next iteration
-		alreadyHave, shouldRequest := mempool.AddRequest(&newTxId)
+	for txid, addedTime := range tracker.txids {
+		alreadyHave, shouldRequest := mempool.AddRequest(txid)
 		if alreadyHave {
 			delete(tracker.txids, txid) // Remove since we have received tx
-		} else {
-			if shouldRequest {
-				logger.Verbose(ctx, "Re-Requesting tx : %s", newTxId.String())
-				item := wire.NewInvVect(wire.InvTypeTx, &newTxId)
-				// Request
-				if err := invRequest.AddInvVect(item); err != nil {
-					// Too many requests for one message
-					response = append(response, invRequest) // Append full message
-					invRequest = wire.NewMsgGetData()       // Start new message
+		} else if shouldRequest {
+			logger.Verbose(ctx, "Re-Requesting tx (announced %s) : %s",
+				addedTime.Format("15:04:05.999999"), txid.String())
+			newTxId := txid // Make a copy to ensure the value isn't overwritten by the next iteration
+			item := wire.NewInvVect(wire.InvTypeTx, &newTxId)
+			// Request
+			if err := invRequest.AddInvVect(item); err != nil {
+				// Too many requests for one message
+				response = append(response, invRequest) // Append full message
+				invRequest = wire.NewMsgGetData()       // Start new message
 
-					// Try to add it again
-					if err := invRequest.AddInvVect(item); err != nil {
-						return response, errors.Wrap(err, "Failed to add tx to get data request")
-					} else {
-						delete(tracker.txids, txid) // Remove since we requested
-					}
+				// Try to add it again
+				if err := invRequest.AddInvVect(item); err != nil {
+					return response, errors.Wrap(err, "Failed to add tx to get data request")
 				} else {
 					delete(tracker.txids, txid) // Remove since we requested
 				}
-			} // else wait and check again later
-		}
+			} else {
+				delete(tracker.txids, txid) // Remove since we requested
+			}
+		} // else wait and check again later
 	}
 
 	if len(invRequest.InvList) > 0 {
