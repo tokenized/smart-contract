@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -26,11 +27,12 @@ type TxData struct {
 	Trusted         bool
 	Safe            bool
 	ConfirmedHeight int
-	Relevant        bool
 }
 
 // NewTXHandler returns a new TXHandler with the given Config.
-func NewTXHandler(ready StateReady, txChannel *TxChannel, memPool *data.MemPool, txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *TXHandler {
+func NewTXHandler(ready StateReady, txChannel *TxChannel, memPool *data.MemPool,
+	txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *TXHandler {
+
 	result := TXHandler{
 		ready:     ready,
 		txChannel: txChannel,
@@ -54,17 +56,17 @@ func (handler *TXHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Me
 		return nil, nil
 	}
 
-	handler.txChannel.Add(&TxData{Msg: msg, Trusted: true, ConfirmedHeight: -1})
+	handler.txChannel.Add(TxData{Msg: msg, Trusted: true, ConfirmedHeight: -1})
 	return nil, nil
 }
 
 type TxChannel struct {
-	Channel chan *TxData
+	Channel chan TxData
 	lock    sync.Mutex
 	open    bool
 }
 
-func (c *TxChannel) Add(tx *TxData) error {
+func (c *TxChannel) Add(tx TxData) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -80,12 +82,57 @@ func (c *TxChannel) Open(count int) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.Channel = make(chan *TxData, count)
+	c.Channel = make(chan TxData, count)
 	c.open = true
 	return nil
 }
 
 func (c *TxChannel) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	close(c.Channel)
+	c.open = false
+	return nil
+}
+
+type TxState struct {
+	MsgType int
+	TxId    bitcoin.Hash32
+}
+
+type TxStateChannel struct {
+	Channel chan TxState
+	lock    sync.Mutex
+	open    bool
+}
+
+func (c *TxStateChannel) Add(tx TxState) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.open {
+		return errors.New("Channel closed")
+	}
+
+	c.Channel <- tx
+	return nil
+}
+
+func (c *TxStateChannel) Open(count int) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.Channel = make(chan TxState, count)
+	c.open = true
+	return nil
+}
+
+func (c *TxStateChannel) Close() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

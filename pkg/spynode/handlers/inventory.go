@@ -47,8 +47,8 @@ func (handler *InvHandler) Handle(ctx context.Context, m wire.Message) ([]wire.M
 	for _, item := range msg.InvList {
 		switch item.Type {
 		case wire.InvTypeTx:
-			handler.txs.MarkTrusted(ctx, &item.Hash)
-			alreadyHave, shouldRequest := handler.memPool.AddRequest(&item.Hash)
+			handler.txs.MarkTrusted(ctx, item.Hash)
+			alreadyHave, shouldRequest := handler.memPool.AddRequest(item.Hash)
 			if !alreadyHave {
 				if shouldRequest {
 					// Request
@@ -64,7 +64,7 @@ func (handler *InvHandler) Handle(ctx context.Context, m wire.Message) ([]wire.M
 					}
 				} else {
 					// Track to ensure previous request is successful and if not, this node can request.
-					handler.tracker.Add(&item.Hash)
+					handler.tracker.Add(item.Hash)
 				}
 			}
 

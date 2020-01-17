@@ -47,6 +47,7 @@ type Node struct {
 	addresses       map[string]time.Time               // Recently used peer addresses
 	confTxChannel   handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
 	unconfTxChannel handlers.TxChannel                 // Channel for directly handled txs so they don't lock the calling thread
+	txStateChannel  handlers.TxStateChannel            // Channel for tx states so they are in one thread
 	broadcastLock   sync.Mutex
 	broadcastTxs    []TxCount // Txs to transmit to nodes upon connection
 	needsRestart    bool
@@ -132,7 +133,7 @@ func (node *Node) load(ctx context.Context) error {
 
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
 		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, &node.confTxChannel,
-		&node.unconfTxChannel, node.listeners, node.txFilters, node)
+		&node.unconfTxChannel, &node.txStateChannel, node.listeners, node.txFilters, node)
 	return nil
 }
 
@@ -178,44 +179,57 @@ func (node *Node) Run(ctx context.Context) error {
 		node.outgoing = make(chan wire.Message, 100)
 		node.confTxChannel.Open(100)
 		node.unconfTxChannel.Open(100)
+		node.txStateChannel.Open(1000)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
 
 		wg := sync.WaitGroup{}
-		wg.Add(7)
 
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.monitorIncoming(ctx)
 			logger.Debug(ctx, "Monitor incoming finished")
 		}()
 
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.monitorRequestTimeouts(ctx)
 			logger.Debug(ctx, "Monitor request timeouts finished")
 		}()
 
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.sendOutgoing(ctx)
 			logger.Debug(ctx, "Send outgoing finished")
 		}()
 
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.processConfirmedTxs(ctx)
 			logger.Debug(ctx, "Process confirmed txs finished")
 		}()
 
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.processUnconfirmedTxs(ctx)
-			logger.Debug(ctx, "Process uncofirmed txs finished")
+			logger.Debug(ctx, "Process unconfirmed txs finished")
 		}()
 
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			node.processTxStates(ctx)
+			logger.Debug(ctx, "Process tx states finished")
+		}()
+
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.checkTxDelays(ctx)
@@ -223,9 +237,9 @@ func (node *Node) Run(ctx context.Context) error {
 		}()
 
 		if node.config.UntrustedCount == 0 {
-			wg.Done()
 			logger.Debug(ctx, "Monitor untrusted not started")
 		} else {
+			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				node.monitorUntrustedNodes(ctx)
@@ -304,6 +318,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	}
 	node.confTxChannel.Close()
 	node.unconfTxChannel.Close()
+	node.txStateChannel.Close()
 	if node.connection != nil {
 		node.connection.Close()
 	}
@@ -463,11 +478,11 @@ func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCou
 // HandleTx processes a tx through spynode as if it came from the network.
 // Used to feed "response" txs directly back through spynode.
 func (node *Node) HandleTx(ctx context.Context, tx *wire.MsgTx) error {
-	return node.unconfTxChannel.Add(&handlers.TxData{Msg: tx, Trusted: true, Safe: true,
+	return node.unconfTxChannel.Add(handlers.TxData{Msg: tx, Trusted: true, Safe: true,
 		ConfirmedHeight: -1})
 }
 
-func (node *Node) processConfirmedTx(ctx context.Context, tx *handlers.TxData) error {
+func (node *Node) processConfirmedTx(ctx context.Context, tx handlers.TxData) error {
 	hash := tx.Msg.TxHash()
 
 	if tx.ConfirmedHeight == -1 {
@@ -476,28 +491,26 @@ func (node *Node) processConfirmedTx(ctx context.Context, tx *handlers.TxData) e
 
 	// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
 	// Or if it isn't in the mempool (not sent to listener yet).
-	var err error
 	marked := false
-	if !tx.Relevant { // Full tx hasn't been sent to listener yet
-		if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
-			var mark bool
-			for _, listener := range node.listeners {
-				mark, _ = listener.HandleTx(ctx, tx.Msg)
-				if mark {
-					marked = true
-				}
+	if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
+		var mark bool
+		for _, listener := range node.listeners {
+			mark, _ = listener.HandleTx(ctx, tx.Msg)
+			if mark {
+				marked = true
 			}
 		}
 	}
 
-	if marked || tx.Relevant {
+	if marked {
 		// Notify of confirm
-		for _, listener := range node.listeners {
-			listener.HandleTxState(ctx, handlers.ListenerMsgTxStateConfirm, *hash)
-		}
+		node.txStateChannel.Add(handlers.TxState{
+			handlers.ListenerMsgTxStateConfirm,
+			*hash,
+		})
 
 		// Add to txs for block
-		if _, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
+		if _, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
 			return err
 		}
 	}
@@ -505,12 +518,14 @@ func (node *Node) processConfirmedTx(ctx context.Context, tx *handlers.TxData) e
 	return nil
 }
 
-func (node *Node) processUnconfirmedTx(ctx context.Context, tx *handlers.TxData) error {
+func (node *Node) processUnconfirmedTx(ctx context.Context, tx handlers.TxData) error {
 	hash := tx.Msg.TxHash()
 
 	if tx.ConfirmedHeight != -1 {
 		return errors.New("Process unconfirmed tx with height")
 	}
+
+	node.txTracker.Remove(ctx, *hash)
 
 	// The mempool is needed to track which transactions have been sent to listeners and to check
 	//   for attempted double spends.
@@ -523,14 +538,15 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx *handlers.TxData)
 		logger.Warn(ctx, "Found %d conflicts with %s", len(conflicts), hash)
 		// Notify of attempted double spend
 		for _, conflict := range conflicts {
-			marked, err := node.txs.MarkUnsafe(ctx, *conflict)
+			marked, err := node.txs.MarkUnsafe(ctx, conflict)
 			if err != nil {
 				return errors.Wrap(err, "Failed to check tx repo")
 			}
 			if marked { // Only send for txs that previously matched filters.
-				for _, listener := range node.listeners {
-					listener.HandleTxState(ctx, handlers.ListenerMsgTxStateUnsafe, *conflict)
-				}
+				node.txStateChannel.Add(handlers.TxState{
+					handlers.ListenerMsgTxStateUnsafe,
+					conflict,
+				})
 			}
 		}
 	}
@@ -550,32 +566,34 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx *handlers.TxData)
 		return nil // Filter out
 	}
 	if tx.Trusted {
-		logger.Verbose(ctx, "Trusted tx added : %s", hash.String())
+		logger.Debug(ctx, "Trusted tx added : %s", hash.String())
 	} else {
-		logger.Verbose(ctx, "Untrusted tx added : %s", hash.String())
+		logger.Debug(ctx, "Untrusted tx added : %s", hash.String())
 	}
 
 	// Notify of new tx
 	marked := false
-	var mark bool
 	for _, listener := range node.listeners {
-		mark, _ = listener.HandleTx(ctx, tx.Msg)
-		if mark {
+		if mark, _ := listener.HandleTx(ctx, tx.Msg); mark {
 			marked = true
 		}
 	}
 
 	if marked {
+		logger.Verbose(ctx, "Tx is marked : %s", hash.String())
+
 		// Notify of conflicting txs
 		if len(conflicts) > 0 {
 			node.txs.MarkUnsafe(ctx, *hash)
-			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateUnsafe, *hash)
-			}
+			node.txStateChannel.Add(handlers.TxState{
+				handlers.ListenerMsgTxStateUnsafe,
+				*hash,
+			})
 		} else if tx.Safe {
-			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *hash)
-			}
+			node.txStateChannel.Add(handlers.TxState{
+				handlers.ListenerMsgTxStateSafe,
+				*hash,
+			})
 		}
 	} else {
 		// Remove from tx repository
@@ -607,6 +625,15 @@ func (node *Node) processConfirmedTxs(ctx context.Context) {
 				tx.Msg.TxHash().String())
 			node.requestStop(ctx)
 			break
+		}
+	}
+}
+
+// processhandlers.TxStates pulls txs from the tx state channel and processes them.
+func (node *Node) processTxStates(ctx context.Context) {
+	for txState := range node.txStateChannel.Channel {
+		for _, listener := range node.listeners {
+			listener.HandleTxState(ctx, txState.MsgType, txState.TxId)
 		}
 	}
 }
@@ -673,7 +700,7 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 		return err
 	}
 
-	node.txTracker.Remove(ctx, txids)
+	node.txTracker.RemoveList(ctx, txids)
 
 	node.untrustedLock.Lock()
 	defer node.untrustedLock.Unlock()
@@ -894,9 +921,10 @@ func (node *Node) checkTxDelays(ctx context.Context) {
 		}
 
 		for _, txid := range txids {
-			for _, listener := range node.listeners {
-				listener.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, txid)
-			}
+			node.txStateChannel.Add(handlers.TxState{
+				handlers.ListenerMsgTxStateSafe,
+				txid,
+			})
 		}
 	}
 }

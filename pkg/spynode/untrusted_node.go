@@ -188,7 +188,7 @@ func (node *UntrustedNode) BroadcastTxs(ctx context.Context, txs []*wire.MsgTx) 
 // ProcessBlock is called when a block is being processed.
 // It is responsible for any cleanup as a result of a block.
 func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []*bitcoin.Hash32) error {
-	node.txTracker.Remove(ctx, txids)
+	node.txTracker.RemoveList(ctx, txids)
 	return nil
 }
 

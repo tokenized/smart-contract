@@ -34,11 +34,11 @@ func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) (
 
 // Mark an unconfirmed tx as being verified by a trusted node.
 // Returns true if the tx was marked
-func (repo *TxRepository) MarkTrusted(ctx context.Context, txid *bitcoin.Hash32) (bool, error) {
+func (repo *TxRepository) MarkTrusted(ctx context.Context, txid bitcoin.Hash32) (bool, error) {
 	repo.unconfirmedLock.Lock()
 	defer repo.unconfirmedLock.Unlock()
 
-	if tx, exists := repo.unconfirmed[*txid]; exists {
+	if tx, exists := repo.unconfirmed[txid]; exists && !tx.trusted {
 		logger.Verbose(ctx, "Tx marked trusted : %s", txid.String())
 		tx.time = time.Now() // Reset so the "safe" delay is from when the trusted node verified.
 		tx.trusted = true

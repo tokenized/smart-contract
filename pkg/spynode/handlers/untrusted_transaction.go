@@ -45,6 +45,6 @@ func (handler *UntrustedTXHandler) Handle(ctx context.Context, m wire.Message) (
 		return nil, nil
 	}
 
-	handler.txChannel.Add(&TxData{Msg: msg, Trusted: false, ConfirmedHeight: -1})
+	handler.txChannel.Add(TxData{Msg: msg, Trusted: false, ConfirmedHeight: -1})
 	return nil, nil
 }
