@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/config"
@@ -29,9 +30,17 @@ func NewContextWithDevelopmentLogger() context.Context {
 			logger.Fatal(ctx, "Failed to open log file : %v\n", err)
 		}
 
-		ctx = node.ContextWithDevelopmentLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
+		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
+			ctx = node.ContextWithDevelopmentLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
+		} else {
+			ctx = node.ContextWithProductionLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
+		}
 	} else {
-		ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
+		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
+			ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
+		} else {
+			ctx = node.ContextWithProductionLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
+		}
 	}
 
 	return ctx
