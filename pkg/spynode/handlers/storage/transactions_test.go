@@ -38,7 +38,7 @@ func TestTransactions(test *testing.T) {
 	repo.ClearBlock(ctx, testBlockHeight)
 
 	for i, hash := range txs {
-		if _, err := repo.Add(ctx, hash, true, true, testBlockHeight); err != nil {
+		if _, _, err := repo.Add(ctx, hash, true, true, testBlockHeight); err != nil {
 			test.Errorf("Failed to add tx %d : %v", i, err)
 		}
 	}

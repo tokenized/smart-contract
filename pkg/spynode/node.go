@@ -510,7 +510,7 @@ func (node *Node) processConfirmedTx(ctx context.Context, tx handlers.TxData) er
 		})
 
 		// Add to txs for block
-		if _, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
+		if _, _, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, tx.ConfirmedHeight); err != nil {
 			return err
 		}
 	}
@@ -538,49 +538,55 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx handlers.TxData) 
 		logger.Warn(ctx, "Found %d conflicts with %s", len(conflicts), hash)
 		// Notify of attempted double spend
 		for _, conflict := range conflicts {
-			marked, err := node.txs.MarkUnsafe(ctx, conflict)
+			isRelevant, err := node.txs.MarkUnsafe(ctx, conflict)
 			if err != nil {
 				return errors.Wrap(err, "Failed to check tx repo")
 			}
-			if marked { // Only send for txs that previously matched filters.
-				node.txStateChannel.Add(handlers.TxState{
-					handlers.ListenerMsgTxStateUnsafe,
-					conflict,
-				})
+			if !isRelevant {
+				continue // Only send for txs that previously matched filters.
 			}
+
+			node.txStateChannel.Add(handlers.TxState{
+				handlers.ListenerMsgTxStateUnsafe,
+				conflict,
+			})
 		}
 	}
 
 	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
 	//   processing the same tx twice at the same time.
-	if added, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, -1); err != nil {
+	var newlySafe bool
+	var err error
+	if added, newlySafe, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, -1); err != nil {
 		return errors.Wrap(err, "Failed to add to tx repo")
-	} else if !added {
-		return nil // Already seen
 	}
 
-	if !handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
-		if _, err := node.txs.Remove(ctx, hash, -1); err != nil {
-			return errors.Wrap(err, "Failed to remove from tx repo")
+	isRelevant := false
+	if added {
+		if !handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
+			if _, err := node.txs.Remove(ctx, hash, -1); err != nil {
+				return errors.Wrap(err, "Failed to remove from tx repo")
+			}
+			return nil // Filter out
 		}
-		return nil // Filter out
-	}
-	if tx.Trusted {
-		logger.Debug(ctx, "Trusted tx added : %s", hash.String())
+		if tx.Trusted {
+			logger.Debug(ctx, "Trusted tx added : %s", hash.String())
+		} else {
+			logger.Debug(ctx, "Untrusted tx added : %s", hash.String())
+		}
+
+		// Notify of new tx
+		for _, listener := range node.listeners {
+			if rel, _ := listener.HandleTx(ctx, tx.Msg); rel {
+				isRelevant = true
+			}
+		}
 	} else {
-		logger.Debug(ctx, "Untrusted tx added : %s", hash.String())
+		isRelevant = true // was already seen and marked relevant
 	}
 
-	// Notify of new tx
-	marked := false
-	for _, listener := range node.listeners {
-		if mark, _ := listener.HandleTx(ctx, tx.Msg); mark {
-			marked = true
-		}
-	}
-
-	if marked {
-		logger.Verbose(ctx, "Tx is marked : %s", hash.String())
+	if isRelevant {
+		logger.Verbose(ctx, "Tx is relevant : %s", hash.String())
 
 		// Notify of conflicting txs
 		if len(conflicts) > 0 {
@@ -589,7 +595,7 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx handlers.TxData) 
 				handlers.ListenerMsgTxStateUnsafe,
 				*hash,
 			})
-		} else if tx.Safe {
+		} else if (added && tx.Safe) || newlySafe {
 			node.txStateChannel.Add(handlers.TxState{
 				handlers.ListenerMsgTxStateSafe,
 				*hash,
