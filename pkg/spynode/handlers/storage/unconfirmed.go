@@ -8,6 +8,7 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 )
 
 const (
@@ -29,12 +30,13 @@ func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) (
 		tx.unsafe = true
 		return true, nil
 	}
-	return false, nil
+
+	repo.unconfirmed[txid] = newUnconfirmedTx(false, true, false)
+	return true, nil
 }
 
 // Mark an unconfirmed tx as being verified by a trusted node.
-// Returns true if the tx was marked relevant
-func (repo *TxRepository) MarkTrusted(ctx context.Context, txid bitcoin.Hash32) (bool, error) {
+func (repo *TxRepository) MarkTrusted(ctx context.Context, txid bitcoin.Hash32) error {
 	repo.unconfirmedLock.Lock()
 	defer repo.unconfirmedLock.Unlock()
 
@@ -42,21 +44,28 @@ func (repo *TxRepository) MarkTrusted(ctx context.Context, txid bitcoin.Hash32) 
 		logger.Verbose(ctx, "Tx marked trusted : %s", txid.String())
 		tx.time = time.Now() // Reset so the "safe" delay is from when the trusted node verified.
 		tx.trusted = true
-		return true, nil
+		return nil
 	}
-	return false, nil
+
+	return nil
 }
 
-// Returns all transactions not marked as unsafe or safe that have a "seen" time before the
-//   specified time.
-// Also marks all returned txs as safe
-func (repo *TxRepository) GetNewSafe(ctx context.Context, beforeTime time.Time) ([]bitcoin.Hash32, error) {
+// Returns all transactions that are newly "safe".
+// Safe means:
+//   have not been marked as unsafe.
+//   has been marked as trusted to ensure the "trusted" node has approved the tx.
+//   "seen" time before the specified time.
+// Also marks all returned txs as safe so they are not returned again.
+func (repo *TxRepository) GetNewSafe(ctx context.Context, memPool *data.MemPool, beforeTime time.Time) ([]bitcoin.Hash32, error) {
 	repo.unconfirmedLock.Lock()
 	defer repo.unconfirmedLock.Unlock()
 
 	result := make([]bitcoin.Hash32, 0)
 	for hash, tx := range repo.unconfirmed {
-		if !tx.safe && !tx.unsafe && tx.trusted && tx.time.Before(beforeTime) {
+		if !tx.safe && !tx.unsafe && tx.time.Before(beforeTime) {
+			if !tx.trusted && !memPool.IsTrusted(ctx, hash) {
+				continue // not trusted yet
+			}
 			tx.safe = true
 			result = append(result, hash)
 		}
@@ -72,10 +81,10 @@ type unconfirmedTx struct { // Tx ID hash is key of map containing this struct
 	trusted bool      // Verified by trusted node
 }
 
-func newUnconfirmedTx(trusted, safe bool) *unconfirmedTx {
+func newUnconfirmedTx(safe, unsafe, trusted bool) *unconfirmedTx {
 	result := unconfirmedTx{
 		time:    time.Now(),
-		unsafe:  false,
+		unsafe:  unsafe,
 		safe:    safe,
 		trusted: trusted,
 	}

@@ -2,12 +2,11 @@ package handlers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/pkg/errors"
 )
 
 // TXHandler exists to handle the tx command.

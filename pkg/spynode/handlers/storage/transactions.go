@@ -83,10 +83,10 @@ func (repo *TxRepository) Save(ctx context.Context) error {
 	return repo.save(ctx)
 }
 
-// Add a "relevant" tx id for a specified block
+// Add tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns
-//   true if the txid was not already in the repo for the specified height, and was added
+//   true if tx was added (not already in repo)
 //   true if the tx is safe, but was not before. This is so we know if we should notify of that state.
 func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted, safe bool,
 	height int) (bool, bool, error) {
@@ -106,7 +106,7 @@ func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted,
 			return false, newlySafe, nil
 		}
 
-		repo.unconfirmed[txid] = newUnconfirmedTx(trusted, safe)
+		repo.unconfirmed[txid] = newUnconfirmedTx(safe, false, trusted)
 		return true, safe, nil
 	}
 
@@ -141,12 +141,12 @@ func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted,
 // Remove a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
 // Returns true if the txid was removed
-func (repo *TxRepository) Remove(ctx context.Context, txid *bitcoin.Hash32, height int) (bool, error) {
+func (repo *TxRepository) Remove(ctx context.Context, txid bitcoin.Hash32, height int) (bool, error) {
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
-		if _, exists := repo.unconfirmed[*txid]; exists {
-			delete(repo.unconfirmed, *txid)
+		if _, exists := repo.unconfirmed[txid]; exists {
+			delete(repo.unconfirmed, txid)
 			return true, nil
 		}
 		return false, nil
@@ -250,7 +250,7 @@ func (repo *TxRepository) FinalizeUnconfirmed(ctx context.Context, unconfirmed [
 		if tx, exists := repo.unconfirmed[hash]; exists {
 			newUnconfirmed[hash] = tx
 		} else {
-			newUnconfirmed[hash] = newUnconfirmedTx(true, false)
+			newUnconfirmed[hash] = newUnconfirmedTx(false, false, true)
 		}
 	}
 	repo.unconfirmed = newUnconfirmed
@@ -298,7 +298,7 @@ func (repo *TxRepository) SetBlock(ctx context.Context, txids []bitcoin.Hash32, 
 			if tx, exists := repo.unconfirmed[hash]; exists {
 				newUnconfirmed[hash] = tx
 			} else {
-				newUnconfirmed[hash] = newUnconfirmedTx(true, false)
+				newUnconfirmed[hash] = newUnconfirmedTx(false, false, true)
 			}
 		}
 		repo.unconfirmed = newUnconfirmed

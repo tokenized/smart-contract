@@ -1,10 +1,12 @@
 package data
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
@@ -32,19 +34,23 @@ func NewMemPool() *MemPool {
 // Returns:
 //   bool - True if we already have the tx
 //   bool - True if the tx should be requested
-func (memPool *MemPool) AddRequest(txid bitcoin.Hash32) (bool, bool) {
+func (memPool *MemPool) AddRequest(ctx context.Context, txid bitcoin.Hash32, trusted bool) (bool, bool) {
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
 	now := time.Now()
-	tx, exists := memPool.txs[txid]
+	memTx, exists := memPool.txs[txid]
 	if exists {
-		if len(tx.outPoints) > 0 {
+		if trusted && !memTx.trusted {
+			logger.Debug(ctx, "Txid marked as trusted : %s", txid.String())
+			memTx.trusted = true
+		}
+		if len(memTx.outPoints) > 0 {
 			return true, false // Already in the mempool
 		}
 	} else {
 		// Add tx
-		memPool.txs[txid] = newMemPoolTx(now)
+		memPool.txs[txid] = newMemPoolTx(now, trusted)
 	}
 
 	requestTime, requested := memPool.requests[txid]
@@ -61,8 +67,11 @@ func (memPool *MemPool) AddRequest(txid bitcoin.Hash32) (bool, bool) {
 // Returns:
 //   []*bitcoin.Hash32 - list of conflicting transactions (not including this tx) if there are
 //     conflicts with inputs (double spends).
+//   bool - true if the tx is marked as trusted
 //   bool - true if the tx isn't already in the mempool and was added
-func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]bitcoin.Hash32, bool) {
+func (memPool *MemPool) AddTransaction(ctx context.Context, tx *wire.MsgTx,
+	trusted bool) ([]bitcoin.Hash32, bool, bool) {
+
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
@@ -71,12 +80,16 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]bitcoin.Hash32, bool) 
 
 	memTx, exists := memPool.txs[*hash]
 	if exists {
+		if trusted && !memTx.trusted {
+			logger.Debug(ctx, "Tx marked as trusted : %s", hash.String())
+			memTx.trusted = true
+		}
 		if len(memTx.outPoints) > 0 {
-			return result, false // Already in the mempool
+			return result, memTx.trusted, false // Already in the mempool
 		}
 	} else {
 		// Add tx
-		memTx = newMemPoolTx(time.Now())
+		memTx = newMemPoolTx(time.Now(), trusted)
 		memPool.txs[*hash] = memTx
 	}
 
@@ -100,7 +113,7 @@ func (memPool *MemPool) AddTransaction(tx *wire.MsgTx) ([]bitcoin.Hash32, bool) 
 		}
 	}
 
-	return result, true
+	return result, trusted, true
 }
 
 // Appends the items in add to list if they are not already in list
@@ -175,6 +188,19 @@ func (memPool *MemPool) TransactionExists(hash *bitcoin.Hash32) bool {
 	return len(tx.outPoints) > 0
 }
 
+// IsTrusted returns true if the txid is in the mempool and marked as trusted.
+func (memPool *MemPool) IsTrusted(ctx context.Context, txid bitcoin.Hash32) bool {
+	memPool.mutex.Lock()
+	defer memPool.mutex.Unlock()
+
+	memTx, exists := memPool.txs[txid]
+	if exists {
+		return memTx.trusted
+	}
+
+	return false
+}
+
 // Returns txids of any transactions from the mempool with inputs that conflict with the specified
 //   transaction.
 // Also removes them from the mempool.
@@ -198,11 +224,13 @@ func (memPool *MemPool) Conflicting(tx *wire.MsgTx) []bitcoin.Hash32 {
 type memPoolTx struct {
 	time      time.Time
 	outPoints []wire.OutPoint
+	trusted   bool
 }
 
-func newMemPoolTx(t time.Time) *memPoolTx {
+func newMemPoolTx(t time.Time, trusted bool) *memPoolTx {
 	result := memPoolTx{
-		time: t,
+		time:    t,
+		trusted: trusted,
 	}
 	return &result
 }

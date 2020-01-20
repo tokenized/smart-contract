@@ -191,59 +191,59 @@ func (node *Node) Run(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			node.monitorIncoming(ctx)
-			logger.Debug(ctx, "Monitor incoming finished")
+			logger.Verbose(ctx, "Monitor incoming finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.monitorRequestTimeouts(ctx)
-			logger.Debug(ctx, "Monitor request timeouts finished")
+			logger.Verbose(ctx, "Monitor request timeouts finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.sendOutgoing(ctx)
-			logger.Debug(ctx, "Send outgoing finished")
+			logger.Verbose(ctx, "Send outgoing finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.processConfirmedTxs(ctx)
-			logger.Debug(ctx, "Process confirmed txs finished")
+			logger.Verbose(ctx, "Process confirmed txs finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.processUnconfirmedTxs(ctx)
-			logger.Debug(ctx, "Process unconfirmed txs finished")
+			logger.Verbose(ctx, "Process unconfirmed txs finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.processTxStates(ctx)
-			logger.Debug(ctx, "Process tx states finished")
+			logger.Verbose(ctx, "Process tx states finished")
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			node.checkTxDelays(ctx)
-			logger.Debug(ctx, "Check tx delays finished")
+			logger.Verbose(ctx, "Check tx delays finished")
 		}()
 
 		if node.config.UntrustedCount == 0 {
-			logger.Debug(ctx, "Monitor untrusted not started")
+			logger.Verbose(ctx, "Monitor untrusted not started")
 		} else {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				node.monitorUntrustedNodes(ctx)
-				logger.Debug(ctx, "Monitor untrusted finished")
+				logger.Verbose(ctx, "Monitor untrusted finished")
 			}()
 		}
 
@@ -288,6 +288,13 @@ func (node *Node) isStopping() bool {
 // Stop closes the connection and causes Run() to return.
 func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	node.lock.Lock()
+	done := node.stopped
+	node.lock.Unlock()
+	if done {
+		return nil
+	}
+
 	node.hardStop = true
 	err := node.requestStop(ctx)
 	count := 0
@@ -491,18 +498,16 @@ func (node *Node) processConfirmedTx(ctx context.Context, tx handlers.TxData) er
 
 	// Send full tx to listener if we aren't in sync yet and don't have a populated mempool.
 	// Or if it isn't in the mempool (not sent to listener yet).
-	marked := false
+	isRelevant := false
 	if handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
-		var mark bool
 		for _, listener := range node.listeners {
-			mark, _ = listener.HandleTx(ctx, tx.Msg)
-			if mark {
-				marked = true
+			if rel, _ := listener.HandleTx(ctx, tx.Msg); rel {
+				isRelevant = true
 			}
 		}
 	}
 
-	if marked {
+	if isRelevant {
 		// Notify of confirm
 		node.txStateChannel.Add(handlers.TxState{
 			handlers.ListenerMsgTxStateConfirm,
@@ -529,9 +534,18 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx handlers.TxData) 
 
 	// The mempool is needed to track which transactions have been sent to listeners and to check
 	//   for attempted double spends.
-	conflicts, added := node.memPool.AddTransaction(tx.Msg)
+	conflicts, trusted, added := node.memPool.AddTransaction(ctx, tx.Msg, tx.Trusted)
 	if !added {
 		return nil // Already saw this tx
+	}
+
+	logger.Debug(ctx, "Tx mempool (added %t) (flagged trusted %t) (received trusted %t) : %s",
+		added, trusted, tx.Trusted, hash.String())
+
+	if trusted {
+		// Was marked trusted in the mempool by a tx inventory from the trusted node.
+		// tx.Trusted means the tx itself was received from the trusted node.
+		tx.Trusted = trusted
 	}
 
 	if len(conflicts) > 0 {
@@ -555,57 +569,54 @@ func (node *Node) processUnconfirmedTx(ctx context.Context, tx handlers.TxData) 
 
 	// We have to succesfully add to tx repo because it is protected by a lock and will prevent
 	//   processing the same tx twice at the same time.
-	var newlySafe bool
-	var err error
-	if added, newlySafe, err = node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, -1); err != nil {
+	added, newlySafe, err := node.txs.Add(ctx, *hash, tx.Trusted, tx.Safe, -1)
+	if err != nil {
 		return errors.Wrap(err, "Failed to add to tx repo")
 	}
+	if !added {
+		return nil // tx already processed
+	}
+
+	logger.Debug(ctx, "Tx repo (added %t) (newly safe %t) : %s", added, newlySafe, hash.String())
 
 	isRelevant := false
-	if added {
-		if !handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
-			if _, err := node.txs.Remove(ctx, hash, -1); err != nil {
-				return errors.Wrap(err, "Failed to remove from tx repo")
-			}
-			return nil // Filter out
+	if !handlers.MatchesFilter(ctx, tx.Msg, node.txFilters) {
+		if _, err := node.txs.Remove(ctx, *hash, -1); err != nil {
+			return errors.Wrap(err, "Failed to remove from tx repo")
 		}
-		if tx.Trusted {
-			logger.Debug(ctx, "Trusted tx added : %s", hash.String())
-		} else {
-			logger.Debug(ctx, "Untrusted tx added : %s", hash.String())
-		}
+		return nil // Filter out
+	}
 
-		// Notify of new tx
-		for _, listener := range node.listeners {
-			if rel, _ := listener.HandleTx(ctx, tx.Msg); rel {
+	// Notify of new tx
+	for _, listener := range node.listeners {
+		if rel, _ := listener.HandleTx(ctx, tx.Msg); rel {
+			if !isRelevant {
 				isRelevant = true
 			}
 		}
-	} else {
-		isRelevant = true // was already seen and marked relevant
 	}
 
-	if isRelevant {
-		logger.Verbose(ctx, "Tx is relevant : %s", hash.String())
-
-		// Notify of conflicting txs
-		if len(conflicts) > 0 {
-			node.txs.MarkUnsafe(ctx, *hash)
-			node.txStateChannel.Add(handlers.TxState{
-				handlers.ListenerMsgTxStateUnsafe,
-				*hash,
-			})
-		} else if (added && tx.Safe) || newlySafe {
-			node.txStateChannel.Add(handlers.TxState{
-				handlers.ListenerMsgTxStateSafe,
-				*hash,
-			})
-		}
-	} else {
+	if !isRelevant {
 		// Remove from tx repository
-		if _, err := node.txs.Remove(ctx, hash, -1); err != nil {
+		if _, err := node.txs.Remove(ctx, *hash, -1); err != nil {
 			return errors.Wrap(err, "Failed to remove from tx repo")
 		}
+		return nil
+	}
+
+	// Notify of conflicting txs
+	if len(conflicts) > 0 {
+		node.txs.MarkUnsafe(ctx, *hash)
+		node.txStateChannel.Add(handlers.TxState{
+			handlers.ListenerMsgTxStateUnsafe,
+			*hash,
+		})
+	} else if (added && tx.Safe) || newlySafe {
+		// Note: A tx can be marked safe without being marked trusted if it is created internally.
+		node.txStateChannel.Add(handlers.TxState{
+			handlers.ListenerMsgTxStateSafe,
+			*hash,
+		})
 	}
 
 	return nil
@@ -919,7 +930,7 @@ func (node *Node) checkTxDelays(ctx context.Context) {
 
 		// Get newly safe txs
 		cutoffTime := time.Now().Add(time.Millisecond * -time.Duration(node.config.SafeTxDelay))
-		txids, err := node.txs.GetNewSafe(ctx, cutoffTime)
+		txids, err := node.txs.GetNewSafe(ctx, node.memPool, cutoffTime)
 		if err != nil {
 			logger.Error(ctx, "SpyNodeFailed GetNewSafe : %s", err)
 			node.restart(ctx)
@@ -927,6 +938,7 @@ func (node *Node) checkTxDelays(ctx context.Context) {
 		}
 
 		for _, txid := range txids {
+			logger.Debug(ctx, "Tx is now safe : %s", txid.String())
 			node.txStateChannel.Add(handlers.TxState{
 				handlers.ListenerMsgTxStateSafe,
 				txid,
