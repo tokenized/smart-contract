@@ -20,7 +20,7 @@ var (
 )
 
 // Mark an unconfirmed tx as unsafe
-// Returns true if the tx was marked
+// Returns true if the tx was marked relevant
 func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) (bool, error) {
 	repo.unconfirmedLock.Lock()
 	defer repo.unconfirmedLock.Unlock()
@@ -33,7 +33,7 @@ func (repo *TxRepository) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) (
 }
 
 // Mark an unconfirmed tx as being verified by a trusted node.
-// Returns true if the tx was marked
+// Returns true if the tx was marked relevant
 func (repo *TxRepository) MarkTrusted(ctx context.Context, txid bitcoin.Hash32) (bool, error) {
 	repo.unconfirmedLock.Lock()
 	defer repo.unconfirmedLock.Unlock()

@@ -85,8 +85,12 @@ func (repo *TxRepository) Save(ctx context.Context) error {
 
 // Add a "relevant" tx id for a specified block
 // Height of -1 means unconfirmed
-// Returns true if the txid was not already in the repo for the specified height, and was added
-func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted, safe bool, height int) (bool, error) {
+// Returns
+//   true if the txid was not already in the repo for the specified height, and was added
+//   true if the tx is safe, but was not before. This is so we know if we should notify of that state.
+func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted, safe bool,
+	height int) (bool, bool, error) {
+
 	if height == -1 {
 		repo.unconfirmedLock.Lock()
 		defer repo.unconfirmedLock.Unlock()
@@ -94,14 +98,16 @@ func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted,
 			if trusted {
 				tx.trusted = true
 			}
-			if safe {
+			newlySafe := false
+			if safe && !tx.safe {
 				tx.safe = true
+				newlySafe = true
 			}
-			return false, nil
+			return false, newlySafe, nil
 		}
 
 		repo.unconfirmed[txid] = newUnconfirmedTx(trusted, safe)
-		return true, nil
+		return true, safe, nil
 	}
 
 	path := repo.buildPath(height)
@@ -112,16 +118,16 @@ func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted,
 	data, err := repo.store.Read(ctx, path)
 	if err == storage.ErrNotFound {
 		// Create new tx block file with only one hash
-		return true, repo.store.Write(ctx, path, txid[:], nil)
+		return true, false, repo.store.Write(ctx, path, txid[:], nil)
 	}
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	// Check for already existing
 	for i := 0; i < len(data); i += bitcoin.Hash32Size {
 		if bytes.Equal(data[i:i+bitcoin.Hash32Size], txid[:]) {
-			return false, nil
+			return false, false, nil
 		}
 	}
 
@@ -129,7 +135,7 @@ func (repo *TxRepository) Add(ctx context.Context, txid bitcoin.Hash32, trusted,
 	newData := make([]byte, len(data)+bitcoin.Hash32Size)
 	copy(newData, data) // Copy in previous data
 	copy(newData[len(data):], txid[:])
-	return true, repo.store.Write(ctx, path, newData, nil)
+	return true, false, repo.store.Write(ctx, path, newData, nil)
 }
 
 // Remove a "relevant" tx id for a specified block
