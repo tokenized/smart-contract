@@ -76,7 +76,7 @@ func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool) ([]wire.M
 	response := []wire.Message{}
 	invRequest := wire.NewMsgGetData()
 	for txid, addedTime := range tracker.txids {
-		alreadyHave, shouldRequest := mempool.AddRequest(txid)
+		alreadyHave, shouldRequest := mempool.AddRequest(ctx, txid, false)
 		if alreadyHave {
 			delete(tracker.txids, txid) // Remove since we have received tx
 		} else if shouldRequest {
