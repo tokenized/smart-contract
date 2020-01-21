@@ -63,16 +63,19 @@ func Context() context.Context {
 
 	// -------------------------------------------------------------------------
 	// Logging
-	os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
-	logFileName := filepath.FromSlash(os.Getenv("CLIENT_LOG_FILE_PATH"))
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Printf("Failed to open log file : %v\n", err)
-		return nil
+	logConfig := logger.NewDevelopmentConfig()
+
+	if len(os.Getenv("CLIENT_LOG_FILE_PATH")) > 0 {
+		os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
+		logFileName := filepath.FromSlash(os.Getenv("CLIENT_LOG_FILE_PATH"))
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open log file : %v\n", err)
+			return nil
+		}
+		logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	}
 
-	logConfig := logger.NewDevelopmentConfig()
-	logConfig.Main.SetWriter(io.MultiWriter(os.Stdout, logFile))
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
 	// logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)

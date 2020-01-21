@@ -60,8 +60,10 @@ func NewConfigFromEnv(ctx context.Context) *config.Config {
 
 func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 	masterDB, err := db.New(&db.StorageConfig{
-		Bucket: cfg.Storage.Bucket,
-		Root:   cfg.Storage.Root,
+		Bucket:     cfg.Storage.Bucket,
+		Root:       cfg.Storage.Root,
+		MaxRetries: cfg.AWS.MaxRetries,
+		RetryDelay: cfg.AWS.RetryDelay,
 	})
 	if err != nil {
 		logger.Fatal(ctx, "Register DB : %s", err)
