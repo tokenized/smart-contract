@@ -24,19 +24,19 @@ When it comes online it will "sync" with the external full node and process all 
 From then on it processes tx and blocks as they are announced/propagated.
 
 Life of a tx:
-	ListenerMsgTx message notifies you of a new tx.
-	Tx is either confirmed in a block or cancelled (conflicting tx confirmed)
-	If confirmed:
-		ListenerMsgTxConfirm message notifies you of the confirm with the tx id
-		The previous ListenerMsgBlock message tells you which block it was confirmed in.
-		At this point you need to call Node.MarkRelevantTX if you want to be notified of reorgs for
-		  this tx.
-		If a reorg effects this tx:
-			ListenerMsgTxRevert message notifies you it has been reverted.
-			If it is reconfirmed in the reorg, you will get another ListenerMsgTxConfirm message.
-	If canceled:
-		ListenerMsgTxCancel message notifies you that the tx is no longer valid and a conflicting
-		  tx has been mined.
+	The `HandleTx` callback function notifies you of a new tx. You must return true from this
+	  function if you want to receive further data about the state of this tx.
+	The `HandleTxState` callback provides information about the state of a transaction.
+		`ListenerMsgTxStateSafe` means the tx has been seen at least `SafeTxDelay` milliseconds ago
+		  and no double spend attempts have been seen. It has also been verified by the trusted node.
+		`ListenerMsgTxStateUnsafe` means the tx has conflicting txs that have been seen attempting
+		  to spend at least one of the inputs of this tx.
+		`ListenerMsgTxStateConfirm` means the tx has been included in a block in the most POW chain.
+		`ListenerMsgTxStateRevert` means the tx was previously confirmed, but a reorg has caused
+		  it to go back to unconfirmed. This does not mean the tx is invalid.
+		`ListenerMsgTxStateCancel` means that a conflicting tx has been confirmed and this tx is
+		  not likely to be confirmed. It would require a reorg to remove the conflicting tx.
+
 
 Double spends:
 We currently have two ways of detecting double spends.
@@ -56,9 +56,10 @@ Life cycle:
 	As they are added we check for other txs with conflicting inputs (double spends).
 	If conflicts are detected, then a ListenerMsgTxUnsafe message is sent for all txs involved.
 Malicious:
-	Technically if we connect to a malicious untrusted node, they could send us invalid txs.
-	They couldn't fake confirms, but we might see pending tx that aren't valid or double spends
-	  that aren't valid and we wouldn't actually care about them.
+	Technically if we connect to a malicious untrusted node, they could send us invalid txs. They
+	couldn't fake confirms, but we might see pending tx that aren't valid or double spends that
+	aren't valid and we wouldn't actually care about them. Spynode won't mark a tx as safe until
+	the trusted node has verified it, so it will just sit in the mempool.
 
 
 ### Makefile
@@ -74,7 +75,7 @@ make deps
 make build
 ```
 
-On windows use build-win and run-win.
+On Windows use build-win and run-win.
 
 
 ## Configuration
@@ -96,7 +97,3 @@ residing at `./tmp/dev.env`
 ```
 source ./tmp/dev.env && go get cmd/spynode/main.go
 ```
-
-## License
-
-(c) Tokenized Cash 2019 All rights reserved
