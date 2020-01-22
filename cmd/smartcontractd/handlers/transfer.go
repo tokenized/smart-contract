@@ -524,7 +524,7 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 				return fmt.Errorf("Receiver bitcoin output missing output data for receiver %d", receiverOffset)
 			}
 
-			if receiver.Quantity >= sendBalance {
+			if receiver.Quantity > sendBalance {
 				return fmt.Errorf("Sending more bitcoin than received")
 			}
 
