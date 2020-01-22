@@ -111,10 +111,13 @@ func TestHandlers(test *testing.T) {
 	unconfTxChannel := TxChannel{}
 	unconfTxChannel.Open(100)
 
+	txStateChannel := TxStateChannel{}
+	txStateChannel.Open(100)
+
 	// Create handlers
 	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo,
-		reorgRepo, txTracker, memPool, &confTxChannel, &unconfTxChannel, listeners, nil,
-		&testListener)
+		reorgRepo, txTracker, memPool, &confTxChannel, &unconfTxChannel, &txStateChannel, listeners,
+		nil, &testListener)
 
 	// Build a bunch of headers
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
@@ -364,7 +367,7 @@ func (listener *TestListener) ProcessBlock(ctx context.Context, block *wire.MsgB
 		return err
 	}
 
-	listener.txTracker.Remove(ctx, txids)
+	listener.txTracker.RemoveList(ctx, txids)
 	return nil
 }
 

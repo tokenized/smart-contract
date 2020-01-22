@@ -2,12 +2,11 @@ package handlers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
-
-	"github.com/pkg/errors"
 )
 
 // TXHandler exists to handle the tx command.
@@ -45,6 +44,6 @@ func (handler *UntrustedTXHandler) Handle(ctx context.Context, m wire.Message) (
 		return nil, nil
 	}
 
-	handler.txChannel.Add(&TxData{Msg: msg, Trusted: false, ConfirmedHeight: -1})
+	handler.txChannel.Add(TxData{Msg: msg, Trusted: false, ConfirmedHeight: -1})
 	return nil, nil
 }

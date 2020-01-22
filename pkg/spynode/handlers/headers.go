@@ -14,25 +14,28 @@ import (
 
 // HeadersHandler exists to handle the headers command.
 type HeadersHandler struct {
-	config    data.Config
-	state     *data.State
-	blocks    *storage.BlockRepository
-	txs       *storage.TxRepository
-	reorgs    *storage.ReorgRepository
-	listeners []Listener
+	config         data.Config
+	state          *data.State
+	txStateChannel *TxStateChannel
+	blocks         *storage.BlockRepository
+	txs            *storage.TxRepository
+	reorgs         *storage.ReorgRepository
+	listeners      []Listener
 }
 
 // NewHeadersHandler returns a new HeadersHandler with the given Config.
-func NewHeadersHandler(config data.Config, state *data.State, blockRepo *storage.BlockRepository,
-	txRepo *storage.TxRepository, reorgs *storage.ReorgRepository, listeners []Listener) *HeadersHandler {
+func NewHeadersHandler(config data.Config, state *data.State, txStateChannel *TxStateChannel,
+	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
+	reorgs *storage.ReorgRepository, listeners []Listener) *HeadersHandler {
 
 	result := HeadersHandler{
-		config:    config,
-		state:     state,
-		blocks:    blockRepo,
-		txs:       txRepo,
-		reorgs:    reorgs,
-		listeners: listeners,
+		config:         config,
+		state:          state,
+		txStateChannel: txStateChannel,
+		blocks:         blockRepo,
+		txs:            txRepo,
+		reorgs:         reorgs,
+		listeners:      listeners,
 	}
 	return &result
 }
@@ -134,8 +137,8 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				if err != nil {
 					return response, errors.Wrap(err, "Failed to get reverted txs")
 				}
-				for _, tx := range revertTxs {
-					reorgBlock.TxIds = append(reorgBlock.TxIds, tx)
+				for _, txid := range revertTxs {
+					reorgBlock.TxIds = append(reorgBlock.TxIds, txid)
 				}
 
 				reorg.Blocks = append(reorg.Blocks, reorgBlock)
@@ -148,10 +151,11 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 					for _, listener := range handler.listeners {
 						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}
-					for _, tx := range revertTxs {
-						for _, listener := range handler.listeners {
-							listener.HandleTxState(ctx, ListenerMsgTxStateRevert, tx)
-						}
+					for _, txid := range revertTxs {
+						handler.txStateChannel.Add(TxState{
+							ListenerMsgTxStateRevert,
+							txid,
+						})
 					}
 				}
 

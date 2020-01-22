@@ -17,6 +17,7 @@ import (
 type BlockHandler struct {
 	state          *data.State
 	txChannel      *TxChannel
+	txStateChannel *TxStateChannel
 	memPool        *data.MemPool
 	blocks         *storage.BlockRepository
 	txs            *storage.TxRepository
@@ -26,10 +27,14 @@ type BlockHandler struct {
 }
 
 // NewBlockHandler returns a new BlockHandler with the given Config.
-func NewBlockHandler(state *data.State, txChannel *TxChannel, memPool *data.MemPool, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) *BlockHandler {
+func NewBlockHandler(state *data.State, txChannel *TxChannel, txStateChannel *TxStateChannel,
+	memPool *data.MemPool, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
+	listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) *BlockHandler {
+
 	result := BlockHandler{
 		state:          state,
 		txChannel:      txChannel,
+		txStateChannel: txStateChannel,
 		memPool:        memPool,
 		blocks:         blockRepo,
 		txs:            txRepo,
@@ -114,7 +119,6 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// Send block notification
-		var removed bool = false
 		height := handler.blocks.LastHeight()
 		blockMessage := BlockMessage{Hash: *hash, Height: height, Time: block.Header.Timestamp}
 		for _, listener := range handler.listeners {
@@ -122,30 +126,46 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// Notify Tx for block and tx listeners
-		var hashes []*bitcoin.Hash32
-		hashes, err = block.TxHashes()
+		hashes, err := block.TxHashes()
 		if err != nil {
 			handler.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
 			return nil, errors.Wrap(err, "Failed to get block tx hashes")
 		}
 
 		logger.Debug(ctx, "Processing block %d (%d tx) : %s", height, len(hashes), hash)
+		inUnconfirmed := false
 		for i, txHash := range hashes {
 			// Remove from unconfirmed. Only matching are in unconfirmed.
-			removed, unconfirmed = removeHash(txHash, unconfirmed)
-			handler.txChannel.Add(&TxData{Msg: block.Transactions[i], ConfirmedHeight: height, Relevant: removed})
+			inUnconfirmed, unconfirmed = removeHash(*txHash, unconfirmed)
 
-			if handler.state.IsReady() && !handler.memPool.RemoveTransaction(txHash) {
+			// Remove from mempool
+			inMemPool := false
+			if handler.state.IsReady() {
+				inMemPool = handler.memPool.RemoveTransaction(*txHash)
+			}
+
+			if inUnconfirmed {
+				// Already seen and marked relevant
+				handler.txStateChannel.Add(TxState{
+					ListenerMsgTxStateConfirm,
+					*txHash,
+				})
+			} else if !inMemPool {
+				// Not seen yet
+				handler.txChannel.Add(TxData{
+					Msg:             block.Transactions[i],
+					ConfirmedHeight: height,
+				})
+
 				// Transaction wasn't in the mempool.
 				// Check for transactions in the mempool with conflicting inputs (double spends).
 				if conflicting := handler.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
 					for _, confHash := range conflicting {
 						if containsHash(confHash, unconfirmed) { // Only send for txs that previously matched filters.
-							for _, listener := range handler.listeners {
-								if err = listener.HandleTxState(ctx, ListenerMsgTxStateCancel, *confHash); err != nil {
-									continue
-								}
-							}
+							handler.txStateChannel.Add(TxState{
+								ListenerMsgTxStateCancel,
+								confHash,
+							})
 						}
 					}
 				}
@@ -153,8 +173,7 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 		}
 
 		// Perform any block cleanup
-		err = handler.blockProcessor.ProcessBlock(ctx, block)
-		if err != nil {
+		if err := handler.blockProcessor.ProcessBlock(ctx, block); err != nil {
 			logger.Debug(ctx, "Failed clean up after block : %s", hash)
 			handler.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
 			return nil, err
@@ -199,18 +218,18 @@ func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire
 	return response, nil
 }
 
-func containsHash(hash *bitcoin.Hash32, list []bitcoin.Hash32) bool {
+func containsHash(hash bitcoin.Hash32, list []bitcoin.Hash32) bool {
 	for _, listhash := range list {
-		if *hash == listhash {
+		if hash.Equal(&listhash) {
 			return true
 		}
 	}
 	return false
 }
 
-func removeHash(hash *bitcoin.Hash32, list []bitcoin.Hash32) (bool, []bitcoin.Hash32) {
+func removeHash(hash bitcoin.Hash32, list []bitcoin.Hash32) (bool, []bitcoin.Hash32) {
 	for i, listhash := range list {
-		if *hash == listhash {
+		if hash.Equal(&listhash) {
 			return true, append(list[:i], list[i+1:]...)
 		}
 	}
