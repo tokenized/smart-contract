@@ -134,6 +134,11 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 		}
 	}
 
+	if err := validateAsset(assetPayload); err != nil {
+		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
 	node.Log(ctx, "Accepting asset creation request : %s %s", address.String(), assetCode.String())
 
@@ -678,6 +683,25 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 					return errors.Wrap(err, "updating contract")
 				}
 			}
+		}
+	}
+
+	return nil
+}
+
+func validateAsset(asset assets.Asset) error {
+	switch a := asset.(type) {
+	case *assets.Currency:
+		if a.Precision == 0 {
+			return errors.New("Currency precision must be specified")
+		}
+	case *assets.Coupon:
+		if a.Precision == 0 {
+			return errors.New("Currency precision must be specified")
+		}
+	case *assets.CasinoChip:
+		if a.Precision == 0 {
+			return errors.New("Currency precision must be specified")
 		}
 	}
 
