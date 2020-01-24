@@ -32,7 +32,7 @@ func NewLoggerObject(ctx context.Context) *LoggerObject {
 }
 
 func (l *LoggerObject) Print(v ...interface{}) {
-	LogDepth(l.ctx, LevelInfo, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelInfo, 1, fmt.Sprint(v...))
 }
 
 func (l *LoggerObject) Printf(format string, v ...interface{}) {
@@ -40,11 +40,11 @@ func (l *LoggerObject) Printf(format string, v ...interface{}) {
 }
 
 func (l *LoggerObject) Println(v ...interface{}) {
-	LogDepth(l.ctx, LevelInfo, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelInfo, 1, fmt.Sprint(v...))
 }
 
 func (l *LoggerObject) Fatal(v ...interface{}) {
-	LogDepth(l.ctx, LevelFatal, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelFatal, 1, fmt.Sprint(v...))
 }
 
 func (l *LoggerObject) Fatalf(format string, v ...interface{}) {
@@ -52,11 +52,11 @@ func (l *LoggerObject) Fatalf(format string, v ...interface{}) {
 }
 
 func (l *LoggerObject) Fatalln(v ...interface{}) {
-	LogDepth(l.ctx, LevelFatal, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelFatal, 1, fmt.Sprint(v...))
 }
 
 func (l *LoggerObject) Panic(v ...interface{}) {
-	LogDepth(l.ctx, LevelPanic, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelPanic, 1, fmt.Sprint(v...))
 }
 
 func (l *LoggerObject) Panicf(format string, v ...interface{}) {
@@ -64,5 +64,5 @@ func (l *LoggerObject) Panicf(format string, v ...interface{}) {
 }
 
 func (l *LoggerObject) Panicln(v ...interface{}) {
-	LogDepth(l.ctx, LevelPanic, 1, fmt.Sprint(v))
+	LogDepth(l.ctx, LevelPanic, 1, fmt.Sprint(v...))
 }
