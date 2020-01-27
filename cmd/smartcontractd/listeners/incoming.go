@@ -308,7 +308,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 
 	// Check if block time is beyond expiration
 	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-	expire := uint32((time.Now().Unix())) - 3600 // Hour ago, unix timestamp in seconds
+	expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
 	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
@@ -361,6 +361,18 @@ func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
 	oracleSig, err := bitcoin.SignatureFromBytes(contractOffer.AdminOracleSignature)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
+	}
+
+	// Check if block time is beyond expiration
+	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
+	expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
+	blockTime, err := headers.Time(ctx, int(contractOffer.AdminOracleSigBlockHeight))
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
+			contractOffer.AdminOracleSigBlockHeight))
+	}
+	if blockTime < expire {
+		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
 	}
 
 	hash, err := headers.Hash(ctx, int(contractOffer.AdminOracleSigBlockHeight))
