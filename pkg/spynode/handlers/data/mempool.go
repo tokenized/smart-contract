@@ -75,8 +75,11 @@ func (memPool *MemPool) AddTransaction(ctx context.Context, tx *wire.MsgTx,
 	memPool.mutex.Lock()
 	defer memPool.mutex.Unlock()
 
-	result := []bitcoin.Hash32{}
+	conflicts := []bitcoin.Hash32{}
 	hash := tx.TxHash()
+
+	// Remove request
+	delete(memPool.requests, *hash)
 
 	memTx, exists := memPool.txs[*hash]
 	if exists {
@@ -84,8 +87,8 @@ func (memPool *MemPool) AddTransaction(ctx context.Context, tx *wire.MsgTx,
 			logger.Debug(ctx, "Tx marked as trusted : %s", hash.String())
 			memTx.trusted = true
 		}
-		if len(memTx.outPoints) > 0 {
-			return result, memTx.trusted, false // Already in the mempool
+		if len(memTx.outPoints) > 0 { // Already in the mempool
+			return conflicts, memTx.trusted, false
 		}
 	} else {
 		// Add tx
@@ -103,8 +106,8 @@ func (memPool *MemPool) AddTransaction(ctx context.Context, tx *wire.MsgTx,
 		if exists {
 			// Append conflicting
 			// It is possible tx conflict on more than one input and we don't want duplicates in
-			//   the result list.
-			appendIfNotContained(result, list)
+			//   the conflicts list.
+			appendIfNotContained(conflicts, list)
 			list = append(list, *hash)
 		} else {
 			// Create new list with only this tx hash
@@ -113,7 +116,7 @@ func (memPool *MemPool) AddTransaction(ctx context.Context, tx *wire.MsgTx,
 		}
 	}
 
-	return result, trusted, true
+	return conflicts, trusted, true
 }
 
 // Appends the items in add to list if they are not already in list
@@ -145,6 +148,10 @@ func (memPool *MemPool) RemoveTransaction(hash bitcoin.Hash32) bool {
 // Removes a tx hash from the mempool
 // Returns true if the tx was in the mempool
 func (memPool *MemPool) removeTransaction(hash bitcoin.Hash32) bool {
+
+	// Remove request
+	delete(memPool.requests, hash)
+
 	tx, exists := memPool.txs[hash]
 	if exists {
 		// Remove outpoints
