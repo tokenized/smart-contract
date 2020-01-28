@@ -31,6 +31,7 @@ func TestTransfers(t *testing.T) {
 
 	t.Run("sendTokens", sendTokens)
 	t.Run("multiExchange", multiExchange)
+	t.Run("bitcoinExchange", bitcoinExchange)
 	t.Run("multiExchangeLock", multiExchangeLock)
 	t.Run("multiExchangeTimeout", multiExchangeTimeout)
 	t.Run("oracle", oracleTransfer)
@@ -1432,6 +1433,166 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 }
 
+func bitcoinExchange(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
+	}
+	user1HoldingBalance := uint64(100)
+	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
+	}
+
+	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
+	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
+
+	// Create Transfer message
+	transferData := actions.Transfer{}
+
+	// Transfer asset 1 from user1 to user2
+	transfer1Amount := uint64(50)
+	assetTransfer1Data := actions.AssetTransferField{
+		ContractIndex: 0, // first output
+		AssetType:     testAssetType,
+		AssetCode:     testAssetCodes[0].Bytes(),
+	}
+
+	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
+	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
+		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+			Quantity: transfer1Amount})
+
+	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+
+	// Transfer asset 2 from user2 to user1
+	transfer2Amount := uint64(1050)
+	assetTransfer2Data := actions.AssetTransferField{
+		ContractIndex: 0, // first output
+		AssetType:     "BSV",
+	}
+
+	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
+	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
+		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+			Quantity: transfer2Amount})
+
+	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+
+	// Build transfer transaction
+	transferTx := wire.NewMsgTx(2)
+
+	// From user1
+	transferInputHash := funding1Tx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
+
+	// From user2
+	transferInputHash = funding2Tx.TxHash()
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
+
+	// To contract1
+	script1, _ := test.ContractKey.Address.LockingScript()
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script1))
+
+	// Data output
+	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
+	}
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
+
+	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	}
+
+	err = transferItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, transferTx)
+
+	err = a.Trigger(ctx, "SEE", transferItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept transfer : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tTransfer accepted", tests.Success)
+
+	// Check the response
+	response := checkResponse(t, "T2")
+
+	// Check issuer and user balance
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], userKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user1Holding.FinalizedBalance != user1HoldingBalance-transfer1Amount {
+		t.Fatalf("\t%s\tUser 1 token 1 balance incorrect : %d != %d", tests.Failed,
+			user1Holding.FinalizedBalance, user1HoldingBalance-transfer1Amount)
+	}
+
+	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
+
+	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], user2Key.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user2Holding.FinalizedBalance != transfer1Amount {
+		t.Fatalf("\t%s\tUser 2 token 1 balance incorrect : %d != %d", tests.Failed,
+			user2Holding.FinalizedBalance, transfer1Amount)
+	}
+
+	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
+
+	if len(response.TxOut) != 5 {
+		t.Fatalf("Incorrect output count : want %d, got %d", 5, len(response.TxOut))
+	}
+
+	t.Logf("Response : \n%s\n", response.StringWithAddresses(test.NodeConfig.Net))
+
+	found := false
+	for _, output := range response.TxOut {
+		ad, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		if err != nil {
+			continue
+		}
+
+		if ad.Equal(userKey.Address) {
+			found = true
+			if output.Value != transfer2Amount {
+				t.Fatalf("Incorrect bitcoin receive amount : want %d, got %d", transfer2Amount,
+					output.Value)
+			}
+
+			t.Logf("\t%s\tUser 2 bitcoin balance : %d", tests.Success, output.Value)
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("Bitcoin receive output not found")
+	}
+}
+
 func multiExchangeLock(t *testing.T) {
 	ctx := test.Context
 
@@ -1913,11 +2074,13 @@ func multiExchangeTimeout(t *testing.T) {
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// From user2
 	transferInputHash = funding2Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract1
 	script1, _ := test.ContractKey.Address.LockingScript()
@@ -2267,27 +2430,73 @@ func oracleTransfer(t *testing.T) {
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := filters.NewTracer()
+	holdingsChannel := &holdings.CacheChannel{}
+	txFilter := filters.NewTxFilter(tracer, true)
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		holdingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		t.Fatalf("Failed to load wallet : %s", err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			t.Logf("Server failed : %s", err)
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	t.Logf("Transfer tx : %s", transferTx.TxHash().String())
+	if _, err := server.HandleTx(ctx, transferTx); err != nil {
+		t.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
 	}
 
-	test.RPCNode.SaveTX(ctx, transferTx)
-
-	err = a.Trigger(ctx, "SEE", transferItx)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to accept transfer : %v", tests.Failed, err)
+	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *transferTx.TxHash()); err != nil {
+		t.Fatalf("\t%s\tTransfer handle state failed : %v", tests.Failed, err)
 	}
 
-	t.Logf("\t%s\tTransfer accepted", tests.Success)
+	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	var response *wire.MsgTx
+	for {
+		if firstResponse == nil {
+			firstResponse = getResponse()
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		response = getResponse()
+		if response != nil {
+			break
+		}
 
-	// Check the response
-	checkResponse(t, "T2")
+		time.Sleep(time.Millisecond)
+	}
+
+	var responseMsg actions.Action
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Fatalf("\t%s\tTransfer response doesn't contain tokenized op return", tests.Failed)
+	}
+	if responseMsg.Code() != "T2" {
+		t.Fatalf("\t%s\tTransfer response not a settlement : %s", tests.Failed, responseMsg.Code())
+	}
 
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -2296,24 +2505,24 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
-	if issuerHolding.FinalizedBalance != testTokenQty-transferAmount {
+	if issuerHolding.PendingBalance != testTokenQty-transferAmount {
 		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed,
-			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
+			issuerHolding.PendingBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
+	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.PendingBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
 		&testAssetCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
-	if userHolding.FinalizedBalance != transferAmount {
+	if userHolding.PendingBalance != transferAmount {
 		t.Fatalf("\t%s\tUser token balance incorrect : %d != %d", tests.Failed,
-			userHolding.FinalizedBalance, transferAmount)
+			userHolding.PendingBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
+	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.PendingBalance)
 }
 
 func oracleTransferBad(t *testing.T) {
@@ -2400,11 +2609,13 @@ func oracleTransferBad(t *testing.T) {
 
 	// From issuer
 	transferInputHash := fundingTx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// From user
 	bitcoinInputHash := bitcoinFundingTx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(bitcoinInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(bitcoinInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -2417,35 +2628,81 @@ func oracleTransferBad(t *testing.T) {
 	}
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
-	transferItx, err := inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
-	}
-
-	err = transferItx.Promote(ctx, test.RPCNode)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
-	}
-
 	test.RPCNode.SaveTX(ctx, transferTx)
 
-	err = a.Trigger(ctx, "SEE", transferItx)
-	if err == nil {
-		t.Fatalf("\t%s\tAccepted transfer with invalid oracle sig", tests.Failed)
-	}
-	if err != node.ErrRejected {
-		t.Fatalf("\t%s\tFailed to reject transfer with invalid oracle sig : %v", tests.Failed, err)
+	test.NodeConfig.PreprocessThreads = 4
+
+	tracer := filters.NewTracer()
+	holdingsChannel := &holdings.CacheChannel{}
+	txFilter := filters.NewTxFilter(tracer, true)
+	test.Scheduler = &scheduler.Scheduler{}
+
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
+		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
+		holdingsChannel)
+
+	if err := server.SyncWallet(ctx); err != nil {
+		t.Fatalf("Failed to load wallet : %s", err)
 	}
 
-	t.Logf("\t%s\tTransfer rejected", tests.Success)
+	server.SetAlternateResponder(respondTx)
+	server.SetInSync()
 
-	if len(responses) == 0 {
-		t.Fatalf("\t%s\tFailed create reject response", tests.Failed)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.Run(ctx); err != nil {
+			t.Logf("Server failed : %s", err)
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	if _, err := server.HandleTx(ctx, transferTx); err != nil {
+		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
 	}
-	response := responses[0]
 
-	// Check the response
-	checkResponse(t, "M2")
+	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *transferTx.TxHash()); err != nil {
+		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
+	}
+
+	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	var response *wire.MsgTx
+	for {
+		if firstResponse == nil {
+			firstResponse = getResponse()
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		response = getResponse()
+		if response != nil {
+			break
+		}
+
+		time.Sleep(time.Millisecond)
+	}
+
+	var responseMsg actions.Action
+	for _, output := range response.TxOut {
+		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		if err == nil {
+			break
+		}
+	}
+	if responseMsg == nil {
+		t.Fatalf("\t%s\tTransfer response doesn't contain tokenized op return", tests.Failed)
+	}
+	if responseMsg.Code() != "M2" {
+		t.Fatalf("\t%s\tTransfer response not a reject : %s", tests.Failed, responseMsg.Code())
+	}
+	reject, ok := responseMsg.(*actions.Rejection)
+	if !ok {
+		t.Fatalf("\t%s\tFailed to convert response to rejection", tests.Failed)
+	}
+	if reject.RejectionCode != actions.RejectionsInvalidSignature {
+		t.Fatalf("\t%s\tWrong reject code for Transfer reject", tests.Failed)
+	}
 
 	// Find refund output
 	found := false

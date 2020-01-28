@@ -149,14 +149,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			actions.RejectionsMsgMalformed, false, "")
 	}
 
-	// Update outputs to pay bitcoin receivers.
-	err = addBitcoinSettlements(ctx, itx, msg, settleTx)
-	if err != nil {
-		node.LogWarn(ctx, "Failed to add bitcoin settlements : %s", err)
-		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsMsgMalformed, false, "")
-	}
-
 	// Create initial settlement data
 	settlement := actions.Settlement{Timestamp: v.Now.Nano()}
 
@@ -373,14 +365,24 @@ func buildSettlementTx(ctx context.Context,
 		assetBalance := uint64(0)
 
 		// Add all senders
-		for _, quantityIndex := range assetTransfer.AssetSenders {
+		for senderOffset, quantityIndex := range assetTransfer.AssetSenders {
 			assetBalance += quantityIndex.Quantity
 
 			if quantityIndex.Index >= uint32(len(transferTx.Inputs)) {
 				return nil, fmt.Errorf("Transfer sender index out of range %d", assetOffset)
 			}
 
-			hash, err := transferTx.Inputs[quantityIndex.Index].Address.Hash()
+			input := transferTx.Inputs[quantityIndex.Index]
+
+			if assetIsBitcoin {
+				// Check sender's input's bitcoin balance
+				if uint64(quantityIndex.Quantity) >= input.UTXO.Value {
+					return nil, fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
+						senderOffset, input.UTXO.Value, quantityIndex.Quantity)
+				}
+			}
+
+			hash, err := input.Address.Hash()
 			if err != nil {
 				return nil, errors.Wrap(err, "Transfer sender address invalid")
 			}
@@ -389,7 +391,7 @@ func buildSettlementTx(ctx context.Context,
 				// Add output to sender
 				addresses[*hash] = uint32(len(settleTx.MsgTx.TxOut))
 
-				err = settleTx.AddDustOutput(transferTx.Inputs[quantityIndex.Index].Address, false)
+				err = settleTx.AddDustOutput(input.Address, false)
 				if err != nil {
 					return nil, err
 				}
@@ -398,6 +400,10 @@ func buildSettlementTx(ctx context.Context,
 
 		var receiverAddress bitcoin.RawAddress
 		for _, assetReceiver := range assetTransfer.AssetReceivers {
+			if assetReceiver.Quantity > assetBalance {
+				return nil, fmt.Errorf("Sending more than received")
+			}
+
 			assetBalance -= assetReceiver.Quantity
 
 			if assetIsBitcoin {
@@ -461,86 +467,11 @@ func buildSettlementTx(ctx context.Context,
 			&messages.TargetAddressField{Address: config.FeeAddress.Bytes(), Quantity: ct.ContractFee})
 	}
 
-	return settleTx, nil
-}
-
-// addBitcoinSettlements adds bitcoin settlement data to the Settlement data
-func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transaction,
-	transfer *actions.Transfer, settleTx *txbuilder.TxBuilder) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addBitcoinSettlements")
-	defer span.End()
-
-	// Check for bitcoin transfers.
-	for assetOffset, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType != "BSV" || len(assetTransfer.AssetCode) != 0 {
-			continue
-		}
-
-		sendBalance := uint64(0)
-
-		// Process senders
-		for senderOffset, sender := range assetTransfer.AssetSenders {
-			// Get sender address from transfer inputs[sender.Index]
-			if int(sender.Index) >= len(transferTx.Inputs) {
-				return fmt.Errorf("Sender input index out of range for asset %d sender %d : %d/%d",
-					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
-			}
-
-			input := transferTx.Inputs[sender.Index]
-
-			// Get sender's balance
-			if uint64(sender.Quantity) >= input.UTXO.Value {
-				return fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
-					senderOffset, input.UTXO.Value, sender.Quantity)
-			}
-
-			// Update total send balance
-			sendBalance += sender.Quantity
-		}
-
-		// Process receivers
-		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
-			receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
-			if err != nil {
-				return err
-			}
-
-			// Find output for receiver
-			added := false
-			for i, _ := range settleTx.MsgTx.TxOut {
-				outputAddress, err := settleTx.OutputAddress(i)
-				if err != nil {
-					continue
-				}
-				if receiverAddress.Equal(outputAddress) {
-					// Add balance to receiver's output
-					settleTx.AddValueToOutput(uint32(i), receiver.Quantity)
-					added = true
-					break
-				}
-			}
-
-			if !added {
-				return fmt.Errorf("Receiver bitcoin output missing output data for receiver %d", receiverOffset)
-			}
-
-			if receiver.Quantity > sendBalance {
-				return fmt.Errorf("Sending more bitcoin than received")
-			}
-
-			sendBalance -= receiver.Quantity
-		}
-
-		if sendBalance != 0 {
-			return fmt.Errorf("Not sending all recieved bitcoins : %d remaining", sendBalance)
-		}
-	}
-
 	// Add exchange fee
 	if len(transfer.ExchangeFeeAddress) != 0 && transfer.ExchangeFee > 0 {
 		exchangeAddress, err := bitcoin.DecodeRawAddress(transfer.ExchangeFeeAddress)
 		if err != nil {
-			return err
+			return nil, errors.Wrap(err, "decode exchange fee address")
 		}
 
 		// Find output for receiver
@@ -561,12 +492,12 @@ func addBitcoinSettlements(ctx context.Context, transferTx *inspector.Transactio
 		if !added {
 			// Add new output for exchange fee.
 			if err := settleTx.AddPaymentOutput(exchangeAddress, transfer.ExchangeFee, false); err != nil {
-				return errors.Wrap(err, "Failed to add exchange fee output")
+				return nil, errors.Wrap(err, "add exchange fee output")
 			}
 		}
 	}
 
-	return nil
+	return settleTx, nil
 }
 
 // addSettlementData appends data to a pending settlement action.
