@@ -52,6 +52,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return err
 	}
 
+	v.Ballots = nv.Ballots // Doesn't come through json convert because it isn't a marshalable type
 	v.CreatedAt = now
 	v.UpdatedAt = now
 
@@ -88,7 +89,11 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		v.AppliedTxId = uv.AppliedTxId
 	}
 	if uv.NewBallot != nil {
-		v.Ballots = append(v.Ballots, uv.NewBallot)
+		hash, err := uv.NewBallot.Address.Hash()
+		if err != nil {
+			return errors.Wrap(err, "address hash")
+		}
+		v.Ballots[*hash] = *uv.NewBallot
 	}
 
 	v.UpdatedAt = now
@@ -114,23 +119,8 @@ func MarkApplied(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.Raw
 	return Save(ctx, dbConn, contractAddress, v)
 }
 
-func CheckBallot(ctx context.Context, vt *state.Vote, holderAddress bitcoin.RawAddress) error {
-	for _, bt := range vt.Ballots {
-		if bt.Address.Equal(holderAddress) {
-			return errors.New("Ballot already accepted for pkh")
-		}
-	}
-
-	return nil
-}
-
 func AddBallot(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	vt *state.Vote, ballot *state.Ballot, now protocol.Timestamp) error {
-	for _, bt := range vt.Ballots {
-		if bytes.Equal(bt.Address.Bytes(), ballot.Address.Bytes()) {
-			return errors.New("Ballot already accepted for pkh")
-		}
-	}
 
 	uv := UpdateVote{NewBallot: ballot}
 
@@ -138,7 +128,11 @@ func AddBallot(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAd
 		return errors.Wrap(err, "Failed to update vote")
 	}
 
-	vt.Ballots = append(vt.Ballots, ballot)
+	hash, err := ballot.Address.Hash()
+	if err != nil {
+		return errors.Wrap(err, "address hash")
+	}
+	vt.Ballots[*hash] = *ballot
 	return nil
 }
 
@@ -150,6 +144,9 @@ func CalculateResults(ctx context.Context, vt *state.Vote, proposal *actions.Pro
 	votedQuantity := uint64(0)
 	var score float32
 	for _, ballot := range vt.Ballots {
+		if len(ballot.Vote) == 0 {
+			continue // Skip ballots that weren't completed
+		}
 		for i, choice := range ballot.Vote {
 			switch votingSystem.TallyLogic {
 			case 0: // Standard

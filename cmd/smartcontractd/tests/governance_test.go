@@ -5,6 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/tokenized/smart-contract/internal/asset"
+	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
@@ -175,6 +179,7 @@ func sendBallot(t *testing.T) {
 		VoteTxId: testVoteTxId.Bytes(),
 		Vote:     "A",
 	}
+	t.Logf("Vote Tx : %s", testVoteTxId.String())
 
 	// Build transaction
 	ballotTx := wire.NewMsgTx(2)
@@ -206,6 +211,7 @@ func sendBallot(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, ballotTx)
+	t.Logf("Ballot Tx : %s", ballotTx.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", ballotItx)
 	if err != nil {
@@ -223,16 +229,17 @@ func sendBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
 	}
 
-	if !vt.Ballots[0].Address.Equal(userKey.Address) {
-		t.Fatalf("\t%s\tFailed to verify ballot pkh : %x != %x", tests.Failed,
-			vt.Ballots[0].Address.Bytes(), userKey.Address.Bytes())
+	userKeyHash, _ := userKey.Address.Hash()
+	ballot, exists := vt.Ballots[*userKeyHash]
+	if !exists {
+		t.Fatalf("\t%s\tFailed to find ballot : %x", tests.Failed, userKey.Address.Bytes())
 	}
 	t.Logf("\t%s\tVerified ballot address : %x", tests.Success, userKey.Address.Bytes())
 
-	if vt.Ballots[0].Quantity != 250 {
-		t.Fatalf("\t%s\tFailed to verify ballot quantity : %d != %d", tests.Failed, vt.Ballots[0].Quantity, 250)
+	if ballot.Quantity != 250 {
+		t.Fatalf("\t%s\tFailed to verify ballot quantity : %d != %d", tests.Failed, ballot.Quantity, 250)
 	}
-	t.Logf("\t%s\tVerified ballot quantity : %d", tests.Success, vt.Ballots[0].Quantity)
+	t.Logf("\t%s\tVerified ballot quantity : %d", tests.Success, ballot.Quantity)
 }
 
 // adminBallot tests ballots in an administrativ vote
@@ -324,16 +331,17 @@ func adminBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
 	}
 
-	if !vt.Ballots[0].Address.Equal(userKey.Address) {
-		t.Fatalf("\t%s\tFailed to verify ballot pkh : %x != %x", tests.Failed,
-			vt.Ballots[0].Address.Bytes(), userKey.Address.Bytes())
+	userKeyHash, _ := userKey.Address.Hash()
+	ballot, exists := vt.Ballots[*userKeyHash]
+	if !exists {
+		t.Fatalf("\t%s\tFailed to find ballot : %x", tests.Failed, userKey.Address.Bytes())
 	}
 	t.Logf("\t%s\tVerified ballot address : %x", tests.Success, userKey.Address.Bytes())
 
-	if vt.Ballots[0].Quantity != 1 {
-		t.Fatalf("\t%s\tFailed to verify ballot quantity : %d != %d", tests.Failed, vt.Ballots[0].Quantity, 1)
+	if ballot.Quantity != 1 {
+		t.Fatalf("\t%s\tFailed to verify ballot quantity : %d != %d", tests.Failed, ballot.Quantity, 1)
 	}
-	t.Logf("\t%s\tVerified ballot quantity : %d", tests.Success, vt.Ballots[0].Quantity)
+	t.Logf("\t%s\tVerified ballot quantity : %d", tests.Success, ballot.Quantity)
 
 	/*********************************** Vote from someone without admin asset ********************/
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100010, user2Key.Address)
@@ -599,12 +607,13 @@ func mockUpBallot(ctx context.Context, address bitcoin.RawAddress, quantity uint
 		return err
 	}
 
-	vt.Ballots = append(vt.Ballots, &state.Ballot{
+	hash, _ := address.Hash()
+	vt.Ballots[*hash] = state.Ballot{
 		Address:   address,
 		Vote:      v,
 		Quantity:  quantity,
 		Timestamp: protocol.CurrentTimestamp(),
-	})
+	}
 
 	return vote.Save(ctx, test.MasterDB, test.ContractKey.Address, vt)
 }
@@ -784,6 +793,43 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		ProposalTxId: protocol.TxIdFromBytes(proposalItx.Hash[:]),
 		VoteTxId:     &testVoteTxId,
 		Expires:      protocol.NewTimestamp(now.Nano() + 500000000),
+
+		Ballots: make(map[bitcoin.Hash20]state.Ballot),
+	}
+
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		return errors.Wrap(err, "retrieve contract")
+	}
+
+	if proposalType == 2 {
+		as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &ct.AdminMemberAsset)
+		if err != nil {
+			return errors.Wrap(err, "retrieve asset")
+		}
+
+		err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
+			false, now)
+		if err != nil {
+			return errors.Wrap(err, "append ballots")
+		}
+	} else {
+		for _, a := range ct.AssetCodes {
+			if a.Equal(ct.AdminMemberAsset) {
+				continue // Administrative tokens don't count for holder votes.
+			}
+
+			as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, a)
+			if err != nil {
+				return errors.Wrap(err, "retrieve asset")
+			}
+
+			err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
+				false, now)
+			if err != nil {
+				return errors.Wrap(err, "append ballots")
+			}
+		}
 	}
 
 	return vote.Save(ctx, test.MasterDB, test.ContractKey.Address, &voteData)
@@ -802,6 +848,19 @@ func mockUpAssetAmendmentVote(ctx context.Context, voteType, system uint32, amen
 
 		VoteTxId: tests.RandomTxId(),
 		Expires:  protocol.NewTimestamp(now.Nano() + 5000000000),
+
+		Ballots: make(map[bitcoin.Hash20]state.Ballot),
+	}
+
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, voteData.AssetCode)
+	if err != nil {
+		return errors.Wrap(err, "fetch asset")
+	}
+
+	err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
+		false, protocol.CurrentTimestamp())
+	if err != nil {
+		return errors.Wrap(err, "append ballots")
 	}
 
 	testVoteTxId = *voteData.VoteTxId
@@ -823,6 +882,8 @@ func mockUpContractAmendmentVote(ctx context.Context, voteType, system uint32,
 
 		VoteTxId: tests.RandomTxId(),
 		Expires:  protocol.NewTimestamp(now.Nano() + 5000000000),
+
+		Ballots: make(map[bitcoin.Hash20]state.Ballot),
 	}
 
 	testVoteTxId = *voteData.VoteTxId

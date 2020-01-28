@@ -2,13 +2,15 @@ package holdings
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -69,6 +71,47 @@ func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
 		return h.FinalizedBalance * uint64(as.VoteMultiplier)
 	}
 	return h.FinalizedBalance
+}
+
+// AppendBallots adds ballot quantities to the ballot map.
+func AppendBallots(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	as *state.Asset, ballots *map[bitcoin.Hash20]state.Ballot, applyMultiplier bool,
+	now protocol.Timestamp) error {
+
+	if !as.VotingRights {
+		return nil
+	}
+
+	holdings, err := FetchAll(ctx, dbConn, contractAddress, as.Code)
+	if err != nil {
+		return errors.Wrap(err, "fetch all holdings")
+	}
+
+	for _, h := range holdings {
+		hash, err := h.Address.Hash()
+		if err != nil {
+			return errors.Wrap(err, "address hash")
+		}
+
+		quantity := h.FinalizedBalance
+		if applyMultiplier {
+			quantity *= uint64(as.VoteMultiplier)
+		}
+
+		_, exists := (*ballots)[*hash]
+		if exists {
+			ballot := (*ballots)[*hash]
+			ballot.Quantity += quantity
+			(*ballots)[*hash] = ballot
+		} else {
+			(*ballots)[*hash] = state.Ballot{
+				Address:  h.Address,
+				Quantity: quantity,
+			}
+		}
+	}
+
+	return nil
 }
 
 func SafeBalance(h *state.Holding) uint64 {

@@ -729,14 +729,15 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	index uint64, payload assets.Asset, permitted, issuer, holder bool) error {
 
 	var assetData = state.Asset{
-		Code:                       protocol.AssetCodeFromContract(test.ContractKey.Address, index),
-		AssetType:                  payload.Code(),
-		TransfersPermitted:         transfers,
-		EnforcementOrdersPermitted: enforcement,
-		VotingRights:               voting,
-		TokenQty:                   quantity,
-		CreatedAt:                  protocol.CurrentTimestamp(),
-		UpdatedAt:                  protocol.CurrentTimestamp(),
+		Code:                        protocol.AssetCodeFromContract(test.ContractKey.Address, index),
+		AssetType:                   payload.Code(),
+		TransfersPermitted:          transfers,
+		EnforcementOrdersPermitted:  enforcement,
+		VotingRights:                voting,
+		TokenQty:                    quantity,
+		AssetModificationGovernance: 1,
+		CreatedAt:                   protocol.CurrentTimestamp(),
+		UpdatedAt:                   protocol.CurrentTimestamp(),
 	}
 
 	testAssetType = payload.Code()
