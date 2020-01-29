@@ -298,6 +298,27 @@ func buildAction(c *cobra.Command, args []string) error {
 			}
 			fmt.Printf(string(data) + "\n")
 		}
+
+	case "A3":
+		assetModification, ok := action.(*actions.AssetModification)
+		if !ok {
+			fmt.Printf("Failed to convert to asset modification")
+			return nil
+		}
+
+		if err := assetModification.Validate(); err != nil {
+			fmt.Printf("Invalid asset modification : %s\n", err)
+			return nil
+		}
+
+		for i, mod := range assetModification.Amendments {
+			fip, err := actions.FieldIndexPathFromBytes(mod.FieldIndexPath)
+			if err != nil {
+				fmt.Printf("Invalid field index path : %s\n", err)
+				return nil
+			}
+			fmt.Printf("Field index path %d : %v\n", i, fip)
+		}
 	}
 
 	if buildTx {
