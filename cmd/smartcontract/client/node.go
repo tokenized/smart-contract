@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -97,7 +98,7 @@ func NewClient(ctx context.Context, network bitcoin.Network) (*Client, error) {
 	// -------------------------------------------------------------------------
 	// Config
 	if err := envconfig.Process("API", &client.Config); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "config process")
 	}
 
 	client.Config.Net = network
@@ -106,14 +107,14 @@ func NewClient(ctx context.Context, network bitcoin.Network) (*Client, error) {
 	// Wallet
 	err := client.Wallet.Load(ctx, client.Config.Key, os.Getenv("CLIENT_PATH"), client.Config.Net)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "load wallet")
 	}
 
 	// -------------------------------------------------------------------------
 	// Contract
 	contractAddress, err := bitcoin.DecodeAddress(client.Config.Contract)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get contract address")
+		return nil, errors.Wrap(err, "decode contract address")
 	}
 	client.ContractAddress = bitcoin.NewRawAddressFromAddress(contractAddress)
 	if !bitcoin.DecodeNetMatches(contractAddress.Network(), client.Config.Net) {
@@ -222,7 +223,71 @@ func (client *Client) ShotgunTx(ctx context.Context, tx *wire.MsgTx, count int) 
 	if err := client.setupSpyNode(ctx); err != nil {
 		return err
 	}
-	return client.spyNode.ShotgunTransmitTx(ctx, tx, count)
+	client.StopOnSync = false
+	client.IncomingTx.Open(100)
+	defer client.IncomingTx.Close()
+	defer func() {
+		if saveErr := client.Wallet.Save(ctx); saveErr != nil {
+			logger.Info(ctx, "Failed to save UTXOs : %s", saveErr)
+		}
+	}()
+
+	// Make a channel to listen for errors coming from the listener. Use a
+	// buffered channel so the goroutine can exit if we don't collect this error.
+	finishChannel := make(chan error, 1)
+	client.spyNodeStopChannel = make(chan error, 1)
+	client.spyNodeInSync = false
+
+	// Start the service listening for requests.
+	go func() {
+		finishChannel <- client.spyNode.Run(ctx)
+	}()
+
+	waitChannel := make(chan error, 1)
+	go func() {
+		// Wait until ready
+		for {
+			if client.spyNode.IsReady(ctx) {
+				break
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		time.Sleep(2 * time.Second)
+
+		// Wait for broadcast to finish
+		for {
+			if client.spyNode.BroadcastIsComplete(ctx) {
+				waitChannel <- nil
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	time.Sleep(1 * time.Second)
+	fmt.Printf("BroadcastTx\n")
+	client.spyNode.BroadcastTx(ctx, tx)
+	client.spyNode.HandleTx(ctx, tx)
+
+	osSignals := make(chan os.Signal, 1)
+	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-finishChannel:
+		if err != nil {
+			logger.Error(ctx, "Failed to run spynode : %s", err)
+		}
+		return err
+	case _ = <-client.spyNodeStopChannel:
+		logger.Info(ctx, "Stopping")
+		return client.spyNode.Stop(ctx)
+	case <-osSignals:
+		logger.Info(ctx, "Shutting down on request")
+		return client.spyNode.Stop(ctx)
+	case <-waitChannel:
+		logger.Info(ctx, "Shutting down after completion")
+		return client.spyNode.Stop(ctx)
+	}
 }
 
 func (client *Client) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
