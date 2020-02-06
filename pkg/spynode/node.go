@@ -354,6 +354,18 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 		return errors.New("Node inactive")
 	}
 
+	// Wait for ready
+	for i := 0; i < 100; i++ {
+		if node.isStopping() { // TODO Resolve issue when node is restarting
+			return errors.New("Node inactive")
+		}
+		if node.state.IsReady() {
+			break
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+
 	count := 1
 
 	// Send to trusted node
@@ -380,6 +392,24 @@ func (node *Node) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
 		node.broadcastLock.Unlock()
 	}
 	return nil
+}
+
+func (node *Node) BroadcastIsComplete(ctx context.Context) bool {
+	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+	if node.isStopping() {
+		return true
+	}
+
+	node.broadcastLock.Lock()
+	count := len(node.broadcastTxs)
+	node.broadcastLock.Unlock()
+
+	logger.Info(ctx, "%d broadcast txs remaining", count)
+	return count == 0
+}
+
+func (node *Node) IsReady(ctx context.Context) bool {
+	return node.state.IsReady()
 }
 
 // BroadcastTxUntrustedOnly broadcasts a tx to the network.
@@ -433,53 +463,6 @@ func (node *Node) AddPeer(ctx context.Context, address string, score int) error 
 	}
 
 	return node.peers.Save(ctx)
-}
-
-// ShotgunTransmitTx broadcasts a tx to as many nodes as it can.
-// Don't call Run when using this function. Just create a node and call this.
-func (node *Node) ShotgunTransmitTx(ctx context.Context, tx *wire.MsgTx, sendCount int) error {
-	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
-	logger.Info(ctx, "Shotgunning tx : %s", tx.TxHash())
-
-	if err := node.load(ctx); err != nil {
-		return err
-	}
-
-	wg := sync.WaitGroup{}
-	count := 0
-
-	// Try for peers with a good score
-	for !node.isStopping() && count < sendCount {
-		if node.addUntrustedNode(ctx, &wg, 5, []*wire.MsgTx{tx}) {
-			count++
-		} else {
-			break
-		}
-	}
-
-	// Try for peers with a non negative score
-	for !node.isStopping() && count < sendCount {
-		if node.addUntrustedNode(ctx, &wg, 0, []*wire.MsgTx{tx}) {
-			count++
-		} else {
-			break
-		}
-	}
-
-	node.sleepUntilStop(10) // Wait for handshake
-
-	// Stop all
-	node.untrustedLock.Lock()
-	nodeCount := len(node.untrustedNodes)
-	for _, untrusted := range node.untrustedNodes {
-		untrusted.Stop(ctx)
-	}
-	node.untrustedLock.Unlock()
-
-	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", nodeCount)
-	wg.Wait()
-	node.peers.Save(ctx)
-	return nil
 }
 
 // HandleTx processes a tx through spynode as if it came from the network.
@@ -904,7 +887,7 @@ func (node *Node) check(ctx context.Context) error {
 // in a goroutine.
 func (node *Node) monitorRequestTimeouts(ctx context.Context) {
 	for !node.isStopping() {
-		node.sleepUntilStop(10) // Only check every 10 seconds
+		node.sleepUntilStop(50) // Only check every 5 seconds
 
 		if err := node.state.CheckTimeouts(); err != nil {
 			logger.Error(ctx, "SpyNodeFailed timeouts : %s", err)
@@ -994,7 +977,7 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 		count++
 	}
 
-	node.sleepUntilStop(30) // Wait for handshake
+	node.sleepUntilStop(100) // Wait for handshake
 
 	for _, node := range nodes {
 		node.Stop(ctx)
@@ -1021,7 +1004,13 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			continue
 		}
 
-		node.scan(ctx, 1000, 1)
+		node.broadcastLock.Lock()
+		broadcastCount := len(node.broadcastTxs)
+		node.broadcastLock.Unlock()
+
+		if broadcastCount == 0 {
+			node.scan(ctx, 1000, 1)
+		}
 		if node.isStopping() {
 			break
 		}
@@ -1122,7 +1111,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 			}
 		}
 
-		node.sleepUntilStop(5) // Only check every 5 seconds
+		node.sleepUntilStop(20) // Only check every 2 seconds
 	}
 
 	// Stop all
@@ -1212,12 +1201,12 @@ func (node *Node) checkAddress(ctx context.Context, address string) bool {
 	return true
 }
 
-func (node *Node) sleepUntilStop(seconds int) {
-	for i := 0; i < seconds; i++ {
+func (node *Node) sleepUntilStop(deciseconds int) {
+	for i := 0; i < deciseconds; i++ {
 		if node.isStopping() {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

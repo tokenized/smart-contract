@@ -124,7 +124,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 	var err error
 	wallet.Key, err = bitcoin.KeyFromStr(wifKey)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "wif decode")
 	}
 	if !bitcoin.DecodeNetMatches(wallet.Key.Network(), net) {
 		return errors.New("Incorrect network encoding")
@@ -133,7 +133,7 @@ func (wallet *Wallet) Load(ctx context.Context, wifKey, path string, net bitcoin
 	// Pub Key Hash Address
 	wallet.Address, err = bitcoin.NewRawAddressPKH(bitcoin.Hash160(wallet.Key.PublicKey().Bytes()))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "pkh address")
 	}
 
 	// Load Outputs

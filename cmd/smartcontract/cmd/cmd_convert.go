@@ -45,7 +45,8 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("%s\n", err)
 				return nil
 			}
-			fmt.Printf("Hex : %x\n", h[:])
+			fmt.Printf("Hash : %x\n", h[:])
+			fmt.Printf("Raw Address : 20%x\n", h[:])
 			return nil
 		}
 
