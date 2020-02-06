@@ -2,6 +2,8 @@ package vote
 
 import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -20,10 +22,11 @@ type NewVote struct {
 	TokenQty     uint64             `json:"TokenQty,omitempty"`
 	Expires      protocol.Timestamp `json:"Expires,omitempty"`
 	Timestamp    protocol.Timestamp `json:"Timestamp,omitempty"`
+
+	Ballots map[bitcoin.Hash20]state.Ballot `json:"-"`
 }
 
-// UpdateVote struct { defines what information may be provided to modify an
-// existing Vote.
+// UpdateVote defines what information may be provided to modify an existing Vote.
 type UpdateVote struct {
 	CompletedAt *protocol.Timestamp `json:"CompletedAt,omitempty"`
 	AppliedTxId *protocol.TxId      `json:"AppliedTxId,omitempty"`

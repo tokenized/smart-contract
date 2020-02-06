@@ -121,7 +121,8 @@ type Vote struct {
 	AppliedTxId *protocol.TxId     `json:"AppliedTxId,omitempty"`
 	CompletedAt protocol.Timestamp `json:"CompletedAt,omitempty"`
 
-	Ballots []*Ballot `json:"Ballots,omitempty"`
+	Ballots    map[bitcoin.Hash20]Ballot `json:"-"` // json can only encode string maps
+	BallotList []Ballot                  `json:"Ballots,omitempty"`
 }
 
 type Ballot struct {

@@ -52,7 +52,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	}
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "contract hash")
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
@@ -91,19 +91,55 @@ func List(ctx context.Context,
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "contract hash")
 	}
 
+	// Merge cache and storage data
 	path := fmt.Sprintf("%s/%s/%s/%s",
 		storageKey,
 		contractHash.String(),
 		storageSubKey,
 		assetCode.String())
+	result := make([]string, 0)
+	resultKeys := make(map[string]bool)
 
-	return dbConn.List(ctx, path)
+	if cache == nil {
+		cache = make(map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+	}
+	contract, exists := cache[*contractHash]
+	if !exists {
+		contract = make(map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+		cache[*contractHash] = contract
+	}
+	asset, exists := contract[*assetCode]
+	if !exists {
+		asset = make(map[bitcoin.Hash20]*cacheUpdate)
+		contract[*assetCode] = asset
+	}
+
+	for addressHash, _ := range asset {
+		key := path + "/" + addressHash.String()
+		result = append(result, key)
+		resultKeys[key] = true
+	}
+
+	// Add storage
+	keys, err := dbConn.List(ctx, path)
+	if err != nil {
+		return nil, errors.Wrap(err, "db list")
+	}
+
+	for _, key := range keys {
+		_, exists := resultKeys[key]
+		if !exists {
+			result = append(result, key)
+		}
+	}
+
+	return result, nil
 }
 
-// FetchAll fetches a single holding from storage for a specified asset.
+// FetchAll fetches aall holdings from storage for a specified asset.
 func FetchAll(ctx context.Context,
 	dbConn *db.DB,
 	contractAddress bitcoin.RawAddress,
@@ -111,41 +147,67 @@ func FetchAll(ctx context.Context,
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "contract hash")
 	}
 
+	// Merge cache and storage data
 	path := fmt.Sprintf("%s/%s/%s/%s",
 		storageKey,
 		contractHash.String(),
 		storageSubKey,
 		assetCode.String())
+	result := make([]*state.Holding, 0)
+	resultKeys := make(map[string]bool)
 
+	if cache == nil {
+		cache = make(map[bitcoin.Hash20]map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+	}
+	contract, exists := cache[*contractHash]
+	if !exists {
+		contract = make(map[protocol.AssetCode]map[bitcoin.Hash20]*cacheUpdate)
+		cache[*contractHash] = contract
+	}
+	asset, exists := contract[*assetCode]
+	if !exists {
+		asset = make(map[bitcoin.Hash20]*cacheUpdate)
+		contract[*assetCode] = asset
+	}
+
+	for addressHash, h := range asset {
+		key := path + "/" + addressHash.String()
+		result = append(result, h.h)
+		resultKeys[key] = true
+	}
+
+	// Add storage
 	keys, err := dbConn.List(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*state.Holding, 0, len(keys))
 	for _, key := range keys {
-		b, err := dbConn.Fetch(ctx, key)
-		if err != nil {
-			if err == db.ErrNotFound {
-				return nil, ErrNotFound
+		_, exists := resultKeys[key]
+		if !exists {
+			b, err := dbConn.Fetch(ctx, key)
+			if err != nil {
+				if err == db.ErrNotFound {
+					return nil, ErrNotFound
+				}
+
+				return nil, errors.Wrap(err, "Failed to fetch holding")
 			}
 
-			return nil, errors.Wrap(err, "Failed to fetch holding")
-		}
+			// Prepare the asset object
+			readResult, err := deserializeHolding(bytes.NewReader(b))
+			if err != nil {
+				return nil, errors.Wrap(err, "Failed to deserialize holding")
+			}
 
-		// Prepare the asset object
-		readResult, err := deserializeHolding(bytes.NewReader(b))
-		if err != nil {
-			return nil, errors.Wrap(err, "Failed to deserialize holding")
+			result = append(result, readResult)
 		}
-
-		results = append(results, readResult)
 	}
 
-	return results, nil
+	return result, nil
 }
 
 // Fetch fetches a single holding from storage and places it in the cache.
@@ -160,7 +222,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 	}
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "contract hash")
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {

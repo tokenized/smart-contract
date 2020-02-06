@@ -356,6 +356,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	nv.ProposalTxId = *protocol.TxIdFromBytes(proposalTx.Hash[:])
 	nv.Expires = protocol.NewTimestamp(proposal.VoteCutOffTimestamp)
 	nv.Timestamp = protocol.NewTimestamp(msg.Timestamp)
+	nv.Ballots = make(map[bitcoin.Hash20]state.Ballot)
 
 	if len(proposal.AssetCode) > 0 {
 		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
@@ -376,6 +377,56 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	} else {
 		nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
 			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
+	}
+
+	// Populate nv.Ballots with current holdings that apply to the vote
+	if proposal.Type == 2 { // Administrative Token holders only
+		if ct.AdminMemberAsset.IsZero() {
+			node.LogWarn(ctx, "Admin Member Asset not defined : %s", proposal.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		}
+
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		if err != nil {
+			node.LogWarn(ctx, "Admin Member Asset not found : %s", proposal.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		}
+
+		err = holdings.AppendBallots(ctx, g.MasterDB, rk.Address, as, &nv.Ballots,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "append ballots")
+		}
+	} else if len(proposal.AssetCode) > 0 && !nv.ContractWideVote {
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
+			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		if err != nil {
+			node.LogWarn(ctx, "Asset not found : %s", proposal.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		}
+
+		err = holdings.AppendBallots(ctx, g.MasterDB, rk.Address, as, &nv.Ballots,
+			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+		if err != nil {
+			return errors.Wrap(err, "append ballots")
+		}
+	} else { // Contract Vote
+		for _, a := range ct.AssetCodes {
+			if a.Equal(ct.AdminMemberAsset) {
+				continue // Administrative tokens don't count for holder votes.
+			}
+			as, err := asset.Retrieve(ctx, g.MasterDB, ct.Address, a)
+			if err != nil {
+				continue
+			}
+
+			err = holdings.AppendBallots(ctx, g.MasterDB, rk.Address, as, &nv.Ballots,
+				ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+			if err != nil {
+				return errors.Wrap(err, "append ballots")
+			}
+		}
 	}
 
 	if err := vote.Create(ctx, g.MasterDB, rk.Address, voteTxId, &nv, v.Now); err != nil {
@@ -477,63 +528,23 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		}
 	}
 
-	// TODO Handle transfers during vote time to ensure they don't vote the same tokens more than once.
-
-	quantity := uint64(0)
-
-	// Add applicable holdings
-	if proposal.Type == 2 { // Administrative Token holders only
-		if ct.AdminMemberAsset.IsZero() {
-			node.LogWarn(ctx, "Admin Member Asset not defined : %s", proposal.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
-		}
-
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode))
-		if err != nil {
-			node.LogWarn(ctx, "Admin Member Asset not found : %s", proposal.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
-		}
-
-		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address, &ct.AdminMemberAsset,
-			itx.Inputs[0].Address, v.Now)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get requestor admin member holding")
-		}
-
-		quantity = holdings.VotingBalance(as, h,
-			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
-	} else if len(proposal.AssetCode) > 0 && !vt.ContractWideVote {
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode))
-		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %s", proposal.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
-		}
-
-		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode), itx.Inputs[0].Address, v.Now)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get requestor holding")
-		}
-
-		quantity = holdings.VotingBalance(as, h,
-			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
-	} else {
-		quantity = contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
-			ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted, v.Now)
+	addressHash, err := itx.Inputs[0].Address.Hash()
+	if err != nil {
+		node.LogWarn(ctx, "Ballot address not valid : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, g.Config.Net).String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if quantity == 0 {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		node.LogWarn(ctx, "Ballot sender doesn't hold any voting tokens : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
+	ballot, exists := vt.Ballots[*addressHash]
+	if !exists {
+		node.LogWarn(ctx, "Ballot address not permitted to vote : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, g.Config.Net).String())
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsUnauthorizedAddress)
 	}
 
-	// TODO Check issue where two ballots are sent simultaneously and the second received before the first response is processed.
-	if err := vote.CheckBallot(ctx, vt, itx.Inputs[0].Address); err != nil {
-		node.LogWarn(ctx, "Failed to check ballot : %s", err)
+	if ballot.Timestamp.Nano() != 0 {
+		node.LogWarn(ctx, "Ballot address already voted : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, g.Config.Net).String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsBallotAlreadyCounted)
 	}
 
@@ -543,7 +554,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	if err != nil {
 		return errors.Wrap(err, "Failed to convert ballot cast to counted")
 	}
-	ballotCounted.Quantity = quantity
+	ballotCounted.Quantity = ballot.Quantity
 	ballotCounted.Timestamp = v.Now.Nano()
 
 	// Build outputs
@@ -560,7 +571,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	// Respond with a vote
 	address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 		w.Config.Net)
-	node.LogWarn(ctx, "Accepting ballot for %d from %s", quantity, address.String())
+	node.LogWarn(ctx, "Accepting ballot for %d from %s", ballot.Quantity, address.String())
 	return node.RespondSuccess(ctx, w, itx, rk, &ballotCounted)
 }
 
@@ -612,12 +623,20 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
 
-	ballot := state.Ballot{
-		Address:   castTx.Inputs[0].Address,
-		Vote:      cast.Vote,
-		Timestamp: protocol.NewTimestamp(msg.Timestamp),
-		Quantity:  msg.Quantity,
+	hash, err := castTx.Inputs[0].Address.Hash()
+	if err != nil {
+		return fmt.Errorf("Ballot address not valid : %s",
+			bitcoin.NewAddressFromRawAddress(castTx.Inputs[0].Address, g.Config.Net).String())
 	}
+
+	ballot, exists := vt.Ballots[*hash]
+	if !exists {
+		return fmt.Errorf("Ballot address not permitted to vote : %s",
+			bitcoin.NewAddressFromRawAddress(castTx.Inputs[0].Address, g.Config.Net).String())
+	}
+
+	ballot.Vote = cast.Vote
+	ballot.Timestamp = protocol.NewTimestamp(msg.Timestamp)
 
 	// Add to vote results
 	if err := vote.AddBallot(ctx, g.MasterDB, rk.Address, vt, &ballot, v.Now); err != nil {
