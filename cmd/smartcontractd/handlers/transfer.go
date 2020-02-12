@@ -375,25 +375,27 @@ func buildSettlementTx(ctx context.Context,
 			input := transferTx.Inputs[quantityIndex.Index]
 
 			if assetIsBitcoin {
-				// Check sender's input's bitcoin balance
+				// Check sender input's bitcoin balance.
+				// Bitcoin senders don't need an output.
 				if uint64(quantityIndex.Quantity) >= input.UTXO.Value {
 					return nil, fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
 						senderOffset, input.UTXO.Value, quantityIndex.Quantity)
 				}
-			}
-
-			hash, err := input.Address.Hash()
-			if err != nil {
-				return nil, errors.Wrap(err, "Transfer sender address invalid")
-			}
-			_, exists := addresses[*hash]
-			if !exists {
-				// Add output to sender
-				addresses[*hash] = uint32(len(settleTx.MsgTx.TxOut))
-
-				err = settleTx.AddDustOutput(input.Address, false)
+			} else {
+				// Add "notification" dust output for settlement.
+				hash, err := input.Address.Hash()
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrap(err, "sender address hash")
+				}
+				_, exists := addresses[*hash]
+				if !exists {
+					// Add output to sender
+					addresses[*hash] = uint32(len(settleTx.MsgTx.TxOut))
+
+					err = settleTx.AddDustOutput(input.Address, false)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -431,7 +433,7 @@ func buildSettlementTx(ctx context.Context,
 					}
 				}
 			} else {
-				// Add output to receiver
+				// Add output to receiver's address
 				addresses[*hash] = uint32(len(settleTx.MsgTx.TxOut))
 				if assetIsBitcoin {
 					err = settleTx.AddPaymentOutput(receiverAddress, assetReceiver.Quantity, false)
