@@ -4,9 +4,12 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
+	"github.com/tokenized/specification/dist/golang/protocol"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
 
 var cmdConvert = &cobra.Command{
@@ -15,6 +18,12 @@ var cmdConvert = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return errors.New("Incorrect argument count")
+		}
+
+		assetType, assetCode, err := protocol.DecodeAssetID(args[0])
+		if err == nil {
+			fmt.Printf("Asset %s : %x\n", assetType, assetCode.Bytes())
+			return nil
 		}
 
 		network := network(c)
