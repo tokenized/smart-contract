@@ -69,6 +69,21 @@ func NewNode(config *Config) (*RPCNode, error) {
 	return n, nil
 }
 
+// IsNotSeenError returns true if the error is because a transaction is not known to the RPC node.
+// TODO Determine when error is tx not seen yet --ce
+// -5: No such mempool or blockchain transaction. Use gettransaction for wallet transactions.
+// -5 = RPC_INVALID_ADDRESS_OR_KEY, which is returned when tx is not found
+// Should be formatted as JSON at other end
+//   {"code": -5, "message": "No such mempool or blockchain transaction. Use gettransaction for wallet transactions."}
+func IsNotSeenError(err error) bool {
+	c := errors.Cause(err)
+	jsonErr, ok := c.(*btcjson.Error)
+	if !ok {
+		return false
+	}
+	return jsonErr.ErrorCode == -5 // RPC_INVALID_ADDRESS_OR_KEY (tx not seen)
+}
+
 // GetTX requests a tx from the remote server.
 func (r *RPCNode) GetTX(ctx context.Context, id *bitcoin.Hash32) (*wire.MsgTx, error) {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
@@ -94,7 +109,11 @@ func (r *RPCNode) GetTX(ctx context.Context, id *bitcoin.Hash32) (*wire.MsgTx, e
 			break
 		}
 
-		logger.Error(ctx, "RPCCallFailed GetTx %s : %v", id.String(), err)
+		if IsNotSeenError(err) {
+			logger.Error(ctx, "RPCTxNotSeenYet GetTxs receive tx %s : %v", id.String(), err)
+		} else {
+			logger.Error(ctx, "RPCCallFailed GetTx %s : %v", id.String(), err)
+		}
 		time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
 	}
 
@@ -137,8 +156,8 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.
 	r.lock.Unlock()
 
 	var lastError error
-	for i := 0; i <= r.Config.MaxRetries; i++ {
-		if i != 0 {
+	for retry := 0; retry <= r.Config.MaxRetries; retry++ {
+		if retry != 0 {
 			time.Sleep(time.Duration(r.Config.RetryDelay) * time.Millisecond)
 		}
 
@@ -161,8 +180,12 @@ func (r *RPCNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.
 
 			rawTx, err := request.Receive()
 			if err != nil {
-				lastError = err // TODO Determine when error is tx not seen yet
-				logger.Error(ctx, "RPCCallFailed GetTxs receive tx %s : %v", txids[i].String(), err)
+				lastError = err
+				if IsNotSeenError(err) {
+					logger.Error(ctx, "RPCTxNotSeenYet GetTxs receive tx %s : %v", txids[i].String(), err)
+				} else {
+					logger.Error(ctx, "RPCCallFailed GetTxs receive tx %s : %v", txids[i].String(), err)
+				}
 				continue
 			}
 
