@@ -47,7 +47,7 @@ func createContract(t *testing.T) {
 	// New Contract Offer
 	offerData := actions.ContractOffer{
 		ContractName:        "Test Name",
-		BodyOfAgreementType: 0,
+		BodyOfAgreementType: 3,
 		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
 		Issuer: &actions.EntityField{
 			Type:           "I",
