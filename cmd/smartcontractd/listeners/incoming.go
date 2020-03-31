@@ -289,8 +289,24 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	assetCode []byte, assetReceiver *actions.AssetReceiverField, headers node.BitcoinHeaders) error {
 
 	if assetReceiver.OracleSigAlgorithm == 0 {
-		if len(ct.Oracles) > 0 {
-			return fmt.Errorf("Missing signature")
+		identityFound := false
+		for _, oracle := range ct.Oracles {
+			if len(oracle.OracleType) == 0 {
+				identityFound = true
+				break
+			}
+			for _, t := range oracle.OracleType {
+				if t == actions.OracleTypeIdentity {
+					identityFound = true
+					break
+				}
+			}
+			if identityFound {
+				break
+			}
+		}
+		if identityFound { // Signature required when an identity oracle is specified.
+			return errors.New("Missing signature")
 		}
 		return nil // No signature required
 	}
@@ -298,6 +314,20 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	if int(assetReceiver.OracleIndex) >= len(ct.FullOracles) {
 		return fmt.Errorf("Oracle index out of range : %d / %d", assetReceiver.OracleIndex,
 			len(ct.FullOracles))
+	}
+
+	// No oracle types specified is assumed to be identity oracle for backwards compatibility
+	if len(ct.Oracles[assetReceiver.OracleIndex].OracleType) != 0 {
+		identityFound := false
+		for _, t := range ct.Oracles[assetReceiver.OracleIndex].OracleType {
+			if t == actions.OracleTypeIdentity {
+				identityFound = true
+				break
+			}
+		}
+		if !identityFound {
+			return errors.New("Oracle is not an identity oracle")
+		}
 	}
 
 	// Parse signature
