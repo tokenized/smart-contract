@@ -80,6 +80,10 @@ func (k PublicKey) IsEmpty() bool {
 	return k.X.Cmp(&zeroBigInt) == 0 && k.Y.Cmp(&zeroBigInt) == 0
 }
 
+func (k PublicKey) Equal(o PublicKey) bool {
+	return k.X.Cmp(&o.X) == 0 && k.Y.Cmp(&o.Y) == 0
+}
+
 // MarshalJSON converts to json.
 func (k *PublicKey) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + k.String() + "\""), nil
