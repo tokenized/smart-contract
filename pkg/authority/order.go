@@ -18,7 +18,7 @@ var (
 
 // ApproveOrder requests a signature from the authority oracle to approve an enforcement order and
 //   puts it in the order action.
-func (o *Oracle) ApproveOrder(ctx context.Context, baseURL, contract string, order *actions.Order,
+func (o *Oracle) ApproveOrder(ctx context.Context, contract string, order *actions.Order,
 	isTest bool) error {
 
 	order.AuthorityName = o.OracleEntity.Name
