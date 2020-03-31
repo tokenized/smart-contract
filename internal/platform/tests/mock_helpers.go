@@ -52,18 +52,30 @@ func (cache *mockRpcNode) GetTX(ctx context.Context, txid *bitcoin.Hash32) (*wir
 	return nil, errors.New("Couldn't find tx in cache")
 }
 
-func (cache *mockRpcNode) GetTXs(ctx context.Context, txids []*bitcoin.Hash32) ([]*wire.MsgTx, error) {
+func (cache *mockRpcNode) GetOutputs(ctx context.Context, outpoints []wire.OutPoint) ([]bitcoin.UTXO, error) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
-	result := make([]*wire.MsgTx, len(txids))
-	for i, txid := range txids {
-		tx, ok := cache.txs[*txid]
+
+	results := make([]bitcoin.UTXO, len(outpoints))
+	for i, outpoint := range outpoints {
+		tx, ok := cache.txs[outpoint.Hash]
 		if !ok {
-			return result, fmt.Errorf("Couldn't find tx in cache : %s", txid.String())
+			return results, fmt.Errorf("Couldn't find tx in cache : %s", outpoint.Hash.String())
 		}
-		result[i] = tx
+
+		if int(outpoint.Index) >= len(tx.TxOut) {
+			return results, fmt.Errorf("Invalid output index for txid %d/%d : %s", outpoint.Index,
+				len(tx.TxOut), outpoint.Hash.String())
+		}
+
+		results[i] = bitcoin.UTXO{
+			Hash:          outpoint.Hash,
+			Index:         outpoint.Index,
+			Value:         tx.TxOut[outpoint.Index].Value,
+			LockingScript: tx.TxOut[outpoint.Index].PkScript,
+		}
 	}
-	return result, nil
+	return results, nil
 }
 
 // ============================================================

@@ -47,7 +47,7 @@ var (
 type NodeInterface interface {
 	SaveTX(context.Context, *wire.MsgTx) error
 	GetTX(context.Context, *bitcoin.Hash32) (*wire.MsgTx, error)
-	GetTXs(context.Context, []*bitcoin.Hash32) ([]*wire.MsgTx, error)
+	GetOutputs(context.Context, []wire.OutPoint) ([]bitcoin.UTXO, error)
 }
 
 // NewTransaction builds an ITX from a raw transaction.

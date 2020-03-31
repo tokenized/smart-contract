@@ -109,7 +109,7 @@ func (n *TestNode) GetTX(context.Context, *bitcoin.Hash32) (*wire.MsgTx, error) 
 	return nil, nil
 }
 
-func (n *TestNode) GetTXs(context.Context, []*bitcoin.Hash32) ([]*wire.MsgTx, error) {
+func (n *TestNode) GetOutputs(context.Context, []wire.OutPoint) ([]bitcoin.UTXO, error) {
 	return nil, nil
 }
 

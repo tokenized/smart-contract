@@ -149,21 +149,21 @@ func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
 
 	// Fetch input transactions from RPC
-	txids := make([]*bitcoin.Hash32, 0, len(itx.MsgTx.TxIn))
+	outpoints := make([]wire.OutPoint, 0, len(itx.MsgTx.TxIn))
 	for _, txin := range itx.MsgTx.TxIn {
 		if txin.PreviousOutPoint.Index != 0xffffffff {
-			txids = append(txids, &txin.PreviousOutPoint.Hash)
+			outpoints = append(outpoints, txin.PreviousOutPoint)
 		}
 	}
 
-	txs, err := node.GetTXs(ctx, txids)
+	utxos, err := node.GetOutputs(ctx, outpoints)
 	if err != nil {
 		return err
 	}
 
 	// Build inputs
 	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
-	txOffset := 0
+	offset := 0
 	for _, txin := range itx.MsgTx.TxIn {
 		if txin.PreviousOutPoint.Index == 0xffffffff {
 			// Empty coinbase input
@@ -175,22 +175,20 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 			continue
 		}
 
-		input, err := buildInput(&txin.PreviousOutPoint.Hash, txs[txOffset], txin.PreviousOutPoint.Index)
+		input, err := buildInput(utxos[offset])
 		if err != nil {
 			return err
 		}
 
 		inputs = append(inputs, *input)
-		txOffset++
+		offset++
 	}
 
 	itx.Inputs = inputs
 	return nil
 }
 
-func buildInput(hash *bitcoin.Hash32, tx *wire.MsgTx, n uint32) (*Input, error) {
-	utxo := NewUTXOFromHashWire(hash, tx, n)
-
+func buildInput(utxo bitcoin.UTXO) (*Input, error) {
 	address, err := utxo.Address()
 	if err != nil {
 		return nil, err
@@ -200,7 +198,6 @@ func buildInput(hash *bitcoin.Hash32, tx *wire.MsgTx, n uint32) (*Input, error) 
 	input := Input{
 		Address: address,
 		UTXO:    utxo,
-		FullTx:  tx,
 	}
 
 	return &input, nil
@@ -401,7 +398,7 @@ func uniquePKHs(pkhs []bitcoin.Hash20) []bitcoin.Hash20 {
 }
 
 func (itx *Transaction) Write(buf *bytes.Buffer) error {
-	buf.WriteByte(0) // Version
+	buf.WriteByte(1) // Version
 
 	if err := itx.MsgTx.Serialize(buf); err != nil {
 		return err
@@ -422,7 +419,7 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	if err != nil {
 		return err
 	}
-	if version != 0 {
+	if version != 0 && version != 1 {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
 
@@ -436,7 +433,7 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	// Inputs
 	itx.Inputs = make([]Input, len(msg.TxIn))
 	for i, _ := range itx.Inputs {
-		if err := itx.Inputs[i].Read(buf); err != nil {
+		if err := itx.Inputs[i].Read(version, buf); err != nil {
 			return err
 		}
 	}
