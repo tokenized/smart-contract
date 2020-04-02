@@ -243,6 +243,10 @@ func (t *TxOut) Serialize(w io.Writer, pver uint32, version int32) error {
 	return writeTxOut(w, pver, version, t)
 }
 
+func (t *TxOut) Deserialize(r io.Reader, pver uint32, version int32) error {
+	return readTxOut(r, pver, version, t)
+}
+
 // SerializeSize returns the number of bytes it would take to serialize the
 // the transaction output.
 func (t *TxOut) SerializeSize() int {
