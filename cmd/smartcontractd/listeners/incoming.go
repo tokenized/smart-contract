@@ -58,6 +58,17 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 			return err
 		}
 
+		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
+			feeRate, err := intx.Itx.FeeRate()
+			if err != nil {
+				return errors.Wrap(err, "fee rate")
+			}
+			if feeRate < server.Config.MinFeeRate {
+				intx.Itx.RejectCode = actions.RejectionsInsufficientTxFeeFunding
+				node.LogWarn(ctx, "Low tx fee rate %f : %s", feeRate, intx.Itx.Hash.String())
+			}
+		}
+
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *actions.Transfer:
 			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {

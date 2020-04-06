@@ -241,6 +241,41 @@ func (itx *Transaction) IsOutgoingMessageType() bool {
 	return ok
 }
 
+func (itx *Transaction) Fee() (uint64, error) {
+	result := uint64(0)
+
+	if len(itx.Inputs) != len(itx.MsgTx.TxIn) {
+		return 0, ErrUnpromotedTx
+	}
+
+	for _, input := range itx.Inputs {
+		result += input.UTXO.Value
+	}
+
+	for _, output := range itx.MsgTx.TxOut {
+		if output.Value > result {
+			return 0, ErrNegativeFee
+		}
+		result -= output.Value
+	}
+
+	return result, nil
+}
+
+func (itx *Transaction) FeeRate() (float32, error) {
+	fee, err := itx.Fee()
+	if err != nil {
+		return 0.0, err
+	}
+
+	size := itx.MsgTx.SerializeSize()
+	if size == 0 {
+		return 0.0, ErrIncompleteTx
+	}
+
+	return float32(fee) / float32(size), nil
+}
+
 // UTXOs returns all the unspent transaction outputs created by this tx
 func (itx *Transaction) UTXOs() UTXOs {
 	utxos := UTXOs{}

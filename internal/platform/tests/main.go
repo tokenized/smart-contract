@@ -77,6 +77,7 @@ func New(logFileName string) *Test {
 		DustLimit:          256,
 		Net:                bitcoin.MainNet,
 		FeeRate:            1.0,
+		MinFeeRate:         0.5,
 		RequestTimeout:     1000000000000,
 		IsTest:             true,
 	}

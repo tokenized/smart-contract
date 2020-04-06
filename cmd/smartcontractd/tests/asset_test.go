@@ -91,7 +91,7 @@ func createAsset(t *testing.T) {
 	}
 
 	// Build asset definition transaction
-	assetTx := wire.NewMsgTx(2)
+	assetTx := wire.NewMsgTx(1)
 
 	assetInputHash := fundingTx.TxHash()
 
@@ -217,7 +217,7 @@ func adminMemberAsset(t *testing.T) {
 	}
 
 	// Build asset definition transaction
-	assetTx := wire.NewMsgTx(2)
+	assetTx := wire.NewMsgTx(1)
 
 	assetInputHash := fundingTx.TxHash()
 
@@ -287,7 +287,7 @@ func adminMemberAsset(t *testing.T) {
 	assetPayloadData.MembershipClass = "Owner"
 
 	// Build asset definition transaction
-	asset2Tx := wire.NewMsgTx(2)
+	asset2Tx := wire.NewMsgTx(1)
 
 	asset2InputHash := fundingTx.TxHash()
 
@@ -386,7 +386,7 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Build asset definition transaction
-	assetTx := wire.NewMsgTx(2)
+	assetTx := wire.NewMsgTx(1)
 
 	assetInputHash := fundingTx.TxHash()
 
@@ -444,7 +444,7 @@ func assetIndex(t *testing.T) {
 	testAssetCodes = append(testAssetCodes, *protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
 
 	// Build asset definition transaction
-	assetTx = wire.NewMsgTx(2)
+	assetTx = wire.NewMsgTx(1)
 
 	assetInputHash = fundingTx.TxHash()
 
@@ -536,7 +536,7 @@ func assetAmendment(t *testing.T) {
 	})
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	amendmentInputHash := fundingTx.TxHash()
 
@@ -646,7 +646,7 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentData.Amendments = append(amendmentData.Amendments, &assetAmendment)
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	amendmentInputHash := fundingTx.TxHash()
 

@@ -98,7 +98,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
-		transferTx := wire.NewMsgTx(2)
+		transferTx := wire.NewMsgTx(1)
 
 		transferInputHash := fundingTx.TxHash()
 
@@ -279,7 +279,7 @@ func separateTransfersBenchmark(b *testing.B) {
 		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
-		transferTx := wire.NewMsgTx(2)
+		transferTx := wire.NewMsgTx(1)
 
 		// From sender
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), senderKey.Address)
@@ -480,7 +480,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 		// Build transfer transaction
-		transferTx := wire.NewMsgTx(2)
+		transferTx := wire.NewMsgTx(1)
 
 		transferInputHash := fundingTx.TxHash()
 
@@ -656,7 +656,7 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	transferInputHash := fundingTx.TxHash()
 
@@ -894,7 +894,7 @@ func sendTokens(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	transferInputHash := fundingTx.TxHash()
 
@@ -1081,7 +1081,7 @@ func sendTokens(t *testing.T) {
 	fundingTx2 := tests.MockFundingTx(ctx, test.RPCNode, 100022, issuerKey.Address)
 
 	// Build transfer transaction
-	transferTx2 := wire.NewMsgTx(2)
+	transferTx2 := wire.NewMsgTx(1)
 
 	transferInputHash = fundingTx2.TxHash()
 
@@ -1253,7 +1253,7 @@ func multiExchange(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
@@ -1492,7 +1492,7 @@ func bitcoinExchange(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
@@ -1674,7 +1674,7 @@ func multiExchangeLock(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
@@ -1777,7 +1777,7 @@ func multiExchangeLock(t *testing.T) {
 	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
 
 	// Build transfer transaction
-	transferOtherTx := wire.NewMsgTx(2)
+	transferOtherTx := wire.NewMsgTx(1)
 
 	// From user
 	transferOtherTx.TxIn = append(transferOtherTx.TxIn,
@@ -1855,7 +1855,7 @@ func multiExchangeLock(t *testing.T) {
 	}
 
 	// Build transfer transaction
-	rejectOtherTx := wire.NewMsgTx(2)
+	rejectOtherTx := wire.NewMsgTx(1)
 
 	// From other contract (second output of multi-contract transfer request)
 	rejectOtherTx.TxIn = append(rejectOtherTx.TxIn,
@@ -2070,7 +2070,7 @@ func multiExchangeTimeout(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
@@ -2175,7 +2175,7 @@ func multiExchangeTimeout(t *testing.T) {
 	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
 
 	// Build transfer transaction
-	transferOtherTx := wire.NewMsgTx(2)
+	transferOtherTx := wire.NewMsgTx(1)
 
 	// From user
 	transferOtherTx.TxIn = append(transferOtherTx.TxIn,
@@ -2412,7 +2412,7 @@ func oracleTransfer(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	transferInputHash := fundingTx.TxHash()
 
@@ -2605,7 +2605,7 @@ func oracleTransferBad(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &bitcoinTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From issuer
 	transferInputHash := fundingTx.TxHash()
@@ -2762,7 +2762,7 @@ func permitted(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	transferInputHash := fundingTx.TxHash()
 
@@ -2875,7 +2875,7 @@ func permittedBad(t *testing.T) {
 	transferData.Assets = append(transferData.Assets, &assetTransferData)
 
 	// Build transfer transaction
-	transferTx := wire.NewMsgTx(2)
+	transferTx := wire.NewMsgTx(1)
 
 	// From issuer
 	transferInputHash := fundingTx.TxHash()
