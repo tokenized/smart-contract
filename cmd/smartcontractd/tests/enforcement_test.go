@@ -61,7 +61,7 @@ func freezeOrder(t *testing.T) {
 	})
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 
@@ -162,7 +162,7 @@ func freezeAuthorityOrder(t *testing.T) {
 	orderData.OrderSignature = sig.Bytes()
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 
@@ -253,7 +253,7 @@ func thawOrder(t *testing.T) {
 	}
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 
@@ -339,7 +339,7 @@ func confiscateOrder(t *testing.T) {
 		&actions.TargetAddressField{Address: userKey.Address.Bytes(), Quantity: 50})
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 
@@ -445,7 +445,7 @@ func reconcileOrder(t *testing.T) {
 		&actions.QuantityIndexField{Index: 0, Quantity: 75000})
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 
@@ -548,7 +548,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	})
 
 	// Build order transaction
-	orderTx := wire.NewMsgTx(2)
+	orderTx := wire.NewMsgTx(1)
 
 	orderInputHash := fundingTx.TxHash()
 

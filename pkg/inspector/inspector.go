@@ -38,6 +38,10 @@ var (
 	// ErrMissingOutputs
 	ErrMissingOutputs = errors.New("Message is missing outputs")
 
+	ErrNegativeFee  = errors.New("Negative fee")
+	ErrUnpromotedTx = errors.New("Unpromoted tx")
+	ErrIncompleteTx = errors.New("Incomplete tx")
+
 	// prefixP2PKH Pay to PKH prefix
 	prefixP2PKH = []byte{0x76, 0xA9}
 )

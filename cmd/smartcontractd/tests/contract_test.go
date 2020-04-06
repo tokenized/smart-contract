@@ -79,7 +79,7 @@ func createContract(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
 
 	// Build offer transaction
-	offerTx := wire.NewMsgTx(2)
+	offerTx := wire.NewMsgTx(1)
 
 	offerInputHash := fundingTx.TxHash()
 
@@ -300,7 +300,7 @@ func oracleContract(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
 
 	// Build offer transaction
-	offerTx := wire.NewMsgTx(2)
+	offerTx := wire.NewMsgTx(1)
 
 	offerInputHash := fundingTx.TxHash()
 
@@ -310,7 +310,7 @@ func oracleContract(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(750000, script))
+	offerTx.TxOut = append(offerTx.TxOut, wire.NewTxOut(75000, script))
 
 	// Data output
 	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
@@ -489,7 +489,7 @@ func contractAmendment(t *testing.T) {
 	})
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	amendmentInputHash := fundingTx.TxHash()
 
@@ -591,7 +591,7 @@ func contractListAmendment(t *testing.T) {
 	})
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	amendmentInputHash := fundingTx.TxHash()
 
@@ -667,7 +667,7 @@ func contractListAmendment(t *testing.T) {
 	}
 
 	// Build amendment transaction
-	amendmentTx = wire.NewMsgTx(2)
+	amendmentTx = wire.NewMsgTx(1)
 
 	amendmentInputHash = fundingTx.TxHash()
 
@@ -772,7 +772,7 @@ func contractOracleAmendment(t *testing.T) {
 	})
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	// From issuer
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address)
@@ -866,7 +866,7 @@ func contractProposalAmendment(t *testing.T) {
 	amendmentData.Amendments = append(amendmentData.Amendments, &assetAmendment)
 
 	// Build amendment transaction
-	amendmentTx := wire.NewMsgTx(2)
+	amendmentTx := wire.NewMsgTx(1)
 
 	amendmentInputHash := fundingTx.TxHash()
 

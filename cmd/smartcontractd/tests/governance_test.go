@@ -75,7 +75,7 @@ func holderProposal(t *testing.T) {
 	})
 
 	// Build proposal transaction
-	proposalTx := wire.NewMsgTx(2)
+	proposalTx := wire.NewMsgTx(1)
 
 	proposalInputHash := fundingTx.TxHash()
 
@@ -182,7 +182,7 @@ func sendBallot(t *testing.T) {
 	t.Logf("Vote Tx : %s", testVoteTxId.String())
 
 	// Build transaction
-	ballotTx := wire.NewMsgTx(2)
+	ballotTx := wire.NewMsgTx(1)
 
 	ballotInputHash := fundingTx.TxHash()
 
@@ -283,7 +283,7 @@ func adminBallot(t *testing.T) {
 	}
 
 	// Build transaction
-	ballotTx := wire.NewMsgTx(2)
+	ballotTx := wire.NewMsgTx(1)
 
 	ballotInputHash := fundingTx.TxHash()
 
@@ -347,7 +347,7 @@ func adminBallot(t *testing.T) {
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100010, user2Key.Address)
 
 	// Build transaction
-	ballotTx = wire.NewMsgTx(2)
+	ballotTx = wire.NewMsgTx(1)
 
 	ballotInputHash = fundingTx.TxHash()
 
@@ -632,7 +632,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	}
 
 	// Build proposal transaction
-	proposalTx := wire.NewMsgTx(2)
+	proposalTx := wire.NewMsgTx(1)
 
 	proposalInputHash := fundingTx.TxHash()
 
@@ -675,7 +675,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 	}
 
 	// Build proposal transaction
-	voteTx := wire.NewMsgTx(2)
+	voteTx := wire.NewMsgTx(1)
 
 	voteInputHash := proposalTx.TxHash()
 
@@ -745,7 +745,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 	})
 
 	// Build proposal transaction
-	proposalTx := wire.NewMsgTx(2)
+	proposalTx := wire.NewMsgTx(1)
 
 	proposalInputHash := fundingTx.TxHash()
 
@@ -906,7 +906,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100011, issuerKey.Address)
 
 	// Build result transaction
-	resultTx := wire.NewMsgTx(2)
+	resultTx := wire.NewMsgTx(1)
 
 	resultInputHash := fundingTx.TxHash()
 

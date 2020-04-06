@@ -87,6 +87,7 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 		ContractProviderID: cfg.Contract.OperatorName,
 		Version:            cfg.Contract.Version,
 		FeeRate:            cfg.Contract.FeeRate,
+		MinFeeRate:         cfg.Contract.MinFeeRate,
 		DustLimit:          cfg.Contract.DustLimit,
 		RequestTimeout:     cfg.Contract.RequestTimeout,
 		PreprocessThreads:  cfg.Contract.PreprocessThreads,

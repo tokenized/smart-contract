@@ -55,6 +55,7 @@ type Config struct {
 	DustLimit          uint64
 	Net                bitcoin.Network
 	FeeRate            float32
+	MinFeeRate         float32
 	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
 	PreprocessThreads  int
 	IsTest             bool
