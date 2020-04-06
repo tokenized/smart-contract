@@ -60,13 +60,22 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
-		node.LogWarn(ctx, "Contract body of agreement hash is incorrect length : %d", len(msg.BodyOfAgreement))
+		node.LogWarn(ctx, "Contract body of agreement hash is incorrect length : %d",
+			len(msg.BodyOfAgreement))
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	if msg.ContractExpiration != 0 && msg.ContractExpiration < v.Now.Nano() {
 		node.LogWarn(ctx, "Expiration already passed : %d", msg.ContractExpiration)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
+	if len(msg.MasterAddress) > 0 {
+		if _, err := bitcoin.DecodeRawAddress(msg.MasterAddress); err != nil {
+			node.LogWarn(ctx, "Invalid master address : %s", err)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				"invalid master address")
+		}
 	}
 
 	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
