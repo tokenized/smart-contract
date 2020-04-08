@@ -199,7 +199,7 @@ func validateMerkleHash(ctx context.Context, block *wire.MsgBlock) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	return *merkleHash == block.Header.MerkleRoot, nil
+	return merkleHash.Equal(&block.Header.MerkleRoot), nil
 }
 
 func containsHash(hash bitcoin.Hash32, list []bitcoin.Hash32) bool {
