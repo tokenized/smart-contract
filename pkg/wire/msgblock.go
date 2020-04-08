@@ -6,6 +6,7 @@ package wire
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 
@@ -247,4 +248,66 @@ func NewMsgBlock(blockHeader *BlockHeader) *MsgBlock {
 		Header:       *blockHeader,
 		Transactions: make([]*MsgTx, 0, defaultTransactionAlloc),
 	}
+}
+
+// CalculateMerkleHash calculates a merkle tree root hash for a set of transactions
+func (msg *MsgBlock) CalculateMerkleHash() (*bitcoin.Hash32, error) {
+	if len(msg.Transactions) == 0 {
+		// Zero hash
+		result, err := bitcoin.NewHash32FromStr("0000000000000000000000000000000000000000000000000000000000000000")
+		return result, err
+	}
+	if len(msg.Transactions) == 1 {
+		// Hash of only tx
+		result := msg.Transactions[0].TxHash()
+		return result, nil
+	}
+
+	// Tree root hash
+	txids := make([]*bitcoin.Hash32, 0, len(msg.Transactions))
+	for _, tx := range msg.Transactions {
+		txid := tx.TxHash()
+		txids = append(txids, txid)
+	}
+	return calculateMerkleLevel(txids), nil
+}
+
+// calculateMerkleLevel calculates one level of the merkle tree
+func calculateMerkleLevel(txids []*bitcoin.Hash32) *bitcoin.Hash32 {
+	if len(txids) == 1 {
+		return combinedHash(txids[0], txids[0]) // Hash it with itself
+	}
+
+	if len(txids) == 2 {
+		return combinedHash(txids[0], txids[1]) // Hash both together
+	}
+
+	// More level calculations required (recursive)
+	// Combine every two hashes and put them in a list to process again.
+	nextLevel := make([]*bitcoin.Hash32, 0, (len(txids)/2)+1)
+	var tx1 *bitcoin.Hash32 = nil
+	for _, txid := range txids {
+		if tx1 == nil {
+			tx1 = txid
+			continue
+		}
+		nextLevel = append(nextLevel, combinedHash(tx1, txid))
+		tx1 = nil
+	}
+
+	// If there is a remainder, hash it with itself
+	if tx1 != nil {
+		nextLevel = append(nextLevel, combinedHash(tx1, tx1))
+	}
+
+	return calculateMerkleLevel(nextLevel)
+}
+
+// combinedHash combines two hashes
+func combinedHash(hash1 *bitcoin.Hash32, hash2 *bitcoin.Hash32) *bitcoin.Hash32 {
+	hasher := sha256.New()
+	hasher.Write(hash1[:])
+	hasher.Write(hash2[:])
+	result, _ := bitcoin.NewHash32(bitcoin.Sha256(hasher.Sum(nil)))
+	return result
 }

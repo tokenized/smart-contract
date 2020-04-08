@@ -69,12 +69,6 @@ type CommandHandler interface {
 	Handle(context.Context, wire.Message) ([]wire.Message, error)
 }
 
-// Procesess cleanup for blocks
-// Used to clean TxTrackers when blocks are confirmed.
-type BlockProcessor interface {
-	ProcessBlock(context.Context, *wire.MsgBlock) error
-}
-
 type StateReady interface {
 	IsReady() bool
 }
@@ -83,8 +77,8 @@ type StateReady interface {
 func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State,
 	peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
 	reorgRepo *storage.ReorgRepository, tracker *data.TxTracker, memPool *data.MemPool,
-	confTxChannel *TxChannel, unconfTxChannel *TxChannel, txStateChannel *TxStateChannel,
-	listeners []Listener, txFilters []TxFilter, blockProcessor BlockProcessor) map[string]CommandHandler {
+	unconfTxChannel *TxChannel, txStateChannel *TxStateChannel,
+	listeners []Listener, txFilters []TxFilter) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
@@ -92,8 +86,7 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewInvHandler(state, txRepo, tracker, memPool),
 		wire.CmdTx:      NewTXHandler(state, unconfTxChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdBlock: NewBlockHandler(state, confTxChannel, txStateChannel, memPool, blockRepo,
-			txRepo, listeners, txFilters, blockProcessor),
+		wire.CmdBlock:   NewBlockHandler(state),
 		wire.CmdHeaders: NewHeadersHandler(config, state, txStateChannel, blockRepo, txRepo,
 			reorgRepo, listeners),
 		wire.CmdReject: NewRejectHandler(),
@@ -101,17 +94,21 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 }
 
 // NewUntrustedCommandHandlers returns a mapping of commands and Handler's.
-func NewUntrustedCommandHandlers(ctx context.Context, state *data.UntrustedState, peers *storage.PeerRepository,
-	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker, memPool *data.MemPool,
-	txChannel *TxChannel, listeners []Listener, txFilters []TxFilter, address string) map[string]CommandHandler {
+func NewUntrustedCommandHandlers(ctx context.Context, trustedState *data.State,
+	untrustedState *data.UntrustedState, peers *storage.PeerRepository,
+	blockRepo *storage.BlockRepository, txRepo *storage.TxRepository, tracker *data.TxTracker,
+	memPool *data.MemPool, txChannel *TxChannel, listeners []Listener,
+	txFilters []TxFilter, address string) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
 		wire.CmdPing:    NewPingHandler(),
-		wire.CmdVersion: NewUntrustedVersionHandler(state, address),
+		wire.CmdVersion: NewUntrustedVersionHandler(untrustedState, address),
 		wire.CmdAddr:    NewAddressHandler(peers),
-		wire.CmdInv:     NewUntrustedInvHandler(state, tracker, memPool),
-		wire.CmdTx:      NewUntrustedTXHandler(state, txChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdHeaders: NewUntrustedHeadersHandler(state, peers, address, blockRepo),
+		wire.CmdInv:     NewUntrustedInvHandler(untrustedState, tracker, memPool),
+		wire.CmdTx: NewUntrustedTXHandler(untrustedState, txChannel, memPool, txRepo,
+			listeners, txFilters),
+		wire.CmdBlock:   NewBlockHandler(trustedState),
+		wire.CmdHeaders: NewUntrustedHeadersHandler(untrustedState, peers, address, blockRepo),
 		wire.CmdReject:  NewRejectHandler(),
 	}
 }
