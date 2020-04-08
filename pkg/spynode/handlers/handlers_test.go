@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
 	handlerStorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/storage"
@@ -20,7 +21,9 @@ func TestHandlers(test *testing.T) {
 	reorgDepth := 5
 
 	// Setup context
-	ctx := context.Background()
+	logConfig := logger.NewDevelopmentConfig()
+	logConfig.IsText = true
+	ctx := logger.ContextWithLogConfig(context.Background(), logConfig)
 
 	// For logging to test from within functions
 	ctx = context.WithValue(ctx, 999, test)
@@ -30,32 +33,6 @@ func TestHandlers(test *testing.T) {
 	// if ok {
 	// test.Logf("Test Debug Message")
 	// }
-
-	// Merkle test (Bitcoin SV Block 570,666)
-	merkleTxIdStrings := []string{
-		"9e7447228f71e65ac0bcce3898f3a9a3e3e3ef89f1a07045f9565d8ef8da5c6d",
-		"26d732c0e4657e93b7143dcf7e25e93f61f630a5d465e3368f69708c57f69dd7",
-		"5fe54352f91acb9a2aff9b1271a296331d3bed9867be430f21ee19ef054efb0c",
-		"496eae8dbe3968884296b3bf078a6426de459afd710e8713645955d9660afad1",
-		"5809a72ee084625365067ff140c0cfedd05adc7a8a5040399409e9cca8ab4255",
-		"2a7927d2f953770fcd899902975ad7067a1adef3f572d5d8d196bfe0cbc7d954",
-	}
-	merkleTxids := make([]*bitcoin.Hash32, 0, 6)
-	for _, hashString := range merkleTxIdStrings {
-		hash, err := bitcoin.NewHash32FromStr(hashString)
-		if err != nil {
-			test.Errorf("Failed to create hash : %v", err)
-		}
-		merkleTxids = append(merkleTxids, hash)
-	}
-
-	merkleRoot := CalculateMerkleLevel(ctx, merkleTxids)
-	test.Logf("Merkle Test : %s", merkleRoot.String())
-
-	correctMerkleRoot, err := bitcoin.NewHash32FromStr("5f7b966b938cdb0dbf08a6bcd53e8854a6583b211452cf5dd5214dddd286e923")
-	if *merkleRoot != *correctMerkleRoot {
-		test.Errorf("Failed merkle root hash calculation, should be : %s", correctMerkleRoot.String())
-	}
 
 	// Setup storage
 	storageConfig := storage.NewConfig("standalone", "./tmp/test")
@@ -102,7 +79,8 @@ func TestHandlers(test *testing.T) {
 	memPool := data.NewMemPool()
 
 	// Setup listeners
-	testListener := TestListener{test: test, txs: txRepo, height: 0, txTracker: txTracker}
+	testListener := TestListener{test: test, state: state, blocks: blockRepo, txs: txRepo,
+		height: 0, txTracker: txTracker}
 	listeners := []Listener{&testListener}
 
 	confTxChannel := TxChannel{}
@@ -116,8 +94,9 @@ func TestHandlers(test *testing.T) {
 
 	// Create handlers
 	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo,
-		reorgRepo, txTracker, memPool, &confTxChannel, &unconfTxChannel, &txStateChannel, listeners,
-		nil, &testListener)
+		reorgRepo, txTracker, memPool, &unconfTxChannel, &txStateChannel, listeners, nil)
+
+	test.Logf("Testing Blocks")
 
 	// Build a bunch of headers
 	blocks := make([]*wire.MsgBlock, 0, testBlockCount)
@@ -164,20 +143,19 @@ func TestHandlers(test *testing.T) {
 		previousHash = hash
 	}
 
-	merkleRoot1, err := CalculateMerkleHash(ctx, txs)
-	test.Logf("Merkle Test 1 : %s", merkleRoot1.String())
-
 	// Send headers to handlers
 	if err := handleMessage(ctx, testHandlers, headersMsg); err != nil {
 		test.Errorf("Failed to process headers message : %v", err)
 	}
 
 	// Send corresponding blocks
-	if err := sendBlocks(ctx, testHandlers, blocks, 0); err != nil {
+	if err := sendBlocks(ctx, testHandlers, blocks, 0, &testListener); err != nil {
 		test.Errorf("Failed to send block messages : %v", err)
 	}
 
 	verify(ctx, test, blocks, blockRepo, testBlockCount)
+
+	test.Logf("Testing Reorg")
 
 	// Cause a reorg
 	reorgHeadersMsg := wire.NewMsgHeaders()
@@ -217,16 +195,13 @@ func TestHandlers(test *testing.T) {
 		previousHash = hash
 	}
 
-	merkleRoot2, err := CalculateMerkleHash(ctx, txs)
-	test.Logf("Merkle Test 2 : %s", merkleRoot2.String())
-
 	// Send reorg headers to handlers
 	if err := handleMessage(ctx, testHandlers, reorgHeadersMsg); err != nil {
 		test.Errorf("Failed to process reorg headers message : %v", err)
 	}
 
 	// Send corresponding reorg blocks
-	if err := sendBlocks(ctx, testHandlers, reorgBlocks, (testBlockCount-reorgDepth)+1); err != nil {
+	if err := sendBlocks(ctx, testHandlers, reorgBlocks, (testBlockCount-reorgDepth)+1, &testListener); err != nil {
 		test.Errorf("Failed to send reorg block messages : %v", err)
 	}
 
@@ -278,12 +253,18 @@ func handleMessage(ctx context.Context, handlers map[string]CommandHandler, msg 
 	return nil
 }
 
-func sendBlocks(ctx context.Context, handlers map[string]CommandHandler, blocks []*wire.MsgBlock, startHeight int) error {
+func sendBlocks(ctx context.Context, handlers map[string]CommandHandler, blocks []*wire.MsgBlock,
+	startHeight int, listener *TestListener) error {
+
 	for i, block := range blocks {
 		// Send block to handlers
 		if err := handleMessage(ctx, handlers, block); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to process block (%d) message", startHeight+i))
 		}
+	}
+
+	if err := listener.ProcessBlocks(ctx); err != nil {
+		return errors.Wrap(err, "process blocks")
 	}
 
 	return nil
@@ -349,28 +330,55 @@ func verify(ctx context.Context, test *testing.T, blocks []*wire.MsgBlock, block
 			test.Errorf("Block repo hash %d should : %s", i+1, blocks[i].Header.BlockHash().String())
 		}
 	}
+
+	test.Logf("Verified %d blocks", len(blocks))
 }
 
 type TestListener struct {
 	test      *testing.T
+	state     *data.State
+	blocks    *handlerStorage.BlockRepository
 	txs       *handlerStorage.TxRepository
 	height    int
 	txTracker *data.TxTracker
 }
 
 // This is called when a block is being processed.
-// Implements handlers.BlockProcessor interface
 // It is responsible for any cleanup as a result of a block.
-func (listener *TestListener) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error {
-	txids, err := block.TxHashes()
-	if err != nil {
-		return err
+func (listener *TestListener) ProcessBlocks(ctx context.Context) error {
+
+	for {
+		block := listener.state.NextBlock()
+
+		if block == nil {
+			break
+		}
+
+		hash := block.Header.BlockHash()
+
+		if listener.blocks.Contains(hash) {
+			height, _ := listener.blocks.Height(hash)
+			logger.Warn(ctx, "Already have block (%d) : %s", height, hash.String())
+			return errors.New("block not added")
+		}
+
+		if block.Header.PrevBlock != *listener.blocks.LastHash() {
+			// Ignore this as it can happen when there is a reorg.
+			logger.Warn(ctx, "Not next block : %s", hash.String())
+			logger.Warn(ctx, "Previous hash : %s", block.Header.PrevBlock.String())
+			return errors.New("not next block") // Unknown or out of order block
+		}
+
+		// Add to repo
+		if err := listener.blocks.Add(ctx, &block.Header); err != nil {
+			return err
+		}
 	}
 
-	listener.txTracker.RemoveList(ctx, txids)
 	return nil
 }
 
+// Spynode listener interface
 func (listener *TestListener) HandleBlock(ctx context.Context, msgType int, block *BlockMessage) error {
 	switch msgType {
 	case ListenerMsgBlock:

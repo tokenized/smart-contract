@@ -20,7 +20,9 @@ var (
 )
 
 // Send a message requesting headers after the latest seen
-func buildHeaderRequest(ctx context.Context, protocol uint32, blocks *storage.BlockRepository, delta int, max int) (*wire.MsgGetHeaders, error) {
+func buildHeaderRequest(ctx context.Context, protocol uint32, blocks *storage.BlockRepository,
+	delta int, max int) (*wire.MsgGetHeaders, error) {
+
 	getheaders := wire.NewMsgGetHeaders()
 	getheaders.ProtocolVersion = protocol
 

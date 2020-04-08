@@ -56,7 +56,9 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		lastHash = handler.blocks.LastHash()
 	}
 
-	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 && lastHash.Equal(message.Headers[0].BlockHash()))) {
+	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 &&
+		lastHash.Equal(message.Headers[0].BlockHash()))) {
+
 		logger.Info(ctx, "Headers in sync at height %d", handler.blocks.LastHeight())
 		handler.state.SetPendingSync() // We are in sync
 		if handler.state.StartHeight() == -1 {
@@ -80,7 +82,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 
 		hash := header.BlockHash()
 
-		if header.PrevBlock == *lastHash {
+		if lastHash.Equal(&header.PrevBlock) {
 			request, err := handler.addHeader(ctx, header)
 			if err != nil {
 				return response, err
@@ -125,12 +127,13 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			// Call reorg listener for all blocks above reorg height.
 			for height := handler.blocks.LastHeight(); height > reorgHeight; height-- {
 				// Add block to reorg
-				header, err := handler.blocks.Header(ctx, height)
+				revertHeader, err := handler.blocks.Header(ctx, height)
 				if err != nil {
 					return response, errors.Wrap(err, "Failed to get reverted block header")
 				}
+
 				reorgBlock := storage.ReorgBlock{
-					Header: *header,
+					Header: *revertHeader,
 				}
 
 				revertTxs, err := handler.txs.GetBlock(ctx, height)
@@ -146,8 +149,11 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				// Notify listeners
 				if len(handler.listeners) > 0 {
 					// Send block revert notification
-					hash := header.BlockHash()
-					blockMessage := BlockMessage{Hash: *hash, Height: height, Time: header.Timestamp}
+					blockMessage := BlockMessage{
+						Hash:   *revertHeader.BlockHash(),
+						Height: height,
+						Time:   revertHeader.Timestamp,
+					}
 					for _, listener := range handler.listeners {
 						listener.HandleBlock(ctx, ListenerMsgBlockRevert, &blockMessage)
 					}
@@ -180,12 +186,12 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 
 			// Assert this header is now next
-			lastHash := handler.state.LastHash()
-			if lastHash == nil {
-				lastHash = handler.blocks.LastHash()
+			newLastHash := handler.state.LastHash()
+			if newLastHash == nil {
+				newLastHash = handler.blocks.LastHash()
 			}
-			if lastHash == nil || header.PrevBlock != *lastHash {
-				return response, errors.New(fmt.Sprintf("Revert failed to produce correct last hash : %s", lastHash))
+			if newLastHash == nil || !newLastHash.Equal(&header.PrevBlock) {
+				return response, errors.New(fmt.Sprintf("Revert failed to produce correct last hash : %s", newLastHash))
 			}
 
 			// Add this header after the new top block
@@ -196,7 +202,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			if request {
 				// Request it if it isn't already requested.
 				if handler.state.AddBlockRequest(hash) {
-					logger.Debug(ctx, "Requesting block : %s", hash)
+					logger.Debug(ctx, "Requesting block : %s", hash.String())
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
 						// Start new get data (blocks) message
@@ -205,10 +211,14 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 					}
 				}
 			}
+
+			lastHash = hash
 			continue
 		}
 
 		// Ignore unknown blocks as they might happen when there is a reorg.
+		logger.Debug(ctx, "Unknown header : %s", hash.String())
+		logger.Debug(ctx, "Previous hash : %s", header.PrevBlock.String())
 		return nil, nil //errors.New(fmt.Sprintf("Unknown header : %s", hash))
 	}
 

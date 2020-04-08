@@ -578,3 +578,34 @@ var blockOneBytes = []byte{
 var blockOneTxLocs = []TxLoc{
 	{TxStart: 81, TxLen: 134},
 }
+
+func TestMerkleRoot(t *testing.T) {
+	// Merkle test (Bitcoin SV Block 570,666)
+	merkleTxIdStrings := []string{
+		"9e7447228f71e65ac0bcce3898f3a9a3e3e3ef89f1a07045f9565d8ef8da5c6d",
+		"26d732c0e4657e93b7143dcf7e25e93f61f630a5d465e3368f69708c57f69dd7",
+		"5fe54352f91acb9a2aff9b1271a296331d3bed9867be430f21ee19ef054efb0c",
+		"496eae8dbe3968884296b3bf078a6426de459afd710e8713645955d9660afad1",
+		"5809a72ee084625365067ff140c0cfedd05adc7a8a5040399409e9cca8ab4255",
+		"2a7927d2f953770fcd899902975ad7067a1adef3f572d5d8d196bfe0cbc7d954",
+	}
+	merkleTxIds := make([]*bitcoin.Hash32, 0, 6)
+	for _, hashString := range merkleTxIdStrings {
+		hash, err := bitcoin.NewHash32FromStr(hashString)
+		if err != nil {
+			t.Fatalf("Failed to create hash : %v", err)
+		}
+		merkleTxIds = append(merkleTxIds, hash)
+	}
+
+	merkleRoot := calculateMerkleLevel(merkleTxIds)
+	t.Logf("Merkle Test : %s", merkleRoot.String())
+
+	correctMerkleRoot, err := bitcoin.NewHash32FromStr("5f7b966b938cdb0dbf08a6bcd53e8854a6583b211452cf5dd5214dddd286e923")
+	if err != nil {
+		t.Fatalf("Failed to create hash : %s", err)
+	}
+	if *merkleRoot != *correctMerkleRoot {
+		t.Fatalf("Failed merkle root hash calculation, should be : %s", correctMerkleRoot.String())
+	}
+}
