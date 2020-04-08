@@ -2,6 +2,7 @@ package bitcoin
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -85,12 +86,14 @@ func (k PublicKey) Equal(o PublicKey) bool {
 }
 
 // MarshalJSON converts to json.
-func (k *PublicKey) MarshalJSON() ([]byte, error) {
+func (k PublicKey) MarshalJSON() ([]byte, error) {
+	fmt.Printf("Marshalling json public key\n")
 	return []byte("\"" + k.String() + "\""), nil
 }
 
 // UnmarshalJSON converts from json.
 func (k *PublicKey) UnmarshalJSON(data []byte) error {
+	fmt.Printf("Unmarshalling json public key\n")
 	return k.SetString(string(data[1 : len(data)-1]))
 }
 

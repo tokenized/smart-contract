@@ -94,7 +94,7 @@ func DeserializeHash20(r io.Reader) (*Hash20, error) {
 }
 
 // MarshalJSON converts to json.
-func (h *Hash20) MarshalJSON() ([]byte, error) {
+func (h Hash20) MarshalJSON() ([]byte, error) {
 	var r [Hash20Size]byte
 	reverse20(r[:], h[:])
 	return []byte(fmt.Sprintf("\"%x\"", r[:])), nil

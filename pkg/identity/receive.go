@@ -21,14 +21,24 @@ var (
 func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
 	quantity uint64, xpub bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, error) {
 
+	keys, err := xpub.ChildKeys(index)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate key")
+	}
+
+	address, err := keys.RawAddress(requiredSigners)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate address")
+	}
+
 	request := struct {
-		XPub     string `json:"xpub"`
-		Index    uint32 `json:"index"`
-		Contract string `json:"contract"`
-		AssetID  string `json:"asset_id"`
-		Quantity uint64 `json:"quantity"`
+		XPub     bitcoin.ExtendedKeys `json:"xpub"`
+		Index    uint32               `json:"index"`
+		Contract string               `json:"contract"`
+		AssetID  string               `json:"asset_id"`
+		Quantity uint64               `json:"quantity"`
 	}{
-		XPub:     xpub.String(),
+		XPub:     xpub,
 		Index:    index,
 		Contract: contract,
 		AssetID:  asset,
@@ -37,10 +47,10 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 
 	var response struct {
 		Data struct {
-			Approved     bool   `json:"approved"`
-			SigAlgorithm uint32 `json:"algorithm"`
-			Sig          string `json:"signature"`
-			BlockHeight  uint32 `json:"block_height"`
+			Approved     bool              `json:"approved"`
+			SigAlgorithm uint32            `json:"algorithm"`
+			Signature    bitcoin.Signature `json:"signature"`
+			BlockHeight  uint32            `json:"block_height"`
 		}
 	}
 
@@ -52,30 +62,16 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 		return nil, ErrNotApproved
 	}
 
-	sig, err := bitcoin.SignatureFromStr(response.Data.Sig)
-	if err != nil {
-		return nil, errors.Wrap(err, "parse signature")
-	}
-
-	address, err := xpub.RawAddress(requiredSigners)
-	if err != nil {
-		return nil, errors.Wrap(err, "generate address")
-	}
-
 	result := &actions.AssetReceiverField{
 		Address:               address.Bytes(),
 		Quantity:              quantity,
 		OracleSigAlgorithm:    response.Data.SigAlgorithm,
 		OracleIndex:           uint32(oracleIndex),
-		OracleConfirmationSig: sig.Bytes(),
+		OracleConfirmationSig: response.Data.Signature.Bytes(),
 		OracleSigBlockHeight:  response.Data.BlockHeight,
 	}
 
 	return result, nil
-}
-
-type BlockHashes interface {
-	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 }
 
 // ValidateReceive checks the validity of an identity oracle signature for a receive.
