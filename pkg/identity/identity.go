@@ -18,9 +18,6 @@ func GetOracle(ctx context.Context, baseURL string, clientAuthKey bitcoin.Key) (
 
 	var response struct {
 		Data struct {
-			Entity    actions.EntityField `json:"entity"`
-			URL       string              `json:"url"`
-			PublicKey bitcoin.PublicKey   `json:"public_key"`
 		}
 	}
 
