@@ -70,7 +70,7 @@ func (s S3Storage) Write(ctx context.Context,
 
 		_, err = svc.PutObject(&poi)
 		if err == nil {
-			break
+			return nil
 		}
 
 		logger.Error(ctx, "S3CallFailed to write to %v : %v", key, err)
@@ -144,17 +144,18 @@ func (s S3Storage) Remove(ctx context.Context, key string) error {
 		}
 
 		_, err = svc.DeleteObject(do)
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				if aerr.Code() == s3.ErrCodeNoSuchKey {
-					// specifically handle the "not found" case
-					return ErrNotFound
-				}
-			}
-
-			logger.Error(ctx, "S3CallFailed to delete object at %v : %v", key, err)
-			continue
+		if err == nil {
+			return nil
 		}
+
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == s3.ErrCodeNoSuchKey {
+				// specifically handle the "not found" case
+				return ErrNotFound
+			}
+		}
+
+		logger.Error(ctx, "S3CallFailed to delete object at %v : %v", key, err)
 	}
 
 	if err != nil {
@@ -172,13 +173,16 @@ func (s S3Storage) Search(ctx context.Context,
 	var err error
 	var keys []string
 	for i := 0; i <= s.Config.MaxRetries; i++ {
+		if i != 0 {
+			time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
+		}
+
 		keys, err = s.findKeys(ctx, path)
 		if err == nil {
 			break
 		}
 
 		logger.Error(ctx, "S3CallFailed to search %v : %v", path, err)
-		time.Sleep(time.Duration(s.Config.RetryDelay) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -278,7 +282,7 @@ func (s S3Storage) Clear(ctx context.Context, query map[string]string) error {
 
 		err = svc.Delete(ctx, iter)
 		if err == nil {
-			break
+			return nil
 		}
 
 		logger.Error(ctx, "S3CallFailed to delete %v : %v", path, err)
