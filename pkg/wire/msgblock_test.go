@@ -605,7 +605,7 @@ func TestMerkleRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create hash : %s", err)
 	}
-	if *merkleRoot != *correctMerkleRoot {
+	if !merkleRoot.Equal(correctMerkleRoot) {
 		t.Fatalf("Failed merkle root hash calculation, should be : %s", correctMerkleRoot.String())
 	}
 }
