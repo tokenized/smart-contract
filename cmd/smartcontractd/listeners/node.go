@@ -77,7 +77,7 @@ func NewServer(
 	txFilter *filters.TxFilter,
 	holdingsChannel *holdings.CacheChannel,
 ) *Server {
-	result := Server{
+	result := &Server{
 		wallet:           wallet,
 		Config:           config,
 		MasterDB:         masterDB,
@@ -97,10 +97,10 @@ func NewServer(
 		holdingsChannel:  holdingsChannel,
 	}
 
-	return &result
+	return result
 }
 
-func (server *Server) Run(ctx context.Context) error {
+func (server *Server) Load(ctx context.Context) error {
 	// Set responder
 	server.Handler.SetResponder(server.respondTx)
 	server.Handler.SetReprocessor(server.reprocessTx)
@@ -115,8 +115,13 @@ func (server *Server) Run(ctx context.Context) error {
 	}
 
 	if err := server.Tracer.Load(ctx, server.MasterDB); err != nil {
-		return err
+		return errors.Wrap(err, "load trader")
 	}
+
+	return nil
+}
+
+func (server *Server) Run(ctx context.Context) error {
 
 	wg := sync.WaitGroup{}
 
