@@ -399,7 +399,7 @@ func (repo *TxRepository) save(ctx context.Context) error {
 	data := make([]byte, 0, (unconfirmedTxSize*len(repo.unconfirmed))+1)
 	writer := bytes.NewBuffer(data)
 	version := uint8(0)
-	err := binary.Write(writer, binary.LittleEndian, version) // Milliseconds
+	err := binary.Write(writer, binary.LittleEndian, version)
 	if err != nil {
 		return err
 	}

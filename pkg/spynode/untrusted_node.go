@@ -11,7 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
-	handlerstorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
+	handlerStorage "github.com/tokenized/smart-contract/pkg/spynode/handlers/storage"
 	"github.com/tokenized/smart-contract/pkg/storage"
 	"github.com/tokenized/smart-contract/pkg/wire"
 
@@ -21,10 +21,11 @@ import (
 type UntrustedNode struct {
 	address         string
 	config          data.Config
-	state           *data.UntrustedState
-	peers           *handlerstorage.PeerRepository
-	blocks          *handlerstorage.BlockRepository
-	txs             *handlerstorage.TxRepository
+	trustedState    *data.State
+	untrustedState  *data.UntrustedState
+	peers           *handlerStorage.PeerRepository
+	blocks          *handlerStorage.BlockRepository
+	txs             *handlerStorage.TxRepository
 	txTracker       *data.TxTracker
 	memPool         *data.MemPool
 	txChannel       *handlers.TxChannel
@@ -43,26 +44,28 @@ type UntrustedNode struct {
 	lock            sync.Mutex
 }
 
-func NewUntrustedNode(address string, config data.Config, store storage.Storage, peers *handlerstorage.PeerRepository,
-	blocks *handlerstorage.BlockRepository, txs *handlerstorage.TxRepository, memPool *data.MemPool,
-	txChannel *handlers.TxChannel, listeners []handlers.Listener, txFilters []handlers.TxFilter, scanning bool) *UntrustedNode {
+func NewUntrustedNode(address string, config data.Config, state *data.State, store storage.Storage,
+	peers *handlerStorage.PeerRepository, blocks *handlerStorage.BlockRepository,
+	txs *handlerStorage.TxRepository, memPool *data.MemPool, txChannel *handlers.TxChannel,
+	listeners []handlers.Listener, txFilters []handlers.TxFilter, scanning bool) *UntrustedNode {
 
 	result := UntrustedNode{
-		address:   address,
-		config:    config,
-		state:     data.NewUntrustedState(),
-		peers:     peers,
-		blocks:    blocks,
-		txs:       txs,
-		txTracker: data.NewTxTracker(),
-		memPool:   memPool,
-		outgoing:  messageChannel{},
-		listeners: listeners,
-		txFilters: txFilters,
-		txChannel: txChannel,
-		stopping:  false,
-		active:    false,
-		scanning:  scanning,
+		address:        address,
+		config:         config,
+		trustedState:   state,
+		untrustedState: data.NewUntrustedState(),
+		peers:          peers,
+		blocks:         blocks,
+		txs:            txs,
+		txTracker:      data.NewTxTracker(),
+		memPool:        memPool,
+		outgoing:       messageChannel{},
+		listeners:      listeners,
+		txFilters:      txFilters,
+		txChannel:      txChannel,
+		stopping:       false,
+		active:         false,
+		scanning:       scanning,
 	}
 	return &result
 }
@@ -76,8 +79,9 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 		return nil
 	}
 
-	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.state, node.peers, node.blocks, node.txs,
-		node.txTracker, node.memPool, node.txChannel, node.listeners, node.txFilters, node.address)
+	node.handlers = handlers.NewUntrustedCommandHandlers(ctx, node.trustedState,
+		node.untrustedState, node.peers, node.blocks, node.txs, node.txTracker, node.memPool,
+		node.txChannel, node.listeners, node.txFilters, node.address)
 
 	if err := node.connect(); err != nil {
 		node.lock.Unlock()
@@ -166,12 +170,12 @@ func (node *UntrustedNode) Stop(ctx context.Context) error {
 }
 
 func (node *UntrustedNode) IsReady() bool {
-	return node.state.IsReady()
+	return node.untrustedState.IsReady()
 }
 
 // Broadcast a tx to the peer
 func (node *UntrustedNode) BroadcastTxs(ctx context.Context, txs []*wire.MsgTx) error {
-	if node.state.IsReady() {
+	if node.untrustedState.IsReady() {
 		for _, tx := range txs {
 			if err := node.outgoing.Add(tx); err != nil {
 				return err
@@ -185,9 +189,9 @@ func (node *UntrustedNode) BroadcastTxs(ctx context.Context, txs []*wire.MsgTx) 
 	return nil
 }
 
-// ProcessBlock is called when a block is being processed.
+// CleanupBlock is called when a block is being processed.
 // It is responsible for any cleanup as a result of a block.
-func (node *UntrustedNode) ProcessBlock(ctx context.Context, txids []*bitcoin.Hash32) error {
+func (node *UntrustedNode) CleanupBlock(ctx context.Context, txids []*bitcoin.Hash32) error {
 	node.txTracker.RemoveList(ctx, txids)
 	return nil
 }
@@ -199,7 +203,7 @@ func (node *UntrustedNode) connect() error {
 	}
 
 	node.connection = conn
-	node.state.MarkConnected()
+	node.untrustedState.MarkConnected()
 	return nil
 }
 
@@ -257,24 +261,24 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 // Check state
 func (node *UntrustedNode) check(ctx context.Context) error {
-	if !node.state.VersionReceived() {
+	if !node.untrustedState.VersionReceived() {
 		return nil // Still performing handshake
 	}
 
-	if !node.state.HandshakeComplete() {
+	if !node.untrustedState.HandshakeComplete() {
 		// Send header request to verify chain
-		headerRequest, err := buildHeaderRequest(ctx, node.state.ProtocolVersion(), node.blocks, handlers.UntrustedHeaderDelta, 10)
+		headerRequest, err := buildHeaderRequest(ctx, node.untrustedState.ProtocolVersion(), node.blocks, handlers.UntrustedHeaderDelta, 10)
 		if err != nil {
 			return err
 		}
 		if node.outgoing.Add(headerRequest) == nil {
-			node.state.MarkHeadersRequested()
-			node.state.SetHandshakeComplete()
+			node.untrustedState.MarkHeadersRequested()
+			node.untrustedState.SetHandshakeComplete()
 		}
 	}
 
 	// Check sync
-	if !node.state.IsReady() {
+	if !node.untrustedState.IsReady() {
 		return nil
 	}
 
@@ -283,15 +287,15 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		node.readyAnnounced = true
 	}
 
-	if !node.state.ScoreUpdated() {
+	if !node.untrustedState.ScoreUpdated() {
 		node.peers.UpdateScore(ctx, node.address, 5)
-		node.state.SetScoreUpdated()
+		node.untrustedState.SetScoreUpdated()
 	}
 
-	if !node.state.AddressesRequested() {
+	if !node.untrustedState.AddressesRequested() {
 		addresses := wire.NewMsgGetAddr()
 		if node.outgoing.Add(addresses) == nil {
-			node.state.SetAddressesRequested()
+			node.untrustedState.SetAddressesRequested()
 		}
 	}
 
@@ -310,12 +314,12 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 	node.pendingOutgoing = nil
 	node.pendingLock.Unlock()
 
-	if !node.state.MemPoolRequested() {
+	if !node.untrustedState.MemPoolRequested() {
 		// Send mempool request
 		// This tells the peer to send inventory of all tx in their mempool.
 		mempool := wire.NewMsgMemPool()
 		if node.outgoing.Add(mempool) == nil {
-			node.state.SetMemPoolRequested()
+			node.untrustedState.SetMemPoolRequested()
 		}
 	}
 
@@ -339,7 +343,7 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 			break
 		}
 
-		if err := node.state.CheckTimeouts(); err != nil {
+		if err := node.untrustedState.CheckTimeouts(); err != nil {
 			logger.Debug(ctx, "(%s) Timed out : %s", node.address, err.Error())
 			node.peers.UpdateScore(ctx, node.address, -1)
 			node.Stop(ctx)

@@ -167,6 +167,10 @@ func main() {
 		logger.Fatal(ctx, "Load Wallet : %s", err)
 	}
 
+	if err := node.Load(ctx); err != nil {
+		logger.Fatal(ctx, "Load Server : %s", err)
+	}
+
 	// -------------------------------------------------------------------------
 	// Start Node Service
 

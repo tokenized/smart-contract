@@ -330,6 +330,10 @@ func oracleContract(t *testing.T) {
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		holdingsChannel)
 
+	if err := server.Load(ctx); err != nil {
+		t.Fatalf("Failed to load server : %s", err)
+	}
+
 	if err := server.SyncWallet(ctx); err != nil {
 		t.Fatalf("Failed to load wallet : %s", err)
 	}
