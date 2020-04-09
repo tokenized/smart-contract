@@ -132,6 +132,10 @@ func simpleTransfersBenchmark(b *testing.B) {
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
 
+	if err := server.Load(ctx); err != nil {
+		b.Fatalf("Failed to load server : %s", err)
+	}
+
 	if err := server.SyncWallet(ctx); err != nil {
 		b.Fatalf("Failed to load wallet : %s", err)
 	}
@@ -312,6 +316,10 @@ func separateTransfersBenchmark(b *testing.B) {
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.Load(ctx); err != nil {
+		b.Fatalf("Failed to load server : %s", err)
+	}
 
 	if err := server.SyncWallet(ctx); err != nil {
 		b.Fatalf("Failed to load wallet : %s", err)
@@ -513,6 +521,10 @@ func oracleTransfersBenchmark(b *testing.B) {
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.Load(ctx); err != nil {
+		b.Fatalf("Failed to load server : %s", err)
+	}
 
 	if err := server.SyncWallet(ctx); err != nil {
 		b.Fatalf("Failed to load wallet : %s", err)
@@ -752,6 +764,10 @@ func treeTransfersBenchmark(b *testing.B) {
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		test.HoldingsChannel)
+
+	if err := server.Load(ctx); err != nil {
+		b.Fatalf("Failed to load server : %s", err)
+	}
 
 	if err := server.SyncWallet(ctx); err != nil {
 		b.Fatalf("Failed to load wallet : %s", err)
@@ -2441,6 +2457,10 @@ func oracleTransfer(t *testing.T) {
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		holdingsChannel)
 
+	if err := server.Load(ctx); err != nil {
+		t.Fatalf("Failed to load server : %s", err)
+	}
+
 	if err := server.SyncWallet(ctx); err != nil {
 		t.Fatalf("Failed to load wallet : %s", err)
 	}
@@ -2640,6 +2660,10 @@ func oracleTransferBad(t *testing.T) {
 	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
 		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
 		holdingsChannel)
+
+	if err := server.Load(ctx); err != nil {
+		t.Fatalf("Failed to load server : %s", err)
+	}
 
 	if err := server.SyncWallet(ctx); err != nil {
 		t.Fatalf("Failed to load wallet : %s", err)
