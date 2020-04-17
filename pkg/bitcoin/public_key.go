@@ -31,6 +31,9 @@ func PublicKeyFromBytes(b []byte) (PublicKey, error) {
 	}
 
 	x, y := expandPublicKey(b)
+	if err := publicKeyIsValid(x, y); err != nil {
+		return PublicKey{}, err
+	}
 	return PublicKey{X: x, Y: y}, nil
 }
 
@@ -146,9 +149,7 @@ func expandPublicKey(k []byte) (big.Int, big.Int) {
 	return x, y
 }
 
-func publicKeyIsValid(k []byte) error {
-	x, y := expandPublicKey(k)
-
+func publicKeyIsValid(x, y big.Int) error {
 	if x.Sign() == 0 || y.Sign() == 0 {
 		return ErrOutOfRangeKey
 	}
@@ -156,7 +157,13 @@ func publicKeyIsValid(k []byte) error {
 	return nil
 }
 
-func addPublicKeys(key1 []byte, key2 []byte) []byte {
+func compressedPublicKeyIsValid(k []byte) error {
+	x, y := expandPublicKey(k)
+
+	return publicKeyIsValid(x, y)
+}
+
+func addCompressedPublicKeys(key1 []byte, key2 []byte) []byte {
 	x1, y1 := expandPublicKey(key1)
 	x2, y2 := expandPublicKey(key2)
 	x, y := curveS256.Add(&x1, &y1, &x2, &y2)

@@ -344,9 +344,9 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 		}
 		publicKey := privateKey.PublicKey().Bytes()
 
-		copy(result.KeyValue[:], addPublicKeys(publicKey, k.KeyValue[:]))
+		copy(result.KeyValue[:], addCompressedPublicKeys(publicKey, k.KeyValue[:]))
 
-		if err := publicKeyIsValid(result.KeyValue[:]); err != nil {
+		if err := compressedPublicKeyIsValid(result.KeyValue[:]); err != nil {
 			return result, errors.Wrap(err, "child add public")
 		}
 	}
