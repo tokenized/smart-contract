@@ -185,7 +185,7 @@ func (k Key) Sign(hash []byte) (Signature, error) {
 }
 
 // MarshalJSON converts to json.
-func (k *Key) MarshalJSON() ([]byte, error) {
+func (k Key) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + k.String() + "\""), nil
 }
 

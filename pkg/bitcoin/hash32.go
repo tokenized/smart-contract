@@ -89,7 +89,7 @@ func DeserializeHash32(r io.Reader) (*Hash32, error) {
 }
 
 // MarshalJSON converts to json.
-func (h *Hash32) MarshalJSON() ([]byte, error) {
+func (h Hash32) MarshalJSON() ([]byte, error) {
 	var r [Hash32Size]byte
 	reverse32(r[:], h[:])
 	return []byte(fmt.Sprintf("\"%x\"", r[:])), nil

@@ -199,7 +199,7 @@ func (s Signature) Bytes() []byte {
 }
 
 // MarshalJSON converts to json.
-func (s *Signature) MarshalJSON() ([]byte, error) {
+func (s Signature) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + s.String() + "\""), nil
 }
 

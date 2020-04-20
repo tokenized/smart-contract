@@ -85,7 +85,7 @@ func (k PublicKey) Equal(o PublicKey) bool {
 }
 
 // MarshalJSON converts to json.
-func (k *PublicKey) MarshalJSON() ([]byte, error) {
+func (k PublicKey) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + k.String() + "\""), nil
 }
 
