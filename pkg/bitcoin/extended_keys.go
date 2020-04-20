@@ -260,7 +260,7 @@ func (k ExtendedKeys) ChildKeysForPath(path []uint32) (ExtendedKeys, error) {
 }
 
 // MarshalJSON converts to json.
-func (k *ExtendedKeys) MarshalJSON() ([]byte, error) {
+func (k ExtendedKeys) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + k.String58() + "\""), nil
 }
 

@@ -1,15 +1,16 @@
 package identity
 
 import (
-	"encoding/hex"
+	"context"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
-func GetOracle(baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
+// GetOracle fetches oracle data from the URL.
+func GetOracle(ctx context.Context, baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
 	result := &Oracle{
 		BaseURL:       baseURL,
 		ClientAuthKey: clientAuthKey,
@@ -17,9 +18,9 @@ func GetOracle(baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
 
 	var response struct {
 		Data struct {
-			Entity    string `json:"entity"`
-			URL       string `json:"url"`
-			PublicKey string `json:"public_key"`
+			Entity    actions.EntityField `json:"entity"`
+			URL       string              `json:"url"`
+			PublicKey bitcoin.PublicKey   `json:"public_key"`
 		}
 	}
 
@@ -27,19 +28,20 @@ func GetOracle(baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
 		return nil, errors.Wrap(err, "http get")
 	}
 
-	entityBytes, err := hex.DecodeString(response.Data.Entity)
-	if err != nil {
-		return nil, errors.Wrap(err, "decode entity hex")
-	}
-
-	if err := proto.Unmarshal(entityBytes, &result.OracleEntity); err != nil {
-		return nil, errors.Wrap(err, "deserialize entity")
-	}
-
-	result.OracleKey, err = bitcoin.PublicKeyFromStr(response.Data.PublicKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "decode public key")
-	}
+	result.OracleEntity = response.Data.Entity
+	result.OracleKey = response.Data.PublicKey
 
 	return result, nil
+}
+
+// NewOracle creates an oracle from existing data.
+func NewOracle(baseURL string, oracleKey bitcoin.PublicKey, oracleEntity actions.EntityField,
+	clientID string, clientAuthKey bitcoin.Key) (*Oracle, error) {
+	return &Oracle{
+		BaseURL:       baseURL,
+		OracleKey:     oracleKey,
+		OracleEntity:  oracleEntity,
+		ClientID:      clientID,
+		ClientAuthKey: clientAuthKey,
+	}, nil
 }

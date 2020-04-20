@@ -1,6 +1,7 @@
 package authority
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -9,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func GetOracle(baseURL string) (*Oracle, error) {
+func GetOracle(ctx context.Context, baseURL string) (*Oracle, error) {
 	result := &Oracle{
 		BaseURL: baseURL,
 	}

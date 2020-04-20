@@ -409,7 +409,7 @@ func (ra *RawAddress) Hashes() ([]Hash20, error) {
 }
 
 // MarshalJSON converts to json.
-func (ra *RawAddress) MarshalJSON() ([]byte, error) {
+func (ra RawAddress) MarshalJSON() ([]byte, error) {
 	if len(ra.data) == 0 {
 		return []byte("\"\""), nil
 	}
