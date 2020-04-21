@@ -2,7 +2,6 @@ package bitcoin
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math/big"
 
 	"github.com/pkg/errors"

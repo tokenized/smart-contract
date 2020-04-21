@@ -40,3 +40,61 @@ func TestWP42(t *testing.T) {
 		// t.Logf("Next Public Key : %s", pubKey2.String())
 	}
 }
+
+func BenchmarkWP42Private(b *testing.B) {
+	key, err := GenerateKey(MainNet)
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	seed, err := GenerateSeedMessage()
+	if err != nil {
+		b.Fatalf("Failed to generate seed : %s", err)
+	}
+
+	var hash Hash32
+	if err := hash.SetBytes(Sha256(seed.Bytes())); err != nil {
+		b.Fatalf("Failed to set hash : %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key, err = NextKey(key, hash)
+		if err != nil {
+			b.Fatalf("Failed to generate next key : %s", err)
+		}
+
+		hash.SetBytes(Sha256(hash.Bytes()))
+	}
+	b.StopTimer()
+}
+
+func BenchmarkWP42Public(b *testing.B) {
+	key, err := GenerateKey(MainNet)
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	publicKey := key.PublicKey()
+
+	seed, err := GenerateSeedMessage()
+	if err != nil {
+		b.Fatalf("Failed to generate seed : %s", err)
+	}
+
+	var hash Hash32
+	if err := hash.SetBytes(Sha256(seed.Bytes())); err != nil {
+		b.Fatalf("Failed to set hash : %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		publicKey, err = NextPublicKey(publicKey, hash)
+		if err != nil {
+			b.Fatalf("Failed to generate next key : %s", err)
+		}
+
+		hash.SetBytes(Sha256(hash.Bytes()))
+	}
+	b.StopTimer()
+}

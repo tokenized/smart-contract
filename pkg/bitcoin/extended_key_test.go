@@ -398,3 +398,37 @@ func TestOldExtendedKey(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkExtendedKeyPrivate(b *testing.B) {
+	key, err := GenerateMasterExtendedKey()
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = key.ChildKey(uint32(i))
+		if err != nil {
+			b.Fatalf("Failed to generate child key : %s", err)
+		}
+	}
+	b.StopTimer()
+}
+
+func BenchmarkExtendedKeyPublic(b *testing.B) {
+	key, err := GenerateMasterExtendedKey()
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	key = key.ExtendedPublicKey()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = key.ChildKey(uint32(i))
+		if err != nil {
+			b.Fatalf("Failed to generate child key : %s", err)
+		}
+	}
+	b.StopTimer()
+}
