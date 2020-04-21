@@ -83,6 +83,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		hash := header.BlockHash()
 
 		if lastHash.Equal(&header.PrevBlock) {
+			logger.Debug(ctx, "Header (next) : %s", hash.String())
 			request, err := handler.addHeader(ctx, header)
 			if err != nil {
 				return response, err
@@ -104,8 +105,10 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			continue
 		}
 
+		logger.Debug(ctx, "Header (not next) : %s", hash.String())
+
 		if hash.Equal(lastHash) {
-			continue
+			continue // Already latest header
 		}
 
 		// Check if we already have this block
@@ -115,6 +118,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 		}
 
 		// Check for a reorg
+		logger.Info(ctx, "Header previous block : %s", header.PrevBlock.String())
 		reorgHeight, exists := handler.blocks.Height(&header.PrevBlock)
 		if exists {
 			logger.Info(ctx, "Reorging to height %d", reorgHeight)

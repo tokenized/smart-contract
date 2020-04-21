@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/logger"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -111,8 +110,6 @@ func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contra
 		return errors.Wrap(err, "signature hash")
 	}
 
-	logger.Info(ctx, "Validate receive signature hash : %x", sigHash)
-
 	signature, err := bitcoin.SignatureFromBytes(receiver.OracleConfirmationSig)
 	if err != nil {
 		return errors.Wrap(ErrInvalidSignature, "parse signature")
@@ -154,8 +151,6 @@ func (o *Oracle) ValidateReceiveHash(ctx context.Context, blockHash bitcoin.Hash
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
-
-	logger.Info(ctx, "Validate receive signature hash : %x", sigHash)
 
 	signature, err := bitcoin.SignatureFromBytes(receiver.OracleConfirmationSig)
 	if err != nil {
