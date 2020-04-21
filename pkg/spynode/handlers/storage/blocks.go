@@ -365,7 +365,7 @@ func (repo *BlockRepository) Revert(ctx context.Context, height int) error {
 		return errors.Wrap(err, fmt.Sprintf("Failed to read block file to truncate : %s", path))
 	}
 
-	if newCount < blocksPerKey {
+	if newCount < blocksPerKey && len(data) > wire.MaxBlockHeaderPayload*newCount {
 		data = data[:wire.MaxBlockHeaderPayload*newCount] // Truncate data
 
 		// Re-write file with truncated data

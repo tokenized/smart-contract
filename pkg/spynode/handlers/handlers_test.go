@@ -373,6 +373,10 @@ func (listener *TestListener) ProcessBlocks(ctx context.Context) error {
 		if err := listener.blocks.Add(ctx, &block.Header); err != nil {
 			return err
 		}
+
+		if err := listener.state.FinalizeBlock(*hash); err != nil {
+			return err
+		}
 	}
 
 	return nil
