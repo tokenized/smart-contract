@@ -1,15 +1,5 @@
 package identity
 
-import (
-	"context"
-	"testing"
-
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
-	"github.com/tokenized/specification/dist/golang/protocol"
-)
-
 const baseURL = "http://localhost:8081"
 
 // func TestRegister(t *testing.T) {

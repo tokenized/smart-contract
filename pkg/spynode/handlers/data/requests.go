@@ -5,6 +5,8 @@ import (
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -70,32 +72,13 @@ func (state *State) AddBlock(hash *bitcoin.Hash32, block *wire.MsgBlock) bool {
 	defer state.lock.Unlock()
 
 	for _, request := range state.blocksRequested {
-		if request.hash == *hash {
+		if request.hash.Equal(hash) {
 			request.block = block
 			return true
 		}
 	}
 
 	return false
-}
-
-// AddNewBlock adds a new request with a block that was not requested.
-func (state *State) AddNewBlock(hash *bitcoin.Hash32, block *wire.MsgBlock) bool {
-	state.lock.Lock()
-	defer state.lock.Unlock()
-
-	if len(state.blocksRequested) > 0 || len(state.blocksRequested) > 0 {
-		return false
-	}
-
-	newRequest := requestedBlock{
-		hash:  *hash,
-		time:  time.Now(),
-		block: block,
-	}
-
-	state.blocksRequested = append(state.blocksRequested, &newRequest)
-	return true
 }
 
 func (state *State) NextBlock() *wire.MsgBlock {
@@ -107,8 +90,19 @@ func (state *State) NextBlock() *wire.MsgBlock {
 	}
 
 	result := state.blocksRequested[0].block
-	state.blocksRequested = state.blocksRequested[1:] // Remove first item
 	return result
+}
+
+func (state *State) FinalizeBlock(hash bitcoin.Hash32) error {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+
+	if len(state.blocksRequested) == 0 || !state.blocksRequested[0].hash.Equal(&hash) {
+		return errors.New("Not next block")
+	}
+
+	state.blocksRequested = state.blocksRequested[1:] // Remove first item
+	return nil
 }
 
 func (state *State) GetNextBlockToRequest() (*bitcoin.Hash32, int) {
@@ -128,19 +122,6 @@ func (state *State) GetNextBlockToRequest() (*bitcoin.Hash32, int) {
 	state.blocksToRequest = state.blocksToRequest[1:] // Remove first item
 	state.blocksRequested = append(state.blocksRequested, &newRequest)
 	return &newRequest.hash, len(state.blocksRequested)
-}
-
-func (state *State) RemoveBlockRequest(hash *bitcoin.Hash32) {
-	state.lock.Lock()
-	defer state.lock.Unlock()
-
-	if len(state.blocksRequested) == 0 {
-		return
-	}
-
-	if state.blocksRequested[0].hash == *hash {
-		state.blocksRequested = state.blocksRequested[1:] // Remove first item
-	}
 }
 
 func (state *State) BlocksRequestedCount() int {

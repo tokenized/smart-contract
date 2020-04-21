@@ -31,6 +31,8 @@ func (node *Node) processBlocks(ctx context.Context) error {
 		if err := node.ProcessBlock(ctx, block); err != nil {
 			c := errors.Cause(err)
 			if c != ErrBlockNotNextBlock && c != ErrBlockNotAdded {
+				logger.Warn(ctx, "Failed to process block : %s : %s",
+					block.Header.BlockHash().String(), err)
 				return err
 			}
 		}
@@ -72,10 +74,12 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 	defer node.blockLock.Unlock()
 
 	hash := block.Header.BlockHash()
+	logger.Debug(ctx, "Block : %s", hash.String())
 
 	if node.blocks.Contains(hash) {
 		height, _ := node.blocks.Height(hash)
 		logger.Warn(ctx, "Already have block (%d) : %s", height, hash.String())
+		node.state.FinalizeBlock(*hash)
 		return ErrBlockNotAdded
 	}
 
@@ -83,22 +87,31 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 		// Ignore this as it can happen when there is a reorg.
 		logger.Warn(ctx, "Not next block : %s", hash.String())
 		logger.Warn(ctx, "Previous hash : %s", block.Header.PrevBlock.String())
+		node.state.FinalizeBlock(*hash)
 		return ErrBlockNotNextBlock // Unknown or out of order block
 	}
 
 	// Validate
 	valid, err := validateMerkleHash(ctx, block)
 	if err != nil {
+		node.state.FinalizeBlock(*hash)
 		return errors.Wrap(err, "Failed to validate merkle hash")
 	}
 	if !valid {
 		logger.Warn(ctx, "Invalid merkle hash for block %s", hash.String())
+		node.state.FinalizeBlock(*hash)
 		return ErrBlockNotAdded
 	}
 
 	// Add to repo
 	if err = node.blocks.Add(ctx, &block.Header); err != nil {
-		return err
+		node.state.FinalizeBlock(*hash)
+		return errors.Wrap(err, "add block")
+	}
+
+	// Remove from requested blocks
+	if err = node.state.FinalizeBlock(*hash); err != nil {
+		return errors.Wrap(err, "finialize block")
 	}
 
 	// If we are in sync we can save after every block
