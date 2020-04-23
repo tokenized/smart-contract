@@ -39,6 +39,11 @@ func NewHash32FromStr(s string) (*Hash32, error) {
 	return &result, nil
 }
 
+// Sha256 sets the value of this hash to the SHA256 of itself.
+func (h *Hash32) Sha256() {
+	copy(h[:], Sha256(h[:]))
+}
+
 // Bytes returns the data for the hash.
 func (h Hash32) Bytes() []byte {
 	return h[:]

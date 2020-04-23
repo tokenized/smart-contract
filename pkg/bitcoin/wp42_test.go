@@ -47,24 +47,24 @@ func BenchmarkWP42Private(b *testing.B) {
 		b.Fatalf("Failed to generate key : %s", err)
 	}
 
-	seed, err := GenerateSeedMessage()
+	seed, err := GenerateSeedValue()
 	if err != nil {
-		b.Fatalf("Failed to generate seed : %s", err)
+		b.Fatalf("Failed to generate seed value : %s", err)
 	}
 
 	var hash Hash32
-	if err := hash.SetBytes(Sha256(seed.Bytes())); err != nil {
+	if err := hash.SetBytes(seed.Bytes()); err != nil {
 		b.Fatalf("Failed to set hash : %s", err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		hash = NextHash(hash)
+
 		key, err = NextKey(key, hash)
 		if err != nil {
 			b.Fatalf("Failed to generate next key : %s", err)
 		}
-
-		hash.SetBytes(Sha256(hash.Bytes()))
 	}
 	b.StopTimer()
 }
@@ -77,24 +77,67 @@ func BenchmarkWP42Public(b *testing.B) {
 
 	publicKey := key.PublicKey()
 
-	seed, err := GenerateSeedMessage()
+	seed, err := GenerateSeedValue()
 	if err != nil {
-		b.Fatalf("Failed to generate seed : %s", err)
+		b.Fatalf("Failed to generate seed value : %s", err)
 	}
 
 	var hash Hash32
-	if err := hash.SetBytes(Sha256(seed.Bytes())); err != nil {
+	if err := hash.SetBytes(seed.Bytes()); err != nil {
 		b.Fatalf("Failed to set hash : %s", err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		hash = NextHash(hash)
 		publicKey, err = NextPublicKey(publicKey, hash)
 		if err != nil {
 			b.Fatalf("Failed to generate next key : %s", err)
 		}
+	}
+	b.StopTimer()
+}
 
-		hash.SetBytes(Sha256(hash.Bytes()))
+func BenchmarkWP42PrivateChild(b *testing.B) {
+	key, err := GenerateKey(MainNet)
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	seed, err := GenerateSeedValue()
+	if err != nil {
+		b.Fatalf("Failed to generate seed value : %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = ChildKey(key, seed, uint64(1000))
+		if err != nil {
+			b.Fatalf("Failed to generate child key : %s", err)
+		}
+	}
+	b.StopTimer()
+}
+
+func BenchmarkWP42PublicChild(b *testing.B) {
+	key, err := GenerateKey(MainNet)
+	if err != nil {
+		b.Fatalf("Failed to generate key : %s", err)
+	}
+
+	publicKey := key.PublicKey()
+
+	seed, err := GenerateSeedValue()
+	if err != nil {
+		b.Fatalf("Failed to generate seed value : %s", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = ChildPublicKey(publicKey, seed, uint64(1000))
+		if err != nil {
+			b.Fatalf("Failed to generate child key : %s", err)
+		}
 	}
 	b.StopTimer()
 }
