@@ -12,14 +12,14 @@
         "cdk": "cdk"
     },
     "devDependencies": {
-        "@types/node": "^8.9.4",
-        "typescript": "^3.1.2",
-        "aws-cdk": "^0.15.2"
+        "@types/node": "^13.13.2",
+        "typescript": "^3.8.3",
+        "aws-cdk": "^1.34.1"
     },
     "dependencies": {
-        "@aws-cdk/aws-ec2": "^0.15.2",
-        "@aws-cdk/aws-ecs": "^0.15.2",
-        "@aws-cdk/aws-s3": "^0.15.2",
-        "@aws-cdk/cdk": "^0.15.2"
+        "@aws-cdk/aws-ec2": "^1.34.1",
+        "@aws-cdk/aws-ecs": "^1.34.1",
+        "@aws-cdk/aws-s3": "^1.34.1",
+        "@aws-cdk/cdk": "^0.36.1"
     }
 }
