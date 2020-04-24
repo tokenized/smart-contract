@@ -7,6 +7,8 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	bip32 "github.com/tyler-smith/go-bip32"
@@ -349,6 +351,79 @@ func (k ExtendedKey) ChildKey(index uint32) (ExtendedKey, error) {
 		if err := compressedPublicKeyIsValid(result.KeyValue[:]); err != nil {
 			return result, errors.Wrap(err, "child add public")
 		}
+	}
+
+	return result, nil
+}
+
+func PathIndexToString(index uint32) string {
+	if index >= Hardened {
+		return fmt.Sprintf("%d'", index-Hardened)
+	}
+	return fmt.Sprintf("%d", index)
+}
+
+func PathToString(values []uint32) string {
+	var parts = make([]string, len(values)+1, 0)
+	parts[0] = "m"
+
+	for _, v := range values {
+		parts = append(parts, PathIndexToString(v))
+	}
+
+	return strings.Join(parts, "/")
+}
+
+func PathIndexFromString(index string) (uint32, error) {
+	if len(index) == 0 {
+		return 0, errors.New("Empty index value")
+	}
+	hard := false
+	if index[len(index)-1] == '\'' {
+		hard = true
+		index = index[:len(index)-1]
+	}
+	if len(index) == 0 {
+		return 0, errors.New("Empty index value")
+	}
+	value, err := strconv.Atoi(index)
+	if err != nil {
+		return 0, errors.Wrap(err, "path index not integer")
+	}
+	if hard {
+		return uint32(value) + Hardened, nil
+	}
+	return uint32(value), nil
+}
+
+func PathFromString(s string) ([]uint32, error) {
+	parts := strings.Split(s, "/")
+
+	if len(parts) == 0 {
+		return nil, errors.New("Path empty")
+	}
+
+	if parts[0] == "m" {
+		parts = parts[1:]
+	}
+
+	if len(parts) == 0 {
+		return nil, errors.New("Path empty")
+	}
+
+	result := []uint32{}
+
+	for _, n := range parts {
+		if len(n) == 0 {
+			return nil, fmt.Errorf("Empty path index : %s", s)
+		}
+
+		index, err := PathIndexFromString(n)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("Invalid path index : %s", n))
+		}
+
+		result = append(result, index)
 	}
 
 	return result, nil
