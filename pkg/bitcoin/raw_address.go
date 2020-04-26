@@ -12,6 +12,7 @@ const (
 	ScriptTypeSH       = 0x21 // Script Hash
 	ScriptTypeMultiPKH = 0x22 // Multi-PKH
 	ScriptTypeRPH      = 0x23 // RPH
+	ScriptTypePK       = 0x24 // Public Key
 
 	ScriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
 )
@@ -42,6 +43,14 @@ func (ra *RawAddress) Decode(b []byte) error {
 		fallthrough
 	case ScriptTypePKH:
 		return ra.SetPKH(b[1:])
+
+	// Public Key
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		fallthrough
+	case ScriptTypePK:
+		return ra.SetCompressedPublicKey(b[1:])
 
 	// Script Hash
 	case AddressTypeMainSH:
@@ -116,6 +125,18 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 		}
 		return ra.SetPKH(pkh)
 
+	// Public Key
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		fallthrough
+	case ScriptTypePK:
+		pk := make([]byte, PublicKeyCompressedLength)
+		if _, err := buf.Read(pk); err != nil {
+			return err
+		}
+		return ra.SetCompressedPublicKey(pk)
+
 	// Script Hash
 	case AddressTypeMainSH:
 		fallthrough
@@ -180,6 +201,10 @@ func NewRawAddressFromAddress(a Address) RawAddress {
 		fallthrough
 	case AddressTypeTestPKH:
 		result.scriptType = ScriptTypePKH
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		result.scriptType = ScriptTypePK
 	case AddressTypeMainSH:
 		fallthrough
 	case AddressTypeTestSH:
@@ -215,6 +240,49 @@ func (ra *RawAddress) SetPKH(pkh []byte) error {
 	ra.scriptType = ScriptTypePKH
 	ra.data = pkh
 	return nil
+}
+
+/****************************************** PK ***************************************************/
+
+// NewRawAddressPublicKey creates an address from a public key.
+func NewRawAddressPublicKey(pk PublicKey) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetPublicKey(pk)
+	return result, err
+}
+
+// SetPublicKey sets the type as ScriptTypePKH and sets the data to the specified public key.
+func (ra *RawAddress) SetPublicKey(pk PublicKey) error {
+	ra.scriptType = ScriptTypePK
+	ra.data = pk.Bytes()
+	return nil
+}
+
+// NewRawAddressCompressedPublicKey creates an address from a compressed public key.
+func NewRawAddressCompressedPublicKey(pk []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetCompressedPublicKey(pk)
+	return result, err
+}
+
+// SetCompressedPublicKey sets the type as ScriptTypePKH and sets the data to the specified
+//   compressed public key.
+func (ra *RawAddress) SetCompressedPublicKey(pk []byte) error {
+	if len(pk) != PublicKeyCompressedLength {
+		return ErrBadScriptHashLength
+	}
+
+	ra.scriptType = ScriptTypePK
+	ra.data = pk
+	return nil
+}
+
+func (ra *RawAddress) GetPublicKey() (PublicKey, error) {
+	if ra.scriptType != ScriptTypePK {
+		return PublicKey{}, ErrWrongType
+	}
+
+	return PublicKeyFromBytes(ra.data)
 }
 
 /******************************************* SH ***************************************************/

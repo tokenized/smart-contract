@@ -20,6 +20,7 @@ const (
 	OP_DUP                = 0x76
 	OP_HASH160            = 0xa9
 	OP_PUSH_DATA_20       = 0x14
+	OP_PUSH_DATA_33       = 0x21
 	OP_EQUAL              = 0x87
 	OP_EQUALVERIFY        = 0x88
 	OP_GREATERTHANOREQUAL = 0xa2

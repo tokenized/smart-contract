@@ -129,6 +129,24 @@ func RawAddressFromLockingScript(lockingScript []byte) (RawAddress, error) {
 			return result, err
 
 		}
+
+	case OP_PUSH_DATA_33: // P2PK
+		if len(script) != 35 {
+			return result, ErrUnknownScriptTemplate
+		}
+		script = script[1:]
+
+		pk := script[:PublicKeyCompressedLength]
+		script = script[PublicKeyCompressedLength:]
+
+		if script[0] != OP_CHECKSIG {
+			return result, ErrUnknownScriptTemplate
+		}
+		script = script[1:]
+
+		err := result.SetCompressedPublicKey(pk)
+		return result, err
+
 	case OP_HASH160: // P2SH
 		if len(script) != 23 {
 			return result, ErrUnknownScriptTemplate
@@ -266,6 +284,16 @@ func (ra RawAddress) LockingScript() ([]byte, error) {
 		result = append(result, ra.data...)
 
 		result = append(result, OP_EQUALVERIFY)
+		result = append(result, OP_CHECKSIG)
+		return result, nil
+
+	case ScriptTypePK:
+		result := make([]byte, 0, PublicKeyCompressedLength+2)
+
+		// Push public key
+		result = append(result, OP_PUSH_DATA_33) // Single byte push op code of 33 bytes
+		result = append(result, ra.data...)
+
 		result = append(result, OP_CHECKSIG)
 		return result, nil
 
