@@ -3,11 +3,13 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 const (
+	ScriptTypeEmpty    = 0xff // Empty address
 	ScriptTypePKH      = 0x20 // Public Key Hash
 	ScriptTypeSH       = 0x21 // Script Hash
 	ScriptTypeMultiPKH = 0x22 // Multi-PKH
@@ -36,6 +38,11 @@ func DecodeRawAddress(b []byte) (RawAddress, error) {
 // Decode decodes a binary raw address. It returns an error if there was an issue.
 func (ra *RawAddress) Decode(b []byte) error {
 	switch b[0] {
+	case ScriptTypeEmpty:
+		ra.scriptType = ScriptTypeEmpty
+		ra.data = nil
+		return nil
+
 	// Public Key Hash
 	case AddressTypeMainPKH:
 		fallthrough
@@ -113,6 +120,11 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 	}
 
 	switch t {
+	case ScriptTypeEmpty:
+		ra.scriptType = ScriptTypeEmpty
+		ra.data = nil
+		return nil
+
 	// Public Key Hash
 	case AddressTypeMainPKH:
 		fallthrough
@@ -189,7 +201,7 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 		return ra.SetRPH(rph)
 	}
 
-	return ErrBadType
+	return errors.Wrapf(ErrBadType, "Type : %d", t)
 }
 
 // NewRawAddressFromAddress creates a RawAddress from an Address.
@@ -418,6 +430,12 @@ func (ra RawAddress) IsEmpty() bool {
 }
 
 func (ra RawAddress) Serialize(buf *bytes.Buffer) error {
+	if ra.IsEmpty() {
+		if err := buf.WriteByte(ScriptTypeEmpty); err != nil {
+			return err
+		}
+	}
+
 	if err := buf.WriteByte(ra.scriptType); err != nil {
 		return err
 	}
@@ -452,6 +470,13 @@ func (ra *RawAddress) Hashes() ([]Hash20, error) {
 		fallthrough
 	case ScriptTypeRPH:
 		hash, err := NewHash20(ra.data)
+		if err != nil {
+			return nil, err
+		}
+		return []Hash20{*hash}, nil
+
+	case ScriptTypePK:
+		hash, err := NewHash20(Hash160(ra.data))
 		if err != nil {
 			return nil, err
 		}
