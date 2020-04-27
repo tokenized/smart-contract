@@ -11,7 +11,7 @@ var (
 	ErrBadScriptHashLength   = errors.New("Script hash has invalid length")
 	ErrBadCheckSum           = errors.New("Address has bad checksum")
 	ErrBadType               = errors.New("Address type unknown")
-	ErrWrongType             = errors.New("Address wrong unknown")
+	ErrWrongType             = errors.New("Address type wrong")
 	ErrUnknownScriptTemplate = errors.New("Unknown script template")
 	ErrNotEnoughData         = errors.New("Not enough data")
 )

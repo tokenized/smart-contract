@@ -389,3 +389,26 @@ func (ra RawAddress) LockingScript() ([]byte, error) {
 
 	return nil, ErrUnknownScriptTemplate
 }
+
+// PublicKeyFromLockingScript returns the serialized compressed public key from the locking script
+//   if there is one.
+// It only works for P2PK locking scripts.
+func PublicKeyFromLockingScript(lockingScript []byte) ([]byte, error) {
+	if len(lockingScript) < 2 {
+		return nil, ErrUnknownScriptTemplate
+	}
+
+	buf := bytes.NewReader(lockingScript)
+
+	// First push
+	_, firstPush, err := ParsePushDataScript(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	if isPublicKey(firstPush) {
+		return firstPush, nil
+	}
+
+	return nil, ErrUnknownScriptTemplate
+}
