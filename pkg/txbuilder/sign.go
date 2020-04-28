@@ -68,9 +68,11 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 	inputValue := tx.InputValue()
 	outputValue := tx.OutputValue(true)
 	shc := SigHashCache{}
+	pks := make([][]byte, 0, len(keys))
 	pkhs := make([][]byte, 0, len(keys))
 
 	for _, key := range keys {
+		pks = append(pks, key.PublicKey().Bytes())
 		pkhs = append(pkhs, bitcoin.Hash160(key.PublicKey().Bytes()))
 	}
 
@@ -130,8 +132,35 @@ func (tx *TxBuilder) Sign(keys []bitcoin.Key) error {
 					return newError(ErrorCodeMissingPrivateKey, "")
 				}
 
+			case bitcoin.ScriptTypePK:
+				pubKey, err := address.GetPublicKey()
+				if err != nil {
+					return err
+				}
+				pkb := pubKey.Bytes()
+				signed := false
+				for i, pk := range pks {
+					if !bytes.Equal(pk, pkb) {
+						continue
+					}
+
+					tx.MsgTx.TxIn[index].SignatureScript, err = P2PKUnlockingScript(keys[i], tx.MsgTx,
+						index, tx.Inputs[index].LockingScript, tx.Inputs[index].Value,
+						SigHashAll+SigHashForkID, &shc)
+
+					if err != nil {
+						return err
+					}
+					signed = true
+					break
+				}
+
+				if !signed {
+					return newError(ErrorCodeMissingPrivateKey, "")
+				}
+
 			default:
-				return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH locking script")
+				return newError(ErrorCodeWrongScriptTemplate, "Not a P2PKH or P2PK locking script")
 			}
 		}
 
@@ -186,6 +215,23 @@ func P2PKHUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
 	}
 
 	err = bitcoin.WritePushDataScript(buf, pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func P2PKUnlockingScript(key bitcoin.Key, tx *wire.MsgTx, index int,
+	lockScript []byte, value uint64, hashType SigHashType, hashCache *SigHashCache) ([]byte, error) {
+	// <Signature>
+	sig, err := InputSignature(key, tx, index, lockScript, value, hashType, hashCache)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, len(sig)+1))
+	err = bitcoin.WritePushDataScript(buf, sig)
 	if err != nil {
 		return nil, err
 	}

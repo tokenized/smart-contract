@@ -254,6 +254,15 @@ func (ra *RawAddress) SetPKH(pkh []byte) error {
 	return nil
 }
 
+func (ra *RawAddress) GetPublicKeyHash() (Hash20, error) {
+	if ra.scriptType != ScriptTypePKH {
+		return Hash20{}, ErrWrongType
+	}
+
+	hash, err := NewHash20(ra.data)
+	return *hash, err
+}
+
 /****************************************** PK ***************************************************/
 
 // NewRawAddressPublicKey creates an address from a public key.
