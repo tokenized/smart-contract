@@ -77,9 +77,16 @@ func (h *Hash32) Equal(o *Hash32) bool {
 }
 
 // Serialize writes the hash into a writer.
-func (h *Hash32) Serialize(w io.Writer) error {
+func (h Hash32) Serialize(w io.Writer) error {
 	_, err := w.Write(h[:])
 	return err
+}
+
+func (h *Hash32) Deserialize(buf *bytes.Reader) error {
+	if _, err := buf.Read(h[:]); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Deserialize reads a hash from a reader.
