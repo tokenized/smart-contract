@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"reflect"
 	"strings"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -151,8 +150,4 @@ func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) bit
 		LockingScript: tx.TxOut[index].PkScript,
 		Value:         tx.TxOut[index].Value,
 	}
-}
-
-func isPayToPublicKeyHash(pkScript []byte) bool {
-	return reflect.DeepEqual(pkScript[0:2], prefixP2PKH)
 }

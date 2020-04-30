@@ -44,6 +44,13 @@ func (h *Hash32) Sha256() {
 	copy(h[:], Sha256(h[:]))
 }
 
+// AddHashes adds the value of the hashes together using big integer modular math.
+func AddHashes(l, r Hash32) Hash32 {
+	b := addPrivateKeys(l[:], r[:])
+	result, _ := NewHash32(b) // Ignore error because addPrivateKeys always returns 32 bytes
+	return *result
+}
+
 // Bytes returns the data for the hash.
 func (h Hash32) Bytes() []byte {
 	return h[:]
