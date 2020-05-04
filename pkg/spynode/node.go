@@ -597,14 +597,15 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			logger.Error(ctx, "SpyNodeAborted to handle [%s] message : %s", msg.Command(), err.Error())
+			logger.Error(ctx, "SpyNodeAborted to handle [%s] message : %s", msg.Command(),
+				err.Error())
 			node.requestStop(ctx)
 			break
 		}
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Warn(ctx, "Reject message from %s : %s - %s", node.config.NodeAddress,
+				logger.Warn(ctx, "(%s) Reject message : %s - %s", node.config.NodeAddress,
 					reject.Reason, reject.Hash.String())
 			}
 		}

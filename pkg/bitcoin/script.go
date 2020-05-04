@@ -402,8 +402,16 @@ func PKHsFromLockingScript(script []byte) ([]Hash20, error) {
 		_, pushdata, err := ParsePushDataScript(buf)
 
 		if err == nil {
+			// Check for public key hash
 			if len(pushdata) == Hash20Size {
 				hash, _ := NewHash20(pushdata)
+				result = append(result, *hash)
+			}
+
+			// Check for public key, then hash it
+			if len(pushdata) == PublicKeyCompressedLength &&
+				(pushdata[0] == 0x02 || pushdata[0] == 0x03) {
+				hash, _ := NewHash20(Hash160(pushdata))
 				result = append(result, *hash)
 			}
 			continue
