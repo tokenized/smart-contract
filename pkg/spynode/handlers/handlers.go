@@ -75,9 +75,9 @@ type StateReady interface {
 
 // NewCommandHandlers returns a mapping of commands and Handler's.
 func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *data.State,
-	peers *storage.PeerRepository, blockRepo *storage.BlockRepository, txRepo *storage.TxRepository,
-	reorgRepo *storage.ReorgRepository, tracker *data.TxTracker, memPool *data.MemPool,
-	unconfTxChannel *TxChannel, txStateChannel *TxStateChannel,
+	peers *storage.PeerRepository, blockRepo *storage.BlockRepository, blockRefeeder *BlockRefeeder,
+	txRepo *storage.TxRepository, reorgRepo *storage.ReorgRepository, tracker *data.TxTracker,
+	memPool *data.MemPool, unconfTxChannel *TxChannel, txStateChannel *TxStateChannel,
 	listeners []Listener, txFilters []TxFilter) map[string]CommandHandler {
 
 	return map[string]CommandHandler{
@@ -86,7 +86,7 @@ func NewTrustedCommandHandlers(ctx context.Context, config data.Config, state *d
 		wire.CmdAddr:    NewAddressHandler(peers),
 		wire.CmdInv:     NewInvHandler(state, txRepo, tracker, memPool),
 		wire.CmdTx:      NewTXHandler(state, unconfTxChannel, memPool, txRepo, listeners, txFilters),
-		wire.CmdBlock:   NewBlockHandler(state),
+		wire.CmdBlock:   NewBlockHandler(state, blockRefeeder),
 		wire.CmdHeaders: NewHeadersHandler(config, state, txStateChannel, blockRepo, txRepo,
 			reorgRepo, listeners),
 		wire.CmdReject: NewRejectHandler(),
@@ -107,7 +107,7 @@ func NewUntrustedCommandHandlers(ctx context.Context, trustedState *data.State,
 		wire.CmdInv:     NewUntrustedInvHandler(untrustedState, tracker, memPool),
 		wire.CmdTx: NewUntrustedTXHandler(untrustedState, txChannel, memPool, txRepo,
 			listeners, txFilters),
-		wire.CmdBlock:   NewBlockHandler(trustedState),
+		wire.CmdBlock:   NewBlockHandler(trustedState, nil),
 		wire.CmdHeaders: NewUntrustedHeadersHandler(untrustedState, peers, address, blockRepo),
 		wire.CmdReject:  NewRejectHandler(),
 	}

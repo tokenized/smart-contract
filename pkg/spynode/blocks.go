@@ -20,9 +20,43 @@ var (
 func (node *Node) processBlocks(ctx context.Context) error {
 
 	for !node.isStopping() {
+
+		block, height, refeederActive := node.blockRefeeder.GetBlock()
+		if refeederActive {
+			if block != nil {
+				node.provideBlock(ctx, block, height)
+
+				if height != 0 { // block header still active
+					if node.blocks.LastHeight() == height {
+						logger.Info(ctx, "Refeed complete at block %d", height)
+						node.blockRefeeder.Clear(height)
+					} else {
+						logger.Info(ctx, "Refeed setting next block %d", height+1)
+						nextHash, err := node.blocks.Hash(ctx, height+1)
+						if err != nil {
+							return errors.Wrap(err, "get next hash")
+						}
+						node.blockRefeeder.Increment(height+1, *nextHash)
+					}
+				}
+			}
+
+			hash := node.blockRefeeder.GetBlockToRequest()
+			if hash != nil {
+				getBlocks := wire.NewMsgGetData()
+				getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
+				if !node.queueOutgoing(getBlocks) {
+					return nil
+				}
+			}
+
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+
 		// Blocks are fed into the state when received by the block handler, then pulled out and
 		//   processed here.
-		block := node.state.NextBlock()
+		block = node.state.NextBlock()
 		if block == nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
@@ -64,6 +98,26 @@ func (node *Node) processBlocks(ctx context.Context) error {
 				return nil
 			}
 		}
+	}
+
+	return nil
+}
+
+// provideBlock feeds the block to the listeners.
+func (node *Node) provideBlock(ctx context.Context, block *wire.MsgBlock, height int) error {
+	hash := block.Header.BlockHash()
+	blockMessage := handlers.BlockMessage{Hash: *hash, Height: height, Time: block.Header.Timestamp}
+	for _, listener := range node.listeners {
+		listener.HandleBlock(ctx, handlers.ListenerMsgBlock, &blockMessage)
+	}
+
+	logger.Debug(ctx, "Providing block %d (%d tx) : %s", height, len(block.Transactions),
+		hash.String())
+	for _, tx := range block.Transactions {
+		node.confTxChannel.Add(handlers.TxData{
+			Msg:             tx,
+			ConfirmedHeight: height,
+		})
 	}
 
 	return nil
