@@ -74,14 +74,20 @@ func KeyFromBytes(b []byte, net Network) (Key, error) {
 	if b[0] != typeIntPrivKey {
 		return Key{}, ErrBadKeyType
 	}
+	if err := privateKeyIsValid(b[1:]); err != nil {
+		return Key{}, err
+	}
 
 	result := Key{net: net}
-	result.value.SetBytes(b)
+	result.value.SetBytes(b[1:])
 	return result, nil
 }
 
 // KeyFromNumber creates a key from a byte representation of a big number.
 func KeyFromNumber(b []byte, net Network) (Key, error) {
+	if err := privateKeyIsValid(b); err != nil {
+		return Key{}, err
+	}
 	result := Key{net: net}
 	result.value.SetBytes(b)
 	return result, nil

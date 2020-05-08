@@ -23,9 +23,8 @@ func Ripemd160(b []byte) []byte {
 //
 // See https://en.wikipedia.org/wiki/SHA-2
 func Sha256(b []byte) []byte {
-	hasher := sha256.New()
-	hasher.Write(b)
-	return hasher.Sum(nil)
+	result := sha256.Sum256(b)
+	return result[:]
 }
 
 // Hash160 returns the Ripemd160(SHA256(input)) of the input.

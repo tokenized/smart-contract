@@ -33,7 +33,12 @@ func RawAddressFromUnlockingScript(unlockingScript []byte) (RawAddress, error) {
 		return result, err
 	}
 
-	if len(firstPush) == 0 || buf.Len() == 0 {
+	if buf.Len() == 0 && isSignature(firstPush) {
+		// Can't determine public key for address from signature along. Locking script required.
+		return result, ErrNotEnoughData
+	}
+
+	if len(firstPush) == 0 {
 		return result, ErrUnknownScriptTemplate
 	}
 
@@ -89,6 +94,10 @@ func PublicKeyFromUnlockingScript(unlockingScript []byte) ([]byte, error) {
 	}
 
 	if buf.Len() == 0 {
+		if isSignature(firstPush) {
+			// Can't determine public key for address from signature along. Locking script required.
+			return nil, ErrNotEnoughData
+		}
 		return nil, ErrUnknownScriptTemplate
 	}
 

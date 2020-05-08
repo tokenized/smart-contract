@@ -93,7 +93,7 @@ func TestHandlers(test *testing.T) {
 	txStateChannel.Open(100)
 
 	// Create handlers
-	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, txRepo,
+	testHandlers := NewTrustedCommandHandlers(ctx, config, state, peerRepo, blockRepo, nil, txRepo,
 		reorgRepo, txTracker, memPool, &unconfTxChannel, &txStateChannel, listeners, nil)
 
 	test.Logf("Testing Blocks")

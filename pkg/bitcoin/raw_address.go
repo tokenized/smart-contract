@@ -3,15 +3,18 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 const (
+	ScriptTypeEmpty    = 0xff // Empty address
 	ScriptTypePKH      = 0x20 // Public Key Hash
 	ScriptTypeSH       = 0x21 // Script Hash
 	ScriptTypeMultiPKH = 0x22 // Multi-PKH
 	ScriptTypeRPH      = 0x23 // RPH
+	ScriptTypePK       = 0x24 // Public Key
 
 	ScriptHashLength = 20 // Length of standard public key, script, and R hashes RIPEMD(SHA256())
 )
@@ -35,6 +38,11 @@ func DecodeRawAddress(b []byte) (RawAddress, error) {
 // Decode decodes a binary raw address. It returns an error if there was an issue.
 func (ra *RawAddress) Decode(b []byte) error {
 	switch b[0] {
+	case ScriptTypeEmpty:
+		ra.scriptType = ScriptTypeEmpty
+		ra.data = nil
+		return nil
+
 	// Public Key Hash
 	case AddressTypeMainPKH:
 		fallthrough
@@ -42,6 +50,14 @@ func (ra *RawAddress) Decode(b []byte) error {
 		fallthrough
 	case ScriptTypePKH:
 		return ra.SetPKH(b[1:])
+
+	// Public Key
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		fallthrough
+	case ScriptTypePK:
+		return ra.SetCompressedPublicKey(b[1:])
 
 	// Script Hash
 	case AddressTypeMainSH:
@@ -104,6 +120,11 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 	}
 
 	switch t {
+	case ScriptTypeEmpty:
+		ra.scriptType = ScriptTypeEmpty
+		ra.data = nil
+		return nil
+
 	// Public Key Hash
 	case AddressTypeMainPKH:
 		fallthrough
@@ -115,6 +136,18 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 			return err
 		}
 		return ra.SetPKH(pkh)
+
+	// Public Key
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		fallthrough
+	case ScriptTypePK:
+		pk := make([]byte, PublicKeyCompressedLength)
+		if _, err := buf.Read(pk); err != nil {
+			return err
+		}
+		return ra.SetCompressedPublicKey(pk)
 
 	// Script Hash
 	case AddressTypeMainSH:
@@ -168,7 +201,7 @@ func (ra *RawAddress) Deserialize(buf *bytes.Reader) error {
 		return ra.SetRPH(rph)
 	}
 
-	return ErrBadType
+	return errors.Wrapf(ErrBadType, "Type : %d", t)
 }
 
 // NewRawAddressFromAddress creates a RawAddress from an Address.
@@ -180,6 +213,10 @@ func NewRawAddressFromAddress(a Address) RawAddress {
 		fallthrough
 	case AddressTypeTestPKH:
 		result.scriptType = ScriptTypePKH
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		result.scriptType = ScriptTypePK
 	case AddressTypeMainSH:
 		fallthrough
 	case AddressTypeTestSH:
@@ -215,6 +252,58 @@ func (ra *RawAddress) SetPKH(pkh []byte) error {
 	ra.scriptType = ScriptTypePKH
 	ra.data = pkh
 	return nil
+}
+
+func (ra *RawAddress) GetPublicKeyHash() (Hash20, error) {
+	if ra.scriptType != ScriptTypePKH {
+		return Hash20{}, ErrWrongType
+	}
+
+	hash, err := NewHash20(ra.data)
+	return *hash, err
+}
+
+/****************************************** PK ***************************************************/
+
+// NewRawAddressPublicKey creates an address from a public key.
+func NewRawAddressPublicKey(pk PublicKey) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetPublicKey(pk)
+	return result, err
+}
+
+// SetPublicKey sets the type as ScriptTypePKH and sets the data to the specified public key.
+func (ra *RawAddress) SetPublicKey(pk PublicKey) error {
+	ra.scriptType = ScriptTypePK
+	ra.data = pk.Bytes()
+	return nil
+}
+
+// NewRawAddressCompressedPublicKey creates an address from a compressed public key.
+func NewRawAddressCompressedPublicKey(pk []byte) (RawAddress, error) {
+	var result RawAddress
+	err := result.SetCompressedPublicKey(pk)
+	return result, err
+}
+
+// SetCompressedPublicKey sets the type as ScriptTypePKH and sets the data to the specified
+//   compressed public key.
+func (ra *RawAddress) SetCompressedPublicKey(pk []byte) error {
+	if len(pk) != PublicKeyCompressedLength {
+		return ErrBadScriptHashLength
+	}
+
+	ra.scriptType = ScriptTypePK
+	ra.data = pk
+	return nil
+}
+
+func (ra *RawAddress) GetPublicKey() (PublicKey, error) {
+	if ra.scriptType != ScriptTypePK {
+		return PublicKey{}, ErrWrongType
+	}
+
+	return PublicKeyFromBytes(ra.data)
 }
 
 /******************************************* SH ***************************************************/
@@ -350,6 +439,12 @@ func (ra RawAddress) IsEmpty() bool {
 }
 
 func (ra RawAddress) Serialize(buf *bytes.Buffer) error {
+	if ra.IsEmpty() {
+		if err := buf.WriteByte(ScriptTypeEmpty); err != nil {
+			return err
+		}
+	}
+
 	if err := buf.WriteByte(ra.scriptType); err != nil {
 		return err
 	}
@@ -384,6 +479,13 @@ func (ra *RawAddress) Hashes() ([]Hash20, error) {
 		fallthrough
 	case ScriptTypeRPH:
 		hash, err := NewHash20(ra.data)
+		if err != nil {
+			return nil, err
+		}
+		return []Hash20{*hash}, nil
+
+	case ScriptTypePK:
+		hash, err := NewHash20(Hash160(ra.data))
 		if err != nil {
 			return nil, err
 		}
