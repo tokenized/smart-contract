@@ -11,6 +11,8 @@ import (
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -201,6 +203,42 @@ func buildInput(utxo bitcoin.UTXO) (*Input, error) {
 	}
 
 	return &input, nil
+}
+
+// GetPublicKeyForInput attempts to find a public key in the locking and unlocking scripts.
+// Currently supports P2PK and P2PKH.
+func (itx *Transaction) GetPublicKeyForInput(index int) (bitcoin.PublicKey, error) {
+	// P2PKH script contains public key in unlock script
+	if itx.Inputs[index].Address.Type() == bitcoin.ScriptTypePKH {
+		pk, err := bitcoin.PublicKeyFromUnlockingScript(itx.MsgTx.TxIn[index].SignatureScript)
+		if err != nil {
+			return bitcoin.PublicKey{}, errors.Wrap(err, "unlock script")
+		}
+
+		publicKey, err := bitcoin.PublicKeyFromBytes(pk)
+		if err != nil {
+			return bitcoin.PublicKey{}, errors.Wrap(err, "parse public key")
+		}
+
+		return publicKey, nil
+	}
+
+	// P2PK script contains public key in locking script
+	if itx.Inputs[index].Address.Type() == bitcoin.ScriptTypePKH {
+		pk, err := bitcoin.PublicKeyFromLockingScript(itx.Inputs[index].UTXO.LockingScript)
+		if err != nil {
+			return bitcoin.PublicKey{}, errors.Wrap(err, "locking script")
+		}
+
+		publicKey, err := bitcoin.PublicKeyFromBytes(pk)
+		if err != nil {
+			return bitcoin.PublicKey{}, errors.Wrap(err, "parse public key")
+		}
+
+		return publicKey, nil
+	}
+
+	return bitcoin.PublicKey{}, errors.Wrap(bitcoin.ErrWrongType, "not found")
 }
 
 // Returns all the input hashes

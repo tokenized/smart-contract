@@ -34,6 +34,7 @@ type Node struct {
 	store           storage.Storage                    // Persistent data
 	peers           *handlerstorage.PeerRepository     // Peer data
 	blocks          *handlerstorage.BlockRepository    // Block data
+	blockRefeeder   handlers.BlockRefeeder             // Reprocess older blocks
 	txs             *handlerstorage.TxRepository       // Tx data
 	reorgs          *handlerstorage.ReorgRepository    // Reorg data
 	txTracker       *data.TxTracker                    // Tracks tx requests to ensure all txs are received
@@ -133,8 +134,8 @@ func (node *Node) load(ctx context.Context) error {
 	}
 
 	node.handlers = handlers.NewTrustedCommandHandlers(ctx, node.config, node.state, node.peers,
-		node.blocks, node.txs, node.reorgs, node.txTracker, node.memPool, &node.unconfTxChannel,
-		&node.txStateChannel, node.listeners, node.txFilters)
+		node.blocks, &node.blockRefeeder, node.txs, node.reorgs, node.txTracker, node.memPool,
+		&node.unconfTxChannel, &node.txStateChannel, node.listeners, node.txFilters)
 	return nil
 }
 
@@ -597,14 +598,15 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		if err := node.handleMessage(ctx, msg); err != nil {
-			logger.Error(ctx, "SpyNodeAborted to handle [%s] message : %s", msg.Command(), err.Error())
+			logger.Error(ctx, "SpyNodeAborted to handle [%s] message : %s", msg.Command(),
+				err.Error())
 			node.requestStop(ctx)
 			break
 		}
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Warn(ctx, "Reject message from %s : %s - %s", node.config.NodeAddress,
+				logger.Warn(ctx, "(%s) Reject message : %s - %s", node.config.NodeAddress,
 					reject.Reason, reject.Hash.String())
 			}
 		}
@@ -1044,6 +1046,16 @@ func (node *Node) sleepUntilStop(deciseconds int) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+func (node *Node) RefeedBlocksFromHeight(ctx context.Context, height int) error {
+	hash, err := node.Hash(ctx, height)
+	if err != nil {
+		return errors.Wrap(err, "get hash")
+	}
+
+	node.blockRefeeder.SetHeight(height, *hash)
+	return nil
 }
 
 // ------------------------------------------------------------------------------------------------

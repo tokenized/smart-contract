@@ -1,10 +1,15 @@
 package bitcoin
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/big"
 
 	"github.com/pkg/errors"
+)
+
+const (
+	PublicKeyCompressedLength = 33
 )
 
 // PublicKey is an elliptic curve public key using the secp256k1 elliptic curve.
@@ -25,11 +30,14 @@ func PublicKeyFromStr(s string) (PublicKey, error) {
 // PublicKeyFromBytes decodes a binary bitcoin public key. It returns the key and an error if
 //   there was an issue.
 func PublicKeyFromBytes(b []byte) (PublicKey, error) {
-	if len(b) != 33 {
+	if len(b) != PublicKeyCompressedLength {
 		return PublicKey{}, errors.New("Invalid public key length")
 	}
 
 	x, y := expandPublicKey(b)
+	if err := publicKeyIsValid(x, y); err != nil {
+		return PublicKey{}, err
+	}
 	return PublicKey{X: x, Y: y}, nil
 }
 
@@ -84,6 +92,22 @@ func (k PublicKey) Equal(o PublicKey) bool {
 	return k.X.Cmp(&o.X) == 0 && k.Y.Cmp(&o.Y) == 0
 }
 
+func (k PublicKey) Serialize(buf *bytes.Buffer) error {
+	if _, err := buf.Write(k.Bytes()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *PublicKey) Deserialize(buf *bytes.Reader) error {
+	b := make([]byte, PublicKeyCompressedLength)
+	if _, err := buf.Read(b); err != nil {
+		return err
+	}
+
+	return k.SetBytes(b)
+}
+
 // MarshalJSON converts to json.
 func (k PublicKey) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + k.String() + "\""), nil
@@ -107,14 +131,14 @@ func (k *PublicKey) Scan(data interface{}) error {
 }
 
 func compressPublicKey(x big.Int, y big.Int) []byte {
-	result := make([]byte, 33)
+	result := make([]byte, PublicKeyCompressedLength)
 
 	// Header byte is 0x02 for even y value and 0x03 for odd
 	result[0] = byte(0x02) + byte(y.Bit(0))
 
 	// Put x at end so it is zero padded in front
 	b := x.Bytes()
-	offset := 33 - len(b)
+	offset := PublicKeyCompressedLength - len(b)
 	copy(result[offset:], b)
 
 	return result
@@ -145,9 +169,7 @@ func expandPublicKey(k []byte) (big.Int, big.Int) {
 	return x, y
 }
 
-func publicKeyIsValid(k []byte) error {
-	x, y := expandPublicKey(k)
-
+func publicKeyIsValid(x, y big.Int) error {
 	if x.Sign() == 0 || y.Sign() == 0 {
 		return ErrOutOfRangeKey
 	}
@@ -155,7 +177,13 @@ func publicKeyIsValid(k []byte) error {
 	return nil
 }
 
-func addPublicKeys(key1 []byte, key2 []byte) []byte {
+func compressedPublicKeyIsValid(k []byte) error {
+	x, y := expandPublicKey(k)
+
+	return publicKeyIsValid(x, y)
+}
+
+func addCompressedPublicKeys(key1 []byte, key2 []byte) []byte {
 	x1, y1 := expandPublicKey(key1)
 	x2, y2 := expandPublicKey(key2)
 	x, y := curveS256.Add(&x1, &y1, &x2, &y2)

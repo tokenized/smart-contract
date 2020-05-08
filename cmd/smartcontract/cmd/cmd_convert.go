@@ -36,26 +36,39 @@ var cmdConvert = &cobra.Command{
 		if err == nil {
 			fmt.Printf("PublicKey : %s\n", key.PublicKey().String())
 			ra, _ := key.RawAddress()
-			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, bitcoin.MainNet).String())
+			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
 			return nil
 		}
 
 		if len(args[0]) == 66 {
 			hash, _ := hex.DecodeString(args[0])
 			ra, _ := bitcoin.NewRawAddressPKH(bitcoin.Hash160(hash))
-			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, bitcoin.MainNet).String())
+			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
 			return nil
 		}
 
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err == nil {
-			h, err := address.Hash()
-			if err != nil {
-				fmt.Printf("%s\n", err)
-				return nil
+			ra := bitcoin.NewRawAddressFromAddress(address)
+			fmt.Printf("Raw Address : %x\n", ra.Bytes())
+
+			if pk, err := ra.GetPublicKey(); err == nil {
+				fmt.Printf("Public Key : %s\n", pk.String())
+
+				pkh, _ := bitcoin.NewHash20(bitcoin.Hash160(pk.Bytes()))
+				fmt.Printf("Public Key Hash : %s\n", pkh.String())
+
+				pkhRa, err := bitcoin.NewRawAddressPKH(pkh.Bytes())
+				if err == nil {
+					fmt.Printf("P2PKH address : %s\n",
+						bitcoin.NewAddressFromRawAddress(pkhRa, network).String())
+				}
 			}
-			fmt.Printf("Hash : %x\n", h[:])
-			fmt.Printf("Raw Address : 20%x\n", h[:])
+
+			if pkh, err := ra.GetPublicKeyHash(); err == nil {
+				fmt.Printf("Public Key Hash : %s\n", pkh.String())
+			}
+
 			return nil
 		}
 

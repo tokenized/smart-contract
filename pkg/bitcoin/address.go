@@ -11,7 +11,9 @@ var (
 	ErrBadScriptHashLength   = errors.New("Script hash has invalid length")
 	ErrBadCheckSum           = errors.New("Address has bad checksum")
 	ErrBadType               = errors.New("Address type unknown")
+	ErrWrongType             = errors.New("Address type wrong")
 	ErrUnknownScriptTemplate = errors.New("Unknown script template")
+	ErrNotEnoughData         = errors.New("Not enough data")
 )
 
 const (
@@ -19,11 +21,13 @@ const (
 	AddressTypeMainSH       = 0x05 // Script Hash (starts with 3)
 	AddressTypeMainMultiPKH = 0x76 // Multi-PKH (starts with p) - Experimental value. Not standard
 	AddressTypeMainRPH      = 0x7b // RPH (starts with r) - Experimental value. Not standard
+	AddressTypeMainPK       = 0x06 // Public Key - Experimental value. Not standard
 
 	AddressTypeTestPKH      = 0x6f // Testnet Public Key Hash (starts with m or n)
 	AddressTypeTestSH       = 0xc4 // Testnet Script Hash (starts with 2)
 	AddressTypeTestMultiPKH = 0x78 // Multi-PKH (starts with q) - Experimental value. Not standard
 	AddressTypeTestRPH      = 0x7d // RPH (starts with s) - Experimental value. Not standard
+	AddressTypeTestPK       = 0x07 // Public Key - Experimental value. Not standard
 )
 
 type Address struct {
@@ -59,6 +63,8 @@ func (a *Address) decodeBytes(b []byte) error {
 	// MainNet
 	case AddressTypeMainPKH:
 		return a.SetPKH(b[1:], MainNet)
+	case AddressTypeMainPK:
+		return a.SetCompressedPublicKey(b[1:], MainNet)
 	case AddressTypeMainSH:
 		return a.SetSH(b[1:], MainNet)
 	case AddressTypeMainMultiPKH:
@@ -92,6 +98,8 @@ func (a *Address) decodeBytes(b []byte) error {
 	// TestNet
 	case AddressTypeTestPKH:
 		return a.SetPKH(b[1:], TestNet)
+	case AddressTypeTestPK:
+		return a.SetCompressedPublicKey(b[1:], TestNet)
 	case AddressTypeTestSH:
 		return a.SetSH(b[1:], TestNet)
 	case AddressTypeTestMultiPKH:
@@ -150,6 +158,12 @@ func NewAddressFromRawAddress(ra RawAddress, net Network) Address {
 		} else {
 			result.addressType = AddressTypeTestPKH
 		}
+	case ScriptTypePK:
+		if net == MainNet {
+			result.addressType = AddressTypeMainPK
+		} else {
+			result.addressType = AddressTypeTestPK
+		}
 	case ScriptTypeSH:
 		if net == MainNet {
 			result.addressType = AddressTypeMainSH
@@ -196,6 +210,58 @@ func (a *Address) SetPKH(pkh []byte, net Network) error {
 
 	a.data = pkh
 	return nil
+}
+
+/****************************************** PK ***************************************************/
+
+// NewAddressPublicKey creates an address from a public key.
+func NewAddressPublicKey(publicKey PublicKey, net Network) (Address, error) {
+	var result Address
+	err := result.SetPublicKey(publicKey, net)
+	return result, err
+}
+
+// SetPublicKey sets the Public Key and script type of the address.
+func (a *Address) SetPublicKey(publicKey PublicKey, net Network) error {
+	if net == MainNet {
+		a.addressType = AddressTypeMainPK
+	} else {
+		a.addressType = AddressTypeTestPK
+	}
+
+	a.data = publicKey.Bytes()
+	return nil
+}
+
+// NewAddressCompressedPublicKey creates an address from a compressed public key.
+func NewAddressCompressedPublicKey(publicKey []byte, net Network) (Address, error) {
+	var result Address
+	err := result.SetCompressedPublicKey(publicKey, net)
+	return result, err
+}
+
+// SetCompressedPublicKey sets the Public Key and script type of the address.
+func (a *Address) SetCompressedPublicKey(publicKey []byte, net Network) error {
+	if len(publicKey) != PublicKeyCompressedLength {
+		return ErrBadScriptHashLength
+	}
+
+	if net == MainNet {
+		a.addressType = AddressTypeMainPK
+	} else {
+		a.addressType = AddressTypeTestPK
+	}
+
+	a.data = publicKey
+	return nil
+}
+
+func (a *Address) GetPublicKey() (PublicKey, error) {
+	if a.addressType != AddressTypeMainPK && a.addressType != AddressTypeTestPK {
+		return PublicKey{}, ErrWrongType
+	}
+
+	return PublicKeyFromBytes(a.data)
 }
 
 /****************************************** SH ***************************************************/
@@ -331,6 +397,10 @@ func (a Address) Hash() (*Hash20, error) {
 		fallthrough
 	case AddressTypeTestRPH:
 		return NewHash20(a.data)
+	case AddressTypeMainPK:
+		fallthrough
+	case AddressTypeTestPK:
+		fallthrough
 	case AddressTypeMainMultiPKH:
 		fallthrough
 	case AddressTypeTestMultiPKH:

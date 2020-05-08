@@ -224,7 +224,8 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion, wire.BitcoinNet(node.config.Net))
+		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion,
+			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
 			if ok {
@@ -246,14 +247,16 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 
 		if err := node.handleMessage(ctx, msg); err != nil {
 			node.peers.UpdateScore(ctx, node.address, -1)
-			logger.Debug(ctx, "(%s) Failed to handle [%s] message : %s", node.address, msg.Command(), err.Error())
+			logger.Debug(ctx, "(%s) Failed to handle [%s] message : %s", node.address,
+				msg.Command(), err.Error())
 			node.Stop(ctx)
 			break
 		}
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Warn(ctx, "(%s) Reject message from : %s - %s", node.address, reject.Reason, reject.Hash.String())
+				logger.Warn(ctx, "(%s) Reject message : %s - %s", node.address, reject.Reason,
+					reject.Hash.String())
 			}
 		}
 	}

@@ -39,6 +39,18 @@ func NewHash32FromStr(s string) (*Hash32, error) {
 	return &result, nil
 }
 
+// Sha256 sets the value of this hash to the SHA256 of itself.
+func (h *Hash32) Sha256() {
+	copy(h[:], Sha256(h[:]))
+}
+
+// AddHashes adds the value of the hashes together using big integer modular math.
+func AddHashes(l, r Hash32) Hash32 {
+	b := addPrivateKeys(l[:], r[:])
+	result, _ := NewHash32(b) // Ignore error because addPrivateKeys always returns 32 bytes
+	return *result
+}
+
 // Bytes returns the data for the hash.
 func (h Hash32) Bytes() []byte {
 	return h[:]
@@ -72,9 +84,16 @@ func (h *Hash32) Equal(o *Hash32) bool {
 }
 
 // Serialize writes the hash into a writer.
-func (h *Hash32) Serialize(w io.Writer) error {
+func (h Hash32) Serialize(w io.Writer) error {
 	_, err := w.Write(h[:])
 	return err
+}
+
+func (h *Hash32) Deserialize(buf *bytes.Reader) error {
+	if _, err := buf.Read(h[:]); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Deserialize reads a hash from a reader.
