@@ -242,10 +242,23 @@ func (server *Server) Stop(ctx context.Context) error {
 }
 
 func (server *Server) SetInSync() {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
 	server.inSync = true
 }
 
+func (server *Server) IsInSync() bool {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
+	return server.inSync
+}
+
 func (server *Server) SetAlternateResponder(responder protomux.ResponderFunc) {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
 	server.AlternateResponder = responder
 }
 
@@ -267,6 +280,9 @@ func (server *Server) sendTx(ctx context.Context, tx *wire.MsgTx) error {
 
 // respondTx is an internal method used as the responder
 func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
 	// Add to spynode and mark as safe so it will be processed now
 	if server.SpyNode != nil {
 		if err := server.SpyNode.HandleTx(ctx, tx); err != nil {

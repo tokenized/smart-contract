@@ -71,6 +71,9 @@ goimports:
 test: prepare
 	go test ./...
 
+test-race: prepare
+	go test -race ./...
+
 test-win: prepare-win
 	go test ./...
 
@@ -79,3 +82,4 @@ bench: prepare
 
 clean:
 	rm -rf dist
+	go clean -testcache

@@ -119,7 +119,7 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 
 	return &Transaction{
 		Hash:          hash,
-		MsgTx:         tx,
+		MsgTx:         tx.Copy(),
 		MsgProto:      msg,
 		MsgProtoIndex: msgProtoIndex,
 	}, nil
@@ -128,7 +128,7 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
 	return &Transaction{
 		Hash:  tx.TxHash(),
-		MsgTx: tx,
+		MsgTx: tx.Copy(),
 	}, nil
 }
 

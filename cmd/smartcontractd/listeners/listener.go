@@ -104,7 +104,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 }
 
 func (server *Server) HandleInSync(ctx context.Context) error {
-	if server.inSync {
+	if server.IsInSync() {
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
 			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
@@ -125,7 +125,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	node.Log(ctx, "Node is in sync")
 	node.Log(ctx, "Processing pending : %d responses, %d requests", len(server.pendingResponses),
 		len(server.pendingRequests))
-	server.inSync = true
+	server.SetInSync()
 	pendingResponses := server.pendingResponses
 	server.pendingResponses = nil
 	pendingRequests := server.pendingRequests

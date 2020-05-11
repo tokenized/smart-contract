@@ -561,6 +561,8 @@ func oracleContract(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
+	clearResponses()
+
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
 		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
