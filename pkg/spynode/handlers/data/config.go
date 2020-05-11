@@ -3,7 +3,6 @@ package data
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 )
@@ -21,8 +20,6 @@ type Config struct {
 	// Retry attempts when main connection fails.
 	MaxRetries int
 	RetryDelay int
-
-	Lock sync.Mutex // Lock for config data
 }
 
 const (
@@ -70,12 +67,4 @@ func (c Config) String() string {
 	}
 
 	return fmt.Sprintf("{%v}", strings.Join(parts, " "))
-}
-
-func (c Config) Copy() Config {
-	c.Lock.Lock()
-	defer c.Lock.Unlock()
-
-	result := c
-	return result
 }

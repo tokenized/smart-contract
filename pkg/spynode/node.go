@@ -70,7 +70,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		state:           data.NewState(),
 		store:           store,
 		peers:           handlerstorage.NewPeerRepository(store),
-		blocks:          handlerstorage.NewBlockRepository(&config, store),
+		blocks:          handlerstorage.NewBlockRepository(config, store),
 		txs:             handlerstorage.NewTxRepository(store),
 		reorgs:          handlerstorage.NewReorgRepository(store),
 		txTracker:       data.NewTxTracker(),
@@ -804,7 +804,7 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 		peers = append(peers[:random], peers[random+1:]...)
 
 		// Attempt connection
-		newNode := NewUntrustedNode(address, node.config.Copy(), node.state, node.store, node.peers,
+		newNode := NewUntrustedNode(address, node.config, node.state, node.store, node.peers,
 			node.blocks, node.txs, node.memPool, &node.unconfTxChannel, node.listeners,
 			node.txFilters, true)
 		nodes = append(nodes, newNode)
@@ -1005,7 +1005,7 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	}
 
 	// Attempt connection
-	newNode := NewUntrustedNode(address, node.config.Copy(), node.state, node.store, node.peers,
+	newNode := NewUntrustedNode(address, node.config, node.state, node.store, node.peers,
 		node.blocks, node.txs, node.memPool, &node.unconfTxChannel, node.listeners, node.txFilters,
 		false)
 	if txs != nil {
