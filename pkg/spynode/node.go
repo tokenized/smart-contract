@@ -328,6 +328,7 @@ func (node *Node) requestStop(ctx context.Context) error {
 	}
 	logger.Info(ctx, "Stopping")
 	node.stopping = true
+	node.txTracker.Stop()
 	if node.outgoing != nil {
 		close(node.outgoing)
 		node.outgoing = nil
@@ -631,6 +632,11 @@ func (node *Node) queueOutgoing(msg wire.Message) bool {
 	return true
 }
 
+// TransmitMessage interface
+func (node *Node) TransmitMessage(msg wire.Message) bool {
+	return node.queueOutgoing(msg)
+}
+
 // check checks the state of spynode and performs state related actions.
 func (node *Node) check(ctx context.Context) error {
 	if !node.state.VersionReceived() {
@@ -692,15 +698,11 @@ func (node *Node) check(ctx context.Context) error {
 			}
 		}
 
-		responses, err := node.txTracker.Check(ctx, node.memPool)
-		if err != nil {
+		if err := node.txTracker.Check(ctx, node.memPool, node); err != nil {
 			return err
 		}
-		// Queue messages to be sent in response
-		for _, response := range responses {
-			if !node.queueOutgoing(response) {
-				break
-			}
+		if node.isStopping() {
+			return nil
 		}
 	} else if node.state.HeadersRequested() == nil && node.state.TotalBlockRequestCount() < 5 {
 		// Request more headers
@@ -1012,6 +1014,9 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
 	wg.Add(1)
+	if node.isStopping() {
+		newNode.Stop(ctx)
+	}
 	node.untrustedLock.Unlock()
 	go func() {
 		defer wg.Done()

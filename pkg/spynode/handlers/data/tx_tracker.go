@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -25,6 +26,7 @@ import (
 
 type TxTracker struct {
 	txids map[bitcoin.Hash32]time.Time
+	stop  atomic.Value
 	mutex sync.Mutex
 }
 
@@ -33,7 +35,13 @@ func NewTxTracker() *TxTracker {
 		txids: make(map[bitcoin.Hash32]time.Time),
 	}
 
+	result.stop.Store(false)
+
 	return &result
+}
+
+func (tracker *TxTracker) Stop() {
+	tracker.stop.Store(true)
 }
 
 // Adds a txid to tracker to be monitored for expired requests
@@ -68,43 +76,63 @@ func (tracker *TxTracker) RemoveList(ctx context.Context, txids []*bitcoin.Hash3
 	}
 }
 
+type MessageTransmitter interface {
+	TransmitMessage(wire.Message) bool
+}
+
 // Called periodically to request any txs that have not been received yet
-func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool) ([]wire.Message, error) {
+func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool, transmitter MessageTransmitter) error {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
-	response := []wire.Message{}
 	invRequest := wire.NewMsgGetData()
+	requestCount := 0
 	for txid, addedTime := range tracker.txids {
+		val := tracker.stop.Load()
+		s, ok := val.(bool)
+		if !ok || s {
+			break
+		}
+
 		alreadyHave, shouldRequest := mempool.AddRequest(ctx, txid, false)
 		if alreadyHave {
 			delete(tracker.txids, txid) // Remove since we have received tx
 		} else if shouldRequest {
-			logger.Verbose(ctx, "Re-Requesting tx (announced %s) : %s",
+			logger.Debug(ctx, "Re-Requesting tx (announced %s) : %s",
 				addedTime.Format("15:04:05.999999"), txid.String())
 			newTxId := txid // Make a copy to ensure the value isn't overwritten by the next iteration
 			item := wire.NewInvVect(wire.InvTypeTx, &newTxId)
+
 			// Request
 			if err := invRequest.AddInvVect(item); err != nil {
 				// Too many requests for one message
-				response = append(response, invRequest) // Append full message
-				invRequest = wire.NewMsgGetData()       // Start new message
+				if !transmitter.TransmitMessage(invRequest) {
+					break // node stopped
+				}
+				invRequest = wire.NewMsgGetData() // Start new message
 
 				// Try to add it again
 				if err := invRequest.AddInvVect(item); err != nil {
-					return response, errors.Wrap(err, "Failed to add tx to get data request")
+					return errors.Wrap(err, "Failed to add tx to get data request")
 				} else {
+					requestCount++
 					delete(tracker.txids, txid) // Remove since we requested
 				}
 			} else {
+				requestCount++
 				delete(tracker.txids, txid) // Remove since we requested
 			}
+
+			if requestCount > 100 {
+				if !transmitter.TransmitMessage(invRequest) {
+					break // node stopped
+				}
+				invRequest = wire.NewMsgGetData() // Start new message
+				requestCount = 0
+			}
+
 		} // else wait and check again later
 	}
 
-	if len(invRequest.InvList) > 0 {
-		response = append(response, invRequest)
-	}
-
-	return response, nil
+	return nil
 }
