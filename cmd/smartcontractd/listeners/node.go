@@ -1,7 +1,10 @@
 package listeners
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
@@ -22,6 +25,7 @@ import (
 
 const (
 	walletKey = "wallet" // storage path for wallet
+	serverKey = "server" // storage path for server
 )
 
 type Server struct {
@@ -101,6 +105,15 @@ func NewServer(
 }
 
 func (server *Server) Load(ctx context.Context) error {
+	b, err := server.MasterDB.Fetch(ctx, serverKey)
+	if err == nil {
+		if err := server.Deserialize(bytes.NewReader(b)); err != nil {
+			return errors.Wrap(err, "deserialize server")
+		}
+	} else if err != db.ErrNotFound {
+		return errors.Wrap(err, "fetch server")
+	}
+
 	// Set responder
 	server.Handler.SetResponder(server.respondTx)
 	server.Handler.SetReprocessor(server.reprocessTx)
@@ -216,7 +229,123 @@ func (server *Server) Run(ctx context.Context) error {
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
 
-	return server.Tracer.Save(ctx, server.MasterDB)
+	return server.Save(ctx)
+}
+
+func (server *Server) Save(ctx context.Context) error {
+
+	var buf bytes.Buffer
+	if err := server.Serialize(&buf); err != nil {
+		return errors.Wrap(err, "serialize server")
+	}
+
+	if err := server.MasterDB.Put(ctx, serverKey, buf.Bytes()); err != nil {
+		return errors.Wrap(err, "put server")
+	}
+
+	if err := server.Tracer.Save(ctx, server.MasterDB); err != nil {
+		return errors.Wrap(err, "save tracer")
+	}
+
+	return nil
+}
+
+func (server *Server) Serialize(buf *bytes.Buffer) error {
+	// Version
+	if err := binary.Write(buf, binary.LittleEndian, uint8(0)); err != nil {
+		return errors.Wrap(err, "version")
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(server.pendingRequests))); err != nil {
+		return errors.Wrap(err, "pending requests size")
+	}
+	for _, pr := range server.pendingRequests {
+		if err := pr.Itx.Write(buf); err != nil {
+			return errors.Wrap(err, "serialize pending request itx")
+		}
+
+		if err := binary.Write(buf, binary.LittleEndian, uint32(pr.ContractIndex)); err != nil {
+			return errors.Wrap(err, "write pending request index")
+		}
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(server.pendingResponses))); err != nil {
+		return errors.Wrap(err, "pending responses size")
+	}
+	for _, itx := range server.pendingResponses {
+		if err := itx.Write(buf); err != nil {
+			return errors.Wrap(err, "serialize pending response itx")
+		}
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(server.revertedTxs))); err != nil {
+		return errors.Wrap(err, "reverted txs size")
+	}
+	for _, txid := range server.revertedTxs {
+		if err := txid.Serialize(buf); err != nil {
+			return errors.Wrap(err, "serialize reverted tx")
+		}
+	}
+
+	return nil
+}
+
+func (server *Server) Deserialize(buf *bytes.Reader) error {
+	// Version
+	var version uint8
+	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+		return errors.Wrap(err, "version")
+	}
+
+	if version != 0 {
+		return fmt.Errorf("Unsupported version : %d", version)
+	}
+
+	var count uint32
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+		return errors.Wrap(err, "pending requests size")
+	}
+	server.pendingRequests = make([]pendingRequest, 0, count)
+	for i := uint32(0); i < count; i++ {
+		pr := pendingRequest{}
+		pr.Itx = &inspector.Transaction{}
+		if err := pr.Itx.Read(buf, server.Config.IsTest); err != nil {
+			return errors.Wrap(err, "deserialize pending request itx")
+		}
+
+		var contractIndex uint32
+		if err := binary.Read(buf, binary.LittleEndian, &contractIndex); err != nil {
+			return errors.Wrap(err, "read pending request index")
+		}
+		pr.ContractIndex = int(contractIndex)
+		server.pendingRequests = append(server.pendingRequests, pr)
+	}
+
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+		return errors.Wrap(err, "pending responses size")
+	}
+	server.pendingResponses = make(inspector.TransactionList, 0, count)
+	for i := uint32(0); i < count; i++ {
+		var itx inspector.Transaction
+		if err := itx.Read(buf, server.Config.IsTest); err != nil {
+			return errors.Wrap(err, "deserialize pending response itx")
+		}
+		server.pendingResponses = append(server.pendingResponses, &itx)
+	}
+
+	if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+		return errors.Wrap(err, "reverted txs size")
+	}
+	server.revertedTxs = make([]*bitcoin.Hash32, 0, count)
+	for i := uint32(0); i < count; i++ {
+		var txid bitcoin.Hash32
+		if err := txid.Deserialize(buf); err != nil {
+			return errors.Wrap(err, "deserialize reverted tx")
+		}
+		server.revertedTxs = append(server.revertedTxs, &txid)
+	}
+
+	return nil
 }
 
 func (server *Server) Stop(ctx context.Context) error {
