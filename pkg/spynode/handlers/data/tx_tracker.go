@@ -82,6 +82,12 @@ type MessageTransmitter interface {
 
 // Called periodically to request any txs that have not been received yet
 func (tracker *TxTracker) Check(ctx context.Context, mempool *MemPool, transmitter MessageTransmitter) error {
+	val := tracker.stop.Load()
+	s, ok := val.(bool)
+	if !ok || s {
+		return nil
+	}
+
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 
