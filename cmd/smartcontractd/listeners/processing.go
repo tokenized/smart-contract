@@ -44,7 +44,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
-					if !server.inSync && ptx.Itx.IsIncomingMessageType() {
+					if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
 						node.Log(ctx, "Request added to pending : %s", ptx.Itx.Hash)
 						// Save pending request to ensure it has a response, and process it if not.
 						server.pendingRequests = append(server.pendingRequests, pendingRequest{
@@ -66,7 +66,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 					if address.Equal(input.Address) {
 						found = true
 						responseAdded = true
-						if !server.inSync {
+						if !server.IsInSync() {
 							node.Log(ctx, "Response added to pending : %s", ptx.Itx.Hash)
 							server.pendingResponses = append(server.pendingResponses, ptx.Itx)
 						}
@@ -80,7 +80,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		}
 
 		if found { // Tx is associated with one of our contracts.
-			if server.inSync {
+			if server.IsInSync() {
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
 					node.LogError(ctx, "Failed to handle tx : %s", err)

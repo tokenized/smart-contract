@@ -228,10 +228,13 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgBlock) error 
 			if conflicting := node.memPool.Conflicting(block.Transactions[i]); len(conflicting) > 0 {
 				for _, confHash := range conflicting {
 					if containsHash(confHash, unconfirmed) { // Only send for txs that previously matched filters.
-						node.txStateChannel.Add(handlers.TxState{
+						if err := node.txStateChannel.Add(handlers.TxState{
 							handlers.ListenerMsgTxStateCancel,
 							confHash,
-						})
+						}); err != nil {
+							logger.Warn(ctx, "Aborting block : tx channel : %s", err)
+							break
+						}
 					}
 				}
 			}

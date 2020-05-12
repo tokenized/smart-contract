@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/storage"
@@ -28,6 +29,7 @@ var (
 // Each database is too different.
 type DB struct {
 	storage storage.Storage
+	lock    sync.RWMutex
 }
 
 // StorageConfig is geared towards "bucket" style storage, where you have a
@@ -66,6 +68,9 @@ func (db *DB) StatusCheck(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "platform.DB.StatusCheck")
 	defer span.End()
 
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage != nil {
 		// Generate a random key that is almost certain not to exist.
 		uid, _ := uuid.NewRandom()
@@ -83,7 +88,9 @@ func (db *DB) StatusCheck(ctx context.Context) error {
 
 // Close closes a DB value being used.
 func (db *DB) Close() {
+	db.lock.Lock()
 	db.storage = nil
+	db.lock.Unlock()
 }
 
 // -------------------------------------------------------------------------
@@ -91,6 +98,9 @@ func (db *DB) Close() {
 
 // Put something in storage
 func (db *DB) Put(ctx context.Context, key string, body []byte) error {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage == nil {
 		return errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -100,6 +110,9 @@ func (db *DB) Put(ctx context.Context, key string, body []byte) error {
 
 // Fetch something from storage
 func (db *DB) Fetch(ctx context.Context, key string) ([]byte, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage == nil {
 		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -118,6 +131,9 @@ func (db *DB) Fetch(ctx context.Context, key string) ([]byte, error) {
 
 // Remove something from storage
 func (db *DB) Remove(ctx context.Context, key string) error {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage == nil {
 		return errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -127,6 +143,9 @@ func (db *DB) Remove(ctx context.Context, key string) error {
 
 // Search for things in storage
 func (db *DB) Search(ctx context.Context, keyStart string) ([][]byte, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage == nil {
 		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -139,6 +158,9 @@ func (db *DB) Search(ctx context.Context, keyStart string) ([][]byte, error) {
 
 // List returns the keys under a given path.
 func (db *DB) List(ctx context.Context, key string) ([]string, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
 	if db.storage == nil {
 		return nil, errors.Wrap(ErrInvalidDBProvided, "storage == nil")
 	}
@@ -150,6 +172,9 @@ func (db *DB) Clear(ctx context.Context, keyStart string) error {
 	query := map[string]string{
 		"path": keyStart,
 	}
+
+	db.lock.RLock()
+	defer db.lock.RUnlock()
 
 	return db.storage.Clear(ctx, query)
 }

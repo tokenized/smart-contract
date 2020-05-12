@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -20,6 +19,8 @@ import (
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 // TestGovernance is the entry point for testing governance functions.
@@ -418,10 +419,12 @@ func voteResult(t *testing.T) {
 	// Wait for vote expiration
 	time.Sleep(2 * time.Second)
 
+	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
 		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
 	}
+	responseLock.Unlock()
 
 	// Check the response
 	checkResponse(t, "G5")
@@ -490,10 +493,12 @@ func voteResultRelative(t *testing.T) {
 	// Wait for vote expiration
 	time.Sleep(time.Second)
 
+	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
 		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
 	}
+	responseLock.Unlock()
 
 	// Check the response
 	checkResponse(t, "G5")
@@ -562,10 +567,12 @@ func voteResultAbsolute(t *testing.T) {
 	// Wait for vote expiration
 	time.Sleep(time.Second)
 
+	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
 		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
 	}
+	responseLock.Unlock()
 
 	// Check the response
 	checkResponse(t, "G5")

@@ -24,12 +24,15 @@ import (
 //   to be added to processing in the order that they were marked safe.
 
 func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
-	intx, err := NewIncomingTxData(ctx, tx)
-	if err != nil {
-		return err
-	}
 
 	server.pendingLock.Lock()
+	// Copy tx within lock to ensure that there is no possibility of a race condition with the
+	//   original copy of the tx in the current thread.
+	intx, err := NewIncomingTxData(ctx, tx)
+	if err != nil {
+		server.pendingLock.Unlock()
+		return err
+	}
 
 	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
@@ -103,6 +106,7 @@ func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32
 }
 
 // processReadyTxs moves txs from pending into the processing channel in the proper order.
+// pendingLock is locked by caller.
 func (server *Server) processReadyTxs(ctx context.Context) {
 	toRemove := 0
 	for _, txid := range server.readyTxs {
@@ -134,7 +138,7 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 
 	// Broadcast to ensure it is accepted by the network.
-	if server.inSync && intx.Itx.IsIncomingMessageType() {
+	if server.IsInSync() && intx.Itx.IsIncomingMessageType() {
 		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
 			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
 		}

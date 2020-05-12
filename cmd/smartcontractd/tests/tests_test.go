@@ -136,6 +136,13 @@ func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {
 	return a.Trigger(ctx, "END", itx)
 }
 
+func clearResponses() {
+	responseLock.Lock()
+	defer responseLock.Unlock()
+
+	responses = nil
+}
+
 func getResponse() *wire.MsgTx {
 	responseLock.Lock()
 	defer responseLock.Unlock()
@@ -144,7 +151,7 @@ func getResponse() *wire.MsgTx {
 		return nil
 	}
 
-	result := responses[0]
+	result := responses[0].Copy()
 	responses = responses[1:]
 	return result
 }
@@ -170,7 +177,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 		t.Fatalf("\t%s\t%s Response not created", tests.Failed, responseCode)
 	}
 
-	response := responses[0]
+	response := responses[0].Copy()
 	responses = nil
 	responseLock.Unlock()
 

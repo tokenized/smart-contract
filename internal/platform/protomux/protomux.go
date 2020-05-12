@@ -3,6 +3,7 @@ package protomux
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wire"
@@ -58,6 +59,8 @@ type ProtoMux struct {
 	LostDefaultHandlers      []HandlerFunc
 	StoleDefaultHandlers     []HandlerFunc
 	ReprocessDefaultHandlers []HandlerFunc
+
+	lock, repLock sync.Mutex
 }
 
 func New() *ProtoMux {
@@ -133,15 +136,21 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 
 // SetResponder sets the function used for handling responses
 func (p *ProtoMux) SetResponder(responder ResponderFunc) {
+	p.lock.Lock()
 	p.Responder = responder
+	p.lock.Unlock()
 }
 
 // SetReprocessor sets the function used for reprocessing
 func (p *ProtoMux) SetReprocessor(reprocessor ReprocessFunc) {
+	p.repLock.Lock()
 	p.Reprocessor = reprocessor
+	p.repLock.Unlock()
 }
 
 func (p *ProtoMux) Reprocess(ctx context.Context, itx *inspector.Transaction) error {
+	p.repLock.Lock()
+	defer p.repLock.Unlock()
 	return p.Reprocessor(ctx, itx)
 }
 
@@ -152,5 +161,7 @@ func (p *ProtoMux) Respond(ctx context.Context, m wire.Message) error {
 		return errors.New("Could not assert as *wire.MsgTx")
 	}
 
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	return p.Responder(ctx, tx)
 }

@@ -28,7 +28,7 @@ type Block struct {
 
 // BlockRepository is used for managing Block data.
 type BlockRepository struct {
-	config      *data.Config
+	config      data.Config
 	store       storage.Storage
 	height      int                    // Height of the latest block
 	lastHeaders []wire.BlockHeader     // Hashes in the latest key/file
@@ -37,7 +37,7 @@ type BlockRepository struct {
 }
 
 // NewBlockRepository returns a new BlockRepository.
-func NewBlockRepository(config *data.Config, store storage.Storage) *BlockRepository {
+func NewBlockRepository(config data.Config, store storage.Storage) *BlockRepository {
 	result := BlockRepository{
 		config:      config,
 		store:       store,

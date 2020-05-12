@@ -20,7 +20,8 @@ type UntrustedTXHandler struct {
 }
 
 // NewTXHandler returns a new TXHandler with the given Config.
-func NewUntrustedTXHandler(ready StateReady, txChannel *TxChannel, memPool *data.MemPool, txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *UntrustedTXHandler {
+func NewUntrustedTXHandler(ready StateReady, txChannel *TxChannel, memPool *data.MemPool,
+	txs *storage.TxRepository, listeners []Listener, txFilters []TxFilter) *UntrustedTXHandler {
 	result := UntrustedTXHandler{
 		ready:     ready,
 		txChannel: txChannel,
