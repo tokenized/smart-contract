@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/logger"
@@ -55,11 +56,16 @@ type Transaction struct {
 	Inputs        []Input
 	Outputs       []Output
 	RejectCode    uint32
+
+	lock sync.RWMutex
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
 //   the NewBaseTransactionFromWire function.
 func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
+	itx.lock.Lock()
+	defer itx.lock.Unlock()
+
 	// Find and deserialize protocol message
 	var err error
 	for i, txOut := range itx.MsgTx.TxOut {
@@ -80,6 +86,9 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 
 // Validate checks the validity of the data in the protocol message.
 func (itx *Transaction) Validate(ctx context.Context) error {
+	itx.lock.RLock()
+	defer itx.lock.RUnlock()
+
 	if itx.MsgProto == nil {
 		return nil
 	}
@@ -95,20 +104,28 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 
 // Promote will populate the inputs and outputs accordingly
 func (itx *Transaction) Promote(ctx context.Context, node NodeInterface) error {
+	itx.lock.Lock()
 
 	if err := itx.ParseOutputs(ctx, node); err != nil {
+		itx.lock.Unlock()
 		return err
 	}
 
 	if err := itx.ParseInputs(ctx, node); err != nil {
+		itx.lock.Unlock()
 		return err
 	}
 
+	itx.lock.Unlock()
+	itx.lock.RLock()
 	return nil
 }
 
 // IsPromoted returns true if inputs and outputs are populated.
 func (itx *Transaction) IsPromoted(ctx context.Context) bool {
+	itx.lock.RLock()
+	defer itx.lock.RUnlock()
+
 	return len(itx.Inputs) > 0 && len(itx.Outputs) > 0
 }
 
@@ -254,6 +271,8 @@ func (itx *Transaction) InputHashes() []bitcoin.Hash32 {
 
 // IsTokenized determines if the inspected transaction is using the Tokenized protocol.
 func (itx *Transaction) IsTokenized() bool {
+	itx.lock.RLock()
+	defer itx.lock.RUnlock()
 	return itx.MsgProto != nil
 }
 

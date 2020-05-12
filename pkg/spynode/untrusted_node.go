@@ -255,7 +255,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Warn(ctx, "(%s) Reject message : %s - %s", node.address, reject.Reason,
+				logger.Verbose(ctx, "(%s) Reject message : %s - %s", node.address, reject.Reason,
 					reject.Hash.String())
 			}
 		}
@@ -326,16 +326,22 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 		}
 	}
 
-	responses, err := node.txTracker.Check(ctx, node.memPool)
-	if err != nil {
+	if err := node.txTracker.Check(ctx, node.memPool, node); err != nil {
 		return err
-	}
-	// Queue messages to be sent in response
-	for _, response := range responses {
-		node.outgoing.Add(response)
 	}
 
 	return nil
+}
+
+// TransmitMessage interface
+func (node *UntrustedNode) TransmitMessage(msg wire.Message) bool {
+	if node.isStopping() {
+		return false
+	}
+	if err := node.outgoing.Add(msg); err != nil {
+		return false
+	}
+	return true
 }
 
 // Monitor for request timeouts

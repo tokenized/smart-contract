@@ -31,7 +31,7 @@ func TestBlocks(test *testing.T) {
 	ctx := context.Background()
 	storageConfig := storage.NewConfig("standalone", "./tmp/test")
 	store := storage.NewFilesystemStorage(storageConfig)
-	repo := NewBlockRepository(&config, store)
+	repo := NewBlockRepository(config, store)
 
 	t := uint32(time.Now().Unix())
 	header := wire.BlockHeader{Version: 1}

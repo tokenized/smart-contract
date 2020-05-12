@@ -2,13 +2,14 @@ package tests
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 // Generate a fake funding tx so inspector can build off of it.
@@ -38,7 +39,8 @@ func newMockRpcNode() *mockRpcNode {
 func (cache *mockRpcNode) SaveTX(ctx context.Context, tx *wire.MsgTx) error {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
-	cache.txs[*tx.TxHash()] = tx
+
+	cache.txs[*tx.TxHash()] = tx.Copy()
 	return nil
 }
 
@@ -85,6 +87,7 @@ type mockHeaders struct {
 	height int
 	hashes []*bitcoin.Hash32
 	times  []uint32
+	lock   sync.Mutex
 }
 
 func newMockHeaders() *mockHeaders {
@@ -94,10 +97,16 @@ func newMockHeaders() *mockHeaders {
 }
 
 func (h *mockHeaders) LastHeight(ctx context.Context) int {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	return h.height
 }
 
 func (h *mockHeaders) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	if height > h.height {
 		return nil, errors.New("Above current height")
 	}
@@ -108,6 +117,9 @@ func (h *mockHeaders) Hash(ctx context.Context, height int) (*bitcoin.Hash32, er
 }
 
 func (h *mockHeaders) Time(ctx context.Context, height int) (uint32, error) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	if height > h.height {
 		return 0, errors.New("Above current height")
 	}
@@ -118,12 +130,18 @@ func (h *mockHeaders) Time(ctx context.Context, height int) (uint32, error) {
 }
 
 func (h *mockHeaders) Reset() {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	h.height = 0
 	h.hashes = nil
 	h.times = nil
 }
 
 func (h *mockHeaders) Populate(ctx context.Context, height, count int) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	h.height = height
 	h.hashes = nil
 	h.times = nil

@@ -3,10 +3,11 @@ package spynode
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
 	"github.com/tokenized/smart-contract/pkg/wire"
+
+	"github.com/pkg/errors"
 )
 
 // HandleTx processes a tx through spynode as if it came from the network.
