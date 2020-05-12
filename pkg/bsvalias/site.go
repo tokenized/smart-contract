@@ -24,6 +24,13 @@ func GetSite(ctx context.Context, domain string) (Site, error) {
 
 	var site Site
 	if len(records) > 0 {
+		// Strip period at end of target if it exists.
+		// I am not sure why it is there --ce
+		l := len(records[0].Target)
+		if records[0].Target[l-1] == '.' {
+			records[0].Target = records[0].Target[:l-1]
+		}
+
 		url := fmt.Sprintf("https://%s:%d/.well-known/bsvalias", records[0].Target, records[0].Port)
 		if err := get(url, &site); err == nil {
 			site.URL = fmt.Sprintf("https://%s:%d", records[0].Target, records[0].Port)
