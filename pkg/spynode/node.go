@@ -594,11 +594,21 @@ func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
 // CleanupBlock is called when a block is being processed.
 // Implements handlers.BlockProcessor interface
 // It is responsible for any cleanup as a result of a block.
-func (node *Node) CleanupBlock(ctx context.Context, block *wire.MsgBlock) error {
-	logger.Debug(ctx, "Cleaning up after block : %s", block.BlockHash())
-	txids, err := block.TxHashes()
-	if err != nil {
-		return err
+func (node *Node) CleanupBlock(ctx context.Context, block *wire.MsgParseBlock) error {
+	logger.Debug(ctx, "Cleaning up after block : %s", block.Header.BlockHash())
+
+	txids := make([]*bitcoin.Hash32, 0, block.TxCount)
+	block.ResetTxs()
+	for {
+		tx, err := block.GetNextTx()
+		if err != nil {
+			return errors.Wrap(err, "get next tx")
+		}
+		if tx == nil {
+			break
+		}
+
+		txids = append(txids, tx.TxHash())
 	}
 
 	node.txTracker.RemoveList(ctx, txids)
@@ -641,7 +651,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		if node.isStopping() {
 			break
 		}
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion,
+		_, msg, _, err := wire.ReadMessageParse(node.connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)

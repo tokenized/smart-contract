@@ -11,11 +11,11 @@ type BlockRefeeder struct {
 	nextHeight int
 	nextHash   bitcoin.Hash32
 	requested  bool
-	block      *wire.MsgBlock
+	block      *wire.MsgParseBlock
 	lock       sync.Mutex
 }
 
-func (br *BlockRefeeder) SetBlock(hash bitcoin.Hash32, block *wire.MsgBlock) bool {
+func (br *BlockRefeeder) SetBlock(hash bitcoin.Hash32, block *wire.MsgParseBlock) bool {
 	br.lock.Lock()
 	defer br.lock.Unlock()
 
@@ -27,7 +27,7 @@ func (br *BlockRefeeder) SetBlock(hash bitcoin.Hash32, block *wire.MsgBlock) boo
 	return false
 }
 
-func (br *BlockRefeeder) GetBlock() (*wire.MsgBlock, int, bool) {
+func (br *BlockRefeeder) GetBlock() (*wire.MsgParseBlock, int, bool) {
 	br.lock.Lock()
 	defer br.lock.Unlock()
 
