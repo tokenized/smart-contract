@@ -155,13 +155,6 @@ func (node *Node) load(ctx context.Context) error {
 func (node *Node) Run(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
 
-	defer func() {
-		node.lock.Lock()
-		node.stopped = true
-		node.lock.Unlock()
-		logger.Verbose(ctx, "Stopped")
-	}()
-
 	var err error = nil
 	if err = node.load(ctx); err != nil {
 		return err
@@ -198,72 +191,58 @@ func (node *Node) Run(ctx context.Context) error {
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 		node.outgoing <- version
 
-		wg := sync.WaitGroup{}
-
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.incomingCount, 1)                // increment
 			defer atomic.AddUint32(&node.incomingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.monitorIncoming(ctx)
 			logger.Verbose(ctx, "Monitor incoming finished")
 		}()
 
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			atomic.AddUint32(&node.processingCount, 1)                // increment
+			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
 			node.monitorRequestTimeouts(ctx)
 			logger.Verbose(ctx, "Monitor request timeouts finished")
 		}()
 
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
+			atomic.AddUint32(&node.processingCount, 1)                // increment
+			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
 			node.sendOutgoing(ctx)
 			logger.Verbose(ctx, "Send outgoing finished")
 		}()
 
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.processingCount, 1)                // increment
 			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.processBlocks(ctx)
 			logger.Verbose(ctx, "Process blocks finished")
 		}()
 
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.processingCount, 1)                // increment
 			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.processConfirmedTxs(ctx)
 			logger.Verbose(ctx, "Process confirmed txs finished")
 		}()
 
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.processingCount, 1)                // increment
 			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.processUnconfirmedTxs(ctx)
 			logger.Verbose(ctx, "Process unconfirmed txs finished")
 		}()
 
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.processingCount, 1)                // increment
 			defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.processTxStates(ctx)
 			logger.Verbose(ctx, "Process tx states finished")
 		}()
 
-		wg.Add(1)
 		go func() {
 			atomic.AddUint32(&node.incomingCount, 1)                // increment
 			defer atomic.AddUint32(&node.incomingCount, ^uint32(0)) // decrement
-			defer wg.Done()
 			node.checkTxDelays(ctx)
 			logger.Verbose(ctx, "Check tx delays finished")
 		}()
@@ -271,18 +250,74 @@ func (node *Node) Run(ctx context.Context) error {
 		if node.config.UntrustedCount == 0 {
 			logger.Verbose(ctx, "Monitor untrusted not started")
 		} else {
-			wg.Add(1)
 			go func() {
 				atomic.AddUint32(&node.incomingCount, 1)                // increment
 				defer atomic.AddUint32(&node.incomingCount, ^uint32(0)) // decrement
-				defer wg.Done()
 				node.monitorUntrustedNodes(ctx)
 				logger.Verbose(ctx, "Monitor untrusted finished")
 			}()
 		}
 
 		// Block until goroutines finish as a result of Stop()
-		wg.Wait()
+
+		// Phased shutdown
+		for !node.isStopping() {
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		logger.Info(ctx, "Stopping")
+
+		node.lock.Lock()
+		node.txTracker.Stop() // This will reduce network messages
+		if node.connection != nil {
+			node.connection.Close() // This should stop the monitorIncoming thread
+		}
+		node.lock.Unlock()
+
+		// Wait for incoming threads to stop.
+		// We have to be sure that we stop writing to channels before we stop reading from channels or
+		//   we can get stuck in a lock trying to write to a full channel.
+		waitCount := 0
+		for {
+			time.Sleep(100 * time.Millisecond)
+			incomingCount := atomic.LoadUint32(&node.incomingCount)
+			if incomingCount == 0 {
+				break
+			}
+			if waitCount > 30 { // 3 seconds
+				logger.Info(ctx, "Waiting for incoming to stop : %d", incomingCount)
+				waitCount = 0
+			}
+			waitCount++
+		}
+
+		// Close the channels to stop the processing threads.
+		node.confTxChannel.Close()
+		node.unconfTxChannel.Close()
+		node.txStateChannel.Close()
+
+		node.lock.Lock()
+		if node.outgoing != nil {
+			// This should stop the sendOutgoing thread
+			close(node.outgoing)
+			node.outgoing = nil
+		}
+		node.lock.Unlock()
+
+		// Wait for processing threads to stop.
+		waitCount = 0
+		for {
+			time.Sleep(100 * time.Millisecond)
+			processingCount := atomic.LoadUint32(&node.processingCount)
+			if processingCount == 0 {
+				break
+			}
+			if waitCount > 30 { // 3 seconds
+				logger.Info(ctx, "Waiting for processing to stop : %d", processingCount)
+				waitCount = 0
+			}
+			waitCount++
+		}
 
 		// Save block repository
 		logger.Verbose(ctx, "Saving")
@@ -301,6 +336,11 @@ func (node *Node) Run(ctx context.Context) error {
 		node.lock.Unlock()
 		node.state.Reset()
 	}
+
+	node.lock.Lock()
+	node.stopped = true
+	node.lock.Unlock()
+	logger.Verbose(ctx, "Stopped")
 
 	return err
 }
@@ -322,10 +362,11 @@ func (node *Node) isStopping() bool {
 // Stop closes the connection and causes Run() to return.
 func (node *Node) Stop(ctx context.Context) error {
 	ctx = logger.ContextWithLogSubSystem(ctx, SubSystem)
+
 	node.lock.Lock()
-	done := node.stopped
+	stopped := node.stopped
 	node.lock.Unlock()
-	if done {
+	if stopped {
 		return nil
 	}
 
@@ -347,55 +388,17 @@ func (node *Node) requestStop(ctx context.Context) error {
 	logger.Verbose(ctx, "Requesting stop")
 
 	node.lock.Lock()
+	defer node.lock.Unlock()
 
-	if node.stopping || node.stopped {
-		node.lock.Unlock()
-		if node.stopped {
-			logger.Info(ctx, "Already stopped")
-		} else {
-			logger.Info(ctx, "Already stopping")
-		}
+	if node.stopped {
+		logger.Verbose(ctx, "Already stopped")
+		return nil
+	} else if node.stopping {
+		logger.Verbose(ctx, "Already stopping")
 		return nil
 	}
 
-	logger.Info(ctx, "Stopping")
-	node.stopping = true // This should stop the monitorUntrusted thread
-
-	if node.connection != nil {
-		// This should stop the monitorIncoming thread
-		node.connection.Close()
-	}
-
-	if node.outgoing != nil {
-		// This should stop the sendOutgoing thread
-		close(node.outgoing)
-		node.outgoing = nil
-	}
-
-	node.lock.Unlock()
-
-	// Wait for incoming threads to stop.
-	// We have to be sure that we stop writing to channels before we stop reading from channels or
-	//   we can get stuck in a lock trying to write to a full channel.
-	waitCount := 0
-	for {
-		time.Sleep(100 * time.Millisecond)
-		incomingCount := atomic.LoadUint32(&node.incomingCount)
-		if incomingCount == 0 {
-			break
-		}
-		if waitCount > 30 { // 3 seconds
-			logger.Info(ctx, "Waiting for incoming to stop : %d", incomingCount)
-			waitCount = 0
-		}
-		waitCount++
-	}
-
-	node.txTracker.Stop()
-	node.confTxChannel.Close()
-	node.unconfTxChannel.Close()
-	node.txStateChannel.Close()
-
+	node.stopping = true
 	return nil
 }
 
@@ -539,7 +542,9 @@ func (node *Node) AddPeer(ctx context.Context, address string, score int) error 
 func (node *Node) sendOutgoing(ctx context.Context) {
 	// Wait for outgoing messages on channel
 	for msg := range node.outgoing {
-		if node.isStopping() {
+		node.lock.Lock()
+		if node.stopping {
+			node.lock.Unlock()
 			break
 		}
 
@@ -549,10 +554,12 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
+			node.lock.Unlock()
 			logger.Error(ctx, "SpyNodeFailed to send %s message : %s", msg.Command(), err)
 			node.restart(ctx)
 			break
 		}
+		node.lock.Unlock()
 	}
 }
 
@@ -847,7 +854,7 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 	logger.Verbose(ctx, "Scanning %d peers", connections)
 
 	count := 0
-	nodes := make([]*UntrustedNode, 0, connections)
+	unodes := make([]*UntrustedNode, 0, connections)
 	wg := sync.WaitGroup{}
 	var address string
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -864,7 +871,7 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 		newNode := NewUntrustedNode(address, node.config, node.state, node.store, node.peers,
 			node.blocks, node.txs, node.memPool, &node.unconfTxChannel, node.listeners,
 			node.txFilters, true)
-		nodes = append(nodes, newNode)
+		unodes = append(unodes, newNode)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -875,11 +882,11 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 
 	node.sleepUntilStop(100) // Wait for handshake
 
-	for _, node := range nodes {
-		node.Stop(ctx)
+	for _, unode := range unodes {
+		unode.Stop(ctx)
 	}
 
-	logger.Verbose(ctx, "Waiting for %d scanning nodes to stop", len(nodes))
+	logger.Verbose(ctx, "Waiting for %d scanning nodes to stop", len(unodes))
 	wg.Wait()
 	node.scanning = false
 	logger.Verbose(ctx, "Finished scanning")

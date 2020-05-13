@@ -16,7 +16,7 @@ func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer, format 
 	logConfig := logger.NewDevelopmentConfig()
 	logConfig.Main.SetWriter(writer)
 	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.LevelDebug
+	logConfig.Main.MinLevel = logger.LevelVerbose
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
