@@ -33,7 +33,7 @@ type UntrustedNode struct {
 	handlers        map[string]handlers.CommandHandler
 	connection      net.Conn
 	sendLock        sync.Mutex // Lock for sending on connection
-	outgoing        messageChannel
+	outgoing        MessageChannel
 	listeners       []handlers.Listener
 	txFilters       []handlers.TxFilter
 	stopping        bool
@@ -66,7 +66,6 @@ func NewUntrustedNode(address string, config data.Config, state *data.State, sto
 		txs:            txs,
 		txTracker:      data.NewTxTracker(),
 		memPool:        memPool,
-		outgoing:       messageChannel{},
 		listeners:      listeners,
 		txFilters:      txFilters,
 		txChannel:      txChannel,
@@ -473,44 +472,4 @@ func (node *UntrustedNode) sleepUntilStop(seconds int) {
 		}
 		time.Sleep(time.Second)
 	}
-}
-
-type messageChannel struct {
-	Channel chan wire.Message
-	lock    sync.Mutex
-	open    bool
-}
-
-func (c *messageChannel) Add(msg wire.Message) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if !c.open {
-		return errors.New("Channel closed")
-	}
-
-	c.Channel <- msg
-	return nil
-}
-
-func (c *messageChannel) Open(count int) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.Channel = make(chan wire.Message, count)
-	c.open = true
-	return nil
-}
-
-func (c *messageChannel) Close() error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if !c.open {
-		return errors.New("Channel closed")
-	}
-
-	close(c.Channel)
-	c.open = false
-	return nil
 }
