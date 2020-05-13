@@ -24,7 +24,8 @@ type State struct {
 	startHeight        int               // Height of start block (to start pulling full blocks)
 	blocksRequested    []*requestedBlock // Blocks that have been requested
 	blocksToRequest    []bitcoin.Hash32  // Blocks that need to be requested
-	pendingSync        bool              // The peer has notified us of all blocks. Now we just have to process to catch up.
+	lastSavedHash      bitcoin.Hash32
+	pendingSync        bool // The peer has notified us of all blocks. Now we just have to process to catch up.
 	lock               sync.Mutex
 }
 

@@ -52,9 +52,6 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 	logger.Debug(ctx, "Received %d headers", len(message.Headers))
 
 	lastHash := handler.state.LastHash()
-	if lastHash == nil {
-		lastHash = handler.blocks.LastHash()
-	}
 
 	if !handler.state.IsReady() && (len(message.Headers) == 0 || (len(message.Headers) == 1 &&
 		lastHash.Equal(message.Headers[0].BlockHash()))) {
@@ -88,9 +85,14 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			if err != nil {
 				return response, err
 			}
-			if request {
+			if request { // block should be processed
 				// Request it if it isn't already requested.
-				if handler.state.AddBlockRequest(hash) {
+				sendRequest, err := handler.state.AddBlockRequest(&header.PrevBlock, hash)
+				if err != nil {
+					if err == data.ErrWrongPreviousHash {
+						logger.Warn(ctx, "Wrong previous hash : %s", header.PrevBlock.String())
+					}
+				} else if sendRequest {
 					logger.Debug(ctx, "Requesting block : %s", hash.String())
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
@@ -99,15 +101,19 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 						getBlocks = wire.NewMsgGetData()
 					}
 				}
+			} else {
+				// A block is not requested if the header matching the start hash has not been
+				//   found yet. The last hash must still be updated.
+				handler.state.SetLastHash(*hash)
 			}
 
-			lastHash = hash
+			lastHash = *hash
 			continue
 		}
 
 		logger.Debug(ctx, "Header (not next) : %s", hash.String())
 
-		if hash.Equal(lastHash) {
+		if hash.Equal(&lastHash) {
 			continue // Already latest header
 		}
 
@@ -190,13 +196,11 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 
 			// Assert this header is now next
-			newLastHash := handler.state.LastHash()
-			if newLastHash == nil {
-				newLastHash = handler.blocks.LastHash()
-			}
+			newLastHash := handler.blocks.LastHash()
 			if newLastHash == nil || !newLastHash.Equal(&header.PrevBlock) {
 				return response, errors.New(fmt.Sprintf("Revert failed to produce correct last hash : %s", newLastHash))
 			}
+			handler.state.SetLastHash(*newLastHash)
 
 			// Add this header after the new top block
 			request, err := handler.addHeader(ctx, header)
@@ -205,7 +209,12 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 			}
 			if request {
 				// Request it if it isn't already requested.
-				if handler.state.AddBlockRequest(hash) {
+				sendRequest, err := handler.state.AddBlockRequest(&header.PrevBlock, hash)
+				if err != nil {
+					if err == data.ErrWrongPreviousHash {
+						logger.Warn(ctx, "Wrong previous hash : %s", header.PrevBlock.String())
+					}
+				} else if sendRequest {
 					logger.Debug(ctx, "Requesting block : %s", hash.String())
 					getBlocks.AddInvVect(wire.NewInvVect(wire.InvTypeBlock, hash))
 					if len(getBlocks.InvList) == wire.MaxInvPerMsg {
@@ -216,7 +225,7 @@ func (handler *HeadersHandler) Handle(ctx context.Context, m wire.Message) ([]wi
 				}
 			}
 
-			lastHash = hash
+			lastHash = *hash
 			continue
 		}
 
@@ -242,6 +251,7 @@ func (handler HeadersHandler) addHeader(ctx context.Context, header *wire.BlockH
 		if handler.config.StartHash.Equal(header.BlockHash()) {
 			startHeight = handler.blocks.LastHeight() + 1
 			handler.state.SetStartHeight(startHeight)
+			handler.state.SetLastHash(header.PrevBlock)
 			logger.Verbose(ctx, "Found start block at height %d", startHeight)
 		} else {
 			err := handler.blocks.Add(ctx, header) // Just add hashes before the start block

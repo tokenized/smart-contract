@@ -131,6 +131,7 @@ func (node *Node) load(ctx context.Context) error {
 	if err := node.blocks.Load(ctx); err != nil {
 		return err
 	}
+	node.state.SetLastHash(*node.blocks.LastHash())
 	logger.Info(ctx, "Loaded blocks to height %d", node.blocks.LastHeight())
 	startHeight, exists := node.blocks.Height(&node.config.StartHash)
 	if exists {

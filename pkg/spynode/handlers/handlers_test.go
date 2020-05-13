@@ -110,6 +110,7 @@ func TestHandlers(test *testing.T) {
 		test.Errorf("Failed to get genesis hash : %s", err)
 		return
 	}
+	state.SetLastHash(*previousHash)
 	for i := 0; i < testBlockCount; i++ {
 		height := i
 

@@ -14,6 +14,10 @@ const (
 	maxRequestedBlocks = 10
 )
 
+var (
+	ErrWrongPreviousHash = errors.New("Wrong previous hash")
+)
+
 type requestedBlock struct {
 	hash  bitcoin.Hash32
 	time  time.Time // Time request was sent
@@ -47,13 +51,18 @@ func (state *State) BlockIsToBeRequested(hash *bitcoin.Hash32) bool {
 // AddBlockRequest adds a block request to the queue.
 // Returns true if the request should be made now.
 // Returns false if the request is queued for later.
-func (state *State) AddBlockRequest(hash *bitcoin.Hash32) bool {
+func (state *State) AddBlockRequest(prevHash, hash *bitcoin.Hash32) (bool, error) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
+	h := state.lastHash()
+	if !h.Equal(prevHash) {
+		return false, ErrWrongPreviousHash
+	}
+
 	if len(state.blocksRequested) >= maxRequestedBlocks {
 		state.blocksToRequest = append(state.blocksToRequest, *hash)
-		return false
+		return false, nil
 	}
 
 	newRequest := requestedBlock{
@@ -63,7 +72,7 @@ func (state *State) AddBlockRequest(hash *bitcoin.Hash32) bool {
 	}
 
 	state.blocksRequested = append(state.blocksRequested, &newRequest)
-	return true
+	return true, nil
 }
 
 // AddBlock adds the block message to the queued block request for later processing.
@@ -101,6 +110,7 @@ func (state *State) FinalizeBlock(hash bitcoin.Hash32) error {
 		return errors.New("Not next block")
 	}
 
+	state.lastSavedHash = hash
 	state.blocksRequested = state.blocksRequested[1:] // Remove first item
 	return nil
 }
@@ -152,17 +162,29 @@ func (state *State) BlockRequestsEmpty() bool {
 	return len(state.blocksToRequest) == 0 && len(state.blocksRequested) == 0
 }
 
-func (state *State) LastHash() *bitcoin.Hash32 {
+func (state *State) LastHash() bitcoin.Hash32 {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
+	return state.lastHash()
+}
+
+func (state *State) SetLastHash(hash bitcoin.Hash32) {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+
+	state.lastSavedHash = hash
+}
+
+// lastHash returns the hash of the last block in the state.
+func (state *State) lastHash() bitcoin.Hash32 {
 	if len(state.blocksToRequest) > 0 {
-		return &state.blocksToRequest[len(state.blocksToRequest)-1]
+		return state.blocksToRequest[len(state.blocksToRequest)-1]
 	}
 
 	if len(state.blocksRequested) > 0 {
-		return &state.blocksRequested[len(state.blocksRequested)-1].hash
+		return state.blocksRequested[len(state.blocksRequested)-1].hash
 	}
 
-	return nil
+	return state.lastSavedHash
 }
