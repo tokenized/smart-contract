@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
@@ -42,6 +43,12 @@ type UntrustedNode struct {
 	pendingLock     sync.Mutex
 	pendingOutgoing []*wire.MsgTx
 	lock            sync.Mutex
+
+	// These counts are used to monitor the number of threads active in specific categories.
+	// They are used to stop the incoming threads before stopping the processing threads to
+	//   prevent the incoming threads from filling channels and getting locked.
+	incomingCount   uint32
+	processingCount uint32
 }
 
 func NewUntrustedNode(address string, config data.Config, state *data.State, store storage.Storage,
@@ -67,6 +74,10 @@ func NewUntrustedNode(address string, config data.Config, state *data.State, sto
 		active:         false,
 		scanning:       scanning,
 	}
+
+	atomic.StoreUint32(&result.incomingCount, 0)
+	atomic.StoreUint32(&result.processingCount, 0)
+
 	return &result
 }
 
@@ -96,40 +107,88 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 	node.active = true
 	node.lock.Unlock()
 
-	defer func() {
-		node.lock.Lock()
-		node.active = false
-		logger.Debug(ctx, "(%s) Stopped", node.address)
-		node.lock.Unlock()
-	}()
-
 	// Queue version message to start handshake
 	version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
 	node.outgoing.Add(version)
 
-	wg := sync.WaitGroup{}
-	wg.Add(3)
-
 	go func() {
-		defer wg.Done()
+		atomic.AddUint32(&node.incomingCount, 1)                // increment
+		defer atomic.AddUint32(&node.incomingCount, ^uint32(0)) // decrement
 		node.monitorIncoming(ctx)
 		logger.Debug(ctx, "(%s) Untrusted monitor incoming finished", node.address)
 	}()
 
 	go func() {
-		defer wg.Done()
+		atomic.AddUint32(&node.incomingCount, 1)                // increment
+		defer atomic.AddUint32(&node.incomingCount, ^uint32(0)) // decrement
 		node.monitorRequestTimeouts(ctx)
 		logger.Debug(ctx, "(%s) Untrusted monitor request timeouts finished", node.address)
 	}()
 
 	go func() {
-		defer wg.Done()
+		atomic.AddUint32(&node.processingCount, 1)                // increment
+		defer atomic.AddUint32(&node.processingCount, ^uint32(0)) // decrement
 		node.sendOutgoing(ctx)
 		logger.Debug(ctx, "(%s) Untrusted send outgoing finished", node.address)
 	}()
 
 	// Block until goroutines finish as a result of Stop()
-	wg.Wait()
+
+	// Phased shutdown
+	for !node.isStopping() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	logger.Debug(ctx, "(%s) Stopping", node.address)
+
+	node.sendLock.Lock()
+	if node.connection != nil {
+		if err := node.connection.Close(); err != nil {
+			logger.Warn(ctx, "(%s) Failed to close : %s", node.address, err)
+		}
+		node.connection = nil
+	}
+	node.sendLock.Unlock()
+
+	// Wait for incoming threads to stop.
+	// We have to be sure that we stop writing to channels before we stop reading from channels or
+	//   we can get stuck in a lock trying to write to a full channel.
+	waitCount := 0
+	for {
+		time.Sleep(100 * time.Millisecond)
+		incomingCount := atomic.LoadUint32(&node.incomingCount)
+		if incomingCount == 0 {
+			break
+		}
+		if waitCount > 30 { // 3 seconds
+			logger.Debug(ctx, "(%s) Waiting for incoming to stop : %d", node.address, incomingCount)
+			waitCount = 0
+		}
+		waitCount++
+	}
+
+	node.outgoing.Close()
+
+	// Wait for processing threads to stop.
+	waitCount = 0
+	for {
+		time.Sleep(100 * time.Millisecond)
+		processingCount := atomic.LoadUint32(&node.processingCount)
+		if processingCount == 0 {
+			break
+		}
+		if waitCount > 30 { // 3 seconds
+			logger.Debug(ctx, "(%s) Waiting for processing to stop : %d", node.address,
+				processingCount)
+			waitCount = 0
+		}
+		waitCount++
+	}
+
+	node.lock.Lock()
+	node.active = false
+	node.lock.Unlock()
+	logger.Debug(ctx, "(%s) Stopped", node.address)
 	return nil
 }
 
@@ -149,23 +208,15 @@ func (node *UntrustedNode) isStopping() bool {
 
 func (node *UntrustedNode) Stop(ctx context.Context) error {
 	node.lock.Lock()
-	defer node.lock.Unlock()
-
 	if node.stopping {
+		logger.Debug(ctx, "(%s) Already stopping", node.address)
+		node.lock.Unlock()
 		return nil
 	}
 
-	logger.Debug(ctx, "(%s) Stopping", node.address)
+	// Setting stopping and closing the connection should stop the monitorIncoming thread.
 	node.stopping = true
-	node.outgoing.Close()
-	node.sendLock.Lock()
-	if node.connection != nil {
-		if err := node.connection.Close(); err != nil {
-			logger.Warn(ctx, "(%s) Failed to close : %s", node.address, err)
-		}
-		node.connection = nil
-	}
-	node.sendLock.Unlock()
+	node.lock.Unlock()
 	return nil
 }
 
@@ -227,7 +278,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
-			wireError, ok := err.(*wire.MessageError)
+			wireError, ok := errors.Cause(err).(*wire.MessageError)
 			if ok {
 				if wireError.Type == wire.MessageErrorUnknownCommand {
 					logger.Debug(ctx, "(%s) %s", node.address, wireError)
@@ -255,7 +306,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		if msg.Command() == "reject" {
 			reject, ok := msg.(*wire.MsgReject)
 			if ok {
-				logger.Verbose(ctx, "(%s) Reject message : %s - %s", node.address, reject.Reason,
+				logger.Debug(ctx, "(%s) Reject message : %s - %s", node.address, reject.Reason,
 					reject.Hash.String())
 			}
 		}
@@ -270,9 +321,10 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 
 	if !node.untrustedState.HandshakeComplete() {
 		// Send header request to verify chain
-		headerRequest, err := buildHeaderRequest(ctx, node.untrustedState.ProtocolVersion(), node.blocks, handlers.UntrustedHeaderDelta, 10)
+		headerRequest, err := buildHeaderRequest(ctx, node.untrustedState.ProtocolVersion(),
+			node.blocks, handlers.UntrustedHeaderDelta, 10)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "build header request")
 		}
 		if node.outgoing.Add(headerRequest) == nil {
 			node.untrustedState.MarkHeadersRequested()
@@ -327,7 +379,7 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 	}
 
 	if err := node.txTracker.Check(ctx, node.memPool, node); err != nil {
-		return err
+		return errors.Wrap(err, "tx tracker check")
 	}
 
 	return nil
@@ -363,8 +415,7 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 
 // sendOutgoing waits for and sends outgoing messages
 //
-// This is a blocking function that will run forever, so it should be run
-// in a goroutine.
+// This is a blocking function that will run forever, so it should be run in a goroutine.
 func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 	for msg := range node.outgoing.Channel {
 		node.sendLock.Lock()
@@ -402,13 +453,14 @@ func (node *UntrustedNode) handleMessage(ctx context.Context, msg wire.Message) 
 
 	responses, err := handler.Handle(ctx, msg)
 	if err != nil {
-		logger.Warn(ctx, "(%s) Failed to handle [%s] message : %s", node.address, msg.Command(), err)
-		return nil
+		return errors.Wrap(err, "handle message")
 	}
 
 	// Queue messages to be sent in response
 	for _, response := range responses {
-		node.outgoing.Add(response)
+		if err := node.outgoing.Add(response); err != nil {
+			return errors.Wrap(err, "add outgoing")
+		}
 	}
 
 	return nil
