@@ -18,7 +18,6 @@ type BlockHandler struct {
 
 // NewBlockHandler returns a new BlockHandler with the given Config.
 func NewBlockHandler(state *data.State, blockRefeeder *BlockRefeeder) *BlockHandler {
-
 	result := BlockHandler{
 		state:         state,
 		blockRefeeder: blockRefeeder,
@@ -28,12 +27,12 @@ func NewBlockHandler(state *data.State, blockRefeeder *BlockRefeeder) *BlockHand
 
 // Handle implements the Handler interface for a block handler.
 func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
-	block, ok := m.(*wire.MsgBlock)
+	block, ok := m.(*wire.MsgParseBlock)
 	if !ok {
-		return nil, errors.New("Could not assert as *wire.MsgBlock")
+		return nil, errors.New("Could not assert as *wire.MsgParseBlock")
 	}
 
-	receivedHash := block.BlockHash()
+	receivedHash := block.Header.BlockHash()
 	logger.Debug(ctx, "Received block : %s", receivedHash.String())
 
 	if handler.blockRefeeder != nil && handler.blockRefeeder.SetBlock(*receivedHash, block) {

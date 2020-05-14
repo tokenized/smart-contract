@@ -339,67 +339,73 @@ func writeElements(w io.Writer, elements ...interface{}) error {
 
 // ReadVarInt reads a variable length integer from r and returns it as a uint64.
 func ReadVarInt(r io.Reader, pver uint32) (uint64, error) {
+	_, result, err := ReadVarIntN(r, pver)
+	return result, err
+}
+
+// ReadVarIntN reads a variable length integer from r and returns it's size and value as uint64s.
+func ReadVarIntN(r io.Reader, pver uint32) (uint64, uint64, error) {
 	var discriminant uint8
 	err := binary.Read(r, endian, &discriminant)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	var rv uint64
 	switch discriminant {
 	case 0xff:
 		var sv uint64
 		err := binary.Read(r, endian, &sv)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
-		rv = sv
 
 		// The encoding is not canonical if the value could have been
 		// encoded using fewer bytes.
 		min := uint64(0x100000000)
-		if rv < min {
-			return 0, messageError("ReadVarInt", fmt.Sprintf(
-				errNonCanonicalVarInt, rv, discriminant, min))
+		if sv < min {
+			return 0, 0, messageError("ReadVarInt", fmt.Sprintf(
+				errNonCanonicalVarInt, sv, discriminant, min))
 		}
+
+		return 9, sv, nil
 
 	case 0xfe:
 		var sv uint32
 		err := binary.Read(r, endian, &sv)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
-		rv = uint64(sv)
 
 		// The encoding is not canonical if the value could have been
 		// encoded using fewer bytes.
-		min := uint64(0x10000)
-		if rv < min {
-			return 0, messageError("ReadVarInt", fmt.Sprintf(
-				errNonCanonicalVarInt, rv, discriminant, min))
+		min := uint32(0x10000)
+		if sv < min {
+			return 0, 0, messageError("ReadVarInt", fmt.Sprintf(
+				errNonCanonicalVarInt, sv, discriminant, min))
 		}
+
+		return 5, uint64(sv), nil
 
 	case 0xfd:
 		var sv uint16
 		err := binary.Read(r, endian, &sv)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
-		rv = uint64(sv)
 
 		// The encoding is not canonical if the value could have been
 		// encoded using fewer bytes.
-		min := uint64(0xfd)
-		if rv < min {
-			return 0, messageError("ReadVarInt", fmt.Sprintf(
-				errNonCanonicalVarInt, rv, discriminant, min))
+		min := uint16(0xfd)
+		if sv < min {
+			return 0, 0, messageError("ReadVarInt", fmt.Sprintf(
+				errNonCanonicalVarInt, sv, discriminant, min))
 		}
 
-	default:
-		rv = uint64(discriminant)
-	}
+		return 3, uint64(sv), nil
 
-	return rv, nil
+	default:
+		return 1, uint64(discriminant), nil
+	}
 }
 
 // WriteVarInt serializes val to w using a variable number of bytes depending
