@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -109,6 +110,7 @@ func TestHandlers(test *testing.T) {
 		test.Errorf("Failed to get genesis hash : %s", err)
 		return
 	}
+	state.SetLastHash(*previousHash)
 	for i := 0; i < testBlockCount; i++ {
 		height := i
 
@@ -257,8 +259,19 @@ func sendBlocks(ctx context.Context, handlers map[string]CommandHandler, blocks 
 	startHeight int, listener *TestListener) error {
 
 	for i, block := range blocks {
+		// Convert from MsgBlock to MsgParseBlock for the handler.
+		var buf bytes.Buffer
+		if err := block.BtcEncode(&buf, wire.ProtocolVersion); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to encode block (%d) message", startHeight+i))
+		}
+
+		parseBlock := &wire.MsgParseBlock{}
+		if err := parseBlock.BtcDecode(bytes.NewReader(buf.Bytes()), wire.ProtocolVersion); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to decode block (%d) message", startHeight+i))
+		}
+
 		// Send block to handlers
-		if err := handleMessage(ctx, handlers, block); err != nil {
+		if err := handleMessage(ctx, handlers, parseBlock); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to process block (%d) message", startHeight+i))
 		}
 	}

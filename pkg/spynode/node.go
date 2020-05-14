@@ -42,7 +42,7 @@ type Node struct {
 	memPool         *data.MemPool                      // Tracks which txs have been received and checked
 	handlers        map[string]handlers.CommandHandler // Handlers for messages from trusted node
 	connection      net.Conn                           // Connection to trusted node
-	outgoing        chan wire.Message                  // Channel for messages to send to trusted node
+	outgoing        MessageChannel                     // Channel for messages to send to trusted node
 	listeners       []handlers.Listener                // Receive data and notifications about transactions
 	txFilters       []handlers.TxFilter                // Determines if a tx should be seen by listeners
 	untrustedNodes  []*UntrustedNode                   // Randomized peer connections to monitor for double spends
@@ -82,7 +82,6 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 		reorgs:          handlerstorage.NewReorgRepository(store),
 		txTracker:       data.NewTxTracker(),
 		memPool:         data.NewMemPool(),
-		outgoing:        nil,
 		listeners:       make([]handlers.Listener, 0),
 		txFilters:       make([]handlers.TxFilter, 0),
 		untrustedNodes:  make([]*UntrustedNode, 0),
@@ -131,6 +130,7 @@ func (node *Node) load(ctx context.Context) error {
 	if err := node.blocks.Load(ctx); err != nil {
 		return err
 	}
+	node.state.SetLastHash(*node.blocks.LastHash())
 	logger.Info(ctx, "Loaded blocks to height %d", node.blocks.LastHeight())
 	startHeight, exists := node.blocks.Height(&node.config.StartHash)
 	if exists {
@@ -182,14 +182,14 @@ func (node *Node) Run(ctx context.Context) error {
 			continue
 		}
 
-		node.outgoing = make(chan wire.Message, 100)
+		node.outgoing.Open(100)
 		node.confTxChannel.Open(100)
 		node.unconfTxChannel.Open(100)
 		node.txStateChannel.Open(1000)
 
 		// Queue version message to start handshake
 		version := buildVersionMsg(node.config.UserAgent, int32(node.blocks.LastHeight()))
-		node.outgoing <- version
+		node.outgoing.Add(version)
 
 		go func() {
 			atomic.AddUint32(&node.incomingCount, 1)                // increment
@@ -292,17 +292,10 @@ func (node *Node) Run(ctx context.Context) error {
 		}
 
 		// Close the channels to stop the processing threads.
+		node.outgoing.Close()
 		node.confTxChannel.Close()
 		node.unconfTxChannel.Close()
 		node.txStateChannel.Close()
-
-		node.lock.Lock()
-		if node.outgoing != nil {
-			// This should stop the sendOutgoing thread
-			close(node.outgoing)
-			node.outgoing = nil
-		}
-		node.lock.Unlock()
 
 		// Wait for processing threads to stop.
 		waitCount = 0
@@ -367,6 +360,7 @@ func (node *Node) Stop(ctx context.Context) error {
 	stopped := node.stopped
 	node.lock.Unlock()
 	if stopped {
+		logger.Verbose(ctx, "Already stopped")
 		return nil
 	}
 
@@ -541,12 +535,13 @@ func (node *Node) AddPeer(ctx context.Context, address string, score int) error 
 // in a goroutine.
 func (node *Node) sendOutgoing(ctx context.Context) {
 	// Wait for outgoing messages on channel
-	for msg := range node.outgoing {
+	for msg := range node.outgoing.Channel {
 		node.lock.Lock()
 		if node.stopping {
 			node.lock.Unlock()
 			break
 		}
+		node.lock.Unlock()
 
 		tx, ok := msg.(*wire.MsgTx)
 		if ok {
@@ -554,12 +549,10 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 		}
 
 		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
-			node.lock.Unlock()
 			logger.Error(ctx, "SpyNodeFailed to send %s message : %s", msg.Command(), err)
 			node.restart(ctx)
 			break
 		}
-		node.lock.Unlock()
 	}
 }
 
@@ -594,11 +587,21 @@ func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
 // CleanupBlock is called when a block is being processed.
 // Implements handlers.BlockProcessor interface
 // It is responsible for any cleanup as a result of a block.
-func (node *Node) CleanupBlock(ctx context.Context, block *wire.MsgBlock) error {
-	logger.Debug(ctx, "Cleaning up after block : %s", block.BlockHash())
-	txids, err := block.TxHashes()
-	if err != nil {
-		return err
+func (node *Node) CleanupBlock(ctx context.Context, block *wire.MsgParseBlock) error {
+	logger.Debug(ctx, "Cleaning up after block : %s", block.Header.BlockHash())
+
+	txids := make([]*bitcoin.Hash32, 0, block.TxCount)
+	block.ResetTxs()
+	for {
+		tx, err := block.GetNextTx()
+		if err != nil {
+			return errors.Wrap(err, "get next tx")
+		}
+		if tx == nil {
+			break
+		}
+
+		txids = append(txids, tx.TxHash())
 	}
 
 	node.txTracker.RemoveList(ctx, txids)
@@ -641,7 +644,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		if node.isStopping() {
 			break
 		}
-		msg, _, err := wire.ReadMessage(node.connection, wire.ProtocolVersion,
+		_, msg, _, err := wire.ReadMessageParse(node.connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
@@ -687,13 +690,8 @@ func (node *Node) restart(ctx context.Context) {
 }
 
 func (node *Node) queueOutgoing(msg wire.Message) bool {
-	node.lock.Lock()
-	defer node.lock.Unlock()
-	if node.stopping {
-		return false
-	}
-	node.outgoing <- msg
-	return true
+	err := node.outgoing.Add(msg)
+	return err == nil
 }
 
 // TransmitMessage interface
