@@ -67,6 +67,7 @@ type Node struct {
 	//   prevent the incoming threads from filling channels and getting locked.
 	incomingCount   uint32
 	processingCount uint32
+	untrustedCount  uint32
 }
 
 // NewNode creates a new node.
@@ -96,6 +97,7 @@ func NewNode(config data.Config, store storage.Storage) *Node {
 
 	atomic.StoreUint32(&result.incomingCount, 0)
 	atomic.StoreUint32(&result.processingCount, 0)
+	atomic.StoreUint32(&result.untrustedCount, 0)
 
 	return &result
 }
@@ -267,10 +269,12 @@ func (node *Node) Run(ctx context.Context) error {
 
 		logger.Info(ctx, "Stopping")
 
-		node.lock.Lock()
 		node.txTracker.Stop() // This will reduce network messages
+
+		node.lock.Lock()
 		if node.connection != nil {
 			node.connection.Close() // This should stop the monitorIncoming thread
+			node.connection = nil
 		}
 		node.lock.Unlock()
 
@@ -537,21 +541,23 @@ func (node *Node) sendOutgoing(ctx context.Context) {
 	// Wait for outgoing messages on channel
 	for msg := range node.outgoing.Channel {
 		node.lock.Lock()
-		if node.stopping {
-			node.lock.Unlock()
-			break
-		}
+		connection := node.connection
 		node.lock.Unlock()
+
+		if connection == nil {
+			continue // Keep clearing the channel
+		}
 
 		tx, ok := msg.(*wire.MsgTx)
 		if ok {
 			logger.Verbose(ctx, "Sending Tx : %s", tx.TxHash().String())
 		}
 
-		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
+		if err := sendAsync(ctx, connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
 			logger.Error(ctx, "SpyNodeFailed to send %s message : %s", msg.Command(), err)
+			// don't break out of the loop because we need to continue emptying the channel.
+			// otherwise any processing adding to the channel can get locked on a write.
 			node.restart(ctx)
-			break
 		}
 	}
 }
@@ -622,7 +628,9 @@ func (node *Node) connect(ctx context.Context) error {
 		return err
 	}
 
+	node.lock.Lock()
 	node.connection = conn
+	node.lock.Unlock()
 	node.state.MarkConnected()
 	node.peers.UpdateTime(ctx, node.config.NodeAddress)
 	return nil
@@ -640,11 +648,16 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 			break
 		}
 
-		// read new messages, blocking
-		if node.isStopping() {
+		node.lock.Lock()
+		connection := node.connection
+		node.lock.Unlock()
+
+		if connection == nil {
 			break
 		}
-		_, msg, _, err := wire.ReadMessageParse(node.connection, wire.ProtocolVersion,
+
+		// read new messages, blocking
+		_, msg, _, err := wire.ReadMessageParse(connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)
@@ -898,7 +911,6 @@ func (node *Node) scan(ctx context.Context, connections, uncheckedCount int) err
 // This is a blocking function that will run forever, so it should be run
 // in a goroutine.
 func (node *Node) monitorUntrustedNodes(ctx context.Context) {
-	wg := sync.WaitGroup{}
 	for !node.isStopping() {
 		if !node.state.IsReady() {
 			node.sleepUntilStop(5)
@@ -971,7 +983,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 		if count < desiredCount/2 {
 			// Try for peers with a good score
 			for !node.isStopping() && count < desiredCount/2 {
-				if node.addUntrustedNode(ctx, &wg, 5, txs) {
+				if node.addUntrustedNode(ctx, 5, txs) {
 					count++
 					sentCount++
 				} else {
@@ -982,7 +994,7 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 
 		// Try for peers with a score above zero
 		for !node.isStopping() && count < desiredCount {
-			if node.addUntrustedNode(ctx, &wg, 1, txs) {
+			if node.addUntrustedNode(ctx, 1, txs) {
 				count++
 				sentCount++
 			} else {
@@ -1018,17 +1030,38 @@ func (node *Node) monitorUntrustedNodes(ctx context.Context) {
 	// Stop all
 	node.untrustedLock.Lock()
 	for _, untrusted := range node.untrustedNodes {
+		logger.Verbose(ctx, "Stopping untrusted node : %s", untrusted.address)
 		untrusted.Stop(ctx)
 	}
 	node.untrustedLock.Unlock()
 
-	logger.Verbose(ctx, "Waiting for %d untrusted nodes to finish", len(node.untrustedNodes))
-	wg.Wait()
+	waitCount := 0
+	for {
+		time.Sleep(100 * time.Millisecond)
+		untrustedCount := atomic.LoadUint32(&node.untrustedCount)
+		if untrustedCount == 0 {
+			break
+		}
+		if waitCount > 30 { // 3 seconds
+			logger.Info(ctx, "Waiting for %d untrusted nodes to stop", untrustedCount)
+
+			node.untrustedLock.Lock()
+			for _, untrusted := range node.untrustedNodes {
+				if untrusted.IsActive() {
+					logger.Info(ctx, "Waiting for untrusted node : %s", untrusted.address)
+				}
+			}
+			node.untrustedLock.Unlock()
+
+			waitCount = 0
+		}
+		waitCount++
+	}
 }
 
 // addUntrustedNode adds a new untrusted node.
 // Returns true if a new node connection was attempted
-func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minScore int32,
+func (node *Node) addUntrustedNode(ctx context.Context, minScore int32,
 	txs []*wire.MsgTx) bool {
 
 	// Get new address
@@ -1075,14 +1108,14 @@ func (node *Node) addUntrustedNode(ctx context.Context, wg *sync.WaitGroup, minS
 	}
 	node.untrustedLock.Lock()
 	node.untrustedNodes = append(node.untrustedNodes, newNode)
-	wg.Add(1)
 	if node.isStopping() {
 		newNode.Stop(ctx)
 	}
 	node.untrustedLock.Unlock()
 	go func() {
-		defer wg.Done()
+		atomic.AddUint32(&node.untrustedCount, 1) // increment
 		newNode.Run(ctx)
+		atomic.AddUint32(&node.untrustedCount, ^uint32(0)) // decrement
 	}()
 	return true
 }
