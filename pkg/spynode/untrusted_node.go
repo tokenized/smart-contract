@@ -2,7 +2,6 @@ package spynode
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -32,7 +31,6 @@ type UntrustedNode struct {
 	txChannel       *handlers.TxChannel
 	handlers        map[string]handlers.CommandHandler
 	connection      net.Conn
-	sendLock        sync.Mutex // Lock for sending on connection
 	outgoing        MessageChannel
 	listeners       []handlers.Listener
 	txFilters       []handlers.TxFilter
@@ -140,14 +138,14 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 
 	logger.Debug(ctx, "(%s) Stopping", node.address)
 
-	node.sendLock.Lock()
+	node.lock.Lock()
 	if node.connection != nil {
 		if err := node.connection.Close(); err != nil {
 			logger.Warn(ctx, "(%s) Failed to close : %s", node.address, err)
 		}
 		node.connection = nil
 	}
-	node.sendLock.Unlock()
+	node.lock.Unlock()
 
 	// Wait for incoming threads to stop.
 	// We have to be sure that we stop writing to channels before we stop reading from channels or
@@ -160,7 +158,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 			break
 		}
 		if waitCount > 30 { // 3 seconds
-			logger.Debug(ctx, "(%s) Waiting for incoming to stop : %d", node.address, incomingCount)
+			logger.Info(ctx, "(%s) Waiting for incoming to stop : %d", node.address, incomingCount)
 			waitCount = 0
 		}
 		waitCount++
@@ -177,7 +175,7 @@ func (node *UntrustedNode) Run(ctx context.Context) error {
 			break
 		}
 		if waitCount > 30 { // 3 seconds
-			logger.Debug(ctx, "(%s) Waiting for processing to stop : %d", node.address,
+			logger.Info(ctx, "(%s) Waiting for processing to stop : %d", node.address,
 				processingCount)
 			waitCount = 0
 		}
@@ -214,6 +212,7 @@ func (node *UntrustedNode) Stop(ctx context.Context) error {
 	}
 
 	// Setting stopping and closing the connection should stop the monitorIncoming thread.
+	logger.Debug(ctx, "(%s) Requesting stop", node.address)
 	node.stopping = true
 	node.lock.Unlock()
 	return nil
@@ -269,12 +268,16 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 			break
 		}
 
-		if node.isStopping() {
+		node.lock.Lock()
+		connection := node.connection
+		node.lock.Unlock()
+
+		if connection == nil {
 			break
 		}
 
 		// read new messages, blocking
-		_, msg, _, err := wire.ReadMessageParse(node.connection, wire.ProtocolVersion,
+		_, msg, _, err := wire.ReadMessageParse(connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := errors.Cause(err).(*wire.MessageError)
@@ -362,7 +365,9 @@ func (node *UntrustedNode) check(ctx context.Context) error {
 	node.pendingLock.Lock()
 	if len(node.pendingOutgoing) > 0 {
 		for _, tx := range node.pendingOutgoing {
-			node.outgoing.Add(tx)
+			if node.outgoing.Add(tx) != nil {
+				break
+			}
 		}
 	}
 	node.pendingOutgoing = nil
@@ -389,9 +394,11 @@ func (node *UntrustedNode) TransmitMessage(msg wire.Message) bool {
 	if node.isStopping() {
 		return false
 	}
+
 	if err := node.outgoing.Add(msg); err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -416,11 +423,15 @@ func (node *UntrustedNode) monitorRequestTimeouts(ctx context.Context) {
 //
 // This is a blocking function that will run forever, so it should be run in a goroutine.
 func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
+
 	for msg := range node.outgoing.Channel {
-		node.sendLock.Lock()
-		if node.connection == nil {
-			node.sendLock.Unlock()
-			break
+		node.lock.Lock()
+		connection := node.connection
+		node.lock.Unlock()
+
+		if connection == nil {
+			logger.Debug(ctx, "(%s) Dropping %s message", node.address, msg.Command())
+			continue // Keep clearing the channel
 		}
 
 		tx, ok := msg.(*wire.MsgTx)
@@ -428,11 +439,12 @@ func (node *UntrustedNode) sendOutgoing(ctx context.Context) error {
 			logger.Verbose(ctx, "(%s) Sending Tx : %s", node.address, tx.TxHash().String())
 		}
 
-		if err := sendAsync(ctx, node.connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
-			node.sendLock.Unlock()
-			return errors.Wrap(err, fmt.Sprintf("Failed to send %s", msg.Command()))
+		if err := sendAsync(ctx, connection, msg, wire.BitcoinNet(node.config.Net)); err != nil {
+			logger.Warn(ctx, "(%s) Failed sending command %s : %s", node.address, msg.Command(), err)
+			// don't break out of the loop because we need to continue emptying the channel.
+			// otherwise any processing adding to the channel can get locked on a write.
+			node.Stop(ctx)
 		}
-		node.sendLock.Unlock()
 	}
 
 	return nil
