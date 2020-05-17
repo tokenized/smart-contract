@@ -322,13 +322,14 @@ func (node *Node) Run(ctx context.Context) error {
 		node.txs.Save(ctx)
 		node.peers.Save(ctx)
 
+		node.lock.Lock()
 		if !node.needsRestart || node.hardStop {
+			node.lock.Unlock()
 			break
 		}
 
 		logger.Verbose(ctx, "Restarting")
 		node.needsRestart = false
-		node.lock.Lock()
 		node.stopping = false
 		node.lock.Unlock()
 		node.state.Reset()
@@ -694,15 +695,22 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 	}
 }
 
+// restart triggers a disconnection and reconnection from the node.
 func (node *Node) restart(ctx context.Context) {
 	if node.isStopping() {
 		return
 	}
+	node.lock.Lock()
 	node.needsRestart = true
+	node.lock.Unlock()
 	node.requestStop(ctx)
 }
 
+// queueOutgoing adds the message to the queue to be sent. It returns true if the message was added.
 func (node *Node) queueOutgoing(msg wire.Message) bool {
+	if node.isStopping() {
+		return false
+	}
 	err := node.outgoing.Add(msg)
 	return err == nil
 }
