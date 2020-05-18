@@ -43,6 +43,36 @@ type TxLoc struct {
 type MsgBlock struct {
 	Header       BlockHeader
 	Transactions []*MsgTx
+	txOffset     uint64
+}
+
+func (msg *MsgBlock) GetHeader() BlockHeader {
+	return msg.Header
+}
+
+func (msg *MsgBlock) IsMerkleRootValid() bool {
+	merkleRoot, err := msg.CalculateMerkleHash()
+	if err != nil {
+		return false
+	}
+	return msg.Header.MerkleRoot.Equal(merkleRoot)
+}
+
+func (msg *MsgBlock) GetTxCount() uint64 {
+	return uint64(len(msg.Transactions))
+}
+
+func (msg *MsgBlock) GetNextTx() (*MsgTx, error) {
+	if msg.txOffset >= uint64(len(msg.Transactions)) {
+		return nil, nil
+	}
+	result := msg.Transactions[msg.txOffset]
+	msg.txOffset++
+	return result, nil
+}
+
+func (msg *MsgBlock) ResetTxs() {
+	msg.txOffset = 0
 }
 
 // AddTransaction adds a transaction to the message.
@@ -67,6 +97,7 @@ func (msg *MsgBlock) BtcDecode(r io.Reader, pver uint32) error {
 		return err
 	}
 
+	msg.txOffset = 0
 	txCount, err := ReadVarInt(r, pver)
 	if err != nil {
 		return err
@@ -125,6 +156,7 @@ func (msg *MsgBlock) DeserializeTxLoc(r *bytes.Buffer) ([]TxLoc, error) {
 		return nil, err
 	}
 
+	msg.txOffset = 0
 	txCount, err := ReadVarInt(r, 0)
 	if err != nil {
 		return nil, err

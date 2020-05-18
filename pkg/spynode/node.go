@@ -74,25 +74,23 @@ type Node struct {
 // See handlers/handlers.go for the listener interface definitions.
 func NewNode(config data.Config, store storage.Storage) *Node {
 	result := Node{
-		config:          config,
-		state:           data.NewState(),
-		store:           store,
-		peers:           handlerstorage.NewPeerRepository(store),
-		blocks:          handlerstorage.NewBlockRepository(config, store),
-		txs:             handlerstorage.NewTxRepository(store),
-		reorgs:          handlerstorage.NewReorgRepository(store),
-		txTracker:       data.NewTxTracker(),
-		memPool:         data.NewMemPool(),
-		listeners:       make([]handlers.Listener, 0),
-		txFilters:       make([]handlers.TxFilter, 0),
-		untrustedNodes:  make([]*UntrustedNode, 0),
-		addresses:       make(map[string]time.Time),
-		needsRestart:    false,
-		hardStop:        false,
-		stopping:        false,
-		stopped:         false,
-		confTxChannel:   handlers.TxChannel{},
-		unconfTxChannel: handlers.TxChannel{},
+		config:         config,
+		state:          data.NewState(),
+		store:          store,
+		peers:          handlerstorage.NewPeerRepository(store),
+		blocks:         handlerstorage.NewBlockRepository(config, store),
+		txs:            handlerstorage.NewTxRepository(store),
+		reorgs:         handlerstorage.NewReorgRepository(store),
+		txTracker:      data.NewTxTracker(),
+		memPool:        data.NewMemPool(),
+		listeners:      make([]handlers.Listener, 0),
+		txFilters:      make([]handlers.TxFilter, 0),
+		untrustedNodes: make([]*UntrustedNode, 0),
+		addresses:      make(map[string]time.Time),
+		needsRestart:   false,
+		hardStop:       false,
+		stopping:       false,
+		stopped:        false,
 	}
 
 	atomic.StoreUint32(&result.incomingCount, 0)
@@ -594,22 +592,8 @@ func (node *Node) handleMessage(ctx context.Context, msg wire.Message) error {
 // CleanupBlock is called when a block is being processed.
 // Implements handlers.BlockProcessor interface
 // It is responsible for any cleanup as a result of a block.
-func (node *Node) CleanupBlock(ctx context.Context, block *wire.MsgParseBlock) error {
-	logger.Debug(ctx, "Cleaning up after block : %s", block.Header.BlockHash())
-
-	txids := make([]*bitcoin.Hash32, 0, block.TxCount)
-	block.ResetTxs()
-	for {
-		tx, err := block.GetNextTx()
-		if err != nil {
-			return errors.Wrap(err, "get next tx")
-		}
-		if tx == nil {
-			break
-		}
-
-		txids = append(txids, tx.TxHash())
-	}
+func (node *Node) CleanupBlock(ctx context.Context, txids []*bitcoin.Hash32) error {
+	logger.Debug(ctx, "Cleaning up after block")
 
 	node.txTracker.RemoveList(ctx, txids)
 
@@ -658,7 +642,7 @@ func (node *Node) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		_, msg, _, err := wire.ReadMessageParse(connection, wire.ProtocolVersion,
+		_, msg, _, err := wire.ReadMessageN(connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := err.(*wire.MessageError)

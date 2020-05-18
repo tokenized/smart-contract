@@ -28,19 +28,35 @@ func NewBlockHandler(state *data.State, blockRefeeder *BlockRefeeder) *BlockHand
 // Handle implements the Handler interface for a block handler.
 func (handler *BlockHandler) Handle(ctx context.Context, m wire.Message) ([]wire.Message, error) {
 	block, ok := m.(*wire.MsgParseBlock)
-	if !ok {
-		return nil, errors.New("Could not assert as *wire.MsgParseBlock")
-	}
+	if ok {
+		hash := block.Header.BlockHash()
 
-	receivedHash := block.Header.BlockHash()
-	logger.Debug(ctx, "Received block : %s", receivedHash.String())
+		logger.Debug(ctx, "Received block : %s", hash.String())
 
-	if handler.blockRefeeder != nil && handler.blockRefeeder.SetBlock(*receivedHash, block) {
-		return nil, nil
-	}
+		if handler.blockRefeeder != nil && handler.blockRefeeder.SetBlock(*hash, block) {
+			return nil, nil
+		}
 
-	if !handler.state.AddBlock(receivedHash, block) {
-		logger.Warn(ctx, "Block not requested : %s", receivedHash.String())
+		if !handler.state.AddBlock(hash, block) {
+			logger.Warn(ctx, "Block not requested : %s", hash.String())
+		}
+	} else {
+		block, ok := m.(*wire.MsgBlock)
+		if !ok {
+			return nil, errors.New("Could not assert as *wire.MsgParseBlock or *wire.MsgParseBlock")
+		}
+
+		hash := block.Header.BlockHash()
+
+		logger.Debug(ctx, "Received block : %s", hash.String())
+
+		if handler.blockRefeeder != nil && handler.blockRefeeder.SetBlock(*hash, block) {
+			return nil, nil
+		}
+
+		if !handler.state.AddBlock(hash, block) {
+			logger.Warn(ctx, "Block not requested : %s", hash.String())
+		}
 	}
 
 	return nil, nil

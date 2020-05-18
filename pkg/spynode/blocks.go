@@ -65,8 +65,9 @@ func (node *Node) processBlocks(ctx context.Context) error {
 		if err := node.ProcessBlock(ctx, block); err != nil {
 			c := errors.Cause(err)
 			if c != ErrBlockNotNextBlock && c != ErrBlockNotAdded {
+				header := block.GetHeader()
 				logger.Warn(ctx, "Failed to process block : %s : %s",
-					block.Header.BlockHash().String(), err)
+					header.BlockHash().String(), err)
 				return err
 			}
 		}
@@ -104,14 +105,15 @@ func (node *Node) processBlocks(ctx context.Context) error {
 }
 
 // provideBlock feeds the block to the listeners.
-func (node *Node) provideBlock(ctx context.Context, block *wire.MsgParseBlock, height int) error {
-	hash := block.Header.BlockHash()
-	blockMessage := handlers.BlockMessage{Hash: *hash, Height: height, Time: block.Header.Timestamp}
+func (node *Node) provideBlock(ctx context.Context, block wire.Block, height int) error {
+	header := block.GetHeader()
+	hash := header.BlockHash()
+	blockMessage := handlers.BlockMessage{Hash: *hash, Height: height, Time: header.Timestamp}
 	for _, listener := range node.listeners {
 		listener.HandleBlock(ctx, handlers.ListenerMsgBlock, &blockMessage)
 	}
 
-	logger.Debug(ctx, "Providing block %d (%d tx) : %s", height, block.TxCount, hash.String())
+	logger.Debug(ctx, "Providing block %d (%d tx) : %s", height, block.GetTxCount(), hash.String())
 	for {
 		tx, err := block.GetNextTx()
 		if err != nil {
@@ -130,11 +132,12 @@ func (node *Node) provideBlock(ctx context.Context, block *wire.MsgParseBlock, h
 	return nil
 }
 
-func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) error {
+func (node *Node) ProcessBlock(ctx context.Context, block wire.Block) error {
 	node.blockLock.Lock()
 	defer node.blockLock.Unlock()
 
-	hash := block.Header.BlockHash()
+	header := block.GetHeader()
+	hash := header.BlockHash()
 	logger.Debug(ctx, "Block : %s", hash.String())
 
 	if node.blocks.Contains(hash) {
@@ -144,10 +147,10 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) e
 		return ErrBlockNotAdded
 	}
 
-	if block.Header.PrevBlock != *node.blocks.LastHash() {
+	if header.PrevBlock != *node.blocks.LastHash() {
 		// Ignore this as it can happen when there is a reorg.
 		logger.Warn(ctx, "Not next block : %s", hash.String())
-		logger.Warn(ctx, "Previous hash : %s", block.Header.PrevBlock.String())
+		logger.Warn(ctx, "Previous hash : %s", header.PrevBlock.String())
 		node.state.FinalizeBlock(*hash)
 		return ErrBlockNotNextBlock // Unknown or out of order block
 	}
@@ -160,7 +163,7 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) e
 	}
 
 	// Add to repo
-	if err := node.blocks.Add(ctx, &block.Header); err != nil {
+	if err := node.blocks.Add(ctx, &header); err != nil {
 		node.state.FinalizeBlock(*hash)
 		return errors.Wrap(err, "add block")
 	}
@@ -189,14 +192,15 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) e
 
 	// Send block notification
 	height := node.blocks.LastHeight()
-	blockMessage := handlers.BlockMessage{Hash: *hash, Height: height, Time: block.Header.Timestamp}
+	blockMessage := handlers.BlockMessage{Hash: *hash, Height: height, Time: header.Timestamp}
 	for _, listener := range node.listeners {
 		listener.HandleBlock(ctx, handlers.ListenerMsgBlock, &blockMessage)
 	}
 
 	// Notify Tx for block and tx listeners
-	logger.Debug(ctx, "Processing block %d (%d tx) : %s", height, block.TxCount, hash)
+	logger.Debug(ctx, "Processing block %d (%d tx) : %s", height, block.GetTxCount(), hash)
 	inUnconfirmed := false
+	txids := make([]*bitcoin.Hash32, 0, block.GetTxCount())
 	for {
 		tx, err := block.GetNextTx()
 		if err != nil {
@@ -207,6 +211,7 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) e
 		}
 
 		txHash := tx.TxHash()
+		txids = append(txids, txHash)
 
 		// Remove from unconfirmed. Only matching are in unconfirmed.
 		inUnconfirmed, unconfirmed = removeHash(*txHash, unconfirmed)
@@ -249,7 +254,7 @@ func (node *Node) ProcessBlock(ctx context.Context, block *wire.MsgParseBlock) e
 	}
 
 	// Perform any block cleanup
-	if err := node.CleanupBlock(ctx, block); err != nil {
+	if err := node.CleanupBlock(ctx, txids); err != nil {
 		logger.Debug(ctx, "Failed clean up after block : %s", hash)
 		node.txs.ReleaseUnconfirmed(ctx) // Release unconfirmed
 		return err
