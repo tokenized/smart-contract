@@ -367,7 +367,8 @@ func (listener *TestListener) ProcessBlocks(ctx context.Context) error {
 			break
 		}
 
-		hash := block.Header.BlockHash()
+		header := block.GetHeader()
+		hash := header.BlockHash()
 
 		if listener.blocks.Contains(hash) {
 			height, _ := listener.blocks.Height(hash)
@@ -375,15 +376,15 @@ func (listener *TestListener) ProcessBlocks(ctx context.Context) error {
 			return errors.New("block not added")
 		}
 
-		if block.Header.PrevBlock != *listener.blocks.LastHash() {
+		if header.PrevBlock != *listener.blocks.LastHash() {
 			// Ignore this as it can happen when there is a reorg.
 			logger.Warn(ctx, "Not next block : %s", hash.String())
-			logger.Warn(ctx, "Previous hash : %s", block.Header.PrevBlock.String())
+			logger.Warn(ctx, "Previous hash : %s", header.PrevBlock.String())
 			return errors.New("not next block") // Unknown or out of order block
 		}
 
 		// Add to repo
-		if err := listener.blocks.Add(ctx, &block.Header); err != nil {
+		if err := listener.blocks.Add(ctx, &header); err != nil {
 			return err
 		}
 

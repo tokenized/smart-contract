@@ -2,6 +2,7 @@ package wire
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"unicode/utf8"
@@ -27,10 +28,20 @@ type MsgParseBlock struct {
 	data     []byte
 }
 
+// GetHeader returns the header of the block.
+func (mpb *MsgParseBlock) GetHeader() BlockHeader {
+	return mpb.Header
+}
+
 // IsMerkleRootValid returns true if the decoded block's calculated merkle root hash matches the
 //   header.
 func (mpb *MsgParseBlock) IsMerkleRootValid() bool {
 	return mpb.Header.MerkleRoot.Equal(&mpb.MerkleRoot)
+}
+
+// GetTxCount returns the count of transactions in the block.
+func (mpb *MsgParseBlock) GetTxCount() uint64 {
+	return mpb.TxCount
 }
 
 // GetNextTx returns the next tx from the block.
@@ -83,18 +94,27 @@ func (mpb *MsgParseBlock) BtcDecode(r io.Reader, pver uint32) error {
 
 	// Read the raw data for each tx and calculate it's hash so the merkle root hash can be
 	//   calculated.
-	txids := make([]*bitcoin.Hash32, 0, mpb.TxCount)
+	txSizes := make([]uint64, 0, mpb.TxCount)
 	for i := uint64(0); i < mpb.TxCount; i++ {
-		txid, err := readTxId(r, pver) // Reads full tx data and returns the hash
+		txSize, err := readTxSize(r, pver) // Reads full tx data and returns the size
 		if err != nil {
 			return err
 		}
-		txids = append(txids, &txid)
+		txSizes = append(txSizes, txSize)
 	}
 
 	mpb.data = dataBuf.Bytes()
 
 	// Calculate merkle root hash
+	offset := uint64(0)
+	txids := make([]*bitcoin.Hash32, 0, mpb.TxCount)
+	for _, txSize := range txSizes {
+		hash := sha256.Sum256(mpb.data[offset : offset+txSize])
+		txid := bitcoin.Hash32(sha256.Sum256(hash[:]))
+		txids = append(txids, &txid)
+		offset += txSize
+	}
+
 	if mpb.TxCount == 1 {
 		mpb.MerkleRoot = *txids[0] // Special case : Use hash of only tx
 	} else {
@@ -226,15 +246,14 @@ func ReadMessageParse(r io.Reader, pver uint32, btcnet BitcoinNet) (int, Message
 //   read past values that we don't actually care about.
 func readTxId(r io.Reader, pver uint32) (bitcoin.Hash32, error) {
 	// Tee reader into a buffer to calculate hash after reading.
-	var buf bytes.Buffer // To calculate hash
-	r = io.TeeReader(r, &buf)
+	hasher := sha256.New()
+	r = io.TeeReader(r, hasher)
 
 	if _, err := readTxSize(r, pver); err != nil {
 		return bitcoin.Hash32{}, errors.Wrap(err, "read tx size")
 	}
 
-	result, _ := bitcoin.NewHash32(bitcoin.DoubleSha256(buf.Bytes()))
-	return *result, nil
+	return bitcoin.Hash32(sha256.Sum256(hasher.Sum(nil))), nil
 }
 
 // readTxSize reads the data for a full tx and returns the size that it read. It must take an

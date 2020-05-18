@@ -21,7 +21,7 @@ var (
 type requestedBlock struct {
 	hash  bitcoin.Hash32
 	time  time.Time // Time request was sent
-	block *wire.MsgParseBlock
+	block wire.Block
 }
 
 func (state *State) BlockIsRequested(hash *bitcoin.Hash32) bool {
@@ -76,7 +76,7 @@ func (state *State) AddBlockRequest(prevHash, hash *bitcoin.Hash32) (bool, error
 }
 
 // AddBlock adds the block message to the queued block request for later processing.
-func (state *State) AddBlock(hash *bitcoin.Hash32, block *wire.MsgParseBlock) bool {
+func (state *State) AddBlock(hash *bitcoin.Hash32, block wire.Block) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
@@ -90,7 +90,7 @@ func (state *State) AddBlock(hash *bitcoin.Hash32, block *wire.MsgParseBlock) bo
 	return false
 }
 
-func (state *State) NextBlock() *wire.MsgParseBlock {
+func (state *State) NextBlock() wire.Block {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 

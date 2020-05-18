@@ -277,7 +277,7 @@ func (node *UntrustedNode) monitorIncoming(ctx context.Context) {
 		}
 
 		// read new messages, blocking
-		_, msg, _, err := wire.ReadMessageParse(connection, wire.ProtocolVersion,
+		_, msg, _, err := wire.ReadMessageN(connection, wire.ProtocolVersion,
 			wire.BitcoinNet(node.config.Net))
 		if err != nil {
 			wireError, ok := errors.Cause(err).(*wire.MessageError)

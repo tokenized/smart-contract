@@ -6,6 +6,7 @@ package wire
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -293,10 +294,10 @@ func (msg *MsgTx) TxHash() *bitcoin.Hash32 {
 	// Ignore the error returns since the only way the encode could fail
 	// is being out of memory or due to nil pointers, both of which would
 	// cause a run-time panic.
-	buf := bytes.NewBuffer(make([]byte, 0, msg.SerializeSize()))
-	_ = msg.Serialize(buf)
-	result, _ := bitcoin.NewHash32(bitcoin.DoubleSha256(buf.Bytes()))
-	return result
+	hasher := sha256.New()
+	_ = msg.Serialize(hasher)
+	result := bitcoin.Hash32(sha256.Sum256(hasher.Sum(nil)))
+	return &result
 }
 
 func (msg *MsgTx) String() string {
