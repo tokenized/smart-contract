@@ -58,10 +58,6 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
 	}
 
-	if !response.Data.Approved {
-		return nil, bitcoin.Hash32{}, ErrNotApproved
-	}
-
 	result := &actions.AssetReceiverField{
 		Address:               address.Bytes(),
 		Quantity:              quantity,
@@ -69,6 +65,10 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 		OracleIndex:           uint32(oracleIndex),
 		OracleConfirmationSig: response.Data.Signature.Bytes(),
 		OracleSigBlockHeight:  response.Data.BlockHeight,
+	}
+
+	if !response.Data.Approved {
+		return result, response.Data.BlockHash, ErrNotApproved
 	}
 
 	return result, response.Data.BlockHash, nil
