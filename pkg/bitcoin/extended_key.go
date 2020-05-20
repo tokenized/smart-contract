@@ -364,8 +364,8 @@ func PathIndexToString(index uint32) string {
 }
 
 func PathToString(values []uint32) string {
-	var parts = make([]string, len(values)+1, 0)
-	parts[0] = "m"
+	var parts = make([]string, 0, len(values)+1)
+	parts = append(parts, "m")
 
 	for _, v := range values {
 		parts = append(parts, PathIndexToString(v))
@@ -411,7 +411,7 @@ func PathFromString(s string) ([]uint32, error) {
 		return nil, errors.New("Path empty")
 	}
 
-	result := []uint32{}
+	result := make([]uint32, 0, len(parts))
 
 	for _, n := range parts {
 		if len(n) == 0 {
