@@ -34,9 +34,15 @@ var cmdConvert = &cobra.Command{
 
 		key, err := bitcoin.KeyFromStr(args[0])
 		if err == nil {
-			fmt.Printf("PublicKey : %s\n", key.PublicKey().String())
+			fmt.Printf("Public key : %s\n", key.PublicKey().String())
 			ra, _ := key.RawAddress()
 			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
+			return nil
+		}
+
+		xkey, err := bitcoin.ExtendedKeyFromStr(args[0])
+		if err == nil {
+			fmt.Printf("Extended public key : %s\n", xkey.ExtendedPublicKey().String())
 			return nil
 		}
 
