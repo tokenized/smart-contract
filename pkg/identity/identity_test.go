@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -12,7 +13,7 @@ import (
 
 var (
 	urls = []string{
-		"http://localhost:8081", // Manually test by removing comment
+		// "http://localhost:8081", // Manually test by removing comment
 	}
 )
 

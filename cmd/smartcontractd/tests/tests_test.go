@@ -178,7 +178,8 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	}
 
 	response := responses[0].Copy()
-	responses = nil
+	responses = responses[1:]
+	remainingResponseCount := len(responses)
 	responseLock.Unlock()
 
 	var responseMsg actions.Action
@@ -215,7 +216,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	}
 
 	responseLock.Lock()
-	if len(responses) != 0 {
+	if len(responses) != remainingResponseCount {
 		responseLock.Unlock()
 		t.Fatalf("\t%s\tResponse created a response", tests.Failed)
 	}

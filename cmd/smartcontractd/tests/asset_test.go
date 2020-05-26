@@ -31,6 +31,7 @@ func TestAssets(t *testing.T) {
 	t.Run("index", assetIndex)
 	t.Run("amendment", assetAmendment)
 	t.Run("proposalAmendment", assetProposalAmendment)
+	t.Run("duplicateAsset", duplicateAsset)
 }
 
 func createAsset(t *testing.T) {
@@ -105,7 +106,7 @@ func createAsset(t *testing.T) {
 	// Data output
 	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
 	if err != nil {
-		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
+		t.Fatalf("\t%s\tFailed to serialize asset definition : %v", tests.Failed, err)
 	}
 	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
 
@@ -706,6 +707,222 @@ func assetProposalAmendment(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified new payload description : %s", tests.Success, sharePayload.Description)
+}
+
+func duplicateAsset(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+		1, "John Bitcoin", true, true, false, false, false)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
+	}
+
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 102001, issuerKey.Address)
+
+	testAssetType = assets.CodeShareCommon
+	testAssetCodes = []protocol.AssetCode{*protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
+
+	// Create AssetDefinition message
+	assetData := actions.AssetDefinition{
+		AssetType:                  testAssetType,
+		TransfersPermitted:         true,
+		EnforcementOrdersPermitted: true,
+		VotingRights:               true,
+		TokenQty:                   1000,
+	}
+
+	assetPayloadData := assets.ShareCommon{
+		Ticker:      "TST  ",
+		Description: "Test common shares",
+	}
+	assetData.AssetPayload, err = assetPayloadData.Bytes()
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
+	}
+
+	// Define permissions for asset fields
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              true,  // Issuer can update field without proposal
+			AdministrationProposal: false, // Issuer can update field with a proposal
+			HolderProposal:         false, // Holder's can initiate proposals to update field
+			AdministrativeMatter:   false,
+		},
+	}
+	permissions[0].VotingSystemsAllowed = make([]bool, len(ct.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	assetData.AssetPermissions, err = permissions.Bytes()
+	t.Logf("Asset Permissions : 0x%x", assetData.AssetPermissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
+	}
+
+	// Build asset definition transaction
+	assetTx := wire.NewMsgTx(1)
+
+	assetInputHash := fundingTx.TxHash()
+
+	// From issuer (Note: empty sig script)
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ := test.ContractKey.Address.LockingScript()
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(100000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&assetData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset definition : %v", tests.Failed, err)
+	}
+	assetTx.TxOut = append(assetTx.TxOut, wire.NewTxOut(0, script))
+
+	assetItx, err := inspector.NewTransactionFromWire(ctx, assetTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx : %v", tests.Failed, err)
+	}
+
+	err = assetItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, assetTx)
+
+	t.Logf("Asset definition 1 tx : %s", assetItx.Hash.String())
+
+	err = a.Trigger(ctx, "SEE", assetItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept asset definition : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAsset definition 1 accepted", tests.Success)
+
+	// Second Asset ********************************************************************************
+	fundingTx2 := tests.MockFundingTx(ctx, test.RPCNode, 102002, issuerKey.Address)
+
+	testAssetCodes = append(testAssetCodes,
+		*protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
+
+	// Create AssetDefinition message
+	assetData2 := actions.AssetDefinition{
+		AssetType:                  testAssetType,
+		TransfersPermitted:         true,
+		EnforcementOrdersPermitted: true,
+		VotingRights:               true,
+		TokenQty:                   2000,
+	}
+
+	assetPayloadData2 := assets.ShareCommon{
+		Ticker:      "TST2 ",
+		Description: "Test common shares 2",
+	}
+	assetData2.AssetPayload, err = assetPayloadData2.Bytes()
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
+	}
+
+	assetData2.AssetPermissions, err = permissions.Bytes()
+	t.Logf("Asset Permissions : 0x%x", assetData2.AssetPermissions)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
+	}
+
+	// Build asset definition transaction
+	assetTx2 := wire.NewMsgTx(1)
+
+	assetInputHash2 := fundingTx2.TxHash()
+
+	// From issuer (Note: empty sig script)
+	assetTx2.TxIn = append(assetTx2.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash2, 0), make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	assetTx2.TxOut = append(assetTx2.TxOut, wire.NewTxOut(100000, script))
+
+	// Data output
+	script, err = protocol.Serialize(&assetData2, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize asset definition 2 : %v", tests.Failed, err)
+	}
+	assetTx2.TxOut = append(assetTx2.TxOut, wire.NewTxOut(0, script))
+
+	assetItx2, err := inspector.NewTransactionFromWire(ctx, assetTx2, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create asset itx 2 : %v", tests.Failed, err)
+	}
+
+	err = assetItx2.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote asset itx 2 : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, assetTx2)
+
+	t.Logf("Asset definition 2 tx : %s", assetItx2.Hash.String())
+
+	err = a.Trigger(ctx, "SEE", assetItx2)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept asset definition 2 : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tAsset definition 2 accepted", tests.Success)
+
+	// Check the responses *************************************************************************
+	checkResponse(t, "A2")
+	checkResponse(t, "A2")
+
+	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if len(ct.AssetCodes) != 2 {
+		t.Fatalf("\t%s\tWrong asset code count : %d", tests.Failed, len(ct.AssetCodes))
+	}
+
+	if !ct.AssetCodes[0].Equal(testAssetCodes[0]) {
+		t.Fatalf("\t%s\tWrong asset code 1 : %s", tests.Failed, ct.AssetCodes[0].String())
+	}
+
+	if !ct.AssetCodes[1].Equal(testAssetCodes[1]) {
+		t.Fatalf("\t%s\tWrong asset code 2 : %s", tests.Failed, ct.AssetCodes[1].String())
+	}
+
+	// Check issuer balance
+	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0])
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
+	}
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+		issuerKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
+	}
+	if h.PendingBalance != assetData.TokenQty {
+		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance,
+			assetData.TokenQty)
+	}
+
+	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
+
+	if as.AssetType != assetData.AssetType {
+		t.Fatalf("\t%s\tAsset type incorrect : %s != %s", tests.Failed, as.AssetType,
+			assetData.AssetType)
+	}
+
+	t.Logf("\t%s\tVerified asset type : %s", tests.Success, as.AssetType)
 }
 
 var currentTimestamp = protocol.CurrentTimestamp()
