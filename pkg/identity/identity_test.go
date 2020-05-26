@@ -1,88 +1,106 @@
 package identity
 
-const baseURL = "http://localhost:8081"
+import (
+	"context"
+	"testing"
 
-// func TestRegister(t *testing.T) {
-// 	ctx := context.Background()
+	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/protocol"
+)
 
-// 	key, err := bitcoin.GenerateKey(bitcoin.MainNet)
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate key : %s", err)
-// 	}
+var (
+	urls = []string{
+		"http://localhost:8081", // Manually test by removing comment
+	}
+)
 
-// 	or, err := GetOracle(ctx, baseURL, key)
-// 	if err != nil {
-// 		t.Fatalf("Failed to get oracle : %s", err)
-// 	}
+func TestRegister(t *testing.T) {
+	ctx := context.Background()
 
-// 	entity := actions.EntityField{
-// 		Name: "Test",
-// 	}
+	key, err := bitcoin.GenerateKey(bitcoin.MainNet)
+	if err != nil {
+		t.Fatalf("Failed to generate key : %s", err)
+	}
 
-// 	xkey, err := bitcoin.GenerateMasterExtendedKey()
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate xkey : %s", err)
-// 	}
+	for _, url := range urls {
+		or, err := GetOracle(ctx, url, key)
+		if err != nil {
+			t.Fatalf("Failed to get oracle : %s", err)
+		}
 
-// 	id, err := or.RegisterUser(ctx, entity, []bitcoin.ExtendedKeys{bitcoin.ExtendedKeys{xkey}})
-// 	if err != nil {
-// 		t.Fatalf("Failed to register user : %s", err)
-// 	}
+		entity := actions.EntityField{
+			Name: "Test",
+		}
 
-// 	t.Logf("User ID : %s", id)
-// }
+		xkey, err := bitcoin.GenerateMasterExtendedKey()
+		if err != nil {
+			t.Fatalf("Failed to generate xkey : %s", err)
+		}
 
-// func TestApproveReceive(t *testing.T) {
-// 	ctx := context.Background()
+		id, err := or.RegisterUser(ctx, entity, []bitcoin.ExtendedKeys{bitcoin.ExtendedKeys{xkey}})
+		if err != nil {
+			t.Fatalf("Failed to register user : %s", err)
+		}
 
-// 	key, err := bitcoin.GenerateKey(bitcoin.MainNet)
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate key : %s", err)
-// 	}
+		t.Logf("User ID : %s", id)
+	}
+}
 
-// 	or, err := GetOracle(ctx, baseURL, key)
-// 	if err != nil {
-// 		t.Fatalf("Failed to get oracle : %s", err)
-// 	}
+func TestApproveReceive(t *testing.T) {
+	ctx := context.Background()
 
-// 	entity := actions.EntityField{
-// 		Name: "Test",
-// 	}
+	key, err := bitcoin.GenerateKey(bitcoin.MainNet)
+	if err != nil {
+		t.Fatalf("Failed to generate key : %s", err)
+	}
 
-// 	xkey, err := bitcoin.GenerateMasterExtendedKey()
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate xkey : %s", err)
-// 	}
+	for _, url := range urls {
+		or, err := GetOracle(ctx, url, key)
+		if err != nil {
+			t.Fatalf("Failed to get oracle : %s", err)
+		}
 
-// 	xpubs := bitcoin.ExtendedKeys{xkey}
+		entity := actions.EntityField{
+			Name: "Test",
+		}
 
-// 	userID, err := or.RegisterUser(ctx, entity, []bitcoin.ExtendedKeys{xpubs})
-// 	if err != nil {
-// 		t.Fatalf("Failed to register user : %s", err)
-// 	}
+		xkey, err := bitcoin.GenerateMasterExtendedKey()
+		if err != nil {
+			t.Fatalf("Failed to generate xkey : %s", err)
+		}
 
-// 	t.Logf("User ID : %s", userID)
+		xpubs := bitcoin.ExtendedKeys{xkey}
 
-// 	if err := or.RegisterXPub(ctx, "m/0", xpubs, 1); err != nil {
-// 		t.Fatalf("Failed to register xpub : %s", err)
-// 	}
+		userID, err := or.RegisterUser(ctx, entity, []bitcoin.ExtendedKeys{xpubs})
+		if err != nil {
+			t.Fatalf("Failed to register user : %s", err)
+		}
 
-// 	contractKey, err := bitcoin.GenerateKey(bitcoin.MainNet)
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate contract key : %s", err)
-// 	}
+		t.Logf("User ID : %s", userID)
 
-// 	contractAddress, err := contractKey.RawAddress()
-// 	contract := bitcoin.NewAddressFromRawAddress(contractAddress, bitcoin.MainNet).String()
-// 	assetCode := protocol.AssetCodeFromContract(contractAddress, 0)
-// 	asset := protocol.AssetID(assets.CodeCurrency, *assetCode)
+		if err := or.RegisterXPub(ctx, "m/0", xpubs, 1); err != nil {
+			t.Fatalf("Failed to register xpub : %s", err)
+		}
 
-// 	receiver, blockHash, err := or.ApproveReceive(ctx, contract, asset, 1, 3, xpubs, 0, 1)
-// 	if err != nil {
-// 		t.Fatalf("Failed to approve receive : %s", err)
-// 	}
+		contractKey, err := bitcoin.GenerateKey(bitcoin.MainNet)
+		if err != nil {
+			t.Fatalf("Failed to generate contract key : %s", err)
+		}
 
-// 	if err := or.ValidateReceiveHash(ctx, blockHash, contract, asset, receiver); err != nil {
-// 		t.Fatalf("Failed to validate receive : %s", err)
-// 	}
-// }
+		contractAddress, err := contractKey.RawAddress()
+		contract := bitcoin.NewAddressFromRawAddress(contractAddress, bitcoin.MainNet).String()
+		assetCode := protocol.AssetCodeFromContract(contractAddress, 0)
+		asset := protocol.AssetID(assets.CodeCurrency, *assetCode)
+
+		receiver, blockHash, err := or.ApproveReceive(ctx, contract, asset, 1, 3, xpubs, 0, 1)
+		if err != nil {
+			t.Fatalf("Failed to approve receive : %s", err)
+		}
+
+		if err := or.ValidateReceiveHash(ctx, blockHash, contract, asset, receiver); err != nil {
+			t.Fatalf("Failed to validate receive : %s", err)
+		}
+	}
+}
