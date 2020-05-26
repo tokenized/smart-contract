@@ -240,7 +240,8 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	return nil
 }
 
-// AddAssetCode adds an asset code to a contract
+// AddAssetCode adds an asset code to a contract. If the asset code is already there, then it will
+//   not add it again.
 func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
@@ -250,6 +251,12 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.Ra
 	ct, err := Fetch(ctx, dbConn, contractAddress)
 	if err != nil {
 		return ErrNotFound
+	}
+
+	for _, ac := range ct.AssetCodes {
+		if ac.Equal(*assetCode) {
+			return nil
+		}
 	}
 
 	ct.AssetCodes = append(ct.AssetCodes, assetCode)
