@@ -32,7 +32,8 @@ type Asset struct {
 }
 
 // DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
-func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -101,7 +102,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	// Allowed to have more assets
 	if !contract.CanHaveMoreAssets(ctx, ct) {
 		address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
-		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(), assetCode.String())
+		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(),
+			assetCode.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFixedQuantity)
 	}
 
@@ -166,11 +168,22 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &ac)
+	if err := node.RespondSuccess(ctx, w, itx, rk, &ac); err != nil {
+		return err
+	}
+
+	// Add the asset code now rather than when the asset creation is processed in case another asset
+	//   definition is received before then.
+	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, v.Now); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
-func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
 	defer span.End()
 
@@ -327,7 +340,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	if ac.TokenQty != as.TokenQty {
 		updateHoldings = true
 
-		// Check administration balance for token quantity reductions. Administration has to hold any tokens being "burned".
+		// Check administration balance for token quantity reductions. Administration has to hold
+		//   any tokens being "burned".
 		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
 			ct.AdministrationAddress, v.Now)
 		if err != nil {
@@ -471,6 +485,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 		na.AdministrationAddress = ct.AdministrationAddress
 
+		// Add asset code if it hasn't been added yet. This will not add duplicates. This is
+		//   required to handle the recovery case when the request will not be reprocessed.
 		if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, v.Now); err != nil {
 			return err
 		}
@@ -478,7 +494,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		if err := asset.Create(ctx, a.MasterDB, rk.Address, assetCode, &na, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to create asset")
 		}
-		node.Log(ctx, "Created asset : %x", msg.AssetCode)
+		node.Log(ctx, "Created asset %d : %s", msg.AssetIndex, assetCode.String())
 
 		// Update administration balance
 		h, err := holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
@@ -624,7 +640,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			node.LogWarn(ctx, "Failed to update asset : %x", msg.AssetCode)
 			return err
 		}
-		node.Log(ctx, "Updated asset : %x", msg.AssetCode)
+		node.Log(ctx, "Updated asset %d : %s", msg.AssetIndex, assetCode.String())
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
