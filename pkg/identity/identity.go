@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/smart-contract/pkg/bitcoin"
+
 	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/pkg/errors"
@@ -44,4 +45,19 @@ func NewOracle(baseURL string, oracleKey bitcoin.PublicKey, oracleEntity actions
 		ClientID:      clientID,
 		ClientAuthKey: clientAuthKey,
 	}, nil
+}
+
+// GetOracleEntity returns the oracle's entity.
+func (o *Oracle) GetOracleEntity() actions.EntityField {
+	return o.OracleEntity
+}
+
+// GetOracleKey returns the oracle's public key.
+func (o *Oracle) GetOracleKey() bitcoin.PublicKey {
+	return o.OracleKey
+}
+
+// SetClientID sets the client's ID.
+func (o *Oracle) SetClientID(id string) {
+	o.ClientID = id
 }
