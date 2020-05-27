@@ -100,10 +100,15 @@ github.com/tokenized/envelope v0.2.1/go.mod h1:dToZvQ7rTs9Jp8YdxOMdrSeXMYb/FXrCp
 github.com/tokenized/envelope v0.2.2-0.20200427055302-06c4c661251e/go.mod h1:dCXzWP+jNQPW087Fw25NVxKRs84Vz74gDmG8iqBuJjs=
 github.com/tokenized/envelope v0.2.2-0.20200508022523-a7c99a18df78 h1:D/91VUIHJMk60MlC7/n1EJUHgapKEQqTq4+11wKlxKM=
 github.com/tokenized/envelope v0.2.2-0.20200508022523-a7c99a18df78/go.mod h1:NPpMU3yddpFlUhXpHGjvsi/C8SGta3aWK7Ss6coNnDw=
+github.com/tokenized/envelope v0.2.2-0.20200508024655-785b711926d3/go.mod h1:8LZ54EznV7C9Z8mrVf93BxgHoWWkxS3Wap4sHkazrLQ=
+github.com/tokenized/envelope v0.2.2-0.20200527065239-5052cdb40f26 h1:6Lo7nHQoejP/iXj3n90QPF5ZW4FIHBCAhz9eecbC2vs=
+github.com/tokenized/envelope v0.2.2-0.20200527065239-5052cdb40f26/go.mod h1:45bsf6vV2x/fCupq7dyJTZ/iRt31T7OvOb4iTbkAFuU=
 github.com/tokenized/smart-contract v0.2.2-0.20200103005916-b230b5e28e16/go.mod h1:3oWcq6AOuFrBBe/Vz1a9ucjM3kKSjjo8n2B1n+Sr+X0=
 github.com/tokenized/smart-contract v0.2.2-0.20200105215152-0ca6d7ce006b/go.mod h1:3oWcq6AOuFrBBe/Vz1a9ucjM3kKSjjo8n2B1n+Sr+X0=
 github.com/tokenized/smart-contract v0.2.3-0.20200427054402-537a79c73c13/go.mod h1:Vr7VsqpYHPT+TOZuepR2iCjT7p1JIfG9uMqjcKCkzhM=
 github.com/tokenized/smart-contract v0.2.3-0.20200430030512-47837c8e0b0c/go.mod h1:Vr7VsqpYHPT+TOZuepR2iCjT7p1JIfG9uMqjcKCkzhM=
+github.com/tokenized/smart-contract v0.2.3-0.20200508024201-fdbe6fb7ec0d/go.mod h1:Eto7Y+ctj838slo9TorOS8I+lShGsT3ET5XcModyVpk=
+github.com/tokenized/smart-contract v0.2.3-0.20200526204003-52bb758ee4c2/go.mod h1:Eto7Y+ctj838slo9TorOS8I+lShGsT3ET5XcModyVpk=
 github.com/tokenized/specification v0.2.1 h1:ritROheLUL1QeemhveRlAhaARpAin2Ee4xmOaMjAp80=
 github.com/tokenized/specification v0.2.1/go.mod h1:8QHhqLHxThlZ3hEGD69UhAuj/AChbCWLNUrr1YNk46E=
 github.com/tokenized/specification v0.2.2-0.20191219061451-ecd0fc17c3ca h1:JyXjlMhKJUndsNwh074+MMF1+JVTvm9CbXjzoEdFZgY=
@@ -113,6 +118,10 @@ github.com/tokenized/specification v0.2.3-0.20200331020322-b65a25099cf8/go.mod h
 github.com/tokenized/specification v0.2.3-0.20200429034013-c34571b57316/go.mod h1:jH3GzsLUUTFX0dXzp9c19uATbe2HXUj9q74AjQZtPRo=
 github.com/tokenized/specification v0.2.3-0.20200508023311-f83bc17eb8b9 h1:UKnybHqdtNKmhl3BBASG3iRk1GQhKp0sEfrv22yTuiI=
 github.com/tokenized/specification v0.2.3-0.20200508023311-f83bc17eb8b9/go.mod h1:P+k8nw9GQ9T5BBrwF9t/8kIX5D9eOVFWdWj6JAEqeHM=
+github.com/tokenized/specification v0.2.3-0.20200508024858-cebadc0f4bdb h1:jGh9h1t0hFDlNhhZuPch/vvh3ePno52G+8sXf743t30=
+github.com/tokenized/specification v0.2.3-0.20200508024858-cebadc0f4bdb/go.mod h1:1FTlTlbS5AVHbZnzyyBKcCDsjWw96Iq9Hq7hfLrO2/c=
+github.com/tokenized/specification v0.2.3-0.20200527065359-f66e7b715e0a h1:/qjxKtB9acltYb1/dsA3+3NfxUVWBAs1U0o4nq/pypI=
+github.com/tokenized/specification v0.2.3-0.20200527065359-f66e7b715e0a/go.mod h1:fFM6E+yUsvH3f+6tlQ76bLljKbZRtc1LtlIPBEfJkdQ=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
