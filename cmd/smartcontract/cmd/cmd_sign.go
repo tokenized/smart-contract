@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/json"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/json"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 

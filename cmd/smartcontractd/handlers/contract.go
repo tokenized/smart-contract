@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 

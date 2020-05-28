@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"

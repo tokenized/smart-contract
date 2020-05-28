@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/pkg/bitcoin"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"

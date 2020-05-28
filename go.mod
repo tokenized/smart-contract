@@ -3,9 +3,9 @@ module github.com/tokenized/smart-contract
 go 1.12
 
 require (
-	github.com/aws/aws-sdk-go v1.27.0
+	github.com/aws/aws-sdk-go v1.31.6
 	github.com/btcsuite/btcd v0.20.1-beta
-	github.com/btcsuite/btcutil v0.0.0-20191219182022-e17c9730c422
+	github.com/btcsuite/btcutil v1.0.2
 	github.com/cmars/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/golang/protobuf v1.3.2
@@ -13,13 +13,13 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/envelope v0.2.2-0.20200527065239-5052cdb40f26 // indirect
-	github.com/tokenized/specification v0.2.3-0.20200527065359-f66e7b715e0a
+	github.com/tokenized/pkg v0.0.0-20200528005955-162f9c3d87f8
+	github.com/tokenized/specification v0.2.3-0.20200528020309-23b03078a6e0
 	github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564
 	go.opencensus.io v0.22.2
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )
 

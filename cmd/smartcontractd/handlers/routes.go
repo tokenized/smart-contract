@@ -3,13 +3,13 @@ package handlers
 import (
 	"context"
 
+	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/utxos"
-	"github.com/tokenized/smart-contract/pkg/scheduler"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 )

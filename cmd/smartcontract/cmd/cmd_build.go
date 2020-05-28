@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/json"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/json"
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"

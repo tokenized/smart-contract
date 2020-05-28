@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
+	"github.com/tokenized/pkg/bitcoin"
 )
 
 func TestAddressesUnique(t *testing.T) {

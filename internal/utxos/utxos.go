@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
 )
 
 var zeroTxId bitcoin.Hash32

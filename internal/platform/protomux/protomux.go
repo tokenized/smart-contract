@@ -5,8 +5,8 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 const (

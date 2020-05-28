@@ -3,10 +3,10 @@ package node
 import (
 	"context"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/logger"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"go.opencensus.io/trace"

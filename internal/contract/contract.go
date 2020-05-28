@@ -3,13 +3,13 @@ package contract
 import (
 	"context"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 

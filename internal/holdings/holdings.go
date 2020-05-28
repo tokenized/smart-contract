@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
 
 	"github.com/tokenized/specification/dist/golang/protocol"
 

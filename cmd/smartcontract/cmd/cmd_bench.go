@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/txbuilder"
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"

@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-	"github.com/tokenized/smart-contract/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
