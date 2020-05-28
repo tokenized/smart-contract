@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/json"
 	"github.com/tokenized/smart-contract/internal/platform/node"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/json"
 
 	"github.com/tokenized/specification/dist/golang/protocol"
 

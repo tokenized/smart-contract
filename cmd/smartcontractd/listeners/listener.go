@@ -5,13 +5,13 @@ import (
 	"context"
 	"sort"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/spynode/handlers"
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/spynode/handlers"
-	"github.com/tokenized/smart-contract/pkg/wire"
 )
 
 // Implement the SpyNode Listener interface.

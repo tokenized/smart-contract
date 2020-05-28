@@ -3,8 +3,8 @@ package node
 import (
 	"context"
 
-	"github.com/tokenized/smart-contract/pkg/json"
-	"github.com/tokenized/smart-contract/pkg/logger"
+	"github.com/tokenized/pkg/json"
+	"github.com/tokenized/pkg/logger"
 )
 
 // Convert assigns all available compatible values with matching member names from one object to

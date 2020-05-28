@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/scheduler"
 
 	"github.com/tokenized/specification/dist/golang/protocol"
 )

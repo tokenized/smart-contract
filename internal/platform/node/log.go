@@ -5,11 +5,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/rpcnode"
-	"github.com/tokenized/smart-contract/pkg/scheduler"
-	"github.com/tokenized/smart-contract/pkg/spynode"
-	"github.com/tokenized/smart-contract/pkg/txbuilder"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/rpcnode"
+	"github.com/tokenized/pkg/scheduler"
+	"github.com/tokenized/pkg/spynode"
+	"github.com/tokenized/pkg/txbuilder"
 )
 
 func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer, format string) context.Context {

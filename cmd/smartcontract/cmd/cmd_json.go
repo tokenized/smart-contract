@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/json"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/json"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"

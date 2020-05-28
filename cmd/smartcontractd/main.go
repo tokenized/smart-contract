@@ -7,17 +7,17 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/rpcnode"
+	"github.com/tokenized/pkg/scheduler"
+	"github.com/tokenized/pkg/spynode"
+	"github.com/tokenized/pkg/spynode/handlers/data"
+	"github.com/tokenized/pkg/storage"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/rpcnode"
-	"github.com/tokenized/smart-contract/pkg/scheduler"
-	"github.com/tokenized/smart-contract/pkg/spynode"
-	"github.com/tokenized/smart-contract/pkg/spynode/handlers/data"
-	"github.com/tokenized/smart-contract/pkg/storage"
 )
 
 var (

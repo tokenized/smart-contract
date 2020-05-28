@@ -5,9 +5,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/logger"
-	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/pkg/wire"
 )
 
 // Filters for transactions with tokenized.com op return scripts.

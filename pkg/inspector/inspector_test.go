@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tokenized/smart-contract/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/pkg/wire"
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
 )
 
 func TestParseTX(t *testing.T) {
