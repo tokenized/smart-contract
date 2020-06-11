@@ -150,10 +150,13 @@ func parseScript(c *cobra.Command, script []byte) error {
 		}
 		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
 		if err != nil {
-			fmt.Printf("Failed to deserialize payload : %s", err)
+			fmt.Printf("Failed to deserialize payload : %s\n", err)
 		} else {
 			dumpJSON(asset)
 		}
+
+		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType, 
+			*protocol.AssetCodeFromBytes(m.AssetCode)))
 	case *actions.Message:
 		if len(m.MessagePayload) == 0 {
 			fmt.Printf("Empty message payload!\n")
