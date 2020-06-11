@@ -8,15 +8,15 @@ require (
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cmars/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/protobuf v1.3.2
-	github.com/google/go-cmp v0.3.0
+	github.com/golang/protobuf v1.4.2
+	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.1.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/pkg v0.0.0-20200528005955-162f9c3d87f8
-	github.com/tokenized/specification v0.2.3-0.20200528020309-23b03078a6e0
+	github.com/tokenized/pkg v0.0.0-20200609212132-64f71e49483f
+	github.com/tokenized/specification v0.2.3-0.20200610050820-40a22df3c5d5
 	github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564
 	go.opencensus.io v0.22.2
 	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
