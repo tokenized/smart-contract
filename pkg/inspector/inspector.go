@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -150,4 +151,30 @@ func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) bit
 		LockingScript: tx.TxOut[index].PkScript,
 		Value:         tx.TxOut[index].Value,
 	}
+}
+
+func NewTransactionFromTxBuilder(ctx context.Context, tx *txbuilder.TxBuilder, isTest bool) (*Transaction, error) {
+	result, err := NewTransactionFromWire(ctx, tx.MsgTx, isTest)
+	if err != nil {
+		return result, errors.Wrap(err, "new from wire")
+	}
+
+	utxos := make([]bitcoin.UTXO, 0, len(tx.Inputs))
+	for i, input := range tx.Inputs {
+		if tx.MsgTx.TxIn[i].PreviousOutPoint.Index == 0xffffffff {
+			continue // skip coinbase inputs
+		}
+		utxos = append(utxos, bitcoin.UTXO{
+			Hash:          tx.MsgTx.TxIn[i].PreviousOutPoint.Hash,
+			Index:         tx.MsgTx.TxIn[i].PreviousOutPoint.Index,
+			Value:         input.Value,
+			LockingScript: input.LockingScript,
+		})
+	}
+
+	if err := result.PromoteFromUTXOs(ctx, utxos); err != nil {
+		return result, errors.Wrap(err, "promote")
+	}
+
+	return result, nil
 }
