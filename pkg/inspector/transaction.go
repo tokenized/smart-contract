@@ -3,6 +3,7 @@ package inspector
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -537,10 +538,14 @@ func uniquePKHs(pkhs []bitcoin.Hash20) []bitcoin.Hash20 {
 }
 
 func (itx *Transaction) Write(buf *bytes.Buffer) error {
-	buf.WriteByte(1) // Version
+	buf.WriteByte(2) // Version
 
 	if err := itx.MsgTx.Serialize(buf); err != nil {
 		return err
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(itx.Inputs))); err != nil {
+		return errors.Wrap(err, "inputs count")
 	}
 
 	for i, _ := range itx.Inputs {
@@ -558,7 +563,7 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	if err != nil {
 		return err
 	}
-	if version != 0 && version != 1 {
+	if version != 0 && version != 1 && version != 2 {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
 
@@ -570,7 +575,16 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	itx.Hash = msg.TxHash()
 
 	// Inputs
-	itx.Inputs = make([]Input, len(msg.TxIn))
+	var count uint32
+	if version >= 2 {
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return errors.Wrap(err, "inputs count")
+		}
+	} else {
+		count = uint32(len(msg.TxIn))
+	}
+
+	itx.Inputs = make([]Input, count)
 	for i, _ := range itx.Inputs {
 		if err := itx.Inputs[i].Read(version, buf); err != nil {
 			return err
