@@ -126,6 +126,13 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 	}, nil
 }
 
+func NewBaseTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx) (*Transaction, error) {
+	return &Transaction{
+		Hash:  hash,
+		MsgTx: tx.Copy(),
+	}, nil
+}
+
 func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
 	return &Transaction{
 		Hash:  tx.TxHash(),

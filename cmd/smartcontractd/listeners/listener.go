@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/spynode/handlers"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -29,13 +30,16 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 
 func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
-	err := server.AddTx(ctx, tx)
+	txid := tx.TxHash()
+	ctx = logger.ContextWithLogTrace(ctx, txid.String())
+
+	err := server.AddTx(ctx, tx, *txid)
 	if err != nil {
 		node.LogError(ctx, "Failed to add tx : %s", err)
 		return true, nil
 	}
 
-	node.Log(ctx, "Tx : %s", tx.TxHash().String())
+	node.Log(ctx, "Handled tx")
 	return true, nil
 }
 
@@ -52,12 +56,14 @@ func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash
 
 func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
+	ctx = logger.ContextWithLogTrace(ctx, txid.String())
+
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:
-		node.Log(ctx, "Tx safe : %s", txid.String())
+		node.Log(ctx, "Tx safe")
 
 		if server.removeFromReverted(ctx, &txid) {
-			node.LogVerbose(ctx, "Tx safe again after reorg : %s", txid.String())
+			node.LogVerbose(ctx, "Tx safe again after reorg")
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
@@ -65,10 +71,10 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 		return nil
 
 	case handlers.ListenerMsgTxStateConfirm:
-		node.Log(ctx, "Tx confirm : %s", txid.String())
+		node.Log(ctx, "Tx confirm")
 
 		if server.removeFromReverted(ctx, &txid) {
-			node.LogVerbose(ctx, "Tx reconfirmed in reorg : %s", txid.String())
+			node.LogVerbose(ctx, "Tx reconfirmed in reorg")
 			return nil // Already accepted. Reverted and reconfirmed by reorg
 		}
 
@@ -76,7 +82,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
-		node.Log(ctx, "Tx cancel : %s", txid.String())
+		node.Log(ctx, "Tx cancel")
 
 		if server.CancelPendingTx(ctx, &txid) {
 			return nil
@@ -93,11 +99,11 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 		}
 
 	case handlers.ListenerMsgTxStateUnsafe:
-		node.Log(ctx, "Tx unsafe : %s", txid.String())
+		node.Log(ctx, "Tx unsafe")
 		server.MarkUnsafe(ctx, &txid)
 
 	case handlers.ListenerMsgTxStateRevert:
-		node.Log(ctx, "Tx revert : %s", txid.String())
+		node.Log(ctx, "Tx revert")
 		server.revertedTxs = append(server.revertedTxs, &txid)
 	}
 	return nil

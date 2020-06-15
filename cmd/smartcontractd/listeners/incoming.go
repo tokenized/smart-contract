@@ -25,12 +25,12 @@ import (
 // TODO Handle scenario when txs are marked ready before proprocessing is complete. They still need
 //   to be added to processing in the order that they were marked safe.
 
-func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
+func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
 
 	server.pendingLock.Lock()
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
 	//   original copy of the tx in the current thread.
-	intx, err := NewIncomingTxData(ctx, tx)
+	intx, err := NewIncomingTxData(ctx, tx, txid)
 	if err != nil {
 		server.pendingLock.Unlock()
 		return err
@@ -269,10 +269,10 @@ func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
 	return nil
 }
 
-func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx) (*IncomingTxData, error) {
+func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) (*IncomingTxData, error) {
 	result := IncomingTxData{Timestamp: protocol.CurrentTimestamp()}
 	var err error
-	result.Itx, err = inspector.NewBaseTransactionFromWire(ctx, tx)
+	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
 	if err != nil {
 		return nil, err
 	}
