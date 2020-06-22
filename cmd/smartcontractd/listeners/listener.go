@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/spynode/handlers"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -31,7 +30,7 @@ func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handl
 func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	txid := tx.TxHash()
-	ctx = logger.ContextWithLogTrace(ctx, txid.String())
+	ctx = node.ContextWithLogTrace(ctx, txid.String())
 
 	err := server.AddTx(ctx, tx, *txid)
 	if err != nil {
@@ -56,7 +55,7 @@ func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash
 
 func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
-	ctx = logger.ContextWithLogTrace(ctx, txid.String())
+	ctx = node.ContextWithLogTrace(ctx, txid.String())
 
 	switch msgType {
 	case handlers.ListenerMsgTxStateSafe:

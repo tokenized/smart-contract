@@ -58,6 +58,10 @@ func ContextWithOutLogSubSystem(ctx context.Context) context.Context {
 	return logger.ContextWithOutLogSubSystem(ctx)
 }
 
+func ContextWithLogTrace(ctx context.Context, trace string) context.Context {
+	return logger.ContextWithLogTrace(ctx, trace)
+}
+
 // Log adds an info level entry to the log.
 func Log(ctx context.Context, format string, values ...interface{}) error {
 	return logger.LogDepth(ctx, logger.LevelInfo, 1, format, values...)

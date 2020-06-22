@@ -25,6 +25,7 @@ import (
 // TODO Handle scenario when txs are marked ready before proprocessing is complete. They still need
 //   to be added to processing in the order that they were marked safe.
 
+// AddTx adds a tx to the incoming pipeline.
 func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
 
 	server.pendingLock.Lock()
