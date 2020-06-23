@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/tokenized/pkg/bitcoin"
@@ -14,6 +13,8 @@ import (
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -97,7 +98,7 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	}
 
 	// Create reject tx. Change goes back to requestor.
-	rejectTx := txbuilder.NewTxBuilder(w.Config.DustLimit, w.Config.FeeRate)
+	rejectTx := txbuilder.NewTxBuilder(w.Config.FeeRate, w.Config.DustFeeRate)
 	if len(w.RejectOutputs) > 0 {
 		var changeAddress bitcoin.RawAddress
 		for _, output := range w.RejectOutputs {
@@ -122,8 +123,12 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	if len(w.RejectOutputs) > 0 {
 		rejectAddressFound := false
 		for i, output := range w.RejectOutputs {
-			if output.Value < w.Config.DustLimit {
-				output.Value = w.Config.DustLimit
+			dustLimit, err := txbuilder.DustLimitForAddress(output.Address, w.Config.DustFeeRate)
+			if err != nil {
+				dustLimit = txbuilder.DustLimit(txbuilder.P2PKHOutputSize, w.Config.DustFeeRate)
+			}
+			if output.Value < dustLimit {
+				output.Value = dustLimit
 			}
 			rejectTx.AddPaymentOutput(output.Address, output.Value, output.Change)
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(i))
@@ -172,7 +177,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Create respond tx. Use contract address as backup change
 	//address if an output wasn't specified
-	respondTx := txbuilder.NewTxBuilder(w.Config.DustLimit, w.Config.FeeRate)
+	respondTx := txbuilder.NewTxBuilder(w.Config.FeeRate, w.Config.DustFeeRate)
 	respondTx.SetChangeAddress(w.Config.FeeAddress, "")
 
 	// Get the specified UTXOs, otherwise look up the spendable
@@ -214,10 +219,10 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	// Sign the tx
 	err = respondTx.Sign([]bitcoin.Key{wk.Key})
 	if err != nil {
-		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+		if errors.Cause(err) == txbuilder.ErrInsufficientValue {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
 			return RespondRejectText(ctx, w, itx, wk, actions.RejectionsInsufficientTxFeeFunding,
-				txbuilder.ErrorMessage(err))
+				err.Error())
 		} else {
 			Error(ctx, w, err)
 			return ErrNoResponse

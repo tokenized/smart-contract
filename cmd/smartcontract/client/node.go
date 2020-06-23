@@ -46,7 +46,7 @@ type Config struct {
 	Net         bitcoin.Network
 	Key         string  `envconfig:"CLIENT_WALLET_KEY"`
 	FeeRate     float32 `default:"1.0" envconfig:"CLIENT_FEE_RATE"`
-	DustLimit   uint64  `default:"546" envconfig:"CLIENT_DUST_LIMIT"`
+	DustFeeRate float32 `default:"1.0" envconfig:"CLIENT_DUST_FEE_RATE"`
 	Contract    string  `envconfig:"CLIENT_CONTRACT_ADDRESS"`
 	ContractFee uint64  `default:"1000" envconfig:"CLIENT_CONTRACT_FEE"`
 	SpyNode     struct {

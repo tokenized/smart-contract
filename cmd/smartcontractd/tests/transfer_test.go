@@ -919,7 +919,7 @@ func sendTokens(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(256, script))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(600, script))
 
 	// Data output
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1013,7 +1013,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	// Adjust amount to contract to be appropriate
-	transferTx.TxOut[0].Value = 2000
+	transferTx.TxOut[0].Value = 2500
 	t.Logf("\tFunded asset transfer : %s", transferTx.TxHash().String())
 
 	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
@@ -1107,7 +1107,7 @@ func sendTokens(t *testing.T) {
 
 	// To contract
 	script, _ = test.ContractKey.Address.LockingScript()
-	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2000, script))
+	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	transferData.Assets[0].AssetSenders[0].Quantity = 250
@@ -1522,7 +1522,7 @@ func bitcoinExchange(t *testing.T) {
 
 	// To contract1
 	script1, _ := test.ContractKey.Address.LockingScript()
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script1))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3200, script1))
 
 	// Data output
 	script, err := protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -1579,8 +1579,9 @@ func bitcoinExchange(t *testing.T) {
 
 	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
-	if len(response.TxOut) != 5 {
-		t.Fatalf("Incorrect output count : want %d, got %d", 5, len(response.TxOut))
+	if len(response.TxOut) != 4 {
+		t.Fatalf("Incorrect output count : want %d, got %d\n%s\n", 4, len(response.TxOut),
+			response.StringWithAddresses(test.NodeConfig.Net))
 	}
 
 	t.Logf("Response : \n%s\n", response.StringWithAddresses(test.NodeConfig.Net))
@@ -2437,7 +2438,7 @@ func oracleTransfer(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -2795,7 +2796,7 @@ func permitted(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
