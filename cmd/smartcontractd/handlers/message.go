@@ -214,17 +214,17 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Create tx
-	tx := txbuilder.NewTxBuilder(m.Config.DustLimit, m.Config.FeeRate)
+	tx := txbuilder.NewTxBuilder(m.Config.FeeRate, m.Config.DustFeeRate)
 	tx.SetChangeAddress(rk.Address, "")
 
 	// Add outputs to administration/operator
 	tx.AddDustOutput(ct.AdministrationAddress, false)
-	outputAmount := uint64(m.Config.DustLimit)
+	outputAmount := tx.MsgTx.TxOut[len(tx.MsgTx.TxOut)-1].Value
 	if !ct.OperatorAddress.IsEmpty() {
 		// Add operator
 		tx.AddDustOutput(ct.OperatorAddress, false)
 		message.ReceiverIndexes = append(message.ReceiverIndexes, uint32(1))
-		outputAmount += uint64(m.Config.DustLimit)
+		outputAmount += tx.MsgTx.TxOut[len(tx.MsgTx.TxOut)-1].Value
 	}
 
 	// Serialize payload
@@ -253,7 +253,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		if err == nil {
 			break
 		}
-		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+		if errors.Cause(err) == txbuilder.ErrInsufficientValue {
 			// Get more utxos
 			amount = uint64(float32(amount) * 1.25)
 			utxos, err = m.UTXOs.Get(amount, rk.Address)
@@ -409,7 +409,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		var sigHashCache txbuilder.SigHashCache
 		for i, _ := range settleTx.Inputs {
 			err = settleTx.SignP2PKHInput(i, rk.Key, &sigHashCache)
-			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
+			if errors.Cause(err) == txbuilder.ErrWrongPrivateKey {
 				continue
 			}
 			if err != nil {
@@ -566,7 +566,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	// Convert settle tx to a txbuilder tx
 	var settleTx *txbuilder.TxBuilder
-	settleTx, err = txbuilder.NewTxBuilderFromWire(m.Config.DustLimit, m.Config.FeeRate,
+	settleTx, err = txbuilder.NewTxBuilderFromWire(m.Config.FeeRate, m.Config.DustFeeRate,
 		settleWireTx, []*wire.MsgTx{transferTx.MsgTx})
 	settleTx.SetChangeAddress(rk.Address, "")
 	if err != nil {
@@ -578,7 +578,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	var hashCache txbuilder.SigHashCache
 	for i, _ := range settleTx.Inputs {
 		err = settleTx.SignP2PKHInput(i, rk.Key, &hashCache)
-		if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeWrongPrivateKey) {
+		if errors.Cause(err) == txbuilder.ErrWrongPrivateKey {
 			continue
 		}
 		if err != nil {

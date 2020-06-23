@@ -70,7 +70,7 @@ func freezeOrder(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
@@ -91,6 +91,7 @@ func freezeOrder(t *testing.T) {
 
 	test.RPCNode.SaveTX(ctx, orderTx)
 
+	t.Logf("Freeze Order : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
@@ -171,7 +172,7 @@ func freezeAuthorityOrder(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
@@ -192,6 +193,7 @@ func freezeAuthorityOrder(t *testing.T) {
 
 	test.RPCNode.SaveTX(ctx, orderTx)
 
+	t.Logf("Freeze Order : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
@@ -262,7 +264,7 @@ func thawOrder(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
@@ -283,6 +285,7 @@ func thawOrder(t *testing.T) {
 
 	test.RPCNode.SaveTX(ctx, orderTx)
 
+	t.Logf("Thaw Order : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
@@ -348,7 +351,7 @@ func confiscateOrder(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(3200, script))
 
 	// Data output
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
@@ -369,6 +372,7 @@ func confiscateOrder(t *testing.T) {
 
 	test.RPCNode.SaveTX(ctx, orderTx)
 
+	t.Logf("Confiscate Order : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
@@ -475,6 +479,7 @@ func reconcileOrder(t *testing.T) {
 
 	test.RPCNode.SaveTX(ctx, orderTx)
 
+	t.Logf("Reconcile Order : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
@@ -557,7 +562,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2000, script))
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
 	var err error
@@ -580,6 +585,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	test.RPCNode.SaveTX(ctx, orderTx)
 	transactions.AddTx(ctx, test.MasterDB, orderItx)
 
+	t.Logf("Mocked Freeze tx : %s", orderItx.Hash.String())
 	err = a.Trigger(ctx, "SEE", orderItx)
 	if err != nil {
 		return nil, err

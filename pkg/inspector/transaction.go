@@ -3,6 +3,7 @@ package inspector
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -102,6 +103,25 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 	return nil
 }
 
+// PromoteFromUTXOs will populate the inputs and outputs accordingly using UTXOs instead of a node.
+func (itx *Transaction) PromoteFromUTXOs(ctx context.Context, utxos []bitcoin.UTXO) error {
+	itx.lock.Lock()
+
+	if err := itx.ParseOutputsWithoutNode(ctx); err != nil {
+		itx.lock.Unlock()
+		return err
+	}
+
+	if err := itx.ParseInputsFromUTXOs(ctx, utxos); err != nil {
+		itx.lock.Unlock()
+		return err
+	}
+
+	itx.lock.Unlock()
+	itx.lock.RLock()
+	return nil
+}
+
 // Promote will populate the inputs and outputs accordingly
 func (itx *Transaction) Promote(ctx context.Context, node NodeInterface) error {
 	itx.lock.Lock()
@@ -127,6 +147,23 @@ func (itx *Transaction) IsPromoted(ctx context.Context) bool {
 	defer itx.lock.RUnlock()
 
 	return len(itx.Inputs) > 0 && len(itx.Outputs) > 0
+}
+
+// ParseOutputsWithoutNode sets the Outputs property of the Transaction
+func (itx *Transaction) ParseOutputsWithoutNode(ctx context.Context) error {
+	outputs := make([]Output, 0, len(itx.MsgTx.TxOut))
+
+	for n := range itx.MsgTx.TxOut {
+		output, err := buildOutput(itx.Hash, itx.MsgTx, n)
+		if err != nil {
+			return err
+		}
+
+		outputs = append(outputs, *output)
+	}
+
+	itx.Outputs = outputs
+	return nil
 }
 
 // ParseOutputs sets the Outputs property of the Transaction
@@ -164,6 +201,41 @@ func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 	return &output, nil
 }
 
+// ParseInputsFromUTXOs sets the Inputs property of the Transaction
+func (itx *Transaction) ParseInputsFromUTXOs(ctx context.Context, utxos []bitcoin.UTXO) error {
+
+	// Build inputs
+	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
+	offset := 0
+	for _, txin := range itx.MsgTx.TxIn {
+		if txin.PreviousOutPoint.Index == 0xffffffff {
+			// Empty coinbase input
+			inputs = append(inputs, Input{
+				UTXO: bitcoin.UTXO{
+					Index: 0xffffffff,
+				},
+			})
+			continue
+		}
+
+		if !txin.PreviousOutPoint.Hash.Equal(&utxos[offset].Hash) ||
+			txin.PreviousOutPoint.Index != utxos[offset].Index {
+			return errors.New("Mismatched UTXO")
+		}
+
+		input, err := buildInput(utxos[offset])
+		if err != nil {
+			return errors.Wrap(err, "build input")
+		}
+
+		inputs = append(inputs, *input)
+		offset++
+	}
+
+	itx.Inputs = inputs
+	return nil
+}
+
 // ParseInputs sets the Inputs property of the Transaction
 func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
 
@@ -180,31 +252,7 @@ func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) err
 		return err
 	}
 
-	// Build inputs
-	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
-	offset := 0
-	for _, txin := range itx.MsgTx.TxIn {
-		if txin.PreviousOutPoint.Index == 0xffffffff {
-			// Empty coinbase input
-			inputs = append(inputs, Input{
-				UTXO: bitcoin.UTXO{
-					Index: 0xffffffff,
-				},
-			})
-			continue
-		}
-
-		input, err := buildInput(utxos[offset])
-		if err != nil {
-			return err
-		}
-
-		inputs = append(inputs, *input)
-		offset++
-	}
-
-	itx.Inputs = inputs
-	return nil
+	return itx.ParseInputsFromUTXOs(ctx, utxos)
 }
 
 func buildInput(utxo bitcoin.UTXO) (*Input, error) {
@@ -490,10 +538,14 @@ func uniquePKHs(pkhs []bitcoin.Hash20) []bitcoin.Hash20 {
 }
 
 func (itx *Transaction) Write(buf *bytes.Buffer) error {
-	buf.WriteByte(1) // Version
+	buf.WriteByte(2) // Version
 
 	if err := itx.MsgTx.Serialize(buf); err != nil {
 		return err
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(itx.Inputs))); err != nil {
+		return errors.Wrap(err, "inputs count")
 	}
 
 	for i, _ := range itx.Inputs {
@@ -511,7 +563,7 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	if err != nil {
 		return err
 	}
-	if version != 0 && version != 1 {
+	if version != 0 && version != 1 && version != 2 {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
 
@@ -523,7 +575,16 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	itx.Hash = msg.TxHash()
 
 	// Inputs
-	itx.Inputs = make([]Input, len(msg.TxIn))
+	var count uint32
+	if version >= 2 {
+		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			return errors.Wrap(err, "inputs count")
+		}
+	} else {
+		count = uint32(len(msg.TxIn))
+	}
+
+	itx.Inputs = make([]Input, count)
 	for i, _ := range itx.Inputs {
 		if err := itx.Inputs[i].Read(version, buf); err != nil {
 			return err

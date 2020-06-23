@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 )
@@ -108,8 +109,12 @@ type Output struct {
 
 // outputValue returns a payment output ensuring the value is always above the dust limit
 func outputValue(ctx context.Context, config *Config, addr bitcoin.RawAddress, value uint64, change bool) *Output {
-	if value < config.DustLimit {
-		value = config.DustLimit
+	dustLimit, err := txbuilder.DustLimitForAddress(addr, config.DustFeeRate)
+	if err != nil {
+		dustLimit = txbuilder.DustLimit(txbuilder.P2PKHOutputSize, config.DustFeeRate)
+	}
+	if value < dustLimit {
+		value = dustLimit
 	}
 
 	out := &Output{

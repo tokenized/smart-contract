@@ -185,11 +185,10 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if isSingleContract {
 		node.Log(ctx, "Single contract settlement complete")
 		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
-			if txbuilder.IsErrorCode(err, txbuilder.ErrorCodeInsufficientValue) {
+			if errors.Cause(err) == txbuilder.ErrInsufficientValue {
 				node.LogWarn(ctx, "Insufficient settlement tx funding : %s", err)
 				return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx,
-					msg, rk, actions.RejectionsInsufficientTxFeeFunding, false,
-					txbuilder.ErrorMessage(err))
+					msg, rk, actions.RejectionsInsufficientTxFeeFunding, false, err.Error())
 			} else {
 				node.LogWarn(ctx, "Failed to sign settlement tx : %s", err)
 				return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx,
@@ -325,7 +324,7 @@ func buildSettlementTx(ctx context.Context,
 	//
 	// Settle Inputs
 	//   Any contracts involved.
-	settleTx := txbuilder.NewTxBuilder(config.DustLimit, config.FeeRate)
+	settleTx := txbuilder.NewTxBuilder(config.FeeRate, config.DustFeeRate)
 	settleTx.SetChangeAddress(rk.Address, "")
 
 	var err error

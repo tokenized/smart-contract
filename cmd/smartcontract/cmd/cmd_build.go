@@ -137,7 +137,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		tx = txbuilder.NewTxBuilder(theClient.Config.DustLimit, theClient.Config.FeeRate)
+		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		// Add output to contract
@@ -156,8 +156,9 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		// Determine funding required for contract to be able to post response tx.
+		dustLimit := txbuilder.DustLimit(txbuilder.P2PKHOutputSize, theClient.Config.DustFeeRate)
 		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0,
-			theClient.Config.DustLimit, theClient.Config.ContractFee, true)
+			dustLimit, theClient.Config.ContractFee, true)
 		if err != nil {
 			fmt.Printf("Failed to estimate funding : %s\n", err)
 			return nil

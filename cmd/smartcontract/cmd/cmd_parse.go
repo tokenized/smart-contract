@@ -155,7 +155,7 @@ func parseScript(c *cobra.Command, script []byte) error {
 			dumpJSON(asset)
 		}
 
-		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType, 
+		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType,
 			*protocol.AssetCodeFromBytes(m.AssetCode)))
 	case *actions.Message:
 		if len(m.MessagePayload) == 0 {

@@ -1,7 +1,9 @@
 package listeners
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 	"time"
@@ -23,12 +25,13 @@ import (
 // TODO Handle scenario when txs are marked ready before proprocessing is complete. They still need
 //   to be added to processing in the order that they were marked safe.
 
-func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx) error {
+// AddTx adds a tx to the incoming pipeline.
+func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
 
 	server.pendingLock.Lock()
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
 	//   original copy of the tx in the current thread.
-	intx, err := NewIncomingTxData(ctx, tx)
+	intx, err := NewIncomingTxData(ctx, tx, txid)
 	if err != nil {
 		server.pendingLock.Unlock()
 		return err
@@ -214,12 +217,63 @@ type IncomingTxData struct {
 	IsPreprocessed bool // Preprocessing has completed
 	IsReady        bool // Is ready to be processed
 	InReady        bool // In ready list
+	Timestamp      protocol.Timestamp
 }
 
-func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx) (*IncomingTxData, error) {
-	result := IncomingTxData{}
+func (itd *IncomingTxData) Serialize(buf *bytes.Buffer) error {
+	if err := itd.Itx.Write(buf); err != nil {
+		return errors.Wrap(err, "write itx")
+	}
+
+	if err := binary.Write(buf, DefaultEndian, itd.IsPreprocessed); err != nil {
+		return errors.Wrap(err, "write is preprocessed")
+	}
+
+	if err := binary.Write(buf, DefaultEndian, itd.IsReady); err != nil {
+		return errors.Wrap(err, "write is ready")
+	}
+
+	if err := binary.Write(buf, DefaultEndian, itd.InReady); err != nil {
+		return errors.Wrap(err, "write in ready")
+	}
+
+	if err := itd.Timestamp.Serialize(buf); err != nil {
+		return errors.Wrap(err, "write timestamp")
+	}
+
+	return nil
+}
+
+func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
+	if err := itd.Itx.Read(buf, isTest); err != nil {
+		return errors.Wrap(err, "read itx")
+	}
+
+	if err := binary.Read(buf, DefaultEndian, &itd.IsPreprocessed); err != nil {
+		return errors.Wrap(err, "read is preprocessed")
+	}
+
+	if err := binary.Read(buf, DefaultEndian, &itd.IsReady); err != nil {
+		return errors.Wrap(err, "read is ready")
+	}
+
+	if err := binary.Read(buf, DefaultEndian, &itd.InReady); err != nil {
+		return errors.Wrap(err, "read in ready")
+	}
+
 	var err error
-	result.Itx, err = inspector.NewBaseTransactionFromWire(ctx, tx)
+	itd.Timestamp, err = protocol.DeserializeTimestamp(buf)
+	if err != nil {
+		return errors.Wrap(err, "read timestamp")
+	}
+
+	return nil
+}
+
+func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) (*IncomingTxData, error) {
+	result := IncomingTxData{Timestamp: protocol.CurrentTimestamp()}
+	var err error
+	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
 	if err != nil {
 		return nil, err
 	}

@@ -790,7 +790,7 @@ func contractListAmendment(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2200, script))
 
 	// Data output
 	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
@@ -976,7 +976,7 @@ func contractOracleAmendment(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2200, script))
 
 	// Data output
 	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
@@ -1065,7 +1065,7 @@ func contractProposalAmendment(t *testing.T) {
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
-	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2200, script))
 
 	// Data output
 	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
