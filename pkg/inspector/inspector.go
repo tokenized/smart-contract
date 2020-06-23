@@ -126,6 +126,9 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 	}, nil
 }
 
+// NewBaseTransactionFromHashWire creates a non-setup transaction from an already calculated tx hash
+// and a wire tx. This is the same as NewTransactionFromHashWire except Setup must be called
+// before the transaction is usable.
 func NewBaseTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx) (*Transaction, error) {
 	return &Transaction{
 		Hash:  hash,
@@ -133,6 +136,8 @@ func NewBaseTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, t
 	}, nil
 }
 
+// NewBaseTransactionFromWire creates a non-setup transaction from a wire tx. This is the same as
+// NewTransactionFromWire except Setup must be called before the transaction is usable.
 func NewBaseTransactionFromWire(ctx context.Context, tx *wire.MsgTx) (*Transaction, error) {
 	return &Transaction{
 		Hash:  tx.TxHash(),
