@@ -126,6 +126,8 @@ github.com/tokenized/pkg v0.0.0-20200609212132-64f71e49483f h1:btOEqYf+VSkZp+1gW
 github.com/tokenized/pkg v0.0.0-20200609212132-64f71e49483f/go.mod h1:qVlOZ6a37XqvfYQFoWhxBUGvGgzY0EkvoCHDBs+cjSA=
 github.com/tokenized/pkg v0.0.0-20200622040539-eade3fe060af h1:mTmHFg8uBw1kdDpS7NlqhcSRdeMyKL3vlDr8/k0Anf4=
 github.com/tokenized/pkg v0.0.0-20200622040539-eade3fe060af/go.mod h1:qVlOZ6a37XqvfYQFoWhxBUGvGgzY0EkvoCHDBs+cjSA=
+github.com/tokenized/pkg v0.0.0-20200717055950-2b5d472398f6 h1:cM3z4g91LdCL9Rj2M+krfLpYKEtDYw7IaDIrypv/QuI=
+github.com/tokenized/pkg v0.0.0-20200717055950-2b5d472398f6/go.mod h1:qVlOZ6a37XqvfYQFoWhxBUGvGgzY0EkvoCHDBs+cjSA=
 github.com/tokenized/smart-contract v0.2.2-0.20200103005916-b230b5e28e16/go.mod h1:3oWcq6AOuFrBBe/Vz1a9ucjM3kKSjjo8n2B1n+Sr+X0=
 github.com/tokenized/smart-contract v0.2.2-0.20200105215152-0ca6d7ce006b/go.mod h1:3oWcq6AOuFrBBe/Vz1a9ucjM3kKSjjo8n2B1n+Sr+X0=
 github.com/tokenized/smart-contract v0.2.3-0.20200427054402-537a79c73c13/go.mod h1:Vr7VsqpYHPT+TOZuepR2iCjT7p1JIfG9uMqjcKCkzhM=
@@ -151,6 +153,12 @@ github.com/tokenized/specification v0.2.3-0.20200528020309-23b03078a6e0 h1:ZmFUx
 github.com/tokenized/specification v0.2.3-0.20200528020309-23b03078a6e0/go.mod h1:QEHkAeKsKjv5jvkA+wP+JKDk/STiCgE+dndihxwW17Q=
 github.com/tokenized/specification v0.2.3-0.20200610050820-40a22df3c5d5 h1:d1vkwxpXRFzAVsFvUBRfO69P0upzM48fdeGoMY4r0Es=
 github.com/tokenized/specification v0.2.3-0.20200610050820-40a22df3c5d5/go.mod h1:yJvUTdqrKPIrROJNnnRSTVCBJZ1nUL5iORpLizujtXM=
+github.com/tokenized/specification v0.2.3-0.20200713220458-ea344e3dfdf7 h1:LuqHon7U2aX7/RhLIQa6v9A8abkYQHJFfaJ51yiDA+s=
+github.com/tokenized/specification v0.2.3-0.20200713220458-ea344e3dfdf7/go.mod h1:yJvUTdqrKPIrROJNnnRSTVCBJZ1nUL5iORpLizujtXM=
+github.com/tokenized/specification v0.2.3-0.20200717060229-4a58e6cc3541 h1:BV8r0++LwhegrOPqvG8NOZbymgGxqUhrQ+qHvRurhgc=
+github.com/tokenized/specification v0.2.3-0.20200717060229-4a58e6cc3541/go.mod h1:yJvUTdqrKPIrROJNnnRSTVCBJZ1nUL5iORpLizujtXM=
+github.com/tokenized/specification v0.2.3-0.20200720040158-e3c0fb128c8f h1:NssWFfs9S2KUYO1Aj9Dj9O/ju92ro8990ABXGz30wlA=
+github.com/tokenized/specification v0.2.3-0.20200720040158-e3c0fb128c8f/go.mod h1:yJvUTdqrKPIrROJNnnRSTVCBJZ1nUL5iORpLizujtXM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=

@@ -15,8 +15,8 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/pkg v0.0.0-20200622040539-eade3fe060af
-	github.com/tokenized/specification v0.2.3-0.20200610050820-40a22df3c5d5
+	github.com/tokenized/pkg v0.0.0-20200717055950-2b5d472398f6
+	github.com/tokenized/specification v0.2.3-0.20200720040158-e3c0fb128c8f
 	github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564
 	go.opencensus.io v0.22.2
 	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37

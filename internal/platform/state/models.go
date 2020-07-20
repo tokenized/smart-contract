@@ -48,7 +48,13 @@ type Contract struct {
 
 	AssetCodes []*protocol.AssetCode `json:"AssetCodes,omitempty"`
 
-	FullOracles []bitcoin.PublicKey `json:"_,omitempty"`
+	FullOracles []Oracle `json:"_,omitempty"`
+}
+
+type Oracle struct {
+	Address   bitcoin.RawAddress `json:"address,omitempty"`
+	URL       string             `json:"url,omitempty"`
+	PublicKey bitcoin.PublicKey  `json:"public_key,omitempty"`
 }
 
 type Asset struct {

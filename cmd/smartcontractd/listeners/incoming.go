@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
+	"github.com/tokenized/smart-contract/internal/entities"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -21,9 +22,6 @@ import (
 
 	"github.com/pkg/errors"
 )
-
-// TODO Handle scenario when txs are marked ready before proprocessing is complete. They still need
-//   to be added to processing in the order that they were marked safe.
 
 // AddTx adds a tx to the incoming pipeline.
 func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
@@ -82,7 +80,8 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 				node.LogWarn(ctx, "Invalid receiver oracle signature : %s", err)
 			}
 		case *actions.ContractOffer:
-			if err := validateContractOracleSig(ctx, intx.Itx, msg, headers); err != nil {
+			if err := validateContractOracleSig(ctx, masterDB, server.Config, intx.Itx, msg, headers,
+				intx.Timestamp); err != nil {
 				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 				node.LogWarn(ctx, "Invalid contract oracle signature : %s", err)
 			}
@@ -432,12 +431,12 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
 		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
-		receiverAddress, assetReceiver.Quantity, hash, 1)
+		receiverAddress, hash, 1)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
 
-	if oracleSig.Verify(sigHash, oracle) {
+	if oracleSig.Verify(sigHash, oracle.PublicKey) {
 		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}
@@ -445,61 +444,90 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	return fmt.Errorf("Valid signature not found")
 }
 
-func validateContractOracleSig(ctx context.Context, itx *inspector.Transaction,
-	contractOffer *actions.ContractOffer, headers node.BitcoinHeaders) error {
-	if contractOffer.AdminOracle == nil {
+func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.Config,
+	itx *inspector.Transaction, contractOffer *actions.ContractOffer, headers node.BitcoinHeaders,
+	ts protocol.Timestamp) error {
+	if len(contractOffer.AdminIdentityCertificates) == 0 {
 		return nil
 	}
 
-	oracle, err := bitcoin.PublicKeyFromBytes(contractOffer.AdminOracle.PublicKey)
-	if err != nil {
-		return err
-	}
+	for _, cert := range contractOffer.AdminIdentityCertificates {
+		if cert.Expiration != 0 && cert.Expiration < ts.Nano() {
+			return errors.New("Expired Admin Identity Certificate")
+		}
 
-	// Parse signature
-	oracleSig, err := bitcoin.SignatureFromBytes(contractOffer.AdminOracleSignature)
-	if err != nil {
-		return errors.Wrap(err, "Failed to parse oracle signature")
-	}
+		ra, err := bitcoin.DecodeRawAddress(cert.EntityContract)
+		if err != nil {
+			return errors.Wrap(err, "entity address")
+		}
 
-	// Check if block time is beyond expiration
-	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-	expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
-	blockTime, err := headers.Time(ctx, int(contractOffer.AdminOracleSigBlockHeight))
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
-			contractOffer.AdminOracleSigBlockHeight))
-	}
-	if blockTime < expire {
-		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
-	}
+		entity, err := entities.FetchEntity(ctx, dbConn, ra, config.IsTest)
+		if err != nil {
+			return errors.Wrap(err, "fetch entity")
+		}
 
-	hash, err := headers.Hash(ctx, int(contractOffer.AdminOracleSigBlockHeight))
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-			contractOffer.AdminOracleSigBlockHeight))
-	}
+		publicKey, err := entities.GetIdentityOracleKey(entity)
+		if err != nil {
+			return errors.Wrap(err, "get identity oracle")
+		}
 
-	addresses := make([]bitcoin.RawAddress, 0, 2)
-	entities := make([]*actions.EntityField, 0, 2)
+		// Parse signature
+		oracleSig, err := bitcoin.SignatureFromBytes(cert.Signature)
+		if err != nil {
+			return errors.Wrap(err, "Failed to parse oracle signature")
+		}
 
-	addresses = append(addresses, itx.Inputs[0].Address)
-	entities = append(entities, contractOffer.Issuer)
+		// Check if block time is beyond expiration
+		// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
+		expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
+		blockTime, err := headers.Time(ctx, int(cert.BlockHeight))
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
+				cert.BlockHeight))
+		}
+		if blockTime < expire {
+			return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
+		}
 
-	if contractOffer.ContractOperator != nil {
-		addresses = append(addresses, itx.Inputs[1].Address)
-		entities = append(entities, contractOffer.ContractOperator)
-	}
+		hash, err := headers.Hash(ctx, int(cert.BlockHeight))
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
+				cert.BlockHeight))
+		}
 
-	sigHash, err := protocol.ContractOracleSigHash(ctx, addresses, entities, hash, 1)
-	if err != nil {
-		return err
-	}
+		addresses := make([]bitcoin.RawAddress, 0, 2)
+		admins := make([]*actions.EntityField, 0, 2)
 
-	if oracleSig.Verify(sigHash, oracle) {
+		addresses = append(addresses, itx.Inputs[0].Address)
+		admins = append(admins, contractOffer.Issuer)
+
+		if len(contractOffer.OperatorEntityContract) > 0 {
+			addresses = append(addresses, itx.Inputs[1].Address)
+
+			operatorRA, err := bitcoin.DecodeRawAddress(contractOffer.OperatorEntityContract)
+			if err != nil {
+				return errors.Wrap(err, "operator entity address")
+			}
+
+			operatorEntity, err := entities.FetchEntity(ctx, dbConn, operatorRA, config.IsTest)
+			if err != nil {
+				return errors.Wrap(err, "fetch operator entity")
+			}
+
+			admins = append(admins, operatorEntity.Issuer)
+		}
+
+		sigHash, err := protocol.ContractOracleSigHash(ctx, addresses, admins, hash, 1)
+		if err != nil {
+			return err
+		}
+
+		if !oracleSig.Verify(sigHash, publicKey) {
+			return fmt.Errorf("Contract signature invalid")
+		}
+
 		node.Log(ctx, "Contract oracle signature is valid")
-		return nil // Valid signature found
 	}
 
-	return fmt.Errorf("Contract signature invalid")
+	return nil
 }

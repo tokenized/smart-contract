@@ -4,9 +4,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tokenized/smart-contract/internal/entities"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/pkg/errors"
 )
@@ -32,6 +34,13 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
 			server.walletLock.RUnlock()
 			continue
+		}
+
+		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
+			if err := entities.SaveContractFormation(ctx, server.MasterDB, ptx.Itx,
+				server.Config.IsTest); err != nil {
+				node.LogError(ctx, "Failed to save contract offer : %s", ptx.Itx.Hash.String())
+			}
 		}
 
 		found := false

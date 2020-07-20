@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 
@@ -89,19 +88,4 @@ func Reset(ctx context.Context) {
 // Returns the storage path prefix for a given identifier.
 func buildStoragePath(contractHash *bitcoin.Hash20) string {
 	return fmt.Sprintf("%s/%s/contract", storageKey, contractHash.String())
-}
-
-func ExpandOracles(ctx context.Context, data *state.Contract) error {
-	logger.Info(ctx, "Expanding %d oracle public keys", len(data.Oracles))
-
-	// Expand oracle public keys
-	data.FullOracles = make([]bitcoin.PublicKey, 0, len(data.Oracles))
-	for _, oracle := range data.Oracles {
-		fullKey, err := bitcoin.PublicKeyFromBytes(oracle.PublicKey)
-		if err != nil {
-			return err
-		}
-		data.FullOracles = append(data.FullOracles, fullKey)
-	}
-	return nil
 }

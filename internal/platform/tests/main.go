@@ -229,6 +229,19 @@ func NewContext() context.Context {
 	return context.WithValue(context.Background(), node.KeyValues, &values)
 }
 
+func NewMasterDB(t *testing.T) *db.DB {
+	path := "./tmp"
+	masterDB, err := db.New(&db.StorageConfig{
+		Bucket: "standalone",
+		Root:   path,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create DB : %v\n", err)
+	}
+
+	return masterDB
+}
+
 // GenerateKey generates a new wallet key.
 func GenerateKey(net bitcoin.Network) (*wallet.Key, error) {
 	key, err := bitcoin.GenerateKey(net)
