@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -15,9 +16,10 @@ import (
 const storageKey = "contracts"
 
 var cache map[bitcoin.Hash20]*state.Contract
+var cacheLock sync.Mutex
 
 // Put a single contract in storage
-func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
+func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract, isTest bool) error {
 	contractHash, err := contract.Address.Hash()
 	if err != nil {
 		return err
@@ -34,6 +36,8 @@ func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
 		return err
 	}
 
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 	if cache == nil {
 		cache = make(map[bitcoin.Hash20]*state.Contract)
 	}
@@ -42,11 +46,13 @@ func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract) error {
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, isTest bool) (*state.Contract, error) {
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
 		return nil, err
 	}
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 	if cache != nil {
 		result, exists := cache[*contractHash]
 		if exists {
@@ -70,7 +76,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 		return nil, errors.Wrap(err, "Failed to unmarshal contract")
 	}
 
-	if err := ExpandOracles(ctx, &result); err != nil {
+	if err := ExpandOracles(ctx, dbConn, &result, isTest); err != nil {
 		return nil, err
 	}
 
@@ -82,6 +88,8 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 }
 
 func Reset(ctx context.Context) {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
 	cache = nil
 }
 

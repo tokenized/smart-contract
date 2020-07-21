@@ -41,19 +41,10 @@ func holderProposal(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 150)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 150)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
@@ -91,6 +82,7 @@ func holderProposal(t *testing.T) {
 	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize proposal : %v", tests.Failed, err)
@@ -156,20 +148,12 @@ func sendBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpProposal(ctx)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 250)
+
+	err := mockUpProposal(ctx)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up proposal : %v", tests.Failed, err)
 	}
@@ -250,28 +234,14 @@ func adminBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 10, 0, &sampleAdminAssetPayload, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 1, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpAssetHolding(ctx, userKey.Address, testAssetCodes[0], 1)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpAssetHolding(ctx, user2Key.Address, testAssetCodes[1], 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpProposalType(ctx, 2, &testAssetCodes[0]) // Administrative
+	mockUpAsset(t, ctx, true, true, true, 10, 0, &sampleAdminAssetPayload, false, false, false)
+	mockUpAsset(t, ctx, true, true, true, 1000, 1, &sampleAssetPayload, true, false, false)
+	mockUpAssetHolding(t, ctx, userKey.Address, testAssetCodes[0], 1)
+	mockUpAssetHolding(t, ctx, user2Key.Address, testAssetCodes[1], 250)
+
+	err := mockUpProposalType(ctx, 2, &testAssetCodes[0]) // Administrative
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up proposal : %v", tests.Failed, err)
 	}
@@ -398,20 +368,12 @@ func voteResult(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpVote(ctx, 0)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 250)
+
+	err := mockUpVote(ctx, 0)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
@@ -467,20 +429,12 @@ func voteResultRelative(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpVote(ctx, 0)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 250)
+
+	err := mockUpVote(ctx, 0)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
@@ -541,20 +495,12 @@ func voteResultAbsolute(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpVote(ctx, 1)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 250)
+
+	err := mockUpVote(ctx, 1)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
@@ -804,7 +750,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		Ballots: make(map[bitcoin.Hash20]state.Ballot),
 	}
 
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, test.NodeConfig.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "retrieve contract")
 	}

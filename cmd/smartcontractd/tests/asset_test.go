@@ -40,12 +40,10 @@ func createAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
 
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -165,12 +163,10 @@ func adminMemberAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
 
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -336,12 +332,10 @@ func assetIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
 
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -504,14 +498,8 @@ func assetAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address)
 
@@ -524,8 +512,7 @@ func assetAmendment(t *testing.T) {
 	// Serialize new token quantity
 	newQuantity := uint64(1200)
 	var buf bytes.Buffer
-	err = binary.Write(&buf, binary.LittleEndian, &newQuantity)
-	if err != nil {
+	if err := binary.Write(&buf, binary.LittleEndian, &newQuantity); err != nil {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
@@ -549,6 +536,7 @@ func assetAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
@@ -609,15 +597,9 @@ func assetProposalAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, true, true)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, true, true)
 
 	fip := actions.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
 	fipBytes, _ := fip.Bytes()
@@ -625,13 +607,12 @@ func assetProposalAmendment(t *testing.T) {
 		FieldIndexPath: fipBytes,
 		Data:           []byte("Test new common shares"),
 	}
-	err = mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment)
-	if err != nil {
+
+	if err := mockUpAssetAmendmentVote(ctx, 1, 0, &assetAmendment); err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
 
-	err = mockUpVoteResultTx(ctx, "A")
-	if err != nil {
+	if err := mockUpVoteResultTx(ctx, "A"); err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote result : %v", tests.Failed, err)
 	}
 
@@ -659,6 +640,7 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
@@ -715,13 +697,11 @@ func duplicateAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
 
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -881,7 +861,8 @@ func duplicateAsset(t *testing.T) {
 	checkResponse(t, "A2")
 	checkResponse(t, "A2")
 
-	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
@@ -942,8 +923,8 @@ var sampleAdminAssetPayload = assets.Membership{
 	Description:     "Test admin token",
 }
 
-func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
-	index uint64, payload assets.Asset, permitted, issuer, holder bool) error {
+func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voting bool,
+	quantity uint64, index uint64, payload assets.Asset, permitted, issuer, holder bool) {
 
 	var assetData = state.Asset{
 		Code:                        protocol.AssetCodeFromContract(test.ContractKey.Address, index),
@@ -967,7 +948,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	var err error
 	assetData.AssetPayload, err = payload.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
 
 	// Define permissions for asset fields
@@ -983,7 +964,7 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 
 	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	issuerHolding := state.Holding{
@@ -996,19 +977,20 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
 
 	err = asset.Save(ctx, test.MasterDB, test.ContractKey.Address, &assetData)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save asset : %v", tests.Failed, err)
 	}
 
 	// Add to contract
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
 	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
@@ -1020,11 +1002,13 @@ func mockUpAsset(ctx context.Context, transfers, enforcement, voting bool, quant
 		}
 	}
 
-	return contract.Save(ctx, test.MasterDB, ct)
+	if err := contract.Save(ctx, test.MasterDB, ct, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("\t%s\tFailed to save contract : %v", tests.Failed, err)
+	}
 }
 
-func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
-	payload assets.Asset, permitted, issuer, holder bool) error {
+func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
+	payload assets.Asset, permitted, issuer, holder bool) {
 
 	var assetData = state.Asset{
 		Code:                       protocol.AssetCodeFromContract(test.Contract2Key.Address, 0),
@@ -1044,7 +1028,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	var err error
 	assetData.AssetPayload, err = payload.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
 
 	// Define permissions for asset fields
@@ -1060,7 +1044,7 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 
 	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	issuerHolding := state.Holding{
@@ -1073,27 +1057,30 @@ func mockUpAsset2(ctx context.Context, transfers, enforcement, voting bool, quan
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
 
 	err = asset.Save(ctx, test.MasterDB, test.Contract2Key.Address, &assetData)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save asset : %v", tests.Failed, err)
 	}
 
 	// Add to contract
-	ct, err := contract.Retrieve(ctx, test.MasterDB, test.Contract2Key.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, test.Contract2Key.Address,
+		test.NodeConfig.IsTest)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
 	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
-	return contract.Save(ctx, test.MasterDB, ct)
+	if err := contract.Save(ctx, test.MasterDB, ct, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("\t%s\tFailed to save contract : %v", tests.Failed, err)
+	}
 }
 
-func mockUpOtherAsset(ctx context.Context, key *wallet.Key, transfers, enforcement, voting bool,
-	quantity uint64, payload assets.Asset, permitted, issuer, holder bool) error {
+func mockUpOtherAsset(t testing.TB, ctx context.Context, key *wallet.Key, transfers, enforcement, voting bool,
+	quantity uint64, payload assets.Asset, permitted, issuer, holder bool) {
 
 	var assetData = state.Asset{
 		Code:                       protocol.AssetCodeFromContract(key.Address, 0),
@@ -1113,7 +1100,7 @@ func mockUpOtherAsset(ctx context.Context, key *wallet.Key, transfers, enforceme
 	var err error
 	assetData.AssetPayload, err = payload.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset payload : %v", tests.Failed, err)
 	}
 
 	// Define permissions for asset fields
@@ -1129,7 +1116,7 @@ func mockUpOtherAsset(ctx context.Context, key *wallet.Key, transfers, enforceme
 
 	assetData.AssetPermissions, err = permissions.Bytes()
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to serialize asset permissions : %v", tests.Failed, err)
 	}
 
 	issuerHolding := state.Holding{
@@ -1142,31 +1129,33 @@ func mockUpOtherAsset(ctx context.Context, key *wallet.Key, transfers, enforceme
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
 
 	err = asset.Save(ctx, test.MasterDB, key.Address, &assetData)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save asset : %v", tests.Failed, err)
 	}
 
 	// Add to contract
-	ct, err := contract.Retrieve(ctx, test.MasterDB, key.Address)
+	ct, err := contract.Retrieve(ctx, test.MasterDB, key.Address, test.NodeConfig.IsTest)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
 	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
-	return contract.Save(ctx, test.MasterDB, ct)
+	if err := contract.Save(ctx, test.MasterDB, ct, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("\t%s\tFailed to save contract : %v", tests.Failed, err)
+	}
 }
 
-func mockUpHolding(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
-	return mockUpAssetHolding(ctx, address, testAssetCodes[0], quantity)
+func mockUpHolding(t testing.TB, ctx context.Context, address bitcoin.RawAddress, quantity uint64) {
+	mockUpAssetHolding(t, ctx, address, testAssetCodes[0], quantity)
 }
 
-func mockUpAssetHolding(ctx context.Context, address bitcoin.RawAddress, assetCode protocol.AssetCode,
-	quantity uint64) error {
+func mockUpAssetHolding(t testing.TB, ctx context.Context, address bitcoin.RawAddress,
+	assetCode protocol.AssetCode, quantity uint64) {
 
 	h := state.Holding{
 		Address:          address,
@@ -1178,13 +1167,12 @@ func mockUpAssetHolding(ctx context.Context, address bitcoin.RawAddress, assetCo
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &assetCode, &h)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
-	return nil
 }
 
-func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity uint64) error {
+func mockUpHolding2(t testing.TB, ctx context.Context, address bitcoin.RawAddress, quantity uint64) {
 	h := state.Holding{
 		Address:          address,
 		PendingBalance:   quantity,
@@ -1195,14 +1183,13 @@ func mockUpHolding2(ctx context.Context, address bitcoin.RawAddress, quantity ui
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAsset2Code, &h)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
-	return nil
 }
 
-func mockUpOtherHolding(ctx context.Context, key *wallet.Key, address bitcoin.RawAddress,
-	quantity uint64) error {
+func mockUpOtherHolding(t testing.TB, ctx context.Context, key *wallet.Key, address bitcoin.RawAddress,
+	quantity uint64) {
 
 	h := state.Holding{
 		Address:          address,
@@ -1214,8 +1201,7 @@ func mockUpOtherHolding(ctx context.Context, key *wallet.Key, address bitcoin.Ra
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAsset2Code, &h)
 	if err != nil {
-		return err
+		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
 	test.HoldingsChannel.Add(cacheItem)
-	return nil
 }

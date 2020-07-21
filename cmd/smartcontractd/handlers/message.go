@@ -166,8 +166,8 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	switch problemMsg := problemTx.MsgProto.(type) {
 	case *actions.Transfer:
 		// Refund any funds from the transfer tx that were sent to the this contract.
-		return refundTransferFromReject(ctx, m.MasterDB, m.HoldingsChannel, m.Scheduler, w, itx,
-			msg, problemTx, problemMsg, rk)
+		return refundTransferFromReject(ctx, m.Config, m.MasterDB, m.HoldingsChannel, m.Scheduler,
+			w, itx, msg, problemTx, problemMsg, rk)
 
 	default:
 	}
@@ -208,7 +208,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		MessagePayload:  payBuf.Bytes(),
 	}
 
-	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -218,7 +218,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	tx.SetChangeAddress(rk.Address, "")
 
 	// Add outputs to administration/operator
-	tx.AddDustOutput(ct.AdministrationAddress, false)
+	tx.AddDustOutput(ct.AdminAddress, false)
 	outputAmount := tx.MsgTx.TxOut[len(tx.MsgTx.TxOut)-1].Value
 	if !ct.OperatorAddress.IsEmpty() {
 		// Add operator
@@ -345,7 +345,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return err
 	}
 
-	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -523,7 +523,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Transfer invalid for transfer tx")
 	}
 
-	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -737,7 +737,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	}
 
 	txid := protocol.TxIdFromBytes(transferTx.Hash[:])
-	ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, masterDB, rk.Address, config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -1029,13 +1029,13 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 	}
 
 	if refundBalance > balance {
-		ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address)
+		ct, err := contract.Retrieve(ctx, m.MasterDB, rk.Address, m.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the administration to hold.
-		w.ClearRejectOutputValues(ct.AdministrationAddress)
+		w.ClearRejectOutputValues(ct.AdminAddress)
 	}
 
 	return node.RespondReject(ctx, w, transferTx, rk, code)
@@ -1044,7 +1044,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 // refundTransferFromReject responds to an M2 Reject, from another contract involved in a multi-contract
 //   transfer with a tx refunding any bitcoin sent to the contract that was requested to be
 //   transferred.
-func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
+func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB *db.DB,
 	holdingsChannel *holdings.CacheChannel, sch *scheduler.Scheduler, w *node.ResponseWriter,
 	rejectionTx *inspector.Transaction, rejection *actions.Rejection,
 	transferTx *inspector.Transaction, transferMsg *actions.Transfer, rk *wallet.Key) error {
@@ -1210,13 +1210,13 @@ func refundTransferFromReject(ctx context.Context, masterDB *db.DB,
 	}
 
 	if refund && refundBalance > balance {
-		ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
+		ct, err := contract.Retrieve(ctx, masterDB, rk.Address, config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone.
-		w.ClearRejectOutputValues(ct.AdministrationAddress)
+		w.ClearRejectOutputValues(ct.AdminAddress)
 	}
 
 	// Set rejection address from previous rejection

@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
-	"github.com/tokenized/smart-contract/internal/entities"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -75,7 +74,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *actions.Transfer:
-			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers); err != nil {
+			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers, server.Config.IsTest); err != nil {
 				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 				node.LogWarn(ctx, "Invalid receiver oracle signature : %s", err)
 			}
@@ -321,7 +320,7 @@ func (c *IncomingTxChannel) Close() error {
 
 // validateOracles verifies all oracle signatures related to this tx.
 func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transaction,
-	transfer *actions.Transfer, headers node.BitcoinHeaders) error {
+	transfer *actions.Transfer, headers node.BitcoinHeaders, isTest bool) error {
 
 	for _, assetTransfer := range transfer.Assets {
 		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
@@ -332,7 +331,8 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 			continue
 		}
 
-		ct, err := contract.Retrieve(ctx, masterDB, itx.Outputs[assetTransfer.ContractIndex].Address)
+		ct, err := contract.Retrieve(ctx, masterDB,
+			itx.Outputs[assetTransfer.ContractIndex].Address, isTest)
 		if err == contract.ErrNotFound {
 			continue // Not associated with one of our contracts
 		}
@@ -359,11 +359,11 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	if assetReceiver.OracleSigAlgorithm == 0 {
 		identityFound := false
 		for _, oracle := range ct.Oracles {
-			if len(oracle.OracleType) == 0 {
+			if len(oracle.OracleTypes) == 0 {
 				identityFound = true
 				break
 			}
-			for _, t := range oracle.OracleType {
+			for _, t := range oracle.OracleTypes {
 				if t == actions.OracleTypeIdentity {
 					identityFound = true
 					break
@@ -385,9 +385,9 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	// No oracle types specified is assumed to be identity oracle for backwards compatibility
-	if len(ct.Oracles[assetReceiver.OracleIndex].OracleType) != 0 {
+	if len(ct.Oracles[assetReceiver.OracleIndex].OracleTypes) != 0 {
 		identityFound := false
-		for _, t := range ct.Oracles[assetReceiver.OracleIndex].OracleType {
+		for _, t := range ct.Oracles[assetReceiver.OracleIndex].OracleTypes {
 			if t == actions.OracleTypeIdentity {
 				identityFound = true
 				break
@@ -461,12 +461,12 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 			return errors.Wrap(err, "entity address")
 		}
 
-		entity, err := entities.FetchEntity(ctx, dbConn, ra, config.IsTest)
+		cf, err := contract.FetchContractFormation(ctx, dbConn, ra, config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, "fetch entity")
 		}
 
-		publicKey, err := entities.GetIdentityOracleKey(entity)
+		publicKey, err := contract.GetIdentityOracleKey(cf)
 		if err != nil {
 			return errors.Wrap(err, "get identity oracle")
 		}
@@ -509,7 +509,8 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 				return errors.Wrap(err, "operator entity address")
 			}
 
-			operatorEntity, err := entities.FetchEntity(ctx, dbConn, operatorRA, config.IsTest)
+			operatorEntity, err := contract.FetchContractFormation(ctx, dbConn, operatorRA,
+				config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "fetch operator entity")
 			}

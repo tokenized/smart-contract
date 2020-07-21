@@ -1,4 +1,4 @@
-package entities
+package contract
 
 import (
 	"context"
@@ -6,27 +6,18 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 )
 
-const storageKey = "entities"
+const cfStorageKey = "formations"
 
-func SaveContractFormation(ctx context.Context, dbConn *db.DB, itx *inspector.Transaction, isTest bool) error {
+func SaveContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAddress,
+	cf *actions.ContractFormation, isTest bool) error {
 
-	if itx.MsgProto == nil {
-		return errors.New("Empty action")
-	}
-
-	cf, ok := itx.MsgProto.(*actions.ContractFormation)
-	if !ok {
-		return errors.New("Not Contract Formation")
-	}
-
-	key := buildStoragePath(itx.Inputs[0].Address) // First input is smart contract address
+	key := buildCFStoragePath(ra) // First input is smart contract address
 
 	// Check existing timestamp
 	b, err := dbConn.Fetch(ctx, key)
@@ -49,18 +40,25 @@ func SaveContractFormation(ctx context.Context, dbConn *db.DB, itx *inspector.Tr
 		return errors.Wrap(err, "Failed to fetch contract")
 	}
 
-	// TODO Keep list of all entity addresses currently used by active contracts under this smart
-	// contract agent. Then update the contract data when a new contract formation is seen. --ce
+	// Update any existing contracts that reference this contract.
+	if err := updateExpandedOracles(ctx, ra, cf); err != nil {
+		return errors.Wrap(err, "update expanded oracles")
+	}
 
-	if err := dbConn.Put(ctx, key, itx.MsgTx.TxOut[itx.MsgProtoIndex].PkScript); err != nil {
-		return err
+	b, err = protocol.Serialize(cf, isTest)
+	if err != nil {
+		return errors.Wrap(err, "serialize")
+	}
+
+	if err := dbConn.Put(ctx, key, b); err != nil {
+		return errors.Wrap(err, "update storage")
 	}
 
 	return nil
 }
 
-func FetchEntity(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAddress, isTest bool) (*actions.ContractFormation, error) {
-	key := buildStoragePath(ra)
+func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAddress, isTest bool) (*actions.ContractFormation, error) {
+	key := buildCFStoragePath(ra)
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to fetch contract")
@@ -89,7 +87,7 @@ func GetIdentityOracleKey(cf *actions.ContractFormation) (bitcoin.PublicKey, err
 	return bitcoin.PublicKey{}, errors.New("Not Found")
 }
 
-// Returns the storage path prefix for a given identifier.
-func buildStoragePath(ra bitcoin.RawAddress) string {
-	return fmt.Sprintf("%s/%x", storageKey, ra.Bytes())
+// buildCFStoragePath returns the storage path prefix for a given identifier.
+func buildCFStoragePath(ra bitcoin.RawAddress) string {
+	return fmt.Sprintf("%s/%x", cfStorageKey, ra.Bytes())
 }

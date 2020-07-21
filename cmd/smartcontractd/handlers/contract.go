@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -48,7 +47,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Locate Contract
-	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
+	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
 	if err != contract.ErrNotFound {
 		if err == nil {
 			address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
@@ -94,11 +93,21 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	node.Log(ctx, "Accepting contract offer : %s", msg.ContractName)
 
 	// Contract Formation <- Contract Offer
-	cf := actions.ContractFormation{}
+	cf := &actions.ContractFormation{}
 
-	err = node.Convert(ctx, &msg, &cf)
+	err = node.Convert(ctx, &msg, cf)
 	if err != nil {
 		return err
+	}
+
+	cf.AdminAddress = itx.Inputs[0].Address.Bytes()
+	if msg.ContractOperatorIncluded {
+		if len(itx.Inputs) < 2 {
+			node.LogWarn(ctx, "Missing operator input")
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				"missing operator input")
+		}
+		cf.OperatorAddress = itx.Inputs[1].Address.Bytes()
 	}
 
 	cf.ContractRevision = 0
@@ -116,7 +125,10 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	}
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &cf)
+	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
+		return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
+	}
+	return err
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
@@ -140,7 +152,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -158,8 +170,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if ct.Revision != msg.ContractRevision {
-		node.LogWarn(ctx, "Incorrect contract revision (%s) : specified %d != current %d",
-			ct.ContractName, msg.ContractRevision, ct.Revision)
+		node.LogWarn(ctx, "Incorrect contract revision : specified %d != current %d",
+			msg.ContractRevision, ct.Revision)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractRevision)
 	}
 
@@ -238,9 +250,15 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		votingSystem = vt.VoteSystem
 	}
 
+	// Contract Formation <- Contract Amendment
+	cf, err := contract.FetchContractFormation(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
+	if err != nil {
+		return errors.Wrap(err, "fetch contract formation")
+	}
+
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
 	// unlimited asset creation is permitted.
-	if ct.RestrictedQtyAssets > 0 && ct.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
+	if cf.RestrictedQtyAssets > 0 && cf.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
 		node.LogWarn(ctx, "Cannot reduce allowable assets below existing number")
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAssetQtyReduction)
 	}
@@ -249,124 +267,76 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		if !ct.OperatorAddress.IsEmpty() {
 			if len(itx.Inputs) < 2 {
 				node.Log(ctx, "All operators required for operator change")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
+				return node.RespondReject(ctx, w, itx, rk,
+					actions.RejectionsContractBothOperatorsRequired)
 			}
 
 			if itx.Inputs[0].Address.Equal(itx.Inputs[1].Address) ||
 				!contract.IsOperator(ctx, ct, itx.Inputs[0].Address) ||
 				!contract.IsOperator(ctx, ct, itx.Inputs[1].Address) {
 				node.Log(ctx, "All operators required for operator change")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
+				return node.RespondReject(ctx, w, itx, rk,
+					actions.RejectionsContractBothOperatorsRequired)
 			}
 		} else {
 			if len(itx.Inputs) < 1 {
 				node.Log(ctx, "All operators required for operator change")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
+				return node.RespondReject(ctx, w, itx, rk,
+					actions.RejectionsContractBothOperatorsRequired)
 			}
 
 			if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 				node.Log(ctx, "All operators required for operator change")
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractBothOperatorsRequired)
+				return node.RespondReject(ctx, w, itx, rk,
+					actions.RejectionsContractBothOperatorsRequired)
 			}
 		}
 	}
 
-	// Check oracle signature
-	if ct.AdminOracle != nil {
-		// Check that new signature is provided
-		adminOracleSigIncluded := false
-		for i, amendment := range msg.Amendments {
-			fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
-			if err != nil {
-				return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
-			}
-			if len(fip) > 0 && fip[0] == actions.ContractFieldAdminOracleSignature {
-				adminOracleSigIncluded = true
-				break
-			}
-		}
-
-		if !adminOracleSigIncluded {
-			node.Log(ctx, "New oracle signature required to change administration or operator")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
-		}
-
-		// Build updated contract to check against signature
-		cf := actions.ContractFormation{}
-
-		// Get current state
-		err = node.Convert(ctx, ct, &cf)
-		if err != nil {
-			return errors.Wrap(err, "Failed to convert state contract to contract formation")
-		}
-
-		if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalType,
-			votingSystem); err != nil {
-			node.LogWarn(ctx, "Failed to apply amendments to check admin oracle sig : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-		}
-
-		// Apply updates
-		updatedContract := *ct
-		err = node.Convert(ctx, &cf, &updatedContract)
-		if err != nil {
-			return errors.Wrap(err, "Failed to convert amended contract formation to contract state")
-		}
-
-		// Pull from amendment tx.
-		// Administration change. New administration in second input
-		inputIndex := 1
-		if !ct.OperatorAddress.IsEmpty() {
-			inputIndex++
-		}
-
-		if msg.ChangeAdministrationAddress {
-			if len(itx.Inputs) <= inputIndex {
-				return errors.New("New administration specified but not included in inputs")
-			}
-
-			updatedContract.AdministrationAddress = itx.Inputs[inputIndex].Address
-			inputIndex++
-		}
-
-		// Operator changes. New operator in second input unless there is also a new administration,
-		//   then it is in the third input
-		if msg.ChangeOperatorAddress {
-			if len(itx.Inputs) <= inputIndex {
-				return errors.New("New operator specified but not included in inputs")
-			}
-
-			updatedContract.OperatorAddress = itx.Inputs[inputIndex].Address
-		}
-
-		if err := validateContractAmendOracleSig(ctx, &updatedContract, c.Headers); err != nil {
-			node.LogVerbose(ctx, "New oracle signature invalid : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
-		}
+	// Pull from amendment tx.
+	// Administration change. New administration in second input
+	inputIndex := 1
+	if !ct.OperatorAddress.IsEmpty() {
+		inputIndex++
 	}
 
-	// Contract Formation <- Contract Amendment
-	cf := actions.ContractFormation{}
+	if msg.ChangeAdministrationAddress {
+		if len(itx.Inputs) <= inputIndex {
+			return errors.New("New administration specified but not included in inputs")
+		}
 
-	// Get current state
-	err = node.Convert(ctx, ct, &cf)
-	if err != nil {
-		return errors.Wrap(err, "Failed to convert state contract to contract formation")
+		cf.AdminAddress = itx.Inputs[inputIndex].Address.Bytes()
+		inputIndex++
+	}
+
+	// Operator changes. New operator in second input unless there is also a new administration,
+	// then it is in the third input
+	if msg.ChangeOperatorAddress {
+		if len(itx.Inputs) <= inputIndex {
+			return errors.New("New operator specified but not included in inputs")
+		}
+
+		cf.OperatorAddress = itx.Inputs[inputIndex].Address.Bytes()
+	}
+
+	if err := applyContractAmendments(cf, msg.Amendments, proposed, proposalType,
+		votingSystem); err != nil {
+		node.LogWarn(ctx, "Failed to apply amendments to check admin oracle sig : %s", err)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
+	// Check admin identity oracle signatures
+	for _, adminCert := range cf.AdminIdentityCertificates {
+		if err := validateContractAmendOracleSig(ctx, c.MasterDB, cf, adminCert, c.Headers,
+			c.Config.IsTest); err != nil {
+			node.LogVerbose(ctx, "New admin identity signature invalid : %s", err)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
+		}
 	}
 
 	// Apply modifications
 	cf.ContractRevision = ct.Revision + 1 // Bump the revision
 	cf.Timestamp = v.Now.Nano()
-
-	if err := applyContractAmendments(&cf, msg.Amendments, proposed, proposalType,
-		votingSystem); err != nil {
-		node.LogWarn(ctx, "Contract amendments failed : %s", err)
-		code, ok := node.ErrorCode(err)
-		if ok {
-			return node.RespondReject(ctx, w, itx, rk, code)
-		}
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-	}
 
 	// Build outputs
 	// 1 - Contract Address
@@ -374,36 +344,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	w.AddOutput(ctx, rk.Address, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
-	// Administration change. New administration in next input
-	inputIndex := 1
-	if !ct.OperatorAddress.IsEmpty() {
-		inputIndex++
-	}
-	if msg.ChangeAdministrationAddress {
-		if len(itx.Inputs) <= inputIndex {
-			node.LogWarn(ctx, "New administration specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
-		}
-		inputIndex++
-	}
-
-	// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
-	if msg.ChangeOperatorAddress {
-		if len(itx.Inputs) <= inputIndex {
-			node.LogWarn(ctx, "New operator specified but not included in inputs (%s)", ct.ContractName)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
-		}
-	}
-
 	// Save Tx.
 	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
 		return errors.Wrap(err, "Failed to save tx")
 	}
 
-	node.Log(ctx, "Accepting contract amendment (%s)", ct.ContractName)
+	node.Log(ctx, "Accepting contract amendment")
 
 	// Respond with a formation
-	return node.RespondSuccess(ctx, w, itx, rk, &cf)
+	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
+		return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
+	}
+	return err
 }
 
 // FormationResponse handles an outgoing Contract Formation and writes it to the state
@@ -430,7 +382,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	contractName := msg.ContractName
-	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -499,12 +451,12 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.AdministrationAddress = offerTx.Inputs[0].Address // First input of offer tx
+		nc.AdminAddress = offerTx.Inputs[0].Address // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
 			nc.OperatorAddress = offerTx.Inputs[1].Address // Second input of offer tx
 		}
 
-		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, v.Now); err != nil {
+		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, c.Config.IsTest, v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err)
 			return err
 		}
@@ -528,9 +480,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.AdministrationAddress = &request.Inputs[inputIndex].Address
+			uc.AdminAddress = &request.Inputs[inputIndex].Address
 			inputIndex++
-			address := bitcoin.NewAddressFromRawAddress(*uc.AdministrationAddress, w.Config.Net)
+			address := bitcoin.NewAddressFromRawAddress(*uc.AdminAddress, w.Config.Net)
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
@@ -545,124 +497,42 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
 		}
 
-		// Required pointers
-		stringPointer := func(s string) *string { return &s }
-
-		if ct.ContractName != msg.ContractName {
-			uc.ContractName = stringPointer(msg.ContractName)
-			node.Log(ctx, "Updating contract name (%s) : %s", ct.ContractName, *uc.ContractName)
-		}
-
 		if ct.ContractType != msg.ContractType {
-			uc.ContractType = stringPointer(msg.ContractType)
-			node.Log(ctx, "Updating contract type (%s) : %s", ct.ContractName, *uc.ContractType)
+			uc.ContractType = &msg.ContractType
+			node.Log(ctx, "Updating contract type : %d", *uc.ContractType)
 		}
 
-		if ct.BodyOfAgreementType != msg.BodyOfAgreementType {
-			uc.BodyOfAgreementType = &msg.BodyOfAgreementType
-			node.Log(ctx, "Updating agreement file type (%s) : %02x", ct.ContractName, msg.BodyOfAgreementType)
-		}
-
-		if !bytes.Equal(ct.BodyOfAgreement, msg.BodyOfAgreement) {
-			uc.BodyOfAgreement = &msg.BodyOfAgreement
-			node.Log(ctx, "Updating agreement (%s)", ct.ContractName)
-		}
-
-		// Check if SupportingDocs are different
-		different := len(ct.SupportingDocs) != len(msg.SupportingDocs)
-		if !different {
-			for i, doc := range ct.SupportingDocs {
-				if !doc.Equal(msg.SupportingDocs[i]) {
-					different = true
-					break
-				}
-			}
-		}
-
-		if different {
-			node.Log(ctx, "Updating contract supporting docs (%s)", ct.ContractName)
-			uc.SupportingDocs = &msg.SupportingDocs
-		}
-
-		if ct.GoverningLaw != string(msg.GoverningLaw) {
-			uc.GoverningLaw = stringPointer(string(msg.GoverningLaw))
-			node.Log(ctx, "Updating contract governing law (%s) : %s", ct.ContractName, *uc.GoverningLaw)
-		}
-
-		if ct.Jurisdiction != string(msg.Jurisdiction) {
-			uc.Jurisdiction = stringPointer(string(msg.Jurisdiction))
-			node.Log(ctx, "Updating contract jurisdiction (%s) : %s", ct.ContractName, *uc.Jurisdiction)
+		if ct.ContractFee != msg.ContractFee {
+			uc.ContractFee = &msg.ContractFee
+			node.Log(ctx, "Updating contract fee : %d", *uc.ContractFee)
 		}
 
 		if ct.ContractExpiration.Nano() != msg.ContractExpiration {
 			ts := protocol.NewTimestamp(msg.ContractExpiration)
 			uc.ContractExpiration = &ts
 			newExpiration := time.Unix(int64(msg.ContractExpiration), 0)
-			node.Log(ctx, "Updating contract expiration (%s) : %s", ct.ContractName, newExpiration.Format(time.UnixDate))
-		}
-
-		if ct.ContractURI != msg.ContractURI {
-			uc.ContractURI = stringPointer(msg.ContractURI)
-			node.Log(ctx, "Updating contract URI (%s) : %s", ct.ContractName, *uc.ContractURI)
-		}
-
-		if !ct.Issuer.Equal(msg.Issuer) {
-			uc.Issuer = msg.Issuer
-			node.Log(ctx, "Updating contract issuer data (%s)", ct.ContractName)
-		}
-
-		if ct.IssuerLogoURL != msg.IssuerLogoURL {
-			uc.IssuerLogoURL = stringPointer(msg.IssuerLogoURL)
-			node.Log(ctx, "Updating contract issuer logo URL (%s) : %s", ct.ContractName, *uc.IssuerLogoURL)
-		}
-
-		if !ct.ContractOperator.Equal(msg.ContractOperator) {
-			uc.ContractOperator = msg.ContractOperator
-			node.Log(ctx, "Updating contract operator data (%s)", ct.ContractName)
-		}
-
-		if !ct.AdminOracle.Equal(msg.AdminOracle) {
-			uc.AdminOracle = msg.AdminOracle
-			node.Log(ctx, "Updating admin oracle (%s)", ct.ContractName)
-		}
-
-		if !bytes.Equal(ct.AdminOracleSignature, msg.AdminOracleSignature) {
-			uc.AdminOracleSignature = &msg.AdminOracleSignature
-			node.Log(ctx, "Updating admin signature (%s)", ct.ContractName)
-		}
-
-		if ct.AdminOracleSigBlockHeight != msg.AdminOracleSigBlockHeight {
-			uc.AdminOracleSigBlockHeight = &msg.AdminOracleSigBlockHeight
-			node.Log(ctx, "Updating admin oracle sig block height (%s)", ct.ContractName)
-		}
-
-		if !bytes.Equal(ct.ContractPermissions[:], msg.ContractPermissions[:]) {
-			uc.ContractPermissions = &msg.ContractPermissions
-			node.Log(ctx, "Updating contract permissions (%s) : %v", ct.ContractName, *uc.ContractPermissions)
-		}
-
-		if ct.ContractFee != msg.ContractFee {
-			uc.ContractFee = &msg.ContractFee
-			node.Log(ctx, "Updating contract fee (%s) : %d", ct.ContractName, *uc.ContractFee)
+			node.Log(ctx, "Updating contract expiration : %s", newExpiration.Format(time.UnixDate))
 		}
 
 		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
 			uc.RestrictedQtyAssets = &msg.RestrictedQtyAssets
-			node.Log(ctx, "Updating contract restricted quantity assets (%s) : %d", ct.ContractName, *uc.RestrictedQtyAssets)
+			node.Log(ctx, "Updating contract restricted quantity assets : %d",
+				*uc.RestrictedQtyAssets)
 		}
 
 		if ct.AdministrationProposal != msg.AdministrationProposal {
 			uc.AdministrationProposal = &msg.AdministrationProposal
-			node.Log(ctx, "Updating contract administration proposal (%s) : %t", ct.ContractName, *uc.AdministrationProposal)
+			node.Log(ctx, "Updating contract administration proposal : %t",
+				*uc.AdministrationProposal)
 		}
 
 		if ct.HolderProposal != msg.HolderProposal {
 			uc.HolderProposal = &msg.HolderProposal
-			node.Log(ctx, "Updating contract holder proposal (%s) : %t", ct.ContractName, *uc.HolderProposal)
+			node.Log(ctx, "Updating contract holder proposal : %t", *uc.HolderProposal)
 		}
 
 		// Check if oracles are different
-		different = len(ct.Oracles) != len(msg.Oracles)
+		different := len(ct.Oracles) != len(msg.Oracles)
 		if !different {
 			for i, oracle := range ct.Oracles {
 				if !oracle.Equal(msg.Oracles[i]) {
@@ -673,7 +543,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			node.Log(ctx, "Updating contract oracles (%s)", ct.ContractName)
+			node.Log(ctx, "Updating contract oracles")
 			uc.Oracles = &msg.Oracles
 		}
 
@@ -689,14 +559,14 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		}
 
 		if different {
-			node.Log(ctx, "Updating contract voting systems (%s)", ct.ContractName)
+			node.Log(ctx, "Updating contract voting systems")
 			uc.VotingSystems = &msg.VotingSystems
 		}
 
-		if err := contract.Update(ctx, c.MasterDB, rk.Address, &uc, v.Now); err != nil {
+		if err := contract.Update(ctx, c.MasterDB, rk.Address, &uc, c.Config.IsTest, v.Now); err != nil {
 			return errors.Wrap(err, "Failed to update contract")
 		}
-		node.Log(ctx, "Updated contract (%s)", msg.ContractName)
+		node.Log(ctx, "Updated contract")
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
@@ -728,7 +598,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
 	if err != nil && err != contract.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -764,7 +634,7 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	}
 
 	// Perform move
-	err = contract.Move(ctx, c.MasterDB, rk.Address, newContractAddress,
+	err = contract.Move(ctx, c.MasterDB, rk.Address, newContractAddress, c.Config.IsTest,
 		protocol.NewTimestamp(msg.Timestamp))
 	if err != nil {
 		return err
@@ -864,35 +734,67 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 	return nil
 }
 
-func validateContractAmendOracleSig(ctx context.Context, updatedContract *state.Contract,
-	headers node.BitcoinHeaders) error {
+func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
+	cf *actions.ContractFormation, adminCert *actions.AdminIdentityCertificateField,
+	headers node.BitcoinHeaders, isTest bool) error {
 
-	oracle, err := bitcoin.PublicKeyFromBytes(updatedContract.AdminOracle.PublicKey)
+	// EntityContract       []byte   `protobuf:"bytes,1,opt,name=EntityContract,proto3" json:"EntityContract,omitempty"`
+	// Signature            []byte   `protobuf:"bytes,2,opt,name=Signature,proto3" json:"Signature,omitempty"`
+	// BlockHeight          uint32   `protobuf:"varint,3,opt,name=BlockHeight,proto3" json:"BlockHeight,omitempty"`
+	// Expiration           uint64   `protobuf:"varint,4,opt,name=Expiration,proto3" json:"Expiration,omitempty"`
+
+	oracleAddress, err := bitcoin.DecodeRawAddress(adminCert.EntityContract)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "entity address")
+	}
+
+	oracleContract, err := contract.FetchContractFormation(ctx, dbConn, oracleAddress, isTest)
+	if err != nil {
+		return errors.Wrap(err, "fetch oracle")
+	}
+
+	oracle, err := contract.GetIdentityOracleKey(oracleContract)
+	if err != nil {
+		return errors.Wrap(err, "get identity oracle")
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.SignatureFromBytes(updatedContract.AdminOracleSignature)
+	oracleSig, err := bitcoin.SignatureFromBytes(adminCert.Signature)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	hash, err := headers.Hash(ctx, int(updatedContract.AdminOracleSigBlockHeight))
+	hash, err := headers.Hash(ctx, int(adminCert.BlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-			updatedContract.AdminOracleSigBlockHeight))
+			adminCert.BlockHeight))
 	}
 
 	addresses := make([]bitcoin.RawAddress, 0, 2)
 	entities := make([]*actions.EntityField, 0, 2)
 
-	addresses = append(addresses, updatedContract.AdministrationAddress)
-	entities = append(entities, updatedContract.Issuer)
+	adminAddress, err := bitcoin.DecodeRawAddress(cf.AdminAddress)
+	if err != nil {
+		return errors.Wrap(err, "admin address")
+	}
 
-	if !updatedContract.OperatorAddress.IsEmpty() {
-		addresses = append(addresses, updatedContract.OperatorAddress)
-		entities = append(entities, updatedContract.ContractOperator)
+	addresses = append(addresses, adminAddress)
+	entities = append(entities, cf.Issuer)
+
+	if len(cf.OperatorAddress) != 0 {
+		operatorAddress, err := bitcoin.DecodeRawAddress(cf.OperatorAddress)
+		if err != nil {
+			return errors.Wrap(err, "operator address")
+		}
+
+		addresses = append(addresses, operatorAddress)
+
+		operatorContract, err := contract.FetchContractFormation(ctx, dbConn, operatorAddress,
+			isTest)
+		if err != nil {
+			return errors.Wrap(err, "fetch operator")
+		}
+		entities = append(entities, operatorContract.Issuer)
 	}
 
 	sigHash, err := protocol.ContractOracleSigHash(ctx, addresses, entities, hash, 1)

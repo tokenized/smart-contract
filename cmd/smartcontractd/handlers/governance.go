@@ -53,7 +53,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -308,7 +308,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return err
 	}
@@ -461,7 +461,7 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return err
 	}
@@ -596,7 +596,7 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Ballot counted not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -661,7 +661,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	node.LogVerbose(ctx, "Finalizing vote : %s", itx.Hash.String())
 
 	// Retrieve contract
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return err
 	}
@@ -748,7 +748,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Vote result not from contract : %x", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}

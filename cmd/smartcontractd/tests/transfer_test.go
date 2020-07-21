@@ -64,15 +64,9 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
 	requests := make([]*wire.MsgTx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
@@ -110,6 +104,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 		// Data output
+		var err error
 		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
@@ -231,15 +226,9 @@ func separateTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
 	requests := make([]*wire.MsgTx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
@@ -253,10 +242,7 @@ func separateTransfersBenchmark(b *testing.B) {
 		}
 		senders = append(senders, senderKey)
 
-		err = mockUpHolding(ctx, senderKey.Address, transferAmount)
-		if err != nil {
-			b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-		}
+		mockUpHolding(b, ctx, senderKey.Address, transferAmount)
 
 		receiverKey, err := tests.GenerateKey(test.NodeConfig.Net)
 		if err != nil {
@@ -429,16 +415,11 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(b, ctx, "Test Contract", "This is a mock contract and means nothing.",
 		"I", 1, "John Bitcoin")
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = test.Headers.Populate(ctx, 50000, 12)
+	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
+
+	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
@@ -467,7 +448,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-			testAssetCodes[0].Bytes(), userKey.Address, transferAmount, blockHash, 1)
+			testAssetCodes[0].Bytes(), userKey.Address, blockHash, 1)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -637,14 +618,8 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	transferData := actions.Transfer{}
 
 	// Mock up holding because otherwise we must wait for settlement, which shouldn't count for benchmark
-	err = mockUpHolding(ctx, receiver1.Address, transferAmount)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, receiver2.Address, transferAmount)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpHolding(b, ctx, receiver1.Address, transferAmount)
+	mockUpHolding(b, ctx, receiver2.Address, transferAmount)
 
 	assetTransferData := actions.AssetTransferField{
 		ContractIndex: 0, // first output
@@ -729,11 +704,8 @@ func treeTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
 
 	levels := uint(1)
 	nodes := (1 << levels) - 1
@@ -743,10 +715,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	}
 	// fmt.Printf("Using %d tree levels for %d transfers\n", levels, nodes)
 
-	err = mockUpAsset(ctx, true, true, true, uint64(nodes)*2, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(b, ctx, true, true, true, uint64(nodes)*2, 0, &sampleAssetPayload, true, false, false)
 
 	requests, _ := splitTransferRecurse(b, ctx, issuerKey, uint64(nodes)*2, levels)
 	hashes := make([]*bitcoin.Hash32, 0, nodes)
@@ -875,15 +844,9 @@ func sendTokens(t *testing.T) {
 		node.LogVerbose(ctx, "Process holdings cache thread finished")
 	}()
 
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	// Let holdings cache update
 	time.Sleep(500 * time.Millisecond)
@@ -922,6 +885,7 @@ func sendTokens(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(600, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
@@ -1200,35 +1164,19 @@ func multiExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	user1HoldingBalance := uint64(100)
-	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
-	err = mockUpContract2(ctx, "Test Contract 2", "This is a mock contract and means nothing.", "I",
+	user1HoldingBalance := uint64(100)
+	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
+
+	mockUpContract2(t, ctx, "Test Contract 2", "This is a mock contract and means nothing.", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset2(ctx, true, true, true, 1500, &sampleAssetPayload2, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
-	}
+	mockUpAsset2(t, ctx, true, true, true, 1500, &sampleAssetPayload2, true, false, false)
+
 	user2HoldingBalance := uint64(200)
-	err = mockUpHolding2(ctx, user2Key.Address, user2HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
-	}
+	mockUpHolding2(t, ctx, user2Key.Address, user2HoldingBalance)
 
 	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
@@ -1455,20 +1403,12 @@ func bitcoinExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
 	user1HoldingBalance := uint64(100)
-	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
 	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
@@ -1616,41 +1556,25 @@ func multiExchangeLock(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
 	user1HoldingBalance := uint64(150)
-	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
 	otherContractKey, err := tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	err = mockUpOtherContract(ctx, otherContractKey,
+	mockUpOtherContract(t, ctx, otherContractKey,
 		"Test Contract 2", "This is a mock contract and means nothing.", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpOtherAsset(ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
+	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
 		true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
-	}
+
 	user2HoldingBalance := uint64(200)
-	err = mockUpOtherHolding(ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
-	}
+	mockUpOtherHolding(t, ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
 
 	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
@@ -2012,41 +1936,25 @@ func multiExchangeTimeout(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
 	user1HoldingBalance := uint64(150)
-	err = mockUpHolding(ctx, userKey.Address, user1HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
 	otherContractKey, err := tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	err = mockUpOtherContract(ctx, otherContractKey,
+	mockUpOtherContract(t, ctx, otherContractKey,
 		"Test Contract 2", "This is a mock contract and means nothing.", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpOtherAsset(ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
+	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
 		true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset 2 : %v", tests.Failed, err)
-	}
+
 	user2HoldingBalance := uint64(200)
-	err = mockUpOtherHolding(ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding 2 : %v", tests.Failed, err)
-	}
+	mockUpOtherHolding(t, ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
 
 	funding1Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, userKey.Address)
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 100012, user2Key.Address)
@@ -2373,16 +2281,11 @@ func oracleTransfer(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
 		"I", 1, "John Bitcoin")
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = test.Headers.Populate(ctx, 50000, 12)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
+	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
@@ -2408,7 +2311,7 @@ func oracleTransfer(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, transferAmount, blockHash, 1)
+		testAssetCodes[0].Bytes(), userKey.Address, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -2434,7 +2337,8 @@ func oracleTransfer(t *testing.T) {
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -2552,16 +2456,11 @@ func oracleTransferBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContractWithOracle(ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
 		"I", 1, "John Bitcoin")
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract with oracle : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = test.Headers.Populate(ctx, 50000, 12)
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
+	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
@@ -2588,7 +2487,7 @@ func oracleTransferBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, transferAmount+1, blockHash, 1)
+		testAssetCodes[0].Bytes(), userKey.Address, blockHash, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -2755,16 +2654,9 @@ func permitted(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	// TransfersPermitted = false
-	err = mockUpAsset(ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 
@@ -2799,6 +2691,7 @@ func permitted(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
@@ -2860,21 +2753,12 @@ func permittedBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	// TransfersPermitted = false
-	err = mockUpAsset(ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+
 	user2Holding := uint64(100)
-	err = mockUpHolding(ctx, user2Key.Address, user2Holding)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpHolding(t, ctx, user2Key.Address, user2Holding)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 	funding2Tx := tests.MockFundingTx(ctx, test.RPCNode, 256, user2Key.Address)
@@ -2914,6 +2798,7 @@ func permittedBad(t *testing.T) {
 	transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)

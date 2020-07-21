@@ -35,6 +35,7 @@ var user2Key *wallet.Key
 var issuerKey *wallet.Key
 var issuer2Key *wallet.Key
 var oracleKey *wallet.Key
+var oracle2Key *wallet.Key
 var authorityKey *wallet.Key
 
 var testTokenQty uint64
@@ -113,6 +114,11 @@ func testMain(m *testing.M) int {
 	}
 
 	oracleKey, err = tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		panic(err)
+	}
+
+	oracle2Key, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}

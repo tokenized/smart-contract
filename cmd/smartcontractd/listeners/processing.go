@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tokenized/smart-contract/internal/entities"
+	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -37,8 +37,9 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		}
 
 		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
-			if err := entities.SaveContractFormation(ctx, server.MasterDB, ptx.Itx,
-				server.Config.IsTest); err != nil {
+			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
+			if err := contract.SaveContractFormation(ctx, server.MasterDB,
+				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
 				node.LogError(ctx, "Failed to save contract offer : %s", ptx.Itx.Hash.String())
 			}
 		}
