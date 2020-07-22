@@ -670,16 +670,24 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 
 		case actions.ContractFieldMasterAddress:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsContractPermissions,
 				"MasterAddress amendments prohibited")
 
 		case actions.ContractFieldContractRevision:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsContractPermissions,
 				"Revision amendments prohibited")
 
 		case actions.ContractFieldTimestamp:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsContractPermissions,
 				"Timestamp amendments prohibited")
+
+		case actions.ContractFieldAdminAddress:
+			return node.NewError(actions.RejectionsContractPermissions,
+				"AdminAddress amendments prohibited")
+
+		case actions.ContractFieldOperatorAddress:
+			return node.NewError(actions.RejectionsContractPermissions,
+				"OperatorAddress amendments prohibited")
 		}
 
 		adjustedFIP, err := cf.ApplyAmendment(fip, amendment.Operation, amendment.Data)

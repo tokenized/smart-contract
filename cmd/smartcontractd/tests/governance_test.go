@@ -100,6 +100,7 @@ func holderProposal(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, proposalTx)
+	t.Logf("Proposal Tx : %s", proposalTx.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", proposalItx)
 	if err != nil {

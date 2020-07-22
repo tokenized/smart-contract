@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"testing"
 
 	"github.com/tokenized/pkg/bitcoin"
@@ -512,7 +511,7 @@ func assetAmendment(t *testing.T) {
 	// Serialize new token quantity
 	newQuantity := uint64(1200)
 	var buf bytes.Buffer
-	if err := binary.Write(&buf, binary.LittleEndian, &newQuantity); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf, int(newQuantity)); err != nil {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
@@ -633,7 +632,8 @@ func assetProposalAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()

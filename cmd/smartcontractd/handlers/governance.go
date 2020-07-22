@@ -197,11 +197,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			// Validate proposed amendments.
-			cf := actions.ContractFormation{}
-
 			// Get current state
-			err = node.Convert(ctx, &ct, &cf)
+			cf, err := contract.FetchContractFormation(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to convert state contract to contract formation")
 			}
@@ -211,7 +208,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			cf.Timestamp = v.Now.Nano()
 
 			// Verify that included amendments are valid and have necessary permission.
-			if err := applyContractAmendments(&cf, msg.ProposedAmendments, true, msg.Type,
+			if err := applyContractAmendments(cf, msg.ProposedAmendments, true, msg.Type,
 				msg.VoteSystem); err != nil {
 				node.LogWarn(ctx, "Contract amendments failed : %s", err)
 				code, ok := node.ErrorCode(err)

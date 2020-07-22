@@ -37,7 +37,7 @@ func SaveContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAdd
 			return nil
 		}
 	} else if errors.Cause(err) != db.ErrNotFound {
-		return errors.Wrap(err, "Failed to fetch contract")
+		return errors.Wrap(err, "fetch contract formation")
 	}
 
 	// Update any existing contracts that reference this contract.
@@ -61,7 +61,10 @@ func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAd
 	key := buildCFStoragePath(ra)
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to fetch contract")
+		if errors.Cause(err) != db.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, errors.Wrap(err, "fetch contract formation")
 	}
 
 	action, err := protocol.Deserialize(b, isTest)

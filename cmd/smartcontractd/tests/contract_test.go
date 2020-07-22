@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"sync"
 	"testing"
 	"time"
@@ -755,6 +754,9 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create address : %v", tests.Failed, err)
 	}
 
+	mockIdentityContract(t, ctx, newKey, oracleKey.Key.PublicKey(),
+		actions.EntitiesPublicCompany, actions.RolesCEO, "John Bitcoin")
+
 	permissions := actions.Permissions{
 		actions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
@@ -841,7 +843,7 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %s", tests.Failed, err)
 	}
 
-	if bytes.Equal(ct.Oracles[1].EntityContract, newAddress.Bytes()) {
+	if !bytes.Equal(ct.Oracles[1].EntityContract, newAddress.Bytes()) {
 		t.Fatalf("\t%s\tContract oracle 2 contract incorrect : \"%x\" != \"%x\"", tests.Failed,
 			ct.Oracles[1].EntityContract, newAddress.Bytes())
 	}
@@ -856,7 +858,7 @@ func contractListAmendment(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := binary.Write(&buf, binary.LittleEndian, actions.OracleTypeAuthority); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf, int(actions.OracleTypeAuthority)); err != nil {
 		t.Fatalf("\t%s\tFailed to write oracle type : %s", tests.Failed, err)
 	}
 
@@ -915,9 +917,83 @@ func contractListAmendment(t *testing.T) {
 	t.Logf("\t%s\tAmendment rejected", tests.Success)
 
 	// Check the response
-	checkResponse(t, "M2")
+	checkResponse(t, "M2") // Wrong revision
 
-	// Check oracle name
+	// Check oracle type
+	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
+		test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
+	}
+
+	if ct.Oracles[1].OracleTypes[0] != actions.OracleTypeIdentity {
+		t.Fatalf("\t%s\tContract oracle 2 type 1 incorrect : %d != %d", tests.Failed,
+			ct.Oracles[1].OracleTypes[0], actions.OracleTypeIdentity)
+	}
+
+	t.Logf("\t%s\tVerified contract oracle 2 type 1 : %d", tests.Success, ct.Oracles[1].OracleTypes[0])
+
+	amendmentData.ContractRevision = 1
+
+	// Build amendment transaction
+	amendmentTx = wire.NewMsgTx(1)
+
+	amendmentInputHash = fundingTx.TxHash()
+
+	// From issuer
+	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0),
+		make([]byte, 130)))
+
+	// To contract
+	script, _ = test.ContractKey.Address.LockingScript()
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(2100, script))
+
+	// Data output
+	script, err = protocol.Serialize(&amendmentData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize amendment : %v", tests.Failed, err)
+	}
+	amendmentTx.TxOut = append(amendmentTx.TxOut, wire.NewTxOut(0, script))
+
+	action, err := protocol.Deserialize(script, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to deserialize amendment : %s", tests.Failed, err)
+	}
+
+	desAmend, ok := action.(*actions.ContractAmendment)
+	if !ok {
+		t.Fatalf("\t%s\tDeserialized amendment wrong type", tests.Failed)
+	}
+
+	if !bytes.Equal(fipBytes, desAmend.Amendments[0].FieldIndexPath) {
+		t.Fatalf("\t%s\tContract amendment wrong FIP bytes : \"%x\" != \"%x\"", tests.Failed,
+			fipBytes, desAmend.Amendments[0].FieldIndexPath)
+	}
+
+	amendmentItx, err = inspector.NewTransactionFromWire(ctx, amendmentTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
+	}
+
+	err = amendmentItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, amendmentTx)
+	t.Logf("Contract Oracle Amendment Tx : %s", amendmentTx.TxHash().String())
+
+	err = a.Trigger(ctx, "SEE", amendmentItx)
+	if err != nil {
+		t.Errorf("\t%s\tFailed to accept amendment : %v", tests.Failed, err)
+	} else {
+		t.Logf("\t%s\tAmendment accepted", tests.Success)
+	}
+
+	// Check the response
+	checkResponse(t, "C2")
+
+	// Check oracle type
 	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
 		test.NodeConfig.IsTest)
 	if err != nil {
@@ -974,7 +1050,10 @@ func contractOracleAmendment(t *testing.T) {
 	})
 
 	var blockHeightBuf bytes.Buffer
-	binary.Write(&blockHeightBuf, binary.LittleEndian, &blockHeight)
+	if err := bitcoin.WriteBase128VarInt(&blockHeightBuf, int(blockHeight)); err != nil {
+		t.Fatalf("\t%s\tFailed to serialize block height : %v", tests.Failed, err)
+	}
+
 	fip = actions.FieldIndexPath{
 		actions.ContractFieldAdminIdentityCertificates,
 		0, // index to first certificate
@@ -1163,7 +1242,7 @@ func mockUpContract(t testing.TB, ctx context.Context, name, agreement string, i
 		MasterAddress: test.MasterKey.Address.Bytes(),
 	}
 
-	// Define permissions for contact fields
+	// Define permissions for contract fields
 	permissions := actions.Permissions{
 		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
@@ -1230,7 +1309,7 @@ func mockUpContract2(t testing.TB, ctx context.Context, name, agreement string, 
 		MasterAddress: test.Master2Key.Address.Bytes(),
 	}
 
-	// Define permissions for contact fields
+	// Define permissions for contract fields
 	permissions := actions.Permissions{
 		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
@@ -1298,7 +1377,7 @@ func mockUpOtherContract(t testing.TB, ctx context.Context, key *wallet.Key, nam
 		MasterAddress: test.Master2Key.Address.Bytes(),
 	}
 
-	// Define permissions for contact fields
+	// Define permissions for contract fields
 	permissions := actions.Permissions{
 		actions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
@@ -1385,7 +1464,7 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name, agreement
 		MasterAddress: test.MasterKey.Address.Bytes(),
 	}
 
-	// Define permissions for contact fields
+	// Define permissions for contract fields
 	permissions := actions.Permissions{
 		actions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal

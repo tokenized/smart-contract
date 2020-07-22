@@ -200,6 +200,12 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 		t.Fatalf("\t%s\t%s Response doesn't contain tokenized op return", tests.Failed, responseCode)
 	}
 	if responseMsg.Code() != responseCode {
+		if responseMsg.Code() == actions.CodeRejection {
+			reject, ok := responseMsg.(*actions.Rejection)
+			if ok {
+				t.Errorf("Reject %+v", reject)
+			}
+		}
 		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Code(), responseCode)
 	}
 

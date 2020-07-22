@@ -79,7 +79,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	// Find contract
 	c, err := Fetch(ctx, dbConn, contractAddress, isTest)
 	if err != nil {
-		return ErrNotFound
+		return errors.Wrap(err, "fetch")
 	}
 
 	// Update fields
@@ -139,7 +139,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		}
 
 		if err := ExpandOracles(ctx, dbConn, c, isTest); err != nil {
-			return err
+			return errors.Wrap(err, "expand oracles")
 		}
 	}
 	if upd.FreezePeriod != nil {
@@ -148,7 +148,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 
 	c.UpdatedAt = now
 
-	return Save(ctx, dbConn, c, isTest)
+	if err := Save(ctx, dbConn, c, isTest); err != nil {
+		return errors.Wrap(err, "save")
+	}
+	return nil
 }
 
 // Move marks the contract as moved and copies the data to the new address.
