@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/smart-contract/pkg/wallet"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -455,8 +454,8 @@ func oracleContract(t *testing.T) {
 	}
 
 	blockHash, err := test.Headers.Hash(ctx, int(offerData.AdminIdentityCertificates[0].BlockHeight))
-	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
-		[]*actions.EntityField{offerData.Issuer}, blockHash, 0)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
+		[]interface{}{offerData.Issuer}, blockHash, 0)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -591,8 +590,8 @@ func oracleContract(t *testing.T) {
 		reject.RejectionCode, reject.Message)
 
 	// Fix signature and retry
-	sigHash, err = protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
-		[]*actions.EntityField{offerData.Issuer}, blockHash, 1)
+	sigHash, err = protocol.ContractAdminIdentityOracleSigHash(ctx,
+		[]bitcoin.RawAddress{issuerKey.Address}, []interface{}{offerData.Issuer}, blockHash, 1)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -1023,8 +1022,8 @@ func contractOracleAmendment(t *testing.T) {
 
 	blockHeight := uint32(test.Headers.LastHeight(ctx) - 4)
 	blockHash, err := test.Headers.Hash(ctx, int(blockHeight))
-	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuer2Key.Address},
-		[]*actions.EntityField{cf.Issuer}, blockHash, 1)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx,
+		[]bitcoin.RawAddress{issuer2Key.Address}, []interface{}{cf.Issuer}, blockHash, 1)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -1347,12 +1346,12 @@ func mockUpContract2(t testing.TB, ctx context.Context, name, agreement string, 
 	return contractData, cf
 }
 
-func mockUpOtherContract(t testing.TB, ctx context.Context, key *wallet.Key, name, agreement string,
+func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddress, name, agreement string,
 	issuerType string, issuerRole uint32, issuerName string,
 	issuerProposal, holderProposal, permitted, issuer, holder bool) (*state.Contract, *actions.ContractFormation) {
 
 	contractData := &state.Contract{
-		Address:   key.Address,
+		Address:   ra,
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 	}
@@ -1407,8 +1406,7 @@ func mockUpOtherContract(t testing.TB, ctx context.Context, key *wallet.Key, nam
 		t.Fatalf("Failed to save contract : %s", err)
 	}
 
-	if err := contract.SaveContractFormation(ctx, test.MasterDB, key.Address, cf,
-		test.NodeConfig.IsTest); err != nil {
+	if err := contract.SaveContractFormation(ctx, test.MasterDB, ra, cf, test.NodeConfig.IsTest); err != nil {
 		t.Fatalf("Failed to save contract formation : %s", err)
 	}
 
@@ -1564,8 +1562,8 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agre
 	}
 
 	blockHash, err := test.Headers.Hash(ctx, int(sigBlockHeight))
-	sigHash, err := protocol.ContractOracleSigHash(ctx, []bitcoin.RawAddress{issuerKey.Address},
-		[]*actions.EntityField{cf.Issuer}, blockHash, 0)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx,
+		[]bitcoin.RawAddress{issuerKey.Address}, []interface{}{cf.Issuer}, blockHash, 0)
 	if err != nil {
 		t.Fatalf("Failed to create sig hash : %s", err)
 	}

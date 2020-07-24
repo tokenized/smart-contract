@@ -1567,7 +1567,7 @@ func multiExchangeLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey,
+	mockUpOtherContract(t, ctx, otherContractKey.Address,
 		"Test Contract 2", "This is a mock contract and means nothing.", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
@@ -1947,7 +1947,7 @@ func multiExchangeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey,
+	mockUpOtherContract(t, ctx, otherContractKey.Address,
 		"Test Contract 2", "This is a mock contract and means nothing.", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,

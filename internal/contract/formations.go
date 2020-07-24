@@ -61,7 +61,7 @@ func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAd
 	key := buildCFStoragePath(ra)
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
-		if errors.Cause(err) != db.ErrNotFound {
+		if errors.Cause(err) == db.ErrNotFound {
 			return nil, ErrNotFound
 		}
 		return nil, errors.Wrap(err, "fetch contract formation")

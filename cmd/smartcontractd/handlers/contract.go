@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -52,7 +53,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		if err == nil {
 			address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
 			node.LogWarn(ctx, "Contract already exists : %s", address.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExists)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsContractExists,
+				fmt.Sprintf("Contract already exists : %s", address.String()))
 		} else {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
@@ -61,12 +63,53 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
 		node.LogWarn(ctx, "Contract body of agreement hash is incorrect length : %d",
 			len(msg.BodyOfAgreement))
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+			fmt.Sprintf("Contract body of agreement hash is incorrect length : %d",
+				len(msg.BodyOfAgreement)))
 	}
 
 	if msg.ContractExpiration != 0 && msg.ContractExpiration < v.Now.Nano() {
 		node.LogWarn(ctx, "Expiration already passed : %d", msg.ContractExpiration)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+			fmt.Sprintf("Expiration already passed : %d", msg.ContractExpiration))
+	}
+
+	// Verify entity contract
+	if len(msg.EntityContract) > 0 {
+		ra, err := bitcoin.DecodeRawAddress(msg.EntityContract)
+		if err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Entity contract address invalid : %s", err))
+		}
+
+		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
+		if err != nil {
+			if errors.Cause(err) == contract.ErrNotFound {
+				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+					"Entity contract not found")
+			}
+			return errors.Wrap(err, "fetch entity contract formation")
+		}
+		logger.Info(ctx, "Found Parent Entity Contract : %s", entityCF.ContractName)
+	}
+
+	// Verify operator entity contract
+	if len(msg.OperatorEntityContract) > 0 {
+		ra, err := bitcoin.DecodeRawAddress(msg.OperatorEntityContract)
+		if err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Operator entity contract address invalid : %s", err))
+		}
+
+		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
+		if err != nil {
+			if errors.Cause(err) == contract.ErrNotFound {
+				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+					"Operator entity contract not found")
+			}
+			return errors.Wrap(err, "fetch operator entity contract formation")
+		}
+		logger.Info(ctx, "Found Operator Entity Contract : %s", entityCF.ContractName)
 	}
 
 	if len(msg.MasterAddress) > 0 {
@@ -79,14 +122,48 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+			fmt.Sprintf("Invalid contract permissions : %s", err))
 	}
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
 		if err = vote.ValidateVotingSystem(votingSystem); err != nil {
 			node.LogWarn(ctx, "Invalid voting system : %s", err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Invalid voting system : %s", err))
+		}
+	}
+
+	// Check any oracle entity contracts
+	for _, oracle := range msg.Oracles {
+		ra, err := bitcoin.DecodeRawAddress(oracle.EntityContract)
+		if err != nil {
+			node.LogWarn(ctx, "Invalid oracle entity address : %s", err)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Invalid oracle entity address : %s", err))
+		}
+		oracleCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
+		if err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Oracle entity address : %s", err))
+		}
+		logger.Info(ctx, "Found Oracle Contract : %s", oracleCF.ContractName)
+
+		// Check oracle type
+		for _, ot := range oracle.OracleTypes {
+			found := false
+			for _, service := range oracleCF.Services {
+				if service.Type == ot {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+					"Oracle type not found for contract")
+			}
 		}
 	}
 
@@ -325,12 +402,64 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
+	// Verify entity contract
+	if len(cf.EntityContract) > 0 {
+		ra, err := bitcoin.DecodeRawAddress(cf.EntityContract)
+		if err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Entity contract address invalid : %s", err))
+		}
+
+		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
+		if err != nil {
+			if errors.Cause(err) == contract.ErrNotFound {
+				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+					"Entity contract not found")
+			}
+			return errors.Wrap(err, "fetch entity contract formation")
+		}
+		logger.Info(ctx, "Found Parent Entity Contract : %s", entityCF.ContractName)
+	}
+
+	// Verify operator entity contract
+	if len(cf.OperatorEntityContract) > 0 {
+		ra, err := bitcoin.DecodeRawAddress(cf.OperatorEntityContract)
+		if err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Operator entity contract address invalid : %s", err))
+		}
+
+		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
+		if err != nil {
+			if errors.Cause(err) == contract.ErrNotFound {
+				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+					"Operator entity contract not found")
+			}
+			return errors.Wrap(err, "fetch operator entity contract formation")
+		}
+		logger.Info(ctx, "Found Operator Entity Contract : %s", entityCF.ContractName)
+	}
+
 	// Check admin identity oracle signatures
 	for _, adminCert := range cf.AdminIdentityCertificates {
 		if err := validateContractAmendOracleSig(ctx, c.MasterDB, cf, adminCert, c.Headers,
 			c.Config.IsTest); err != nil {
 			node.LogVerbose(ctx, "New admin identity signature invalid : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
+		}
+	}
+
+	// Check any oracle entity contracts
+	for _, oracle := range cf.Oracles {
+		ra, err := bitcoin.DecodeRawAddress(oracle.EntityContract)
+		if err != nil {
+			node.LogWarn(ctx, "Invalid oracle entity address : %s", err)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Invalid oracle entity address : %s", err))
+		}
+		if _, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest); err != nil {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Oracle entity address : %s", err))
 		}
 	}
 
@@ -779,7 +908,7 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 	}
 
 	addresses := make([]bitcoin.RawAddress, 0, 2)
-	entities := make([]*actions.EntityField, 0, 2)
+	entities := make([]interface{}, 0, 2)
 
 	adminAddress, err := bitcoin.DecodeRawAddress(cf.AdminAddress)
 	if err != nil {
@@ -787,7 +916,18 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 	}
 
 	addresses = append(addresses, adminAddress)
-	entities = append(entities, cf.Issuer)
+
+	if len(cf.EntityContract) > 0 {
+		// Use parent entity contract address in signature instead of entity structure.
+		entityRA, err := bitcoin.DecodeRawAddress(cf.EntityContract)
+		if err != nil {
+			return errors.Wrap(err, "entity address")
+		}
+
+		entities = append(entities, entityRA)
+	} else {
+		entities = append(entities, cf.Issuer)
+	}
 
 	if len(cf.OperatorAddress) != 0 {
 		operatorAddress, err := bitcoin.DecodeRawAddress(cf.OperatorAddress)
@@ -797,15 +937,15 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 
 		addresses = append(addresses, operatorAddress)
 
-		operatorContract, err := contract.FetchContractFormation(ctx, dbConn, operatorAddress,
-			isTest)
+		operatorRA, err := bitcoin.DecodeRawAddress(cf.OperatorEntityContract)
 		if err != nil {
-			return errors.Wrap(err, "fetch operator")
+			return errors.Wrap(err, "operator entity address")
 		}
-		entities = append(entities, operatorContract.Issuer)
+
+		entities = append(entities, operatorRA)
 	}
 
-	sigHash, err := protocol.ContractOracleSigHash(ctx, addresses, entities, hash, 1)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, addresses, entities, hash, 1)
 	if err != nil {
 		return err
 	}
