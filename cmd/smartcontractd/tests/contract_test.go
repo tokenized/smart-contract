@@ -857,7 +857,7 @@ func contractListAmendment(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := bitcoin.WriteBase128VarInt(&buf, int(actions.OracleTypeAuthority)); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf, int(actions.ServiceTypeAuthorityOracle)); err != nil {
 		t.Fatalf("\t%s\tFailed to write oracle type : %s", tests.Failed, err)
 	}
 
@@ -925,9 +925,9 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
-	if ct.Oracles[1].OracleTypes[0] != actions.OracleTypeIdentity {
+	if ct.Oracles[1].OracleTypes[0] != actions.ServiceTypeIdentityOracle {
 		t.Fatalf("\t%s\tContract oracle 2 type 1 incorrect : %d != %d", tests.Failed,
-			ct.Oracles[1].OracleTypes[0], actions.OracleTypeIdentity)
+			ct.Oracles[1].OracleTypes[0], actions.ServiceTypeIdentityOracle)
 	}
 
 	t.Logf("\t%s\tVerified contract oracle 2 type 1 : %d", tests.Success, ct.Oracles[1].OracleTypes[0])
@@ -999,9 +999,9 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
-	if ct.Oracles[1].OracleTypes[0] != actions.OracleTypeAuthority {
+	if ct.Oracles[1].OracleTypes[0] != actions.ServiceTypeAuthorityOracle {
 		t.Fatalf("\t%s\tContract oracle 2 type 1 incorrect : %d != %d", tests.Failed,
-			ct.Oracles[1].OracleTypes[0], actions.OracleTypeAuthority)
+			ct.Oracles[1].OracleTypes[0], actions.ServiceTypeAuthorityOracle)
 	}
 
 	t.Logf("\t%s\tVerified contract oracle 2 type 1 : %d", tests.Success, ct.Oracles[1].OracleTypes[0])
@@ -1453,7 +1453,7 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name, agreement
 
 		Oracles: []*actions.OracleField{
 			&actions.OracleField{
-				OracleTypes:    []uint32{actions.OracleTypeIdentity},
+				OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 				EntityContract: oracleAddress.Bytes(),
 			},
 		},
@@ -1544,7 +1544,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agre
 
 		Oracles: []*actions.OracleField{
 			&actions.OracleField{
-				OracleTypes:    []uint32{actions.OracleTypeIdentity},
+				OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 				EntityContract: oracleAddress.Bytes(),
 			},
 		},
@@ -1642,11 +1642,11 @@ func mockUpContractWithPermissions(t testing.TB, ctx context.Context, name, agre
 
 		Oracles: []*actions.OracleField{
 			&actions.OracleField{
-				OracleTypes:    []uint32{actions.OracleTypeIdentity},
+				OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 				EntityContract: oracle1Address.Bytes(),
 			},
 			&actions.OracleField{
-				OracleTypes:    []uint32{actions.OracleTypeIdentity},
+				OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 				EntityContract: oracle2Address.Bytes(),
 			},
 		},
@@ -1698,7 +1698,7 @@ func mockIdentityContract(t testing.TB, ctx context.Context, key bitcoin.Key,
 		ContractFee: 1000,
 		Services: []*actions.ServiceField{
 			&actions.ServiceField{
-				Type:      actions.OracleTypeIdentity,
+				Type:      actions.ServiceTypeIdentityOracle,
 				URL:       "tokenized.com/identity",
 				PublicKey: publicKey.Bytes(),
 			},

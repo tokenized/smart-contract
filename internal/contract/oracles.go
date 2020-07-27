@@ -22,7 +22,7 @@ func ExpandOracles(ctx context.Context, dbConn *db.DB, c *state.Contract, isTest
 	for _, oracle := range c.Oracles {
 		isIdentity := false
 		for _, t := range oracle.OracleTypes {
-			if t == actions.OracleTypeIdentity {
+			if t == actions.ServiceTypeIdentityOracle {
 				isIdentity = true
 				break
 			}
@@ -46,7 +46,7 @@ func ExpandOracles(ctx context.Context, dbConn *db.DB, c *state.Contract, isTest
 		var url string
 		var publicKey bitcoin.PublicKey
 		for _, service := range cf.Services {
-			if service.Type == actions.OracleTypeIdentity {
+			if service.Type == actions.ServiceTypeIdentityOracle {
 				found = true
 				url = service.URL
 				publicKey, err = bitcoin.PublicKeyFromBytes(service.PublicKey)
@@ -75,7 +75,7 @@ func updateExpandedOracles(ctx context.Context, ra bitcoin.RawAddress, cf *actio
 	isIdentity := false
 	serviceIndex := 0
 	for i, service := range cf.Services {
-		if service.Type == actions.OracleTypeIdentity {
+		if service.Type == actions.ServiceTypeIdentityOracle {
 			isIdentity = true
 			serviceIndex = i
 			break

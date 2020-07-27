@@ -286,7 +286,7 @@ func createEntityContract(t *testing.T) {
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 				Services: []*actions.ServiceField{
 					&actions.ServiceField{
-						Type:      actions.OracleTypeIdentity,
+						Type:      actions.ServiceTypeIdentityOracle,
 						PublicKey: oracleKey.Key.PublicKey().Bytes(),
 					},
 				},
@@ -302,7 +302,7 @@ func createEntityContract(t *testing.T) {
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 				Services: []*actions.ServiceField{
 					&actions.ServiceField{
-						Type:      actions.OracleTypeIdentity,
+						Type:      actions.ServiceTypeIdentityOracle,
 						PublicKey: []byte{0x03, 0x00, 0xff, 0x1d},
 					},
 				},
@@ -428,7 +428,7 @@ func identityContracts(t *testing.T) {
 				EntityContract: test.Contract2Key.Address.Bytes(),
 				Oracles: []*actions.OracleField{
 					&actions.OracleField{
-						OracleTypes:    []uint32{actions.OracleTypeIdentity},
+						OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 						EntityContract: idAddress.Bytes(),
 					},
 				},
@@ -446,7 +446,7 @@ func identityContracts(t *testing.T) {
 				EntityContract: test.Contract2Key.Address.Bytes(),
 				Oracles: []*actions.OracleField{
 					&actions.OracleField{
-						OracleTypes:    []uint32{actions.OracleTypeIdentity},
+						OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 						EntityContract: idAddress.Bytes(),
 					},
 				},
@@ -464,7 +464,7 @@ func identityContracts(t *testing.T) {
 				EntityContract: test.Contract2Key.Address.Bytes(),
 				Oracles: []*actions.OracleField{
 					&actions.OracleField{
-						OracleTypes:    []uint32{actions.OracleTypeAuthority},
+						OracleTypes:    []uint32{actions.ServiceTypeAuthorityOracle},
 						EntityContract: idAddress.Bytes(),
 					},
 				},

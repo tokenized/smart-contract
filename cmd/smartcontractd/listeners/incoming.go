@@ -364,7 +364,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 				break
 			}
 			for _, t := range oracle.OracleTypes {
-				if t == actions.OracleTypeIdentity {
+				if t == actions.ServiceTypeIdentityOracle {
 					identityFound = true
 					break
 				}
@@ -388,7 +388,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	if len(ct.Oracles[assetReceiver.OracleIndex].OracleTypes) != 0 {
 		identityFound := false
 		for _, t := range ct.Oracles[assetReceiver.OracleIndex].OracleTypes {
-			if t == actions.OracleTypeIdentity {
+			if t == actions.ServiceTypeIdentityOracle {
 				identityFound = true
 				break
 			}

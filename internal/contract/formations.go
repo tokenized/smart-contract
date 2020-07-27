@@ -82,7 +82,7 @@ func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAd
 
 func GetIdentityOracleKey(cf *actions.ContractFormation) (bitcoin.PublicKey, error) {
 	for _, service := range cf.Services {
-		if service.Type == actions.OracleTypeIdentity {
+		if service.Type == actions.ServiceTypeIdentityOracle {
 			return bitcoin.PublicKeyFromBytes(service.PublicKey)
 		}
 	}
