@@ -1714,3 +1714,38 @@ func mockIdentityContract(t testing.TB, ctx context.Context, key bitcoin.Key,
 		t.Fatalf("Failed to save identity contract address : %s", err)
 	}
 }
+
+func mockOperatorContract(t testing.TB, ctx context.Context, key bitcoin.Key,
+	publicKey bitcoin.PublicKey, issuerType string, issuerRole uint32, issuerName string) {
+
+	cf := &actions.ContractFormation{
+		ContractType: actions.ContractTypeEntity,
+		ContractName: "Test ContractOperator",
+		Issuer: &actions.EntityField{
+			Type: issuerType,
+			Administration: []*actions.AdministratorField{
+				&actions.AdministratorField{
+					Type: issuerRole,
+					Name: issuerName,
+				},
+			},
+		},
+		ContractFee: 1000,
+		Services: []*actions.ServiceField{
+			&actions.ServiceField{
+				Type:      actions.ServiceTypeContractOperator,
+				URL:       "tokenized.com/contracts",
+				PublicKey: publicKey.Bytes(),
+			},
+		},
+	}
+
+	ra, err := key.RawAddress()
+	if err != nil {
+		t.Fatalf("Failed to create operator contract address : %s", err)
+	}
+
+	if err := contract.SaveContractFormation(ctx, test.MasterDB, ra, cf, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("Failed to save operator contract address : %s", err)
+	}
+}

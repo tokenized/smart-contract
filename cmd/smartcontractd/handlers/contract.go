@@ -110,6 +110,20 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 			return errors.Wrap(err, "fetch operator entity contract formation")
 		}
 		logger.Info(ctx, "Found Operator Entity Contract : %s", entityCF.ContractName)
+
+		// Check service type
+		found := false
+		for _, service := range entityCF.Services {
+			if service.Type == actions.ServiceTypeContractOperator {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				"Contract operator service type not found for contract")
+		}
 	}
 
 	if len(msg.MasterAddress) > 0 {
