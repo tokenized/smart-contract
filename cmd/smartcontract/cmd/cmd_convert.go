@@ -32,6 +32,19 @@ var cmdConvert = &cobra.Command{
 			return nil
 		}
 
+		b, err := hex.DecodeString(args[0])
+		if err == nil {
+			if len(b) == 32 {
+				// Reverse hash
+				fmt.Printf("Reverse hash : %x\n", reverse32(b))
+				return nil
+			} else if len(b) == 20 {
+				// Reverse hash
+				fmt.Printf("Reverse hash : %x\n", reverse20(b))
+				return nil
+			}
+		}
+
 		key, err := bitcoin.KeyFromStr(args[0])
 		if err == nil {
 			fmt.Printf("Public key : %s\n", key.PublicKey().String())
@@ -115,4 +128,24 @@ var cmdConvert = &cobra.Command{
 }
 
 func init() {
+}
+
+func reverse32(h []byte) []byte {
+	r := make([]byte, 32)
+	i := 31
+	for _, b := range h[:] {
+		r[i] = b
+		i--
+	}
+	return r
+}
+
+func reverse20(h []byte) []byte {
+	r := make([]byte, 20)
+	i := 19
+	for _, b := range h[:] {
+		r[i] = b
+		i--
+	}
+	return r
 }

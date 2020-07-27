@@ -99,7 +99,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		TransferTxId: itx.Hash[:],
 	}
 
-	ct, err := contract.Retrieve(ctx, t.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, t.MasterDB, rk.Address, t.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -307,14 +307,9 @@ func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField, itx 
 }
 
 // buildSettlementTx builds the tx for a settlement action.
-func buildSettlementTx(ctx context.Context,
-	masterDB *db.DB,
-	config *node.Config,
-	transferTx *inspector.Transaction,
-	transfer *actions.Transfer,
-	settlementRequest *messages.SettlementRequest,
-	contractBalance uint64,
-	rk *wallet.Key) (*txbuilder.TxBuilder, error) {
+func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config,
+	transferTx *inspector.Transaction, transfer *actions.Transfer,
+	settlementRequest *messages.SettlementRequest, contractBalance uint64, rk *wallet.Key) (*txbuilder.TxBuilder, error) {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
 	defer span.End()
 
@@ -456,7 +451,7 @@ func buildSettlementTx(ctx context.Context,
 	}
 
 	// Add this contract's fee output
-	ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, masterDB, rk.Address, config.IsTest)
 	if err != nil {
 		return settleTx, errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -513,7 +508,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 	dataAdded := false
 
-	ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, masterDB, rk.Address, config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -616,7 +611,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
 			}
 
-			if transferTx.Inputs[sender.Index].Address.Equal(ct.AdministrationAddress) {
+			if transferTx.Inputs[sender.Index].Address.Equal(ct.AdminAddress) {
 				fromAdministration += sender.Quantity
 			} else {
 				fromNonAdministration += sender.Quantity
@@ -711,7 +706,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					assetOffset, receiverOffset, address.String())
 			}
 
-			if receiverAddress.Equal(ct.AdministrationAddress) {
+			if receiverAddress.Equal(ct.AdminAddress) {
 				toAdministration += receiver.Quantity
 			} else {
 				toNonAdministration += receiver.Quantity
@@ -1019,7 +1014,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	}
 
 	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])
-	ct, err := contract.Retrieve(ctx, t.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, t.MasterDB, rk.Address, t.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -1253,14 +1248,14 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	}
 
 	if refundBalance > balance {
-		ct, err := contract.Retrieve(ctx, masterDB, rk.Address)
+		ct, err := contract.Retrieve(ctx, masterDB, rk.Address, config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, "Failed to retrieve contract")
 		}
 
 		// Funding not enough to refund everyone, so don't refund to anyone. Send it to the
 		//   administration to hold.
-		w.ClearRejectOutputValues(ct.AdministrationAddress)
+		w.ClearRejectOutputValues(ct.AdminAddress)
 	}
 
 	return node.RespondRejectText(ctx, w, transferTx, rk, code, text)

@@ -7,7 +7,7 @@ import (
 
 // NewAsset defines what we require when creating a Asset record.
 type NewAsset struct {
-	AdministrationAddress bitcoin.RawAddress `json:"AdministrationAddress,omitempty"`
+	AdminAddress bitcoin.RawAddress `json:"AdminAddress,omitempty"`
 
 	Timestamp protocol.Timestamp `json:"Timestamp,omitempty"`
 

@@ -8,6 +8,8 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/wire"
+	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 // Filters for transactions with tokenized.com op return scripts.
@@ -66,6 +68,13 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 	// Check if relevant to contract
 	for _, output := range tx.TxOut {
+		// Check for C2
+		action, err := protocol.Deserialize(output.PkScript, filter.isTest)
+		if err == nil && action.Code() == actions.CodeContractFormation {
+			return true
+		}
+
+		// Check for filtered pub keys
 		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
 		if err != nil {
 			continue

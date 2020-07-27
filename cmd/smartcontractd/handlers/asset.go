@@ -51,7 +51,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Contract
-	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -78,7 +78,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Verify administration is sender of tx.
-	if !itx.Inputs[0].Address.Equal(ct.AdministrationAddress) {
+	if !itx.Inputs[0].Address.Equal(ct.AdminAddress) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			w.Config.Net)
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
@@ -174,7 +174,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Add the asset code now rather than when the asset creation is processed in case another asset
 	//   definition is received before then.
-	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, v.Now); err != nil {
+	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, a.Config.IsTest, v.Now); err != nil {
 		return err
 	}
 
@@ -201,7 +201,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Asset
-	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -342,8 +342,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		// Check administration balance for token quantity reductions. Administration has to hold
 		//   any tokens being "burned".
-		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
-			ct.AdministrationAddress, v.Now)
+		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode, ct.AdminAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
@@ -418,7 +417,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			itx.Inputs[0].Address.Bytes())
 	}
 
-	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -483,11 +482,12 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			return err
 		}
 
-		na.AdministrationAddress = ct.AdministrationAddress
+		na.AdminAddress = ct.AdminAddress
 
 		// Add asset code if it hasn't been added yet. This will not add duplicates. This is
 		//   required to handle the recovery case when the request will not be reprocessed.
-		if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, v.Now); err != nil {
+		if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, a.Config.IsTest,
+			v.Now); err != nil {
 			return err
 		}
 
@@ -498,7 +498,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 		// Update administration balance
 		h, err := holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
-			ct.AdministrationAddress, v.Now)
+			ct.AdminAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
@@ -528,7 +528,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					OwnerMemberAsset: assetCode,
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			}
@@ -536,7 +537,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: assetCode,
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			}
@@ -551,31 +553,38 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
 			ua.AssetPermissions = &msg.AssetPermissions
-			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode, *ua.AssetPermissions)
+			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode,
+				*ua.AssetPermissions)
 		}
 		if as.TransfersPermitted != msg.TransfersPermitted {
 			ua.TransfersPermitted = &msg.TransfersPermitted
-			node.Log(ctx, "Updating asset transfers permitted (%x) : %t", msg.AssetCode, *ua.TransfersPermitted)
+			node.Log(ctx, "Updating asset transfers permitted (%x) : %t", msg.AssetCode,
+				*ua.TransfersPermitted)
 		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
-			node.Log(ctx, "Updating asset enforcement orders permitted (%x) : %t", msg.AssetCode, *ua.EnforcementOrdersPermitted)
+			node.Log(ctx, "Updating asset enforcement orders permitted (%x) : %t", msg.AssetCode,
+				*ua.EnforcementOrdersPermitted)
 		}
 		if as.VoteMultiplier != msg.VoteMultiplier {
 			ua.VoteMultiplier = &msg.VoteMultiplier
-			node.Log(ctx, "Updating asset vote multiplier (%x) : %02x", msg.AssetCode, *ua.VoteMultiplier)
+			node.Log(ctx, "Updating asset vote multiplier (%x) : %02x", msg.AssetCode,
+				*ua.VoteMultiplier)
 		}
 		if as.AdministrationProposal != msg.AdministrationProposal {
 			ua.AdministrationProposal = &msg.AdministrationProposal
-			node.Log(ctx, "Updating asset administration proposal (%x) : %t", msg.AssetCode, *ua.AdministrationProposal)
+			node.Log(ctx, "Updating asset administration proposal (%x) : %t", msg.AssetCode,
+				*ua.AdministrationProposal)
 		}
 		if as.HolderProposal != msg.HolderProposal {
 			ua.HolderProposal = &msg.HolderProposal
-			node.Log(ctx, "Updating asset holder proposal (%x) : %t", msg.AssetCode, *ua.HolderProposal)
+			node.Log(ctx, "Updating asset holder proposal (%x) : %t", msg.AssetCode,
+				*ua.HolderProposal)
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			node.Log(ctx, "Updating asset modification governance (%x) : %d", msg.AssetCode, *ua.AssetModificationGovernance)
+			node.Log(ctx, "Updating asset modification governance (%x) : %d", msg.AssetCode,
+				*ua.AssetModificationGovernance)
 		}
 
 		var h *state.Holding
@@ -585,7 +594,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			node.Log(ctx, "Updating asset token quantity %d : %x", *ua.TokenQty, msg.AssetCode)
 
 			h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
-				ct.AdministrationAddress, v.Now)
+				ct.AdminAddress, v.Now)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get admin holding")
 			}
@@ -669,7 +678,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: assetCode,
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			} else if membership.MembershipClass != "Administrator" && assetCode.Equal(ct.AdminMemberAsset) {
@@ -677,7 +687,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: &protocol.AssetCode{}, // zero asset code
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			}
@@ -687,7 +698,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					OwnerMemberAsset: assetCode,
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			} else if membership.MembershipClass != "Owner" && assetCode.Equal(ct.OwnerMemberAsset) {
@@ -695,7 +707,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				updateContract := &contract.UpdateContract{
 					OwnerMemberAsset: &protocol.AssetCode{}, // zero asset code
 				}
-				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract, v.Now); err != nil {
+				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
+					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
 			}

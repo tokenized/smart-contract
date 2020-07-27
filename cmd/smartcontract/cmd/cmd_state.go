@@ -39,7 +39,7 @@ var cmdState = &cobra.Command{
 		masterDB := bootstrap.NewMasterDB(ctx, cfg)
 
 		return loadContract(ctx, c, masterDB, address,
-			bitcoin.NetworkFromString(cfg.Bitcoin.Network))
+			bitcoin.NetworkFromString(cfg.Bitcoin.Network), cfg.Contract.IsTest)
 	},
 }
 
@@ -47,9 +47,10 @@ func loadContract(ctx context.Context,
 	cmd *cobra.Command,
 	db *db.DB,
 	address bitcoin.Address,
-	net bitcoin.Network) error {
+	net bitcoin.Network,
+	isTest bool) error {
 
-	c, err := contract.Fetch(ctx, db, bitcoin.NewRawAddressFromAddress(address))
+	c, err := contract.Fetch(ctx, db, bitcoin.NewRawAddressFromAddress(address), isTest)
 	if err != nil {
 		return err
 	}

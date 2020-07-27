@@ -32,19 +32,10 @@ func freezeOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 300)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address)
 
@@ -73,6 +64,7 @@ func freezeOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
@@ -120,19 +112,10 @@ func freezeAuthorityOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 300)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address)
 
@@ -224,19 +207,11 @@ func thawOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 300)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 300)
+
 	freezeTxId, err := mockUpFreeze(ctx, t, userKey.Address, 200)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up freeze : %v", tests.Failed, err)
@@ -314,19 +289,10 @@ func confiscateOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 250)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100007, issuerKey.Address)
 
@@ -354,6 +320,7 @@ func confiscateOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(3200, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
@@ -419,19 +386,10 @@ func reconcileOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	err := mockUpContract(ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up contract : %v", tests.Failed, err)
-	}
-	err = mockUpAsset(ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up asset : %v", tests.Failed, err)
-	}
-	err = mockUpHolding(ctx, userKey.Address, 150)
-	if err != nil {
-		t.Fatalf("\t%s\tFailed to mock up holding : %v", tests.Failed, err)
-	}
+	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 150)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100008, issuerKey.Address)
 
@@ -461,6 +419,7 @@ func reconcileOrder(t *testing.T) {
 	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(752000, script))
 
 	// Data output
+	var err error
 	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)

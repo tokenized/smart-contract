@@ -26,12 +26,12 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, isTest bool) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
 	// Find contract in storage
-	contract, err := Fetch(ctx, dbConn, contractAddress)
+	contract, err := Fetch(ctx, dbConn, contractAddress, isTest)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 
 // Create the contract
 func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, nu *NewContract,
-	now protocol.Timestamp) error {
+	isTest bool, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
@@ -62,24 +62,24 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if contract.VotingSystems == nil {
 		contract.VotingSystems = []*actions.VotingSystemField{}
 	}
-	if err := ExpandOracles(ctx, &contract); err != nil {
+	if err := ExpandOracles(ctx, dbConn, &contract, isTest); err != nil {
 		return err
 	}
 
-	return Save(ctx, dbConn, &contract)
+	return Save(ctx, dbConn, &contract, isTest)
 }
 
 // Update the contract
 func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	upd *UpdateContract, now protocol.Timestamp) error {
+	upd *UpdateContract, isTest bool, now protocol.Timestamp) error {
 
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, contractAddress)
+	c, err := Fetch(ctx, dbConn, contractAddress, isTest)
 	if err != nil {
-		return ErrNotFound
+		return errors.Wrap(err, "fetch")
 	}
 
 	// Update fields
@@ -90,8 +90,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.Timestamp = *upd.Timestamp
 	}
 
-	if upd.AdministrationAddress != nil {
-		c.AdministrationAddress = *upd.AdministrationAddress
+	if upd.AdminAddress != nil {
+		c.AdminAddress = *upd.AdminAddress
 	}
 	if upd.OperatorAddress != nil {
 		c.OperatorAddress = *upd.OperatorAddress
@@ -104,56 +104,26 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.OwnerMemberAsset = *upd.OwnerMemberAsset
 	}
 
-	if upd.ContractName != nil {
-		c.ContractName = *upd.ContractName
-	}
 	if upd.ContractType != nil {
 		c.ContractType = *upd.ContractType
-	}
-	if upd.BodyOfAgreementType != nil {
-		c.BodyOfAgreementType = *upd.BodyOfAgreementType
-	}
-	if upd.BodyOfAgreement != nil {
-		c.BodyOfAgreement = *upd.BodyOfAgreement
-	}
-	if upd.SupportingDocs != nil {
-		c.SupportingDocs = *upd.SupportingDocs
-	}
-	if upd.GoverningLaw != nil {
-		c.GoverningLaw = *upd.GoverningLaw
-	}
-	if upd.Jurisdiction != nil {
-		c.Jurisdiction = *upd.Jurisdiction
-	}
-	if upd.ContractExpiration != nil {
-		c.ContractExpiration = *upd.ContractExpiration
-	}
-	if upd.ContractURI != nil {
-		c.ContractURI = *upd.ContractURI
-	}
-	if upd.Issuer != nil {
-		c.Issuer = upd.Issuer
-	}
-	if upd.IssuerLogoURL != nil {
-		c.IssuerLogoURL = *upd.IssuerLogoURL
-	}
-	if upd.ContractOperator != nil {
-		c.ContractOperator = upd.ContractOperator
-	}
-	if upd.ContractPermissions != nil {
-		c.ContractPermissions = *upd.ContractPermissions
 	}
 	if upd.ContractFee != nil {
 		c.ContractFee = *upd.ContractFee
 	}
+
+	if upd.ContractExpiration != nil {
+		c.ContractExpiration = *upd.ContractExpiration
+	}
+
+	if upd.RestrictedQtyAssets != nil {
+		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
+	}
+
 	if upd.VotingSystems != nil {
 		c.VotingSystems = *upd.VotingSystems
 		if c.VotingSystems == nil {
 			c.VotingSystems = []*actions.VotingSystemField{}
 		}
-	}
-	if upd.RestrictedQtyAssets != nil {
-		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
 	}
 	if upd.AdministrationProposal != nil {
 		c.AdministrationProposal = *upd.AdministrationProposal
@@ -161,14 +131,15 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.HolderProposal != nil {
 		c.HolderProposal = *upd.HolderProposal
 	}
+
 	if upd.Oracles != nil {
 		c.Oracles = *upd.Oracles
 		if c.Oracles == nil {
 			c.Oracles = []*actions.OracleField{}
 		}
 
-		if err := ExpandOracles(ctx, c); err != nil {
-			return err
+		if err := ExpandOracles(ctx, dbConn, c, isTest); err != nil {
+			return errors.Wrap(err, "expand oracles")
 		}
 	}
 	if upd.FreezePeriod != nil {
@@ -177,18 +148,21 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 
 	c.UpdatedAt = now
 
-	return Save(ctx, dbConn, c)
+	if err := Save(ctx, dbConn, c, isTest); err != nil {
+		return errors.Wrap(err, "save")
+	}
+	return nil
 }
 
 // Move marks the contract as moved and copies the data to the new address.
 func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	newContractAddress bitcoin.RawAddress, now protocol.Timestamp) error {
+	newContractAddress bitcoin.RawAddress, isTest bool, now protocol.Timestamp) error {
 
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Move")
 	defer span.End()
 
 	// Find contract
-	c, err := Fetch(ctx, dbConn, contractAddress)
+	c, err := Fetch(ctx, dbConn, contractAddress, isTest)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -214,10 +188,10 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 
 	c.MovedTo = newContractAddress
 
-	if err = Save(ctx, dbConn, c); err != nil {
+	if err = Save(ctx, dbConn, c, isTest); err != nil {
 		return err
 	}
-	if err = Save(ctx, dbConn, &newContract); err != nil {
+	if err = Save(ctx, dbConn, &newContract, isTest); err != nil {
 		return err
 	}
 
@@ -243,12 +217,12 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 // AddAssetCode adds an asset code to a contract. If the asset code is already there, then it will
 //   not add it again.
 func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, now protocol.Timestamp) error {
+	assetCode *protocol.AssetCode, isTest bool, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
 	// Find contract
-	ct, err := Fetch(ctx, dbConn, contractAddress)
+	ct, err := Fetch(ctx, dbConn, contractAddress, isTest)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -262,7 +236,7 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.Ra
 	ct.AssetCodes = append(ct.AssetCodes, assetCode)
 	ct.UpdatedAt = now
 
-	if err := Save(ctx, dbConn, ct); err != nil {
+	if err := Save(ctx, dbConn, ct, isTest); err != nil {
 		return errors.Wrap(err, "Failed to add asset to contract")
 	}
 
@@ -358,7 +332,7 @@ func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddr
 	if address.IsEmpty() {
 		return false
 	}
-	if !ct.AdministrationAddress.IsEmpty() && ct.AdministrationAddress.Equal(address) {
+	if !ct.AdminAddress.IsEmpty() && ct.AdminAddress.Equal(address) {
 		return true
 	}
 	if !ct.OperatorAddress.IsEmpty() && ct.OperatorAddress.Equal(address) {

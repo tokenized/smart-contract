@@ -47,7 +47,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
 	}
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -130,7 +130,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -253,7 +253,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -363,7 +363,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -540,7 +540,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -696,7 +696,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 		return fmt.Errorf("Freeze not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -722,7 +722,8 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 			// Contract wide freeze
 			ts := protocol.NewTimestamp(msg.FreezePeriod)
 			uc := contract.UpdateContract{FreezePeriod: &ts}
-			if err := contract.Update(ctx, e.MasterDB, rk.Address, &uc, protocol.NewTimestamp(msg.Timestamp)); err != nil {
+			if err := contract.Update(ctx, e.MasterDB, rk.Address, &uc, e.Config.IsTest,
+				protocol.NewTimestamp(msg.Timestamp)); err != nil {
 				return errors.Wrap(err, "Failed to update contract freeze period")
 			}
 		}
@@ -732,7 +733,8 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 			ts := protocol.NewTimestamp(msg.FreezePeriod)
 			ua := asset.UpdateAsset{FreezePeriod: &ts}
 			if err := asset.Update(ctx, e.MasterDB, rk.Address,
-				protocol.AssetCodeFromBytes(msg.AssetCode), &ua, protocol.NewTimestamp(msg.Timestamp)); err != nil {
+				protocol.AssetCodeFromBytes(msg.AssetCode), &ua,
+				protocol.NewTimestamp(msg.Timestamp)); err != nil {
 				return errors.Wrap(err, "Failed to update asset freeze period")
 			}
 		} else {
@@ -824,7 +826,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Thaw not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -863,7 +865,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 			// Contract wide freeze
 			var zeroTimestamp protocol.Timestamp
 			uc := contract.UpdateContract{FreezePeriod: &zeroTimestamp}
-			if err := contract.Update(ctx, e.MasterDB, rk.Address, &uc,
+			if err := contract.Update(ctx, e.MasterDB, rk.Address, &uc, e.Config.IsTest,
 				protocol.NewTimestamp(msg.Timestamp)); err != nil {
 				return errors.Wrap(err, "Failed to clear contract freeze period")
 			}
@@ -873,8 +875,9 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 			// Asset wide freeze
 			var zeroTimestamp protocol.Timestamp
 			ua := asset.UpdateAsset{FreezePeriod: &zeroTimestamp}
-			if err := asset.Update(ctx, e.MasterDB, rk.Address, protocol.AssetCodeFromBytes(freeze.AssetCode),
-				&ua, protocol.NewTimestamp(msg.Timestamp)); err != nil {
+			if err := asset.Update(ctx, e.MasterDB, rk.Address,
+				protocol.AssetCodeFromBytes(freeze.AssetCode), &ua,
+				protocol.NewTimestamp(msg.Timestamp)); err != nil {
 				return errors.Wrap(err, "Failed to clear asset freeze period")
 			}
 		} else {
@@ -968,7 +971,7 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Confiscation not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
@@ -1087,7 +1090,7 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 		return fmt.Errorf("Reconciliation not from contract : %s", address.String())
 	}
 
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address)
+	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}

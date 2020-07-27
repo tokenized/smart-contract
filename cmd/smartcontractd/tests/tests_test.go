@@ -35,7 +35,9 @@ var user2Key *wallet.Key
 var issuerKey *wallet.Key
 var issuer2Key *wallet.Key
 var oracleKey *wallet.Key
+var oracle2Key *wallet.Key
 var authorityKey *wallet.Key
+var operatorKey *wallet.Key
 
 var testTokenQty uint64
 var testToken2Qty uint64
@@ -117,7 +119,17 @@ func testMain(m *testing.M) int {
 		panic(err)
 	}
 
+	oracle2Key, err = tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		panic(err)
+	}
+
 	authorityKey, err = tests.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		panic(err)
+	}
+
+	operatorKey, err = tests.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
 		panic(err)
 	}
@@ -194,6 +206,12 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 		t.Fatalf("\t%s\t%s Response doesn't contain tokenized op return", tests.Failed, responseCode)
 	}
 	if responseMsg.Code() != responseCode {
+		if responseMsg.Code() == actions.CodeRejection {
+			reject, ok := responseMsg.(*actions.Rejection)
+			if ok {
+				t.Errorf("Reject %+v", reject)
+			}
+		}
 		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Code(), responseCode)
 	}
 
