@@ -52,10 +52,11 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 			Signature    bitcoin.Signature `json:"signature"`
 			BlockHeight  uint32            `json:"block_height"`
 			BlockHash    bitcoin.Hash32    `json:"block_hash"`
+			Expiration   uint64            `json:"expiration"`
 		}
 	}
 
-	if err := post(o.BaseURL+"/transfer/approve", request, &response); err != nil {
+	if err := post(o.URL+"/transfer/approve", request, &response); err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
 	}
 
@@ -66,6 +67,7 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 		OracleIndex:           uint32(oracleIndex),
 		OracleConfirmationSig: response.Data.Signature.Bytes(),
 		OracleSigBlockHeight:  response.Data.BlockHeight,
+		OracleSigExpiry:       response.Data.Expiration,
 	}
 
 	if !response.Data.Approved {
@@ -112,23 +114,23 @@ func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contra
 
 	// Check for approved signature
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, blockHash, 1)
+		receiveAddress, blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.OracleKey) {
+	if signature.Verify(sigHash, o.PublicKey) {
 		return nil
 	}
 
 	// Check for not approved signature
 	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, blockHash, 0)
+		receiveAddress, blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.OracleKey) {
+	if signature.Verify(sigHash, o.PublicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}
@@ -168,23 +170,23 @@ func (o *Oracle) ValidateReceiveHash(ctx context.Context, blockHash bitcoin.Hash
 
 	// Check for approved signature
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, &blockHash, 1)
+		receiveAddress, &blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.OracleKey) {
+	if signature.Verify(sigHash, o.PublicKey) {
 		return nil
 	}
 
 	// Check for not approved signature
 	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, &blockHash, 0)
+		receiveAddress, &blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.OracleKey) {
+	if signature.Verify(sigHash, o.PublicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}

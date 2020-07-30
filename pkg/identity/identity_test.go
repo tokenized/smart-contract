@@ -26,10 +26,12 @@ func TestRegister(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetOracle(ctx, url, key)
+		or, err := GetOracle(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}
+
+		or.SetClientKey(key)
 
 		entity := actions.EntityField{
 			Name: "Test",
@@ -58,10 +60,12 @@ func TestApproveReceive(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetOracle(ctx, url, key)
+		or, err := GetOracle(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}
+
+		or.SetClientKey(key)
 
 		entity := actions.EntityField{
 			Name: "Test",

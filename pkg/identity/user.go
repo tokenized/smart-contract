@@ -2,18 +2,21 @@ package identity
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 
 	"github.com/tokenized/pkg/bitcoin"
 
 	"github.com/tokenized/specification/dist/golang/actions"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
 // RegisterUser checks if a user for this entity exists with the identity oracle and if not
 //   registers a new user id.
 func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
-	xpubs []bitcoin.ExtendedKeys) (string, error) {
+	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
 
 	// Check for existing user for xpubs.
 	for _, xpub := range xpubs {
@@ -27,15 +30,15 @@ func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
 		// Look for 200 OK status with data
 		var response struct {
 			Data struct {
-				UserID string `json:"user_id"`
+				UserID uuid.UUID `json:"user_id"`
 			}
 		}
 
-		if err := post(o.BaseURL+"/oracle/user", request, &response); err != nil {
+		if err := post(o.URL+"/oracle/user", request, &response); err != nil {
 			if errors.Cause(err) == ErrNotFound {
 				continue
 			}
-			return "", errors.Wrap(err, "http post")
+			return uuid.UUID{}, errors.Wrap(err, "http post")
 		}
 
 		o.ClientID = response.Data.UserID
@@ -54,13 +57,13 @@ func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
 	// Look for 200 OK status with data
 	var response struct {
 		Data struct {
-			Status string `json:"status"`
-			UserID string `json:"user_id"`
+			Status string    `json:"status"`
+			UserID uuid.UUID `json:"user_id"`
 		}
 	}
 
-	if err := post(o.BaseURL+"/oracle/register", request, &response); err != nil {
-		return "", errors.Wrap(err, "http post")
+	if err := post(o.URL+"/oracle/register", request, &response); err != nil {
+		return uuid.UUID{}, errors.Wrap(err, "http post")
 	}
 
 	o.ClientID = response.Data.UserID
@@ -78,7 +81,7 @@ func (o *Oracle) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.Ex
 
 	// Add xpub to user using identity oracle endpoint.
 	request := struct {
-		UserID          string               `json:"user_id"`
+		UserID          uuid.UUID            `json:"user_id"`
 		XPubs           bitcoin.ExtendedKeys `json:"xpubs"`
 		RequiredSigners int                  `json:"required_signers"`
 		Signature       bitcoin.Signature    `json:"signature"` // hex signature of user id and xpub with users public key
@@ -88,15 +91,21 @@ func (o *Oracle) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.Ex
 		RequiredSigners: requiredSigners,
 	}
 
-	hash := bitcoin.DoubleSha256([]byte(request.UserID + request.XPubs.String()))
+	s := sha256.New()
+	s.Write(request.UserID[:])
+	s.Write(request.XPubs.Bytes())
+	if err := binary.Write(s, binary.LittleEndian, uint32(request.RequiredSigners)); err != nil {
+		return errors.Wrap(err, "hash signers")
+	}
+	hash := sha256.Sum256(s.Sum(nil))
 
 	var err error
-	request.Signature, err = o.ClientAuthKey.Sign(hash)
+	request.Signature, err = o.ClientAuthKey.Sign(hash[:])
 	if err != nil {
 		return errors.Wrap(err, "sign")
 	}
 
-	if err := post(o.BaseURL+"/oracle/addXPub", request, nil); err != nil {
+	if err := post(o.URL+"/oracle/addXPub", request, nil); err != nil {
 		return errors.Wrap(err, "http post")
 	}
 

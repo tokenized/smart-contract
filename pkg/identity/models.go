@@ -5,19 +5,18 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 
-	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/google/uuid"
 )
 
 type Oracle struct {
-	BaseURL string
-
 	// Oracle information
-	OracleKey    bitcoin.PublicKey
-	OracleEntity actions.EntityField
+	ContractAddress bitcoin.RawAddress // Address of oracle's contract entity.
+	URL             string
+	PublicKey       bitcoin.PublicKey
 
 	// Client information
+	ClientID      uuid.UUID   // User ID of client
 	ClientAuthKey bitcoin.Key // Key used to authorize/encrypt with oracle
-	ClientID      string      // User ID of client
 
 	// TODO Implement retry functionality --ce
 	// MaxRetries int

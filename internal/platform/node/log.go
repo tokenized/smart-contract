@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"io"
 	"strings"
 
 	"github.com/tokenized/pkg/logger"
@@ -12,40 +11,68 @@ import (
 	"github.com/tokenized/pkg/txbuilder"
 )
 
-func ContextWithDevelopmentLogger(ctx context.Context, writer io.Writer, format string) context.Context {
-	logConfig := logger.NewDevelopmentConfig()
-	logConfig.Main.SetWriter(writer)
-	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.Main.MinLevel = logger.LevelVerbose
+func ContextWithDevelopmentLogger(ctx context.Context, format string) context.Context {
+	var logConfig *logger.Config
+	if strings.ToUpper(format) == "TEXT" {
+		logConfig = logger.NewDevelopmentTextConfig()
+	} else {
+		logConfig = logger.NewDevelopmentConfig()
+	}
+
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
-
-	if strings.ToUpper(format) == "TEXT" {
-		logConfig.IsText = true
-	}
-
-	// Configure spynode logs
-	logConfig.SubSystems[spynode.SubSystem] = logger.NewDevelopmentSystemConfig()
-	logConfig.SubSystems[spynode.SubSystem].Format |= logger.IncludeSystem | logger.IncludeMicro
-	logConfig.SubSystems[spynode.SubSystem].MinLevel = logger.LevelVerbose
-	logConfig.SubSystems[spynode.SubSystem].SetWriter(writer)
+	logConfig.EnableSubSystem(spynode.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
 
-func ContextWithProductionLogger(ctx context.Context, writer io.Writer, format string) context.Context {
-	logConfig := logger.NewProductionConfig()
-	logConfig.Main.SetWriter(writer)
-	logConfig.Main.Format |= logger.IncludeSystem | logger.IncludeMicro
+func ContextWithDevelopmentFileLogger(ctx context.Context, logFileName string, format string) context.Context {
+	var logConfig *logger.Config
+	if strings.ToUpper(format) == "TEXT" {
+		logConfig = logger.NewDevelopmentTextConfig()
+	} else {
+		logConfig = logger.NewDevelopmentConfig()
+	}
+
+	logConfig.Main.AddFile(logFileName)
+	logConfig.EnableSubSystem(rpcnode.SubSystem)
+	logConfig.EnableSubSystem(txbuilder.SubSystem)
+	logConfig.EnableSubSystem(scheduler.SubSystem)
+	logConfig.EnableSubSystem(spynode.SubSystem)
+
+	return logger.ContextWithLogConfig(ctx, logConfig)
+}
+
+func ContextWithProductionLogger(ctx context.Context, format string) context.Context {
+	var logConfig *logger.Config
+	if strings.ToUpper(format) == "TEXT" {
+		logConfig = logger.NewDevelopmentTextConfig()
+	} else {
+		logConfig = logger.NewDevelopmentConfig()
+	}
+
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(spynode.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
 
+	return logger.ContextWithLogConfig(ctx, logConfig)
+}
+
+func ContextWithProductionFileLogger(ctx context.Context, logFileName string, format string) context.Context {
+	var logConfig *logger.Config
 	if strings.ToUpper(format) == "TEXT" {
-		logConfig.IsText = true
+		logConfig = logger.NewDevelopmentTextConfig()
+	} else {
+		logConfig = logger.NewDevelopmentConfig()
 	}
+
+	logConfig.Main.AddFile(logFileName)
+	logConfig.EnableSubSystem(rpcnode.SubSystem)
+	logConfig.EnableSubSystem(txbuilder.SubSystem)
+	logConfig.EnableSubSystem(spynode.SubSystem)
+	logConfig.EnableSubSystem(scheduler.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

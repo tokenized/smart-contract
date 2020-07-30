@@ -3,61 +3,66 @@ package identity
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/tokenized/pkg/bitcoin"
-
-	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/pkg/errors"
 )
 
 // GetOracle fetches oracle data from the URL.
-func GetOracle(ctx context.Context, baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
+func GetOracle(ctx context.Context, baseURL string) (*Oracle, error) {
 	result := &Oracle{
-		BaseURL:       baseURL,
-		ClientAuthKey: clientAuthKey,
+		URL: baseURL,
 	}
 
 	var response struct {
 		Data struct {
-			Entity    actions.EntityField `json:"entity"`
-			URL       string              `json:"url"`
-			PublicKey bitcoin.PublicKey   `json:"public_key"`
+			ContractAddress bitcoin.RawAddress `json:"contract_address"`
+			PublicKey       bitcoin.PublicKey  `json:"public_key"`
 		}
 	}
 
-	if err := get(result.BaseURL+"/oracle/id", &response); err != nil {
+	if err := get(result.URL+"/oracle/id", &response); err != nil {
 		return nil, errors.Wrap(err, "http get")
 	}
 
-	result.OracleEntity = response.Data.Entity
-	result.OracleKey = response.Data.PublicKey
+	result.ContractAddress = response.Data.ContractAddress
+	result.PublicKey = response.Data.PublicKey
 
 	return result, nil
 }
 
-// NewOracle creates an oracle from existing data.
-func NewOracle(baseURL string, oracleKey bitcoin.PublicKey, oracleEntity actions.EntityField,
-	clientID string, clientAuthKey bitcoin.Key) (*Oracle, error) {
+// NewOracle creates an oracle from specified data.
+func NewOracle(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*Oracle, error) {
 	return &Oracle{
-		BaseURL:       baseURL,
-		OracleKey:     oracleKey,
-		OracleEntity:  oracleEntity,
-		ClientID:      clientID,
-		ClientAuthKey: clientAuthKey,
+		ContractAddress: contractAddress,
+		URL:             url,
+		PublicKey:       publicKey,
 	}, nil
 }
 
-// GetOracleEntity returns the oracle's entity.
-func (o *Oracle) GetOracleEntity() actions.EntityField {
-	return o.OracleEntity
+// GetContractAddress returns the oracle's contract address.
+func (o *Oracle) GetContractAddress() bitcoin.RawAddress {
+	return o.ContractAddress
 }
 
-// GetOracleKey returns the oracle's public key.
-func (o *Oracle) GetOracleKey() bitcoin.PublicKey {
-	return o.OracleKey
+// GetURL returns the oracle's service URL.
+func (o *Oracle) GetURL() string {
+	return o.URL
 }
 
-// SetClientID sets the client's ID.
-func (o *Oracle) SetClientID(id string) {
+// GetPublicKey returns the oracle's public key.
+func (o *Oracle) GetPublicKey() bitcoin.PublicKey {
+	return o.PublicKey
+}
+
+// SetClientID sets the client's ID and authorization key.
+func (o *Oracle) SetClientID(id uuid.UUID, key bitcoin.Key) {
 	o.ClientID = id
+	o.ClientAuthKey = key
+}
+
+// SetClientKey sets the client's authorization key.
+func (o *Oracle) SetClientKey(key bitcoin.Key) {
+	o.ClientAuthKey = key
 }

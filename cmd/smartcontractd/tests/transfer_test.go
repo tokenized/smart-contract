@@ -424,6 +424,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 		b.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
 
+	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
+
 	requests := make([]*wire.MsgTx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	for i := 0; i < b.N; i++ {
@@ -448,7 +450,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-			testAssetCodes[0].Bytes(), userKey.Address, blockHash, 1)
+			testAssetCodes[0].Bytes(), userKey.Address, blockHash, expiry, 1)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -463,6 +465,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 			OracleSigAlgorithm:    1,
 			OracleConfirmationSig: oracleSig.Bytes(),
 			OracleSigBlockHeight:  uint32(blockHeight),
+			OracleSigExpiry:       expiry,
 		}
 		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 
@@ -2310,8 +2313,9 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
+	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, blockHash, 1)
+		testAssetCodes[0].Bytes(), userKey.Address, blockHash, expiry, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -2326,6 +2330,7 @@ func oracleTransfer(t *testing.T) {
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Bytes(),
 		OracleSigBlockHeight:  uint32(blockHeight),
+		OracleSigExpiry:       expiry,
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 
@@ -2486,8 +2491,9 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
+	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, blockHash, 0)
+		testAssetCodes[0].Bytes(), userKey.Address, blockHash, expiry, 0)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
@@ -2502,6 +2508,7 @@ func oracleTransferBad(t *testing.T) {
 		OracleSigAlgorithm:    1,
 		OracleConfirmationSig: oracleSig.Bytes(),
 		OracleSigBlockHeight:  uint32(blockHeight),
+		OracleSigExpiry:       expiry,
 	}
 	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
 

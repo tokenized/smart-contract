@@ -47,7 +47,7 @@ func (o *Oracle) ApproveEntityPublicKey(ctx context.Context, entity actions.Enti
 		}
 	}
 
-	if err := post(o.BaseURL+"/identity/verifyPubKey", request, &response); err != nil {
+	if err := post(o.URL+"/identity/verifyPubKey", request, &response); err != nil {
 		return ApprovedEntityPublicKey{}, errors.Wrap(err, "http post")
 	}
 
@@ -84,7 +84,7 @@ func (o *Oracle) ValidateEntityPublicKey(ctx context.Context, blocks BlockHashes
 		return errors.Wrap(err, "generate signature")
 	}
 
-	if !data.Signature.Verify(sigHash, o.OracleKey) {
+	if !data.Signature.Verify(sigHash, o.PublicKey) {
 		return errors.Wrap(ErrInvalidSignature, "validate signature")
 	}
 
