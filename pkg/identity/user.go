@@ -15,7 +15,7 @@ import (
 
 // RegisterUser checks if a user for this entity exists with the identity oracle and if not
 //   registers a new user id.
-func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
+func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityField,
 	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
 
 	// Check for existing user for xpubs.
@@ -51,7 +51,7 @@ func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
 		PublicKey bitcoin.PublicKey   `json:"public_key"` // hex compressed
 	}{
 		Entity:    entity,
-		PublicKey: o.ClientAuthKey.PublicKey(),
+		PublicKey: o.ClientKey.PublicKey(),
 	}
 
 	// Look for 200 OK status with data
@@ -72,7 +72,7 @@ func (o *Oracle) RegisterUser(ctx context.Context, entity actions.EntityField,
 
 // RegisterXPub checks if the xpub is already added to the identity user and if not adds it to the
 //   identity oracle.
-func (o *Oracle) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys,
+func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys,
 	requiredSigners int) error {
 
 	if len(o.ClientID) == 0 {
@@ -100,7 +100,7 @@ func (o *Oracle) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.Ex
 	hash := sha256.Sum256(s.Sum(nil))
 
 	var err error
-	request.Signature, err = o.ClientAuthKey.Sign(hash[:])
+	request.Signature, err = o.ClientKey.Sign(hash[:])
 	if err != nil {
 		return errors.Wrap(err, "sign")
 	}

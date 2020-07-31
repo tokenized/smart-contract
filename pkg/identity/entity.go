@@ -20,7 +20,7 @@ type ApprovedEntityPublicKey struct {
 
 // ApproveEntityPublicKey requests a signature from the identity oracle to verify the ownership of
 //   a public key by a specified entity.
-func (o *Oracle) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
+func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
 	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
 
 	key, err := xpub.ChildKey(index)
@@ -66,7 +66,7 @@ func (o *Oracle) ApproveEntityPublicKey(ctx context.Context, entity actions.Enti
 }
 
 // ValidateReceive checks the validity of an identity oracle signature for a receive.
-func (o *Oracle) ValidateEntityPublicKey(ctx context.Context, blocks BlockHashes,
+func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHashes,
 	entity *actions.EntityField, data ApprovedEntityPublicKey) error {
 
 	if data.SigAlgorithm != 1 {

@@ -9,9 +9,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GetOracle fetches oracle data from the URL.
-func GetOracle(ctx context.Context, baseURL string) (*Oracle, error) {
-	result := &Oracle{
+// GetOracle fetches an HTTP oracle client's data from the URL.
+func GetHTTPOracle(ctx context.Context, baseURL string) (*HTTPClient, error) {
+	result := &HTTPClient{
 		URL: baseURL,
 	}
 
@@ -32,9 +32,9 @@ func GetOracle(ctx context.Context, baseURL string) (*Oracle, error) {
 	return result, nil
 }
 
-// NewOracle creates an oracle from specified data.
-func NewOracle(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*Oracle, error) {
-	return &Oracle{
+// NewHTTPClient creates an HTTP oracle client from specified data.
+func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*HTTPClient, error) {
+	return &HTTPClient{
 		ContractAddress: contractAddress,
 		URL:             url,
 		PublicKey:       publicKey,
@@ -42,27 +42,27 @@ func NewOracle(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin
 }
 
 // GetContractAddress returns the oracle's contract address.
-func (o *Oracle) GetContractAddress() bitcoin.RawAddress {
+func (o *HTTPClient) GetContractAddress() bitcoin.RawAddress {
 	return o.ContractAddress
 }
 
 // GetURL returns the oracle's service URL.
-func (o *Oracle) GetURL() string {
+func (o *HTTPClient) GetURL() string {
 	return o.URL
 }
 
 // GetPublicKey returns the oracle's public key.
-func (o *Oracle) GetPublicKey() bitcoin.PublicKey {
+func (o *HTTPClient) GetPublicKey() bitcoin.PublicKey {
 	return o.PublicKey
 }
 
 // SetClientID sets the client's ID and authorization key.
-func (o *Oracle) SetClientID(id uuid.UUID, key bitcoin.Key) {
+func (o *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
 	o.ClientID = id
-	o.ClientAuthKey = key
+	o.ClientKey = key
 }
 
 // SetClientKey sets the client's authorization key.
-func (o *Oracle) SetClientKey(key bitcoin.Key) {
-	o.ClientAuthKey = key
+func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
+	o.ClientKey = key
 }

@@ -17,7 +17,8 @@ var (
 )
 
 // ApproveReceive requests a signature from the identity oracle to approve receipt of a token.
-func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
+// quantity is simply placed in the result data structure and not used in the certificate.
+func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
 	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
 
 	keys, err := xpubs.ChildKeys(index)
@@ -35,13 +36,11 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 		Index    uint32               `json:"index"`
 		Contract string               `json:"contract"`
 		AssetID  string               `json:"asset_id"`
-		Quantity uint64               `json:"quantity"`
 	}{
 		XPubs:    xpubs,
 		Index:    index,
 		Contract: contract,
 		AssetID:  asset,
-		Quantity: quantity,
 	}
 
 	var response struct {
@@ -78,8 +77,8 @@ func (o *Oracle) ApproveReceive(ctx context.Context, contract, asset string, ora
 }
 
 // ValidateReceive checks the validity of an identity oracle signature for a receive.
-func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contract, asset string,
-	receiver *actions.AssetReceiverField) error {
+func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks BlockHashes,
+	contract, asset string, receiver *actions.AssetReceiverField) error {
 
 	if receiver.OracleSigAlgorithm != 1 {
 		return errors.New("Unsupported signature algorithm")
@@ -119,7 +118,7 @@ func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contra
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.PublicKey) {
+	if signature.Verify(sigHash, publicKey) {
 		return nil
 	}
 
@@ -130,7 +129,7 @@ func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contra
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.PublicKey) {
+	if signature.Verify(sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}
@@ -140,8 +139,8 @@ func (o *Oracle) ValidateReceive(ctx context.Context, blocks BlockHashes, contra
 }
 
 // ValidateReceiveHash checks the validity of an identity oracle signature for a receive.
-func (o *Oracle) ValidateReceiveHash(ctx context.Context, blockHash bitcoin.Hash32,
-	contract, asset string, receiver *actions.AssetReceiverField) error {
+func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
+	blockHash bitcoin.Hash32, contract, asset string, receiver *actions.AssetReceiverField) error {
 
 	if receiver.OracleSigAlgorithm != 1 {
 		return errors.New("Unsupported signature algorithm")
@@ -175,7 +174,7 @@ func (o *Oracle) ValidateReceiveHash(ctx context.Context, blockHash bitcoin.Hash
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.PublicKey) {
+	if signature.Verify(sigHash, publicKey) {
 		return nil
 	}
 
@@ -186,7 +185,7 @@ func (o *Oracle) ValidateReceiveHash(ctx context.Context, blockHash bitcoin.Hash
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, o.PublicKey) {
+	if signature.Verify(sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}
