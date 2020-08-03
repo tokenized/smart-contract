@@ -26,7 +26,7 @@ func TestRegister(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetHTTPOracle(ctx, url)
+		or, err := GetHTTPClient(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}
@@ -60,7 +60,7 @@ func TestApproveReceive(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetHTTPOracle(ctx, url)
+		or, err := GetHTTPClient(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}

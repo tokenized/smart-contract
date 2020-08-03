@@ -21,7 +21,7 @@ func NewMockFactory() *MockFactory {
 	return &MockFactory{}
 }
 
-func (f *MockFactory) NewOracle(contractAddress bitcoin.RawAddress, url string,
+func (f *MockFactory) NewClient(contractAddress bitcoin.RawAddress, url string,
 	publicKey bitcoin.PublicKey) (Client, error) {
 	// Find setup mock oracle
 	for _, client := range f.clients {
@@ -33,7 +33,7 @@ func (f *MockFactory) NewOracle(contractAddress bitcoin.RawAddress, url string,
 	return nil, errors.New("Client contract address not found")
 }
 
-// SetupOracle prepares a mock client in the factory. This must be called before calling NewOracle.
+// SetupOracle prepares a mock client in the factory. This must be called before calling NewClient.
 func (f *MockFactory) SetupOracle(contractAddress bitcoin.RawAddress, url string,
 	key bitcoin.Key, blockHashes BlockHashes) {
 	// Find setup mock oracle
@@ -73,6 +73,17 @@ type MockXPub struct {
 // RegisterUser registers a user with the identity oracle.
 func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityField,
 	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
+
+	for _, user := range c.users {
+		for _, uxpub := range user.xpubs {
+			for _, xpub := range xpubs {
+				if uxpub.xpubs.Equal(xpub) {
+					return user.id, nil // Already registered
+				}
+			}
+		}
+	}
+
 	id := uuid.New()
 	c.users = append(c.users, &MockUser{
 		id: id,

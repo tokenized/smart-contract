@@ -5,64 +5,41 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tokenized/pkg/bitcoin"
-
-	"github.com/pkg/errors"
+	"github.com/tokenized/specification/dist/golang/actions"
 )
 
-// GetOracle fetches an HTTP oracle client's data from the URL.
-func GetHTTPOracle(ctx context.Context, baseURL string) (*HTTPClient, error) {
-	result := &HTTPClient{
-		URL: baseURL,
-	}
-
-	var response struct {
-		Data struct {
-			ContractAddress bitcoin.RawAddress `json:"contract_address"`
-			PublicKey       bitcoin.PublicKey  `json:"public_key"`
-		}
-	}
-
-	if err := get(result.URL+"/oracle/id", &response); err != nil {
-		return nil, errors.Wrap(err, "http get")
-	}
-
-	result.ContractAddress = response.Data.ContractAddress
-	result.PublicKey = response.Data.PublicKey
-
-	return result, nil
+type Factory interface {
+	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (Client, error)
 }
 
-// NewHTTPClient creates an HTTP oracle client from specified data.
-func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*HTTPClient, error) {
-	return &HTTPClient{
-		ContractAddress: contractAddress,
-		URL:             url,
-		PublicKey:       publicKey,
-	}, nil
+type Client interface {
+	// RegisterUser registers a user with the identity oracle.
+	RegisterUser(ctx context.Context, entity actions.EntityField, xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error)
+
+	// RegisterXPub registers an xpub under a user with an identity oracle.
+	RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys, requiredSigners int) error
+
+	// ApproveReceive requests an approval signature for a receiver from an identity oracle.
+	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
+		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error)
+
+	// GetContractAddress returns the oracle's contract address.
+	GetContractAddress() bitcoin.RawAddress
+
+	// GetURL returns the oracle's URL.
+	GetURL() string
+
+	// GetPublicKey returns the oracle's public key.
+	GetPublicKey() bitcoin.PublicKey
+
+	// SetClientID sets the client's ID and authorization key.
+	SetClientID(id uuid.UUID, key bitcoin.Key)
+
+	// SetClientKey sets the client's authorization key.
+	SetClientKey(key bitcoin.Key)
 }
 
-// GetContractAddress returns the oracle's contract address.
-func (o *HTTPClient) GetContractAddress() bitcoin.RawAddress {
-	return o.ContractAddress
-}
-
-// GetURL returns the oracle's service URL.
-func (o *HTTPClient) GetURL() string {
-	return o.URL
-}
-
-// GetPublicKey returns the oracle's public key.
-func (o *HTTPClient) GetPublicKey() bitcoin.PublicKey {
-	return o.PublicKey
-}
-
-// SetClientID sets the client's ID and authorization key.
-func (o *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
-	o.ClientID = id
-	o.ClientKey = key
-}
-
-// SetClientKey sets the client's authorization key.
-func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
-	o.ClientKey = key
+// BlockHashes is an interface for a system that provides block hashes for specified block heights.
+type BlockHashes interface {
+	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 }
