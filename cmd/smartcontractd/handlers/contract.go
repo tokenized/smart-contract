@@ -115,6 +115,29 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		found := false
 		for _, service := range entityCF.Services {
 			if service.Type == actions.ServiceTypeContractOperator {
+				if len(itx.Inputs) < 2 {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						"Contract operator input missing")
+				}
+
+				servicePublicKey, err := bitcoin.PublicKeyFromBytes(service.PublicKey)
+				if err != nil {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						fmt.Sprintf("Contract operator public key invalid : %s", err))
+				}
+
+				serviceAddress, err := servicePublicKey.RawAddress()
+				if err != nil {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						fmt.Sprintf("Contract operator public key not addressable : %s", err))
+				}
+
+				// Check that second input is from contract operator service key
+				if !itx.Inputs[1].Address.Equal(serviceAddress) {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						"Contract operator input from wrong address")
+				}
+
 				found = true
 				break
 			}
