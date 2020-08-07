@@ -1,18 +1,26 @@
 package operator
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/tokenized/pkg/bitcoin"
+)
+
+var (
+	ErrNotFound = errors.New("Not Found")
 )
 
 type HTTPFactory struct{}
@@ -73,61 +81,71 @@ func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bit
 	}, nil
 }
 
-func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64, error) {
-	var transport = &http.Transport{
-		Dial: (&net.Dialer{
-			Timeout: 5 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout: 5 * time.Second,
-	}
+// FetchContractAddress fetches a new contract address from the contract operator.
+// Returns contract address, contract fee, and master address.
+// The master address is optional to use.
+func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64,
+	bitcoin.RawAddress, error) {
 
-	var client = &http.Client{
-		Timeout:   time.Second * 10,
-		Transport: transport,
-	}
-
-	resp, err := client.Get(c.URL + "/new_contract")
-	if err != nil {
-		return bitcoin.RawAddress{}, 0, errors.Wrap(err, "http get")
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return bitcoin.RawAddress{}, 0, fmt.Errorf("%d %s", resp.StatusCode, resp.Status)
-	}
-
-	var newContract struct {
+	var response struct {
 		EntityContract bitcoin.RawAddress `json:"entity_contract,omitempty"`
 		Address        bitcoin.RawAddress `json:"address,omitempty"`
+		MasterAddress  bitcoin.RawAddress `json:"master_address,omitempty"`
 		ContractFee    uint64             `json:"contract_fee,omitempty"`
 		Error          string             `json:"error,omitempty"`
 		Signature      bitcoin.Signature  `json:"signature,omitempty"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&newContract); err != nil {
-		return bitcoin.RawAddress{}, 0, errors.Wrap(err, "unmarshal response")
+	if err := get(c.URL+"/new_contract", &response); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http get")
 	}
 
-	if len(newContract.Error) > 0 {
-		return bitcoin.RawAddress{}, 0, errors.New(newContract.Error)
+	if len(response.Error) > 0 {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.New(response.Error)
 	}
 
 	// Validate signature
 	s := sha256.New()
-	if _, err := s.Write(newContract.Address.Bytes()); err != nil {
-		return bitcoin.RawAddress{}, 0, errors.Wrap(err, "hash contract address")
+	if _, err := s.Write(response.Address.Bytes()); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.Wrap(err, "hash contract address")
 	}
-	if err := binary.Write(s, binary.LittleEndian, newContract.ContractFee); err != nil {
-		return bitcoin.RawAddress{}, 0, errors.Wrap(err, "hash contract fee")
+	if err := binary.Write(s, binary.LittleEndian, response.ContractFee); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "hash contract fee")
+	}
+	if _, err := s.Write(response.MasterAddress.Bytes()); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.Wrap(err, "hash contract address")
 	}
 	h := sha256.Sum256(s.Sum(nil))
 
-	if !newContract.Signature.Verify(h[:], c.PublicKey) {
-		return bitcoin.RawAddress{}, 0, errors.New("Invalid operator signature")
+	if !response.Signature.Verify(h[:], c.PublicKey) {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.New("Invalid operator signature")
 	}
 
-	return newContract.Address, newContract.ContractFee, nil
+	return response.Address, response.ContractFee, response.MasterAddress, nil
+}
+
+// SignContractOffer adds a signed input to a contract offer transaction.
+func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+
+	request := struct {
+		Tx *wire.MsgTx `json:"tx"`
+	}{
+		Tx: tx,
+	}
+
+	var response struct {
+		Tx   *wire.MsgTx   `json:"tx"`
+		UTXO *bitcoin.UTXO `json:"utxo"`
+	}
+
+	if err := post(c.URL+"/sign_contract", request, &response); err != nil {
+		return nil, nil, errors.Wrap(err, "http get")
+	}
+
+	return response.Tx, response.UTXO, nil
 }
 
 // GetContractAddress returns the oracle's contract address.
@@ -154,6 +172,55 @@ func (c *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
 // SetClientKey sets the client's authorization key.
 func (c *HTTPClient) SetClientKey(key bitcoin.Key) {
 	c.ClientKey = key
+}
+
+// post sends an HTTP POST request.
+func post(url string, request, response interface{}) error {
+	var transport = &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: 5 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 5 * time.Second,
+	}
+
+	var client = &http.Client{
+		Timeout:   time.Second * 10,
+		Transport: transport,
+	}
+
+	b, err := json.Marshal(request)
+	if err != nil {
+		return errors.Wrap(err, "marshal request")
+	}
+
+	httpResponse, err := client.Post(url, "application/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	if httpResponse.StatusCode < 200 || httpResponse.StatusCode > 299 {
+		if httpResponse.StatusCode == 404 {
+			return errors.Wrap(ErrNotFound, httpResponse.Status)
+		}
+		if httpResponse.Body != nil {
+			message, err := ioutil.ReadAll(httpResponse.Body)
+			if err == nil && len(message) > 0 {
+				return fmt.Errorf("%v %s : %s", httpResponse.StatusCode, httpResponse.Status,
+					string(message))
+			}
+		}
+		return fmt.Errorf("%v %s", httpResponse.StatusCode, httpResponse.Status)
+	}
+
+	defer httpResponse.Body.Close()
+
+	if response != nil {
+		if err := json.NewDecoder(httpResponse.Body).Decode(response); err != nil {
+			return errors.Wrap(err, "decode response")
+		}
+	}
+
+	return nil
 }
 
 // get sends an HTTP GET request.

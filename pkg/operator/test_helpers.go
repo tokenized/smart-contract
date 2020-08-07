@@ -2,8 +2,11 @@ package operator
 
 import (
 	"context"
+	"math/rand"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/txbuilder"
+	"github.com/tokenized/pkg/wire"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -55,18 +58,78 @@ type MockClient struct {
 	keys        []*bitcoin.Key
 }
 
-func (c *MockClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64, error) {
+func (c *MockClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64,
+	bitcoin.RawAddress, error) {
 	k, err := bitcoin.GenerateKey(bitcoin.MainNet)
 	if err != nil {
-		return bitcoin.RawAddress{}, c.contractFee, errors.Wrap(err, "generate key")
+		return bitcoin.RawAddress{}, c.contractFee, bitcoin.RawAddress{},
+			errors.Wrap(err, "generate key")
 	}
 
 	ra, err := k.RawAddress()
 	if err != nil {
-		return bitcoin.RawAddress{}, c.contractFee, errors.Wrap(err, "create address")
+		return bitcoin.RawAddress{}, c.contractFee, bitcoin.RawAddress{},
+			errors.Wrap(err, "create address")
 	}
 
-	return ra, c.contractFee, nil
+	mk, err := bitcoin.GenerateKey(bitcoin.MainNet)
+	if err != nil {
+		return bitcoin.RawAddress{}, c.contractFee, bitcoin.RawAddress{},
+			errors.Wrap(err, "generate key")
+	}
+
+	mra, err := mk.RawAddress()
+	if err != nil {
+		return bitcoin.RawAddress{}, c.contractFee, bitcoin.RawAddress{},
+			errors.Wrap(err, "create address")
+	}
+
+	return ra, c.contractFee, mra, nil
+}
+
+// SignContractOffer adds a signed input to a contract offer transaction.
+func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+
+	serviceAddress, err := c.Key.RawAddress()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "address")
+	}
+
+	lockingScript, err := serviceAddress.LockingScript()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "locking script")
+	}
+
+	utxo := bitcoin.UTXO{
+		Index:         uint32(rand.Intn(10)),
+		Value:         546,
+		LockingScript: lockingScript,
+	}
+	rand.Read(utxo.Hash[:])
+
+	// Add dust input from service key and output back to service key.
+	inputIndex := 1 // contract operator input must be immediately after admin input
+	input := wire.NewTxIn(wire.NewOutPoint(&utxo.Hash, utxo.Index), nil)
+
+	if len(tx.TxIn) > 1 {
+		tx.TxIn = append(append(tx.TxIn[:1], input), tx.TxIn[1:]...)
+	} else {
+		tx.TxIn = append(tx.TxIn, input)
+	}
+
+	output := wire.NewTxOut(utxo.Value, lockingScript)
+	tx.AddTxOut(output)
+
+	// Sign input based on current tx. Note: The client can only add signatures after this or they
+	// will invalidate this signature.
+	input.SignatureScript, err = txbuilder.P2PKHUnlockingScript(c.Key, tx, inputIndex,
+		utxo.LockingScript, utxo.Value, txbuilder.SigHashAll+txbuilder.SigHashForkID,
+		&txbuilder.SigHashCache{})
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "sign")
+	}
+
+	return tx, &utxo, nil
 }
 
 // GetContractAddress returns the oracle's contract address.
