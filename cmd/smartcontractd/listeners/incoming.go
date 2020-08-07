@@ -490,11 +490,7 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 				cert.BlockHeight))
 		}
 
-		addresses := make([]bitcoin.RawAddress, 0, 2)
-		entities := make([]interface{}, 0, 2)
-
-		addresses = append(addresses, itx.Inputs[0].Address)
-
+		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
 			// Use parent entity contract address in signature instead of entity structure.
 			entityRA, err := bitcoin.DecodeRawAddress(contractOffer.EntityContract)
@@ -502,23 +498,13 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 				return errors.Wrap(err, "entity address")
 			}
 
-			entities = append(entities, entityRA)
+			entity = entityRA
 		} else {
-			entities = append(entities, contractOffer.Issuer)
+			entity = contractOffer.Issuer
 		}
 
-		if len(contractOffer.OperatorEntityContract) > 0 {
-			addresses = append(addresses, itx.Inputs[1].Address)
-
-			operatorRA, err := bitcoin.DecodeRawAddress(contractOffer.OperatorEntityContract)
-			if err != nil {
-				return errors.Wrap(err, "operator entity address")
-			}
-
-			entities = append(entities, operatorRA)
-		}
-
-		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, addresses, entities, hash, 1)
+		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
+			entity, hash, 1)
 		if err != nil {
 			return err
 		}
