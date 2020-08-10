@@ -89,6 +89,7 @@ func (c *MockClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 
 // SignContractOffer adds a signed input to a contract offer transaction.
 func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+	tx = tx.Copy()
 
 	serviceAddress, err := c.Key.RawAddress()
 	if err != nil {
@@ -112,7 +113,9 @@ func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 	input := wire.NewTxIn(wire.NewOutPoint(&utxo.Hash, utxo.Index), nil)
 
 	if len(tx.TxIn) > 1 {
-		tx.TxIn = append(append(tx.TxIn[:1], input), tx.TxIn[1:]...)
+		after := make([]*wire.TxIn, len(tx.TxIn)-1)
+		copy(after, tx.TxIn[1:])
+		tx.TxIn = append(append(tx.TxIn[:1], input), after...)
 	} else {
 		tx.TxIn = append(tx.TxIn, input)
 	}

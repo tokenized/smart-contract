@@ -61,6 +61,36 @@ type Transaction struct {
 	lock sync.RWMutex
 }
 
+func (itx *Transaction) String(net bitcoin.Network) string {
+	result := fmt.Sprintf("TxId: %s (%d bytes)\n", itx.Hash.String(), itx.MsgTx.SerializeSize())
+	result += fmt.Sprintf("  Version: %d\n", itx.MsgTx.Version)
+	result += "  Inputs:\n\n"
+	for i, input := range itx.MsgTx.TxIn {
+		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
+			input.PreviousOutPoint.Hash.String())
+		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Sequence: %x\n", input.Sequence)
+
+		if !itx.Inputs[i].Address.IsEmpty() {
+			result += fmt.Sprintf("    Address: %s\n",
+				bitcoin.NewAddressFromRawAddress(itx.Inputs[i].Address, net).String())
+		}
+		result += fmt.Sprintf("    Value: %d\n\n", itx.Inputs[i].UTXO.Value)
+	}
+	result += "  Outputs:\n\n"
+	for i, output := range itx.MsgTx.TxOut {
+		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
+		result += fmt.Sprintf("    Script: %x\n", output.PkScript)
+		if !itx.Outputs[i].Address.IsEmpty() {
+			result += fmt.Sprintf("    Address: %s\n",
+				bitcoin.NewAddressFromRawAddress(itx.Outputs[i].Address, net).String())
+		}
+		result += "\n"
+	}
+	result += fmt.Sprintf("  LockTime: %d\n", itx.MsgTx.LockTime)
+	return result
+}
+
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
 //   the NewBaseTransactionFromWire function.
 func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
