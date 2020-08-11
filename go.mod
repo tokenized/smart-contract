@@ -3,11 +3,7 @@ module github.com/tokenized/smart-contract
 go 1.12
 
 require (
-	github.com/aws/aws-sdk-go v1.31.6
 	github.com/cmars/basen v0.0.0-20150613233007-fe3947df716e // indirect
-	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/protobuf v1.4.2
-	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.1.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
@@ -15,9 +11,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/pkg v0.0.0-20200807044545-835ff3f32dbb
 	github.com/tokenized/specification v0.2.3-0.20200807044753-edcf86532819
-	github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564
 	go.opencensus.io v0.22.2
-	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )
 

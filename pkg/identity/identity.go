@@ -3,15 +3,19 @@ package identity
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
+
+	"github.com/google/uuid"
 )
 
+// Factory is the interface for creating new identity clients.
 type Factory interface {
+	// NewClient creates a new client.
 	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (Client, error)
 }
 
+// Client is the interface for interacting with an identity oracle service.
 type Client interface {
 	// RegisterUser registers a user with the identity oracle.
 	RegisterUser(ctx context.Context, entity actions.EntityField, xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error)

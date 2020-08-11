@@ -9,10 +9,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// Factory is the interface for creating new identity clients.
 type Factory interface {
+	// NewClient creates a new client.
 	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (Client, error)
 }
 
+// Client is the interface for interacting with an contract operator service.
 type Client interface {
 	// FetchContractAddress requests a hosted smart contract agent address from the operator.
 	// Returns contract address, contract fee, and master address.

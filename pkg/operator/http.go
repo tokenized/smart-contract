@@ -23,8 +23,10 @@ var (
 	ErrNotFound = errors.New("Not Found")
 )
 
+// HTTPFactory implements the factory interface that creates http clients.
 type HTTPFactory struct{}
 
+// HTTPClient implements the client interface to perform HTTP requests to contract operators.
 type HTTPClient struct {
 	// Service information
 	ContractAddress bitcoin.RawAddress // Address of contract entity.
@@ -40,10 +42,12 @@ type HTTPClient struct {
 	// RetryDelay int
 }
 
+// NewHTTPFactory creates a new http factory.
 func NewHTTPFactory() *HTTPFactory {
 	return &HTTPFactory{}
 }
 
+// NewClient creates a new http client.
 func (f *HTTPFactory) NewClient(contractAddress bitcoin.RawAddress, url string,
 	publicKey bitcoin.PublicKey) (Client, error) {
 	return NewHTTPClient(contractAddress, url, publicKey)
