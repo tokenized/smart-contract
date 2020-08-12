@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,6 +46,9 @@ func NewHTTPFactory() *HTTPFactory {
 // NewClient creates a new http client.
 func (f *HTTPFactory) NewClient(contractAddress bitcoin.RawAddress, url string,
 	publicKey bitcoin.PublicKey) (Client, error) {
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		url = "https://" + url
+	}
 	return NewHTTPClient(contractAddress, url, publicKey)
 }
 
