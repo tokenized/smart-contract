@@ -115,6 +115,29 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		found := false
 		for _, service := range entityCF.Services {
 			if service.Type == actions.ServiceTypeContractOperator {
+				if len(itx.Inputs) < 2 {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						"Contract operator input missing")
+				}
+
+				servicePublicKey, err := bitcoin.PublicKeyFromBytes(service.PublicKey)
+				if err != nil {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						fmt.Sprintf("Contract operator public key invalid : %s", err))
+				}
+
+				serviceAddress, err := servicePublicKey.RawAddress()
+				if err != nil {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						fmt.Sprintf("Contract operator public key not addressable : %s", err))
+				}
+
+				// Check that second input is from contract operator service key
+				if !itx.Inputs[1].Address.Equal(serviceAddress) {
+					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+						"Contract operator input from wrong address")
+				}
+
 				found = true
 				break
 			}
@@ -921,16 +944,12 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 			adminCert.BlockHeight))
 	}
 
-	addresses := make([]bitcoin.RawAddress, 0, 2)
-	entities := make([]interface{}, 0, 2)
-
 	adminAddress, err := bitcoin.DecodeRawAddress(cf.AdminAddress)
 	if err != nil {
 		return errors.Wrap(err, "admin address")
 	}
 
-	addresses = append(addresses, adminAddress)
-
+	var entity interface{}
 	if len(cf.EntityContract) > 0 {
 		// Use parent entity contract address in signature instead of entity structure.
 		entityRA, err := bitcoin.DecodeRawAddress(cf.EntityContract)
@@ -938,28 +957,12 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 			return errors.Wrap(err, "entity address")
 		}
 
-		entities = append(entities, entityRA)
+		entity = entityRA
 	} else {
-		entities = append(entities, cf.Issuer)
+		entity = cf.Issuer
 	}
 
-	if len(cf.OperatorAddress) != 0 {
-		operatorAddress, err := bitcoin.DecodeRawAddress(cf.OperatorAddress)
-		if err != nil {
-			return errors.Wrap(err, "operator address")
-		}
-
-		addresses = append(addresses, operatorAddress)
-
-		operatorRA, err := bitcoin.DecodeRawAddress(cf.OperatorEntityContract)
-		if err != nil {
-			return errors.Wrap(err, "operator entity address")
-		}
-
-		entities = append(entities, operatorRA)
-	}
-
-	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, addresses, entities, hash, 1)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, adminAddress, entity, hash, 1)
 	if err != nil {
 		return err
 	}

@@ -1,17 +1,22 @@
-package identity
+package operator
 
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/tokenized/pkg/bitcoin"
 )
 
 var (
@@ -21,10 +26,10 @@ var (
 // HTTPFactory implements the factory interface that creates http clients.
 type HTTPFactory struct{}
 
-// HTTPClient implements the client interface to perform HTTP requests to identity oracles.
+// HTTPClient implements the client interface to perform HTTP requests to contract operators.
 type HTTPClient struct {
-	// Oracle information
-	ContractAddress bitcoin.RawAddress // Address of oracle's contract entity.
+	// Service information
+	ContractAddress bitcoin.RawAddress // Address of contract entity.
 	URL             string
 	PublicKey       bitcoin.PublicKey
 
@@ -61,7 +66,7 @@ func GetHTTPClient(ctx context.Context, baseURL string) (*HTTPClient, error) {
 		}
 	}
 
-	if err := get(result.URL+"/oracle/id", &response); err != nil {
+	if err := get(result.URL+"/id", &response); err != nil {
 		return nil, errors.Wrap(err, "http get")
 	}
 
@@ -80,30 +85,97 @@ func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bit
 	}, nil
 }
 
-// GetContractAddress returns the oracle's contract address.
-func (o *HTTPClient) GetContractAddress() bitcoin.RawAddress {
-	return o.ContractAddress
+// FetchContractAddress fetches a new contract address from the contract operator.
+// Returns contract address, contract fee, and master address.
+// The master address is optional to use.
+func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64,
+	bitcoin.RawAddress, error) {
+
+	var response struct {
+		EntityContract bitcoin.RawAddress `json:"entity_contract,omitempty"`
+		Address        bitcoin.RawAddress `json:"address,omitempty"`
+		MasterAddress  bitcoin.RawAddress `json:"master_address,omitempty"`
+		ContractFee    uint64             `json:"contract_fee,omitempty"`
+		Error          string             `json:"error,omitempty"`
+		Signature      bitcoin.Signature  `json:"signature,omitempty"`
+	}
+
+	if err := get(c.URL+"/new_contract", &response); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http get")
+	}
+
+	if len(response.Error) > 0 {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.New(response.Error)
+	}
+
+	// Validate signature
+	s := sha256.New()
+	if _, err := s.Write(response.Address.Bytes()); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.Wrap(err, "hash contract address")
+	}
+	if err := binary.Write(s, binary.LittleEndian, response.ContractFee); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "hash contract fee")
+	}
+	if _, err := s.Write(response.MasterAddress.Bytes()); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.Wrap(err, "hash contract address")
+	}
+	h := sha256.Sum256(s.Sum(nil))
+
+	if !response.Signature.Verify(h[:], c.PublicKey) {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
+			errors.New("Invalid operator signature")
+	}
+
+	return response.Address, response.ContractFee, response.MasterAddress, nil
 }
 
-// GetURL returns the oracle's service URL.
-func (o *HTTPClient) GetURL() string {
-	return o.URL
+// SignContractOffer adds a signed input to a contract offer transaction.
+func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+
+	request := struct {
+		Tx *wire.MsgTx `json:"tx"`
+	}{
+		Tx: tx,
+	}
+
+	var response struct {
+		Tx   *wire.MsgTx   `json:"tx"`
+		UTXO *bitcoin.UTXO `json:"utxo"`
+	}
+
+	if err := post(c.URL+"/sign_contract", request, &response); err != nil {
+		return nil, nil, errors.Wrap(err, "http get")
+	}
+
+	return response.Tx, response.UTXO, nil
+}
+
+// GetContractAddress returns the oracle's contract address.
+func (c *HTTPClient) GetContractAddress() bitcoin.RawAddress {
+	return c.ContractAddress
+}
+
+// GetURL returns the oracle's URL.
+func (c *HTTPClient) GetURL() string {
+	return c.URL
 }
 
 // GetPublicKey returns the oracle's public key.
-func (o *HTTPClient) GetPublicKey() bitcoin.PublicKey {
-	return o.PublicKey
+func (c *HTTPClient) GetPublicKey() bitcoin.PublicKey {
+	return c.PublicKey
 }
 
 // SetClientID sets the client's ID and authorization key.
-func (o *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
-	o.ClientID = id
-	o.ClientKey = key
+func (c *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
+	c.ClientID = id
+	c.ClientKey = key
 }
 
 // SetClientKey sets the client's authorization key.
-func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
-	o.ClientKey = key
+func (c *HTTPClient) SetClientKey(key bitcoin.Key) {
+	c.ClientKey = key
 }
 
 // post sends an HTTP POST request.
@@ -133,6 +205,13 @@ func post(url string, request, response interface{}) error {
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode > 299 {
 		if httpResponse.StatusCode == 404 {
 			return errors.Wrap(ErrNotFound, httpResponse.Status)
+		}
+		if httpResponse.Body != nil {
+			message, err := ioutil.ReadAll(httpResponse.Body)
+			if err == nil && len(message) > 0 {
+				return fmt.Errorf("%v %s : %s", httpResponse.StatusCode, httpResponse.Status,
+					string(message))
+			}
 		}
 		return fmt.Errorf("%v %s", httpResponse.StatusCode, httpResponse.Status)
 	}

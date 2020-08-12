@@ -4,60 +4,46 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 
-	"github.com/pkg/errors"
+	"github.com/google/uuid"
 )
 
-// GetOracle fetches oracle data from the URL.
-func GetOracle(ctx context.Context, baseURL string, clientAuthKey bitcoin.Key) (*Oracle, error) {
-	result := &Oracle{
-		BaseURL:       baseURL,
-		ClientAuthKey: clientAuthKey,
-	}
-
-	var response struct {
-		Data struct {
-			Entity    actions.EntityField `json:"entity"`
-			URL       string              `json:"url"`
-			PublicKey bitcoin.PublicKey   `json:"public_key"`
-		}
-	}
-
-	if err := get(result.BaseURL+"/oracle/id", &response); err != nil {
-		return nil, errors.Wrap(err, "http get")
-	}
-
-	result.OracleEntity = response.Data.Entity
-	result.OracleKey = response.Data.PublicKey
-
-	return result, nil
+// Factory is the interface for creating new identity clients.
+type Factory interface {
+	// NewClient creates a new client.
+	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (Client, error)
 }
 
-// NewOracle creates an oracle from existing data.
-func NewOracle(baseURL string, oracleKey bitcoin.PublicKey, oracleEntity actions.EntityField,
-	clientID string, clientAuthKey bitcoin.Key) (*Oracle, error) {
-	return &Oracle{
-		BaseURL:       baseURL,
-		OracleKey:     oracleKey,
-		OracleEntity:  oracleEntity,
-		ClientID:      clientID,
-		ClientAuthKey: clientAuthKey,
-	}, nil
+// Client is the interface for interacting with an identity oracle service.
+type Client interface {
+	// RegisterUser registers a user with the identity oracle.
+	RegisterUser(ctx context.Context, entity actions.EntityField, xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error)
+
+	// RegisterXPub registers an xpub under a user with an identity oracle.
+	RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys, requiredSigners int) error
+
+	// ApproveReceive requests an approval signature for a receiver from an identity oracle.
+	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
+		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error)
+
+	// GetContractAddress returns the oracle's contract address.
+	GetContractAddress() bitcoin.RawAddress
+
+	// GetURL returns the oracle's URL.
+	GetURL() string
+
+	// GetPublicKey returns the oracle's public key.
+	GetPublicKey() bitcoin.PublicKey
+
+	// SetClientID sets the client's ID and authorization key.
+	SetClientID(id uuid.UUID, key bitcoin.Key)
+
+	// SetClientKey sets the client's authorization key.
+	SetClientKey(key bitcoin.Key)
 }
 
-// GetOracleEntity returns the oracle's entity.
-func (o *Oracle) GetOracleEntity() actions.EntityField {
-	return o.OracleEntity
-}
-
-// GetOracleKey returns the oracle's public key.
-func (o *Oracle) GetOracleKey() bitcoin.PublicKey {
-	return o.OracleKey
-}
-
-// SetClientID sets the client's ID.
-func (o *Oracle) SetClientID(id string) {
-	o.ClientID = id
+// BlockHashes is an interface for a system that provides block hashes for specified block heights.
+type BlockHashes interface {
+	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 }

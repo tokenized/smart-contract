@@ -26,10 +26,12 @@ func TestRegister(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetOracle(ctx, url, key)
+		or, err := GetHTTPClient(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}
+
+		or.SetClientKey(key)
 
 		entity := actions.EntityField{
 			Name: "Test",
@@ -58,10 +60,12 @@ func TestApproveReceive(t *testing.T) {
 	}
 
 	for _, url := range urls {
-		or, err := GetOracle(ctx, url, key)
+		or, err := GetHTTPClient(ctx, url)
 		if err != nil {
 			t.Fatalf("Failed to get oracle : %s", err)
 		}
+
+		or.SetClientKey(key)
 
 		entity := actions.EntityField{
 			Name: "Test",
@@ -100,7 +104,7 @@ func TestApproveReceive(t *testing.T) {
 			t.Fatalf("Failed to approve receive : %s", err)
 		}
 
-		if err := or.ValidateReceiveHash(ctx, blockHash, contract, asset, receiver); err != nil {
+		if err := ValidateReceiveHash(ctx, or.GetPublicKey(), blockHash, contract, asset, receiver); err != nil {
 			t.Fatalf("Failed to validate receive : %s", err)
 		}
 	}

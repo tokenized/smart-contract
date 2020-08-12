@@ -25,21 +25,17 @@ func NewContextWithDevelopmentLogger() context.Context {
 	if len(logPath) > 0 {
 		os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
 		logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			logger.Fatal(ctx, "Failed to open log file : %v\n", err)
-		}
 
 		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
-			ctx = node.ContextWithDevelopmentLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
+			ctx = node.ContextWithDevelopmentFileLogger(ctx, logFileName, os.Getenv("LOG_FORMAT"))
 		} else {
-			ctx = node.ContextWithProductionLogger(ctx, logFile, os.Getenv("LOG_FORMAT"))
+			ctx = node.ContextWithProductionFileLogger(ctx, logFileName, os.Getenv("LOG_FORMAT"))
 		}
 	} else {
 		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
-			ctx = node.ContextWithDevelopmentLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
+			ctx = node.ContextWithDevelopmentLogger(ctx, os.Getenv("LOG_FORMAT"))
 		} else {
-			ctx = node.ContextWithProductionLogger(ctx, os.Stdout, os.Getenv("LOG_FORMAT"))
+			ctx = node.ContextWithProductionLogger(ctx, os.Getenv("LOG_FORMAT"))
 		}
 	}
 

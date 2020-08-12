@@ -558,9 +558,14 @@ func identityContracts(t *testing.T) {
 func operatorContracts(t *testing.T) {
 	ctx := test.Context
 
-	opKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
+	opServiceKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
 	if err != nil {
-		t.Fatalf("Failed to generate operator key : %s", err)
+		t.Fatalf("Failed to generate operator service key : %s", err)
+	}
+
+	opServiceAddress, err := opServiceKey.RawAddress()
+	if err != nil {
+		t.Fatalf("Failed to generate operator service address : %s", err)
 	}
 
 	opContractKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
@@ -573,12 +578,24 @@ func operatorContracts(t *testing.T) {
 		t.Fatalf("Failed to generate operator address : %s", err)
 	}
 
+	otherKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
+	if err != nil {
+		t.Fatalf("Failed to generate other key : %s", err)
+	}
+
+	otherAddress, err := otherKey.RawAddress()
+	if err != nil {
+		t.Fatalf("Failed to generate other address : %s", err)
+	}
+
 	testSet := []struct {
-		name          string
-		offer         *actions.ContractOffer
-		opContractKey *bitcoin.Key
-		idContractKey *bitcoin.Key
-		valid         bool
+		name             string
+		offer            *actions.ContractOffer
+		opContractKey    *bitcoin.Key
+		opServiceKey     *bitcoin.Key
+		opServiceAddress *bitcoin.RawAddress
+		idContractKey    *bitcoin.Key
+		valid            bool
 	}{
 		{
 			name: "AssetWithOperator",
@@ -587,12 +604,14 @@ func operatorContracts(t *testing.T) {
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-				EntityContract:         test.Contract2Key.Address.Bytes(),
+				EntityContract:           test.Contract2Key.Address.Bytes(),
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
-			opContractKey: &opContractKey,
-			valid:         true,
+			opContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &opServiceAddress,
+			valid:            true,
 		},
 		{
 			name: "EntityWithOperator",
@@ -602,10 +621,12 @@ func operatorContracts(t *testing.T) {
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
-			opContractKey: &opContractKey,
-			valid:         true,
+			opContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &opServiceAddress,
+			valid:            true,
 		},
 		{
 			name: "AssetWithMissingOperator",
@@ -614,11 +635,12 @@ func operatorContracts(t *testing.T) {
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-				EntityContract:         test.Contract2Key.Address.Bytes(),
+				EntityContract:           test.Contract2Key.Address.Bytes(),
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
 			opContractKey: nil,
+			opServiceKey:  nil,
 			valid:         false, // operator contract won't exist
 		},
 		{
@@ -629,9 +651,10 @@ func operatorContracts(t *testing.T) {
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
 			opContractKey: nil,
+			opServiceKey:  nil,
 			valid:         false, // operator contract won't exist
 		},
 		{
@@ -641,12 +664,14 @@ func operatorContracts(t *testing.T) {
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-				EntityContract:         test.Contract2Key.Address.Bytes(),
+				EntityContract:           test.Contract2Key.Address.Bytes(),
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
-			idContractKey: &opContractKey,
-			valid:         false, // operator contract doesn't support operator type
+			idContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &opServiceAddress,
+			valid:            false, // operator contract doesn't support operator type
 		},
 		{
 			name: "EntityWithWrongIdentity",
@@ -656,10 +681,43 @@ func operatorContracts(t *testing.T) {
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 				ContractOperatorIncluded: true,
-				OperatorEntityContract: opAddress.Bytes(),
+				OperatorEntityContract:   opAddress.Bytes(),
 			},
-			idContractKey: &opContractKey,
-			valid:         false, // operator contract doesn't support operator type
+			idContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &opServiceAddress,
+			valid:            false, // operator contract doesn't support operator type
+		},
+		{
+			name: "EntityWrongOperatorInputAddress",
+			offer: &actions.ContractOffer{
+				ContractType: actions.ContractTypeEntity,
+				ContractName: "Test Name",
+				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
+					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+				ContractOperatorIncluded: true,
+				OperatorEntityContract:   opAddress.Bytes(),
+			},
+			opContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &otherAddress,
+			valid:            false, // wrong address
+		},
+		{
+			name: "AssetWithWrongIdentity",
+			offer: &actions.ContractOffer{
+				ContractType: actions.ContractTypeAsset,
+				ContractName: "Test Name",
+				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
+					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+				EntityContract:           test.Contract2Key.Address.Bytes(),
+				ContractOperatorIncluded: true,
+				OperatorEntityContract:   opAddress.Bytes(),
+			},
+			opContractKey:    &opContractKey,
+			opServiceKey:     &opServiceKey,
+			opServiceAddress: &otherAddress,
+			valid:            false, // wrong address
 		},
 	}
 
@@ -674,30 +732,29 @@ func operatorContracts(t *testing.T) {
 				true, false, false, false)
 
 			if tt.opContractKey != nil {
-				mockOperatorContract(t, ctx, *tt.opContractKey, opKey.PublicKey(), "C", 1, "John")
+				mockOperatorContract(t, ctx, *tt.opContractKey, tt.opServiceKey.PublicKey(), "C", 1, "John")
 			}
 
 			if tt.idContractKey != nil {
-				mockIdentityContract(t, ctx, *tt.idContractKey, opKey.PublicKey(), "C", 1, "John")
+				mockIdentityContract(t, ctx, *tt.idContractKey, tt.opServiceKey.PublicKey(), "C", 1, "John")
 			}
-
-			// Create funding tx
-			fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100104, issuerKey.Address)
-			opFundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100204, operatorKey.Address)
 
 			// Build offer transaction
 			offerTx := wire.NewMsgTx(1)
 
-			offerInputHash := fundingTx.TxHash()
-			offerOperatorInputHash := opFundingTx.TxHash()
-
 			// From issuer (Note: empty sig script)
+			fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100104, issuerKey.Address)
+			offerInputHash := fundingTx.TxHash()
 			offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerInputHash, 0),
 				make([]byte, 130)))
 
 			// From operator
-			offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerOperatorInputHash, 0),
-				make([]byte, 130)))
+			if tt.opServiceAddress != nil {
+				opFundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100204, *tt.opServiceAddress)
+				offerOperatorInputHash := opFundingTx.TxHash()
+				offerTx.TxIn = append(offerTx.TxIn, wire.NewTxIn(wire.NewOutPoint(offerOperatorInputHash, 0),
+					make([]byte, 130)))
+			}
 
 			// To contract
 			script, _ := test.ContractKey.Address.LockingScript()
@@ -747,9 +804,11 @@ func operatorContracts(t *testing.T) {
 					t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 				}
 
-				if !bytes.Equal(cf.OperatorAddress, operatorKey.Address.Bytes()) {
-					t.Errorf("\t%s\tWrong contract operator : %x != %x", tests.Failed,
-						cf.OperatorAddress, operatorKey.Address.Bytes())
+				if tt.opServiceAddress != nil {
+					if !bytes.Equal(cf.OperatorAddress, tt.opServiceAddress.Bytes()) {
+						t.Errorf("\t%s\tWrong contract operator : %x != %x", tests.Failed,
+							cf.OperatorAddress, opServiceAddress.Bytes())
+					}
 				}
 
 			} else {

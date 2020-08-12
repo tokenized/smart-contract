@@ -1,10 +1,10 @@
 package inspector
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
@@ -59,6 +59,36 @@ type Transaction struct {
 	RejectCode    uint32
 
 	lock sync.RWMutex
+}
+
+func (itx *Transaction) String(net bitcoin.Network) string {
+	result := fmt.Sprintf("TxId: %s (%d bytes)\n", itx.Hash.String(), itx.MsgTx.SerializeSize())
+	result += fmt.Sprintf("  Version: %d\n", itx.MsgTx.Version)
+	result += "  Inputs:\n\n"
+	for i, input := range itx.MsgTx.TxIn {
+		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
+			input.PreviousOutPoint.Hash.String())
+		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Sequence: %x\n", input.Sequence)
+
+		if !itx.Inputs[i].Address.IsEmpty() {
+			result += fmt.Sprintf("    Address: %s\n",
+				bitcoin.NewAddressFromRawAddress(itx.Inputs[i].Address, net).String())
+		}
+		result += fmt.Sprintf("    Value: %d\n\n", itx.Inputs[i].UTXO.Value)
+	}
+	result += "  Outputs:\n\n"
+	for i, output := range itx.MsgTx.TxOut {
+		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
+		result += fmt.Sprintf("    Script: %x\n", output.PkScript)
+		if !itx.Outputs[i].Address.IsEmpty() {
+			result += fmt.Sprintf("    Address: %s\n",
+				bitcoin.NewAddressFromRawAddress(itx.Outputs[i].Address, net).String())
+		}
+		result += "\n"
+	}
+	result += fmt.Sprintf("  LockTime: %d\n", itx.MsgTx.LockTime)
+	return result
 }
 
 // Setup finds the tokenized message. It is required if the inspector transaction was created using
@@ -537,38 +567,44 @@ func uniquePKHs(pkhs []bitcoin.Hash20) []bitcoin.Hash20 {
 	return result
 }
 
-func (itx *Transaction) Write(buf *bytes.Buffer) error {
-	buf.WriteByte(2) // Version
-
-	if err := itx.MsgTx.Serialize(buf); err != nil {
-		return err
+func (itx *Transaction) Write(w io.Writer) error {
+	// Version
+	if _, err := w.Write([]byte{2}); err != nil {
+		return errors.Wrap(err, "version")
 	}
 
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(itx.Inputs))); err != nil {
+	if err := itx.MsgTx.Serialize(w); err != nil {
+		return errors.Wrap(err, "tx")
+	}
+
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(itx.Inputs))); err != nil {
 		return errors.Wrap(err, "inputs count")
 	}
 
 	for i, _ := range itx.Inputs {
-		if err := itx.Inputs[i].Write(buf); err != nil {
+		if err := itx.Inputs[i].Write(w); err != nil {
 			return err
 		}
 	}
 
-	buf.WriteByte(uint8(itx.RejectCode))
+	if _, err := w.Write([]byte{uint8(itx.RejectCode)}); err != nil {
+		return errors.Wrap(err, "reject code")
+	}
 	return nil
 }
 
-func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
-	version, err := buf.ReadByte() // Version
-	if err != nil {
+func (itx *Transaction) Read(r io.Reader, isTest bool) error {
+	// Version
+	var version [1]byte
+	if _, err := r.Read(version[:]); err != nil {
 		return err
 	}
-	if version != 0 && version != 1 && version != 2 {
-		return fmt.Errorf("Unknown version : %d", version)
+	if version[0] != 0 && version[0] != 1 && version[0] != 2 {
+		return fmt.Errorf("Unknown version : %d", version[0])
 	}
 
 	msg := wire.MsgTx{}
-	if err := msg.Deserialize(buf); err != nil {
+	if err := msg.Deserialize(r); err != nil {
 		return err
 	}
 	itx.MsgTx = &msg
@@ -576,8 +612,8 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 
 	// Inputs
 	var count uint32
-	if version >= 2 {
-		if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+	if version[0] >= 2 {
+		if err := binary.Read(r, binary.LittleEndian, &count); err != nil {
 			return errors.Wrap(err, "inputs count")
 		}
 	} else {
@@ -586,16 +622,16 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 
 	itx.Inputs = make([]Input, count)
 	for i, _ := range itx.Inputs {
-		if err := itx.Inputs[i].Read(version, buf); err != nil {
+		if err := itx.Inputs[i].Read(version[0], r); err != nil {
 			return err
 		}
 	}
 
-	rejectCode, err := buf.ReadByte()
-	if err != nil {
+	var rejectCode [1]byte
+	if _, err := r.Read(rejectCode[:]); err != nil {
 		return err
 	}
-	itx.RejectCode = uint32(rejectCode)
+	itx.RejectCode = uint32(rejectCode[0])
 
 	// Outputs
 	outputs := []Output{}
@@ -616,6 +652,7 @@ func (itx *Transaction) Read(buf *bytes.Reader, isTest bool) error {
 	itx.Outputs = outputs
 
 	// Protocol Message
+	var err error
 	for i, txOut := range itx.MsgTx.TxOut {
 		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
 		if err == nil {

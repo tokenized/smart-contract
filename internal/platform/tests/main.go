@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -58,12 +57,7 @@ func New(logFileName string) *Test {
 
 	var ctx context.Context
 	if len(logFileName) > 0 {
-		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			fmt.Printf("Failed to open log file : %v\n", err)
-			return nil
-		}
-		ctx = node.ContextWithDevelopmentLogger(NewContext(), logFile, "text")
+		ctx = node.ContextWithDevelopmentFileLogger(NewContext(), logFileName, "text")
 	} else {
 		ctx = node.ContextWithNoLogger(NewContext())
 	}

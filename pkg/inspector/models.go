@@ -1,7 +1,7 @@
 package inspector
 
 import (
-	"bytes"
+	"io"
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
@@ -51,24 +51,24 @@ func (u UTXOs) ForAddress(address bitcoin.RawAddress) (UTXOs, error) {
 	return filtered, nil
 }
 
-func (in *Input) Write(buf *bytes.Buffer) error {
-	if err := in.UTXO.Write(buf); err != nil {
+func (in *Input) Write(w io.Writer) error {
+	if err := in.UTXO.Write(w); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (in *Input) Read(version uint8, buf *bytes.Reader) error {
+func (in *Input) Read(version uint8, r io.Reader) error {
 	if version == 0 {
 		// Read full tx
 		msg := wire.MsgTx{}
-		if err := msg.Deserialize(buf); err != nil {
+		if err := msg.Deserialize(r); err != nil {
 			return err
 		}
 	}
 
-	if err := in.UTXO.Read(buf); err != nil {
+	if err := in.UTXO.Read(r); err != nil {
 		return err
 	}
 

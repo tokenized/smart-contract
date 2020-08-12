@@ -31,7 +31,8 @@ var cmdGen = &cobra.Command{
 				return nil
 			}
 
-			fmt.Printf("XKey : %s\n", key.String())
+			fmt.Printf("Private XKey : %s\n", key.String())
+			fmt.Printf("Public XKey : %s\n", key.ExtendedPublicKey().String())
 			return nil
 		}
 
@@ -45,7 +46,8 @@ var cmdGen = &cobra.Command{
 
 			keys := bitcoin.ExtendedKeys{key}
 
-			fmt.Printf("XKeys : %s\n", keys.String())
+			fmt.Printf("Private XKeys : %s\n", keys.String())
+			fmt.Printf("Public XKeys : %s\n", keys.ExtendedPublicKeys().String())
 			return nil
 		}
 
@@ -67,9 +69,9 @@ var cmdGen = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("WIF : %s\n", key.String())
-		fmt.Printf("PubKey : %s\n", hex.EncodeToString(key.PublicKey().Bytes()))
-		fmt.Printf("Addr : %s\n", address.String())
+		fmt.Printf("WIF (Private) : %s\n", key.String())
+		fmt.Printf("Public Key : %s\n", hex.EncodeToString(key.PublicKey().Bytes()))
+		fmt.Printf("Address : %s\n", address.String())
 		return nil
 	},
 }

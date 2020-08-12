@@ -404,23 +404,18 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	// Check if block time is beyond expiration
-	// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-	expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
-	blockTime, err := headers.Time(ctx, int(assetReceiver.OracleSigBlockHeight))
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
-			assetReceiver.OracleSigBlockHeight))
-	}
-	if blockTime < expire {
-		return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
-	}
-
 	oracle := ct.FullOracles[assetReceiver.OracleIndex]
 	hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
 			assetReceiver.OracleSigBlockHeight))
+	}
+
+	if assetReceiver.OracleSigExpiry != 0 {
+		now := uint64(time.Now().UnixNano())
+		if now > assetReceiver.OracleSigExpiry {
+			return fmt.Errorf("Oracle sigature expired : %d > %d", now, assetReceiver.OracleSigExpiry)
+		}
 	}
 
 	receiverAddress, err := bitcoin.DecodeRawAddress(assetReceiver.Address)
@@ -431,7 +426,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
 		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
-		receiverAddress, hash, 1)
+		receiverAddress, hash, assetReceiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
@@ -495,11 +490,7 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 				cert.BlockHeight))
 		}
 
-		addresses := make([]bitcoin.RawAddress, 0, 2)
-		entities := make([]interface{}, 0, 2)
-
-		addresses = append(addresses, itx.Inputs[0].Address)
-
+		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
 			// Use parent entity contract address in signature instead of entity structure.
 			entityRA, err := bitcoin.DecodeRawAddress(contractOffer.EntityContract)
@@ -507,23 +498,13 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 				return errors.Wrap(err, "entity address")
 			}
 
-			entities = append(entities, entityRA)
+			entity = entityRA
 		} else {
-			entities = append(entities, contractOffer.Issuer)
+			entity = contractOffer.Issuer
 		}
 
-		if len(contractOffer.OperatorEntityContract) > 0 {
-			addresses = append(addresses, itx.Inputs[1].Address)
-
-			operatorRA, err := bitcoin.DecodeRawAddress(contractOffer.OperatorEntityContract)
-			if err != nil {
-				return errors.Wrap(err, "operator entity address")
-			}
-
-			entities = append(entities, operatorRA)
-		}
-
-		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, addresses, entities, hash, 1)
+		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
+			entity, hash, 1)
 		if err != nil {
 			return err
 		}

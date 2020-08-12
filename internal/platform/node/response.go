@@ -168,6 +168,7 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 		Error(ctx, w, err)
 		return ErrNoResponse
 	}
+	Log(ctx, "Sending reject : %s", rejection.Message)
 	return ErrRejected
 }
 
