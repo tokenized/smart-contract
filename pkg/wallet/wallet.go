@@ -20,6 +20,7 @@ type WalletInterface interface {
 	List([]bitcoin.RawAddress) ([]*Key, error)
 	ListAll() []*Key
 	Remove(*Key) error
+	RemoveAddress(bitcoin.RawAddress) error
 	Serialize(*bytes.Buffer) error
 	Deserialize(*bytes.Reader) error
 }
@@ -47,6 +48,13 @@ func (w Wallet) Remove(key *Key) error {
 	defer w.lock.Unlock()
 
 	return w.KeyStore.Remove(key)
+}
+
+func (w Wallet) RemoveAddress(ra bitcoin.RawAddress) error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	return w.KeyStore.RemoveAddress(ra)
 }
 
 // Register a private key with the wallet

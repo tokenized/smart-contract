@@ -3,9 +3,10 @@ package wallet
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 
 	"github.com/tokenized/pkg/bitcoin"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -35,6 +36,15 @@ func (k KeyStore) Remove(key *Key) error {
 	hash, err := bitcoin.NewHash20(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
 	if err != nil {
 		return err
+	}
+	delete(k.Keys, *hash)
+	return nil
+}
+
+func (k KeyStore) RemoveAddress(ra bitcoin.RawAddress) error {
+	hash, err := ra.Hash()
+	if err != nil {
+		return errors.Wrap(err, "address hash")
 	}
 	delete(k.Keys, *hash)
 	return nil
