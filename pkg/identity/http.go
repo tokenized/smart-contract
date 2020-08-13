@@ -3,7 +3,6 @@ package identity
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -11,10 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/json"
+	"github.com/tokenized/pkg/logger"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 )
 
 var (
