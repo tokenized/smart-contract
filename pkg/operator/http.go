@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/wire"
 
 	"github.com/google/uuid"
@@ -70,7 +71,7 @@ func GetHTTPClient(ctx context.Context, baseURL string) (*HTTPClient, error) {
 		}
 	}
 
-	if err := get(result.URL+"/id", &response); err != nil {
+	if err := get(ctx, result.URL+"/id", &response); err != nil {
 		return nil, errors.Wrap(err, "http get")
 	}
 
@@ -104,7 +105,7 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 		Signature      bitcoin.Signature  `json:"signature,omitempty"`
 	}
 
-	if err := get(c.URL+"/new_contract", &response); err != nil {
+	if err := get(ctx, c.URL+"/new_contract", &response); err != nil {
 		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http get")
 	}
 
@@ -149,9 +150,12 @@ func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 		UTXO *bitcoin.UTXO `json:"utxo"`
 	}
 
-	if err := post(c.URL+"/sign_contract", request, &response); err != nil {
+	if err := post(ctx, c.URL+"/sign_contract", request, &response); err != nil {
 		return nil, nil, errors.Wrap(err, "http get")
 	}
+
+	// TODO Validate signature of second input of response.Tx and that it is signed by the service
+	// public key --ce
 
 	return response.Tx, response.UTXO, nil
 }
@@ -183,7 +187,7 @@ func (c *HTTPClient) SetClientKey(key bitcoin.Key) {
 }
 
 // post sends an HTTP POST request.
-func post(url string, request, response interface{}) error {
+func post(ctx context.Context, url string, request, response interface{}) error {
 	var transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -200,6 +204,8 @@ func post(url string, request, response interface{}) error {
 	if err != nil {
 		return errors.Wrap(err, "marshal request")
 	}
+
+	logger.Verbose(ctx, "POST URL : %s\nRequest : %s", url, string(b))
 
 	httpResponse, err := client.Post(url, "application/json", bytes.NewReader(b))
 	if err != nil {
@@ -223,8 +229,12 @@ func post(url string, request, response interface{}) error {
 	defer httpResponse.Body.Close()
 
 	if response != nil {
-		if err := json.NewDecoder(httpResponse.Body).Decode(response); err != nil {
-			return errors.Wrap(err, "decode response")
+		b, err := ioutil.ReadAll(httpResponse.Body)
+		if err != nil {
+			return errors.Wrap(err, "read response")
+		}
+		if err := json.Unmarshal(b, response); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("decode response : \n%s\n", string(b)))
 		}
 	}
 
@@ -232,7 +242,7 @@ func post(url string, request, response interface{}) error {
 }
 
 // get sends an HTTP GET request.
-func get(url string, response interface{}) error {
+func get(ctx context.Context, url string, response interface{}) error {
 	var transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -244,6 +254,8 @@ func get(url string, response interface{}) error {
 		Timeout:   time.Second * 10,
 		Transport: transport,
 	}
+
+	logger.Verbose(ctx, "GET URL : %s", url)
 
 	httpResponse, err := client.Get(url)
 	if err != nil {
@@ -257,8 +269,12 @@ func get(url string, response interface{}) error {
 	defer httpResponse.Body.Close()
 
 	if response != nil {
-		if err := json.NewDecoder(httpResponse.Body).Decode(response); err != nil {
-			return errors.Wrap(err, "decode response")
+		b, err := ioutil.ReadAll(httpResponse.Body)
+		if err != nil {
+			return errors.Wrap(err, "read response")
+		}
+		if err := json.Unmarshal(b, response); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("decode response : \n%s\n", string(b)))
 		}
 	}
 

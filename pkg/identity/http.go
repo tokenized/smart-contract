@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 )
 
 var (
@@ -65,7 +67,7 @@ func GetHTTPClient(ctx context.Context, baseURL string) (*HTTPClient, error) {
 		}
 	}
 
-	if err := get(result.URL+"/oracle/id", &response); err != nil {
+	if err := get(ctx, result.URL+"/oracle/id", &response); err != nil {
 		return nil, errors.Wrap(err, "http get")
 	}
 
@@ -111,7 +113,7 @@ func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
 }
 
 // post sends an HTTP POST request.
-func post(url string, request, response interface{}) error {
+func post(ctx context.Context, url string, request, response interface{}) error {
 	var transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -129,6 +131,8 @@ func post(url string, request, response interface{}) error {
 		return errors.Wrap(err, "marshal request")
 	}
 
+	logger.Verbose(ctx, "POST URL : %s\nRequest : %s", url, string(b))
+
 	httpResponse, err := client.Post(url, "application/json", bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -144,8 +148,12 @@ func post(url string, request, response interface{}) error {
 	defer httpResponse.Body.Close()
 
 	if response != nil {
-		if err := json.NewDecoder(httpResponse.Body).Decode(response); err != nil {
-			return errors.Wrap(err, "decode response")
+		b, err := ioutil.ReadAll(httpResponse.Body)
+		if err != nil {
+			return errors.Wrap(err, "read response")
+		}
+		if err := json.Unmarshal(b, response); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("decode response : \n%s\n", string(b)))
 		}
 	}
 
@@ -153,7 +161,7 @@ func post(url string, request, response interface{}) error {
 }
 
 // get sends an HTTP GET request.
-func get(url string, response interface{}) error {
+func get(ctx context.Context, url string, response interface{}) error {
 	var transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 5 * time.Second,
@@ -165,6 +173,8 @@ func get(url string, response interface{}) error {
 		Timeout:   time.Second * 10,
 		Transport: transport,
 	}
+
+	logger.Verbose(ctx, "GET URL : %s", url)
 
 	httpResponse, err := client.Get(url)
 	if err != nil {
@@ -178,8 +188,12 @@ func get(url string, response interface{}) error {
 	defer httpResponse.Body.Close()
 
 	if response != nil {
-		if err := json.NewDecoder(httpResponse.Body).Decode(response); err != nil {
-			return errors.Wrap(err, "decode response")
+		b, err := ioutil.ReadAll(httpResponse.Body)
+		if err != nil {
+			return errors.Wrap(err, "read response")
+		}
+		if err := json.Unmarshal(b, response); err != nil {
+			return errors.Wrap(err, fmt.Sprintf("decode response : \n%s\n", string(b)))
 		}
 	}
 

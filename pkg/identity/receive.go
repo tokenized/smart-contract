@@ -55,7 +55,7 @@ func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string,
 		}
 	}
 
-	if err := post(o.URL+"/transfer/approve", request, &response); err != nil {
+	if err := post(ctx, o.URL+"/transfer/approve", request, &response); err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
 	}
 

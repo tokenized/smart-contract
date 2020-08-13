@@ -34,7 +34,7 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 			}
 		}
 
-		if err := post(o.URL+"/oracle/user", request, &response); err != nil {
+		if err := post(ctx, o.URL+"/oracle/user", request, &response); err != nil {
 			if errors.Cause(err) == ErrNotFound {
 				continue
 			}
@@ -62,7 +62,7 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 		}
 	}
 
-	if err := post(o.URL+"/oracle/register", request, &response); err != nil {
+	if err := post(ctx, o.URL+"/oracle/register", request, &response); err != nil {
 		return uuid.UUID{}, errors.Wrap(err, "http post")
 	}
 
@@ -105,7 +105,7 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 		return errors.Wrap(err, "sign")
 	}
 
-	if err := post(o.URL+"/oracle/addXPub", request, nil); err != nil {
+	if err := post(ctx, o.URL+"/oracle/addXPub", request, nil); err != nil {
 		return errors.Wrap(err, "http post")
 	}
 

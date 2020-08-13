@@ -47,7 +47,7 @@ func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 		}
 	}
 
-	if err := post(o.URL+"/identity/verifyPubKey", request, &response); err != nil {
+	if err := post(ctx, o.URL+"/identity/verifyPubKey", request, &response); err != nil {
 		return ApprovedEntityPublicKey{}, errors.Wrap(err, "http post")
 	}
 
