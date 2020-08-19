@@ -243,6 +243,7 @@ func (itd *IncomingTxData) Serialize(buf *bytes.Buffer) error {
 }
 
 func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
+	itd.Itx = &inspector.Transaction{}
 	if err := itd.Itx.Read(buf, isTest); err != nil {
 		return errors.Wrap(err, "read itx")
 	}
