@@ -455,7 +455,7 @@ func oracleContract(t *testing.T) {
 
 	blockHash, err := test.Headers.Hash(ctx, int(offerData.AdminIdentityCertificates[0].BlockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuerKey.Address,
-		offerData.Issuer, blockHash, 0)
+		offerData.Issuer, *blockHash, 0, 0)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -591,7 +591,7 @@ func oracleContract(t *testing.T) {
 
 	// Fix signature and retry
 	sigHash, err = protocol.ContractAdminIdentityOracleSigHash(ctx, issuerKey.Address,
-		offerData.Issuer, blockHash, 1)
+		offerData.Issuer, *blockHash, 0, 1)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -1023,7 +1023,7 @@ func contractOracleAmendment(t *testing.T) {
 	blockHeight := uint32(test.Headers.LastHeight(ctx) - 4)
 	blockHash, err := test.Headers.Hash(ctx, int(blockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuer2Key.Address, cf.Issuer,
-		blockHash, 1)
+		*blockHash, 0, 1)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
@@ -1563,7 +1563,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agre
 
 	blockHash, err := test.Headers.Hash(ctx, int(sigBlockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuerKey.Address, cf.Issuer,
-		blockHash, 0)
+		*blockHash, 0, 0)
 	if err != nil {
 		t.Fatalf("Failed to create sig hash : %s", err)
 	}

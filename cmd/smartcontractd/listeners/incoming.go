@@ -509,7 +509,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
 		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
-		receiverAddress, hash, assetReceiver.OracleSigExpiry, 1)
+		receiverAddress, *hash, assetReceiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
@@ -587,7 +587,7 @@ func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.
 		}
 
 		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
-			entity, hash, 1)
+			entity, *hash, cert.Expiration, 1)
 		if err != nil {
 			return err
 		}

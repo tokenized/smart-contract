@@ -16,6 +16,16 @@ var cmdConvert = &cobra.Command{
 	Use:   "convert [address/hash]",
 	Short: "Convert bitcoin addresses to hashes and vice versa",
 	RunE: func(c *cobra.Command, args []string) error {
+		if len(args) == 2 {
+			b, err := hex.DecodeString(args[1])
+			if err == nil {
+				assetID := protocol.AssetID(args[0], *protocol.AssetCodeFromBytes(b))
+				fmt.Printf("Asset ID : %s\n", assetID)
+				return nil
+			}
+
+		}
+
 		if len(args) != 1 {
 			return errors.New("Incorrect argument count")
 		}

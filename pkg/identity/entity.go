@@ -79,7 +79,7 @@ func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHa
 		return errors.Wrap(err, "block hash")
 	}
 
-	sigHash, err := protocol.EntityPubKeyOracleSigHash(ctx, entity, data.PublicKey, blockHash, 1)
+	sigHash, err := protocol.EntityPubKeyOracleSigHash(ctx, entity, data.PublicKey, *blockHash, 1)
 	if err != nil {
 		return errors.Wrap(err, "generate signature")
 	}

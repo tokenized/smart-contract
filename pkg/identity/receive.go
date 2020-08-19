@@ -113,7 +113,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 
 	// Check for approved signature
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, blockHash, receiver.OracleSigExpiry, 1)
+		receiveAddress, *blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
@@ -124,7 +124,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 
 	// Check for not approved signature
 	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, blockHash, receiver.OracleSigExpiry, 0)
+		receiveAddress, *blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
@@ -169,7 +169,7 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 
 	// Check for approved signature
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, &blockHash, receiver.OracleSigExpiry, 1)
+		receiveAddress, blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
@@ -180,7 +180,7 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 
 	// Check for not approved signature
 	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, &blockHash, receiver.OracleSigExpiry, 0)
+		receiveAddress, blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}

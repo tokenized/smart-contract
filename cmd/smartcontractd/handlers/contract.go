@@ -967,7 +967,8 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 		entity = cf.Issuer
 	}
 
-	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, adminAddress, entity, hash, 1)
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, adminAddress, entity, *hash,
+		adminCert.Expiration, 1)
 	if err != nil {
 		return err
 	}

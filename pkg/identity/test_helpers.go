@@ -169,7 +169,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 	}
 
 	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
-		receiveAddress, blockHash, 0, 1)
+		receiveAddress, *blockHash, 0, 1)
 	if err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate sig hash")
 	}
@@ -187,6 +187,56 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 		OracleConfirmationSig: sig.Bytes(),
 		OracleSigBlockHeight:  uint32(height),
 		OracleSigExpiry:       0,
+	}
+
+	return result, *blockHash, nil
+}
+
+// AdminIdentityCertificate requests a admin identity certification for a contract offer.
+func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
+	entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
+	requiredSigners int) (*actions.AdminIdentityCertificateField, bitcoin.Hash32, error) {
+
+	adminKey, err := xpubs.ChildKeys(index)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address key")
+	}
+
+	adminAddress, err := adminKey.RawAddress(requiredSigners)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address")
+	}
+
+	// Get random block hash
+	height := rand.Intn(5000)
+	blockHash, err := c.blockHashes.Hash(ctx, height)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "get sig block hash")
+	}
+
+	var entity interface{}
+	if entityContract.IsEmpty() {
+		entity = issuer
+	} else {
+		entity = entityContract
+	}
+
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, adminAddress, entity,
+		*blockHash, 0, 1)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate sig hash")
+	}
+
+	sig, err := c.Key.Sign(sigHash)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "sign")
+	}
+
+	result := &actions.AdminIdentityCertificateField{
+		EntityContract: c.ContractAddress.Bytes(),
+		Signature:      sig.Bytes(),
+		BlockHeight:    uint32(height),
+		Expiration:     0,
 	}
 
 	return result, *blockHash, nil
