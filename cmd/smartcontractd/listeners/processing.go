@@ -17,6 +17,7 @@ import (
 func (server *Server) ProcessTxs(ctx context.Context) error {
 	for ptx := range server.processingTxs.Channel {
 		node.Log(ctx, "Processing tx : %s", ptx.Itx.Hash)
+
 		server.lock.Lock()
 		server.Tracer.AddTx(ctx, ptx.Itx.MsgTx)
 		server.lock.Unlock()
@@ -27,12 +28,14 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			node.Log(ctx, "Not tokenized : %s", ptx.Itx.Hash)
 			server.utxos.Add(ptx.Itx.MsgTx, server.contractAddresses)
 			server.walletLock.RUnlock()
+			node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
 			continue
 		}
 
 		if err := server.removeConflictingPending(ctx, ptx.Itx); err != nil {
 			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
 			server.walletLock.RUnlock()
+			node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
 			continue
 		}
 
@@ -40,7 +43,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
 			if err := contract.SaveContractFormation(ctx, server.MasterDB,
 				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
-				node.LogError(ctx, "Failed to save contract offer : %s", ptx.Itx.Hash.String())
+				node.LogError(ctx, "Failed to save contract formation : %s", ptx.Itx.Hash.String())
 			}
 		}
 
@@ -89,7 +92,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
+		server.walletLock.RUnlock()
+
 		if found { // Tx is associated with one of our contracts.
+			node.LogVerbose(ctx, "Handling tx : %s", ptx.Itx.Hash)
 			if server.IsInSync() {
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
@@ -102,10 +108,12 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 					node.LogError(ctx, "Failed to save tx : %s", err)
 				}
 			}
+			node.LogVerbose(ctx, "Handled tx : %s", ptx.Itx.Hash)
 		}
 
-		server.walletLock.RUnlock()
+		node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
 	}
+
 	return nil
 }
 

@@ -43,6 +43,8 @@ func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Ha
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
+
+	node.LogVerbose(ctx, "Tx added to incoming : %s", intx.Itx.Hash.String())
 	return nil
 }
 
@@ -51,6 +53,8 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 	headers node.BitcoinHeaders) error {
 
 	for intx := range server.incomingTxs.Channel {
+		node.LogVerbose(ctx, "Processing incoming tx : %s", intx.Itx.Hash.String())
+
 		if err := intx.Itx.Setup(ctx, server.Config.IsTest); err != nil {
 			return err
 		}
@@ -92,6 +96,9 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 }
 
 func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32) {
+	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked preprocessed  : %s", txid.String())
+
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
@@ -130,6 +137,9 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 }
 
 func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
+	node.LogVerbose(ctx, "Marking tx safe  : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked safe  : %s", txid.String())
+
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
