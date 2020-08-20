@@ -902,8 +902,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				for _, settlementQuantity := range assetSettlement.Settlements {
 					if index == int(settlementQuantity.Index) {
 						if *quantity != settlementQuantity.Quantity {
-							node.LogWarn(ctx, "%s : Incorrect settlment quantity for output %d : %d != %d : %x",
-								v.TraceID, index, *quantity, settlementQuantity.Quantity, assetTransfer.AssetCode)
+							node.LogWarn(ctx, "Incorrect settlment quantity for output %d : %d != %d : %x",
+								index, *quantity, settlementQuantity.Quantity, assetTransfer.AssetCode)
 							return fmt.Errorf("Asset settlement quantity wrong")
 						}
 						found = true
@@ -912,8 +912,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				}
 
 				if !found {
-					node.LogWarn(ctx, "%s : missing settlment for output %d : %x",
-						v.TraceID, index, assetTransfer.AssetCode)
+					node.LogWarn(ctx, "Missing settlment for output %d : %x", index,
+						assetTransfer.AssetCode)
 					return fmt.Errorf("Asset settlement missing")
 				}
 			}

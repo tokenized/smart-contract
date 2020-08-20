@@ -295,8 +295,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		// Verify proposal amendments match these amendments.
 		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
-			node.LogWarn(ctx, "%s : Proposal has different count of amendments : %d != %d",
-				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
+			node.LogWarn(ctx, "Proposal has different count of amendments : %d != %d",
+				len(voteResult.ProposedAmendments), len(msg.Amendments))
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
@@ -351,7 +351,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		if ac.TokenQty < as.TokenQty {
 			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, true, v.Now); err != nil {
-				node.LogWarn(ctx, "%s : Failed to reduce administration holdings : %s", v.TraceID, err)
+				node.LogWarn(ctx, "Failed to reduce administration holdings : %s", err)
 				if err == holdings.ErrInsufficientHoldings {
 					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 				} else {
@@ -360,7 +360,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		} else {
 			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, true, v.Now); err != nil {
-				node.LogWarn(ctx, "%s : Failed to increase administration holdings : %s", v.TraceID, err)
+				node.LogWarn(ctx, "Failed to increase administration holdings : %s", err)
 				return errors.Wrap(err, "Failed to increase holdings")
 			}
 		}

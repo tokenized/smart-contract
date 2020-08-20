@@ -17,7 +17,6 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -216,8 +215,7 @@ func (test *Test) TearDown() {
 // Context returns an app level context for testing.
 func NewContext() context.Context {
 	values := node.Values{
-		TraceID: uuid.New().String(),
-		Now:     protocol.CurrentTimestamp(),
+		Now: protocol.CurrentTimestamp(),
 	}
 
 	return context.WithValue(context.Background(), node.KeyValues, &values)

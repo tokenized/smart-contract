@@ -348,8 +348,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 		// Verify proposal amendments match these amendments.
 		if len(voteResult.ProposedAmendments) != len(msg.Amendments) {
-			node.LogWarn(ctx, "%s : Proposal has different count of amendments : %d != %d",
-				v.TraceID, len(voteResult.ProposedAmendments), len(msg.Amendments))
+			node.LogWarn(ctx, "Proposal has different count of amendments : %d != %d",
+				len(voteResult.ProposedAmendments), len(msg.Amendments))
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
@@ -600,7 +600,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		var nc contract.NewContract
 		err := node.Convert(ctx, &msg, &nc)
 		if err != nil {
-			node.LogWarn(ctx, "Failed to convert formation to new contract (%s) : %s", contractName, err.Error())
+			node.LogWarn(ctx, "Failed to convert formation to new contract (%s) : %s",
+				contractName, err.Error())
 			return err
 		}
 
@@ -608,7 +609,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		var offerTx *inspector.Transaction
 		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s", itx.Inputs[0].UTXO.Hash.String()))
+			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s",
+				itx.Inputs[0].UTXO.Hash.String()))
 		}
 
 		// Get offer from it
@@ -748,7 +750,9 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 }
 
 // AddressChange handles an incoming Contract Address Change.
-func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
+
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.AddressChange")
 	defer span.End()
 
@@ -772,7 +776,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter, it
 	// Check that it is from the master PKH
 	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogWarn(ctx, "Contract address change must be from master address : %s", address.String())
+		node.LogWarn(ctx, "Contract address change must be from master address : %s",
+			address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}
 

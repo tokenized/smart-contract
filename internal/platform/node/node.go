@@ -4,12 +4,10 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
-	"go.opencensus.io/trace"
 )
 
 // ctxKey represents the type of value for the context key.
@@ -20,7 +18,6 @@ const KeyValues ctxKey = 1
 
 // Values represent state for each event.
 type Values struct {
-	TraceID    string
 	Now        protocol.Timestamp
 	StatusCode int
 	Error      bool
@@ -80,9 +77,6 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 	// The function to execute for each event.
 	h := func(ctx context.Context, itx *inspector.Transaction) error {
-		// Start trace span.
-		ctx, span := trace.StartSpan(ctx, "internal.platform.node")
-
 		// Prepare response writer
 		w := &ResponseWriter{
 			Mux:    a.ProtoMux,
@@ -99,16 +93,9 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 			// Set the context with the required values to process the event.
 			v := Values{
-				TraceID: span.SpanContext().TraceID.String(),
-				Now:     protocol.CurrentTimestamp(),
+				Now: protocol.CurrentTimestamp(),
 			}
 			ctx = context.WithValue(ctx, KeyValues, &v)
-
-			// Add logger trace of beginning of contract and tx ids.
-			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %s Tx %s",
-				bitcoin.NewAddressFromRawAddress(walletKey.Address, w.Config.Net).String(),
-				itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true

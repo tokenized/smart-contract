@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
@@ -18,7 +19,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 	for ptx := range server.processingTxs.Channel {
 		ctx := node.ContextWithLogTrace(ctx, ptx.Itx.Hash.String())
 
-		node.Log(ctx, "Processing tx : %s", ptx.Itx.Hash)
+		node.Log(ctx, "Processing tx")
 
 		server.lock.Lock()
 		server.Tracer.AddTx(ctx, ptx.Itx.MsgTx)
@@ -27,17 +28,15 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		server.walletLock.RLock()
 
 		if !ptx.Itx.IsTokenized() {
-			node.Log(ctx, "Not tokenized : %s", ptx.Itx.Hash)
+			node.Log(ctx, "Not tokenized")
 			server.utxos.Add(ptx.Itx.MsgTx, server.contractAddresses)
 			server.walletLock.RUnlock()
-			node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
 			continue
 		}
 
 		if err := server.removeConflictingPending(ctx, ptx.Itx); err != nil {
 			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
 			server.walletLock.RUnlock()
-			node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
 			continue
 		}
 
@@ -45,7 +44,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
 			if err := contract.SaveContractFormation(ctx, server.MasterDB,
 				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
-				node.LogError(ctx, "Failed to save contract formation : %s", ptx.Itx.Hash.String())
+				node.LogError(ctx, "Failed to save contract formation : %s", err)
 			}
 		}
 
@@ -56,11 +55,13 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			for _, address := range server.contractAddresses {
 				if address.Equal(output.Address) {
 					found = true
+					node.Log(ctx, "Request for contract %s",
+						bitcoin.NewAddressFromRawAddress(address, server.Config.Net).String())
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
 					if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
-						node.Log(ctx, "Request added to pending : %s", ptx.Itx.Hash)
+						node.Log(ctx, "Adding request to pending")
 						// Save pending request to ensure it has a response, and process it if not.
 						server.pendingRequests = append(server.pendingRequests, pendingRequest{
 							Itx:           ptx.Itx,
@@ -79,10 +80,12 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			for _, input := range ptx.Itx.Inputs {
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
+						node.Log(ctx, "Response for contract %s",
+							bitcoin.NewAddressFromRawAddress(address, server.Config.Net).String())
 						found = true
 						responseAdded = true
 						if !server.IsInSync() {
-							node.Log(ctx, "Response added to pending : %s", ptx.Itx.Hash)
+							node.Log(ctx, "Adding response to pending")
 							server.pendingResponses = append(server.pendingResponses, ptx.Itx)
 						}
 						break
@@ -110,7 +113,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				}
 			}
 		} else {
-			node.LogVerbose(ctx, "Tx not for contracts : %s", ptx.Itx.Hash)
+			node.LogVerbose(ctx, "Tx not for any contract addresses")
 		}
 	}
 
