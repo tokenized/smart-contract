@@ -122,18 +122,28 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 
 	toRemove := 0
 	for _, txid := range server.readyTxs {
+		node.LogVerbose(ctx, "Checking ready tx : %s", txid.String())
+
 		intx, exists := server.pendingTxs[*txid]
 		if !exists {
 			node.LogVerbose(ctx, "Tx not pending : %s", txid.String())
 			toRemove++
-		} else if intx.IsPreprocessed && intx.IsReady {
+			continue
+		}
+
+		node.LogVerbose(ctx, "IsPreprocessed : %t", intx.IsPreprocessed)
+		node.LogVerbose(ctx, "IsReady : %t", intx.IsReady)
+
+		if intx.IsPreprocessed && intx.IsReady {
 			node.LogVerbose(ctx, "Pending tx added to processing : %s", txid.String())
 			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
 			delete(server.pendingTxs, *intx.Itx.Hash)
 			toRemove++
-		} else {
-			break
+			continue
 		}
+
+		node.LogVerbose(ctx, "Tx not ready : %s", txid.String())
+		break
 	}
 
 	// Remove processed txids
@@ -151,19 +161,12 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	defer node.LogVerbose(ctx, "Tx marked safe : %s", txid.String())
 
 	server.pendingLock.Lock()
-	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for safe : %s", txid.String())
+		server.pendingLock.Unlock()
 		return
-	}
-
-	// Broadcast to ensure it is accepted by the network.
-	if server.IsInSync() && intx.Itx.IsIncomingMessageType() {
-		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
-			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
-		}
 	}
 
 	intx.IsReady = true
@@ -173,6 +176,15 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
+
+	server.pendingLock.Unlock()
+
+	// Broadcast to ensure it is accepted by the network.
+	if server.IsInSync() && intx.Itx.IsIncomingMessageType() {
+		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
+			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
+		}
+	}
 }
 
 func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
