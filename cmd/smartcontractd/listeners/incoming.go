@@ -138,6 +138,10 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 
 	// Remove processed txids
 	if toRemove > 0 {
+		node.LogVerbose(ctx, "Removing %d txs from ready", toRemove)
+		for i := 0; i < toRemove; i++ {
+			node.LogVerbose(ctx, "Removing tx from ready : %s", server.readyTxs[i].String())
+		}
 		server.readyTxs = append(server.readyTxs[:toRemove-1], server.readyTxs[toRemove:]...)
 	}
 }
@@ -164,6 +168,7 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 
 	intx.IsReady = true
 	if !intx.InReady {
+		node.LogVerbose(ctx, "Adding tx to ready : %s", txid.String())
 		intx.InReady = true
 		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
@@ -187,6 +192,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 	intx.Itx.RejectCode = actions.RejectionsDoubleSpend
 	for i, readyID := range server.readyTxs {
 		if *readyID == *txid {
+			node.LogVerbose(ctx, "Removing tx from ready : %s", txid.String())
 			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
 			break
 		}
@@ -210,6 +216,7 @@ func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32)
 	if intx.InReady {
 		for i, readyID := range server.readyTxs {
 			if *readyID == *txid {
+				node.LogVerbose(ctx, "Removing tx from ready : %s", txid.String())
 				server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
 				break
 			}
@@ -233,6 +240,7 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 
 	intx.IsReady = true
 	if !intx.InReady {
+		node.LogVerbose(ctx, "Adding tx to ready : %s", txid.String())
 		intx.InReady = true
 		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
@@ -299,7 +307,12 @@ func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
 }
 
 func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) (*IncomingTxData, error) {
-	result := IncomingTxData{Timestamp: protocol.CurrentTimestamp()}
+	result := IncomingTxData{
+		Timestamp:      protocol.CurrentTimestamp(),
+		IsPreprocessed: false,
+		IsReady:        false,
+		InReady:        false,
+	}
 	var err error
 	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
 	if err != nil {
