@@ -326,7 +326,8 @@ func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32)
 		InReady:        false,
 	}
 	var err error
-	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
+	newTxId := txid
+	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &newTxId, tx)
 	if err != nil {
 		return nil, err
 	}
