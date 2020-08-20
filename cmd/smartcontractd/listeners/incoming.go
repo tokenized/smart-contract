@@ -97,7 +97,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 
 func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32) {
 	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked preprocessed  : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked preprocessed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
@@ -120,8 +120,10 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 	for _, txid := range server.readyTxs {
 		intx, exists := server.pendingTxs[*txid]
 		if !exists {
+			node.LogVerbose(ctx, "Tx not pending : %s", txid.String())
 			toRemove++
 		} else if intx.IsPreprocessed && intx.IsReady {
+			node.LogVerbose(ctx, "Pending tx added to processing : %s", txid.String())
 			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
 			delete(server.pendingTxs, *intx.Itx.Hash)
 			toRemove++
@@ -137,8 +139,8 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 }
 
 func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
-	node.LogVerbose(ctx, "Marking tx safe  : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked safe  : %s", txid.String())
+	node.LogVerbose(ctx, "Marking tx safe : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked safe : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()

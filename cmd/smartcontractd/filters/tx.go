@@ -61,7 +61,7 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 	defer filter.lock.RUnlock()
 
 	if filter.tracer.Contains(ctx, tx) {
-		logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
+		logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 4,
 			"Matches Tracer : %s", tx.TxHash().String())
 		return true
 	}
@@ -85,8 +85,8 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 		}
 		for _, pkh := range filter.pkhs {
 			if bytes.Equal(hash.Bytes(), pkh) {
-				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
-					"Matches PaymentToContract : %s", tx.TxHash().String())
+				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 4,
+					"Matches PKH : %s", tx.TxHash().String())
 				return true
 			}
 		}
@@ -102,8 +102,8 @@ func (filter *TxFilter) IsRelevant(ctx context.Context, tx *wire.MsgTx) bool {
 
 		for _, cpk := range filter.pubkeys {
 			if bytes.Equal(pk, cpk) {
-				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 3,
-					"Matches PaymentFromContract : %s", tx.TxHash().String())
+				logger.LogDepth(logger.ContextWithOutLogSubSystem(ctx), logger.LevelInfo, 4,
+					"Matches Pub Key : %s", tx.TxHash().String())
 				return true
 			}
 		}

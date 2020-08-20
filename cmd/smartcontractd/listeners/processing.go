@@ -18,11 +18,14 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 	for ptx := range server.processingTxs.Channel {
 		node.Log(ctx, "Processing tx : %s", ptx.Itx.Hash)
 
+		node.LogVerbose(ctx, "Adding tx to tracer : %s", ptx.Itx.Hash)
 		server.lock.Lock()
 		server.Tracer.AddTx(ctx, ptx.Itx.MsgTx)
 		server.lock.Unlock()
+		node.LogVerbose(ctx, "Added tx to tracer : %s", ptx.Itx.Hash)
 
 		server.walletLock.RLock()
+		node.LogVerbose(ctx, "Wallet read locked : %s", ptx.Itx.Hash)
 
 		if !ptx.Itx.IsTokenized() {
 			node.Log(ctx, "Not tokenized : %s", ptx.Itx.Hash)
@@ -47,6 +50,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
+		node.LogVerbose(ctx, "Past save formation : %s", ptx.Itx.Hash)
+
 		found := false
 
 		// Save tx to cache so it can be used to process the response
@@ -70,6 +75,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
+		node.LogVerbose(ctx, "Past inputs : %s", ptx.Itx.Hash)
+
 		// Save pending responses so they can be processed in proper order, which may not be on
 		//   chain order.
 		if ptx.Itx.IsOutgoingMessageType() {
@@ -92,6 +99,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
+		node.LogVerbose(ctx, "Past outputs : %s", ptx.Itx.Hash)
+
 		server.walletLock.RUnlock()
 
 		if found { // Tx is associated with one of our contracts.
@@ -109,6 +118,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				}
 			}
 			node.LogVerbose(ctx, "Handled tx : %s", ptx.Itx.Hash)
+		} else {
+			node.LogVerbose(ctx, "Tx not for contracts : %s", ptx.Itx.Hash)
 		}
 
 		node.LogVerbose(ctx, "Processed tx : %s", ptx.Itx.Hash)
