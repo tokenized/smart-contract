@@ -106,7 +106,9 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 
 			// Add logger trace of beginning of contract and tx ids.
 			ctx = logger.ContextWithLogTrace(ctx, v.TraceID)
-			Log(ctx, "Trace Data : Contract %x Tx %s", bitcoin.Hash160(walletKey.Key.PublicKey().Bytes()), itx.Hash)
+			Log(ctx, "Trace Data : Contract %s Tx %s",
+				bitcoin.NewAddressFromRawAddress(walletKey.Address, w.Config.Net).String(),
+				itx.Hash)
 
 			// Call the wrapped handler functions.
 			handled = true

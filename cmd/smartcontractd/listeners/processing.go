@@ -16,6 +16,8 @@ import (
 // ProcessTxs performs "core" processing on transactions.
 func (server *Server) ProcessTxs(ctx context.Context) error {
 	for ptx := range server.processingTxs.Channel {
+		ctx = node.ContextWithLogTrace(ctx, ptx.Itx.Hash.String())
+
 		node.Log(ctx, "Processing tx : %s", ptx.Itx.Hash)
 
 		node.LogVerbose(ctx, "Adding tx to tracer : %s", ptx.Itx.Hash)

@@ -66,7 +66,7 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 			return nil // Already accepted. Reverted by reorg and safe again.
 		}
 
-		server.MarkSafe(ctx, &txid)
+		server.MarkSafe(ctx, txid)
 		return nil
 
 	case handlers.ListenerMsgTxStateConfirm:
@@ -77,13 +77,13 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 			return nil // Already accepted. Reverted and reconfirmed by reorg
 		}
 
-		server.MarkConfirmed(ctx, &txid)
+		server.MarkConfirmed(ctx, txid)
 		return nil
 
 	case handlers.ListenerMsgTxStateCancel:
 		node.Log(ctx, "Tx cancel")
 
-		if server.CancelPendingTx(ctx, &txid) {
+		if server.CancelPendingTx(ctx, txid) {
 			return nil
 		}
 
@@ -99,12 +99,13 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 
 	case handlers.ListenerMsgTxStateUnsafe:
 		node.Log(ctx, "Tx unsafe")
-		server.MarkUnsafe(ctx, &txid)
+		server.MarkUnsafe(ctx, txid)
 
 	case handlers.ListenerMsgTxStateRevert:
 		node.Log(ctx, "Tx revert")
 		server.revertedTxs = append(server.revertedTxs, &txid)
 	}
+
 	return nil
 }
 

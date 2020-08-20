@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -56,18 +57,26 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		node.LogVerbose(ctx, "Processing incoming tx : %s", intx.Itx.Hash.String())
 
 		if err := intx.Itx.Setup(ctx, server.Config.IsTest); err != nil {
-			return err
+			server.abortPendingTx(ctx, *intx.Itx.Hash)
+			return errors.Wrap(err, "setup")
 		}
 		if err := intx.Itx.Validate(ctx); err != nil {
-			return err
+			server.abortPendingTx(ctx, *intx.Itx.Hash)
+			return errors.Wrap(err, "validate")
 		}
 		if err := intx.Itx.Promote(ctx, server.RpcNode); err != nil {
-			return err
+			server.abortPendingTx(ctx, *intx.Itx.Hash)
+			if errors.Cause(err) == rpcnode.ErrNotSeen {
+				node.LogVerbose(ctx, "Failed to promote tx : %s : %s", intx.Itx.Hash.String(), err)
+				continue
+			}
+			return errors.Wrap(err, "promote")
 		}
 
 		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
 			feeRate, err := intx.Itx.FeeRate()
 			if err != nil {
+				server.abortPendingTx(ctx, *intx.Itx.Hash)
 				return errors.Wrap(err, "fee rate")
 			}
 			if feeRate < server.Config.MinFeeRate {
@@ -90,19 +99,20 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 			}
 		}
 
-		server.markPreprocessed(ctx, intx.Itx.Hash)
+		server.markPreprocessed(ctx, *intx.Itx.Hash)
 	}
+
 	return nil
 }
 
-func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32) {
+func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32) {
 	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
 	defer node.LogVerbose(ctx, "Tx marked preprocessed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
-	intx, exists := server.pendingTxs[*txid]
+	intx, exists := server.pendingTxs[txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
 		return
@@ -117,22 +127,14 @@ func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32
 // processReadyTxs moves txs from pending into the processing channel in the proper order.
 // pendingLock is locked by caller.
 func (server *Server) processReadyTxs(ctx context.Context) {
-	node.LogVerbose(ctx, "Process ready txs")
-	defer node.LogVerbose(ctx, "Processed ready txs")
-
 	toRemove := 0
 	for _, txid := range server.readyTxs {
-		node.LogVerbose(ctx, "Checking ready tx : %s", txid.String())
-
 		intx, exists := server.pendingTxs[*txid]
 		if !exists {
 			node.LogVerbose(ctx, "Tx not pending : %s", txid.String())
 			toRemove++
 			continue
 		}
-
-		node.LogVerbose(ctx, "IsPreprocessed : %t", intx.IsPreprocessed)
-		node.LogVerbose(ctx, "IsReady : %t", intx.IsReady)
 
 		if intx.IsPreprocessed && intx.IsReady {
 			node.LogVerbose(ctx, "Pending tx added to processing : %s", txid.String())
@@ -142,7 +144,8 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 			continue
 		}
 
-		node.LogVerbose(ctx, "Tx not ready : %s", txid.String())
+		node.LogVerbose(ctx, "Tx not ready : IsPreprocessed=%t, IsReady=%t : %s",
+			intx.IsPreprocessed, intx.IsReady, txid.String())
 		break
 	}
 
@@ -156,13 +159,10 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 	}
 }
 
-func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
-	node.LogVerbose(ctx, "Marking tx safe : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked safe : %s", txid.String())
-
+func (server *Server) MarkSafe(ctx context.Context, txid bitcoin.Hash32) {
 	server.pendingLock.Lock()
 
-	intx, exists := server.pendingTxs[*txid]
+	intx, exists := server.pendingTxs[txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for safe : %s", txid.String())
 		server.pendingLock.Unlock()
@@ -187,14 +187,13 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 }
 
-func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
+func (server *Server) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) {
 	node.LogVerbose(ctx, "Marking tx unsafe : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked unsafe : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
-	intx, exists := server.pendingTxs[*txid]
+	intx, exists := server.pendingTxs[txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for unsafe : %s", txid.String())
 		return
@@ -202,49 +201,44 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 
 	intx.IsReady = true
 	intx.Itx.RejectCode = actions.RejectionsDoubleSpend
-	for i, readyID := range server.readyTxs {
-		if *readyID == *txid {
-			node.LogVerbose(ctx, "Removing tx from ready : %s", txid.String())
-			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
-			break
+	if intx.InReady {
+		if err := server.removeReadyTx(ctx, txid); err != nil {
+			node.LogWarn(ctx, "Failed to remove tx from ready txs : %s : %s", txid.String(), err)
 		}
+		intx.InReady = false
 	}
 }
 
-func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32) bool {
+func (server *Server) CancelPendingTx(ctx context.Context, txid bitcoin.Hash32) bool {
 	node.LogVerbose(ctx, "Canceling pending tx : %s", txid.String())
-	defer node.LogVerbose(ctx, "Cancelled pending tx : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
-	intx, exists := server.pendingTxs[*txid]
+	intx, exists := server.pendingTxs[txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for cancel : %s", txid.String())
 		return false
 	}
 
-	delete(server.pendingTxs, *txid)
+	delete(server.pendingTxs, txid)
 	if intx.InReady {
-		for i, readyID := range server.readyTxs {
-			if *readyID == *txid {
-				node.LogVerbose(ctx, "Removing tx from ready : %s", txid.String())
-				server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
-				break
-			}
+		if err := server.removeReadyTx(ctx, txid); err != nil {
+			node.LogWarn(ctx, "Failed to remove tx from ready txs : %s : %s", txid.String(), err)
 		}
+		intx.InReady = false
 	}
+
 	return true
 }
 
-func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
+func (server *Server) MarkConfirmed(ctx context.Context, txid bitcoin.Hash32) {
 	node.LogVerbose(ctx, "Marking tx confirmed : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked confirmed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
-	intx, exists := server.pendingTxs[*txid]
+	intx, exists := server.pendingTxs[txid]
 	if !exists {
 		node.LogVerbose(ctx, "Pending tx doesn't exist for confirmed : %s", txid.String())
 		return
@@ -257,6 +251,38 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
 		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
+}
+
+// abortTx removes the tx from pending processing so it will not be processed.
+func (server *Server) abortPendingTx(ctx context.Context, txid bitcoin.Hash32) error {
+	node.LogVerbose(ctx, "Aborting tx : %s", txid.String())
+
+	server.pendingLock.Lock()
+	defer server.pendingLock.Unlock()
+
+	// Remove from pending
+	delete(server.pendingTxs, txid)
+
+	if err := server.removeReadyTx(ctx, txid); err != nil {
+		return errors.Wrap(err, "unready tx")
+	}
+
+	return nil
+}
+
+// removeReadyTx removes the tx from ready txs.
+// pendingLock must already be locked.
+func (server *Server) removeReadyTx(ctx context.Context, txid bitcoin.Hash32) error {
+	// Remove from ready txs if it is in there.
+	for i, readyID := range server.readyTxs {
+		if *readyID == txid {
+			node.LogVerbose(ctx, "Removing tx from ready : %s", txid.String())
+			server.readyTxs = append(server.readyTxs[:i], server.readyTxs[i+1:]...)
+			break
+		}
+	}
+
+	return nil
 }
 
 type IncomingTxData struct {
@@ -326,8 +352,7 @@ func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32)
 		InReady:        false,
 	}
 	var err error
-	newTxId := txid
-	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &newTxId, tx)
+	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
 	if err != nil {
 		return nil, err
 	}
