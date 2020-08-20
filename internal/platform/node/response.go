@@ -37,7 +37,7 @@ func Error(ctx context.Context, w *ResponseWriter, err error) {
 	// }
 
 	// fmt.Printf("Error : %s\n", err)
-	LogDepth(ctx, logger.LevelError, 1, "%s", err)
+	LogDepth(ctx, logger.LevelWarn, 1, "%s", err)
 }
 
 // RespondReject sends a rejection message.
