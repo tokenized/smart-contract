@@ -104,6 +104,7 @@ func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
+		node.LogVerbose(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
 		return
 	}
 
@@ -116,6 +117,9 @@ func (server *Server) markPreprocessed(ctx context.Context, txid *bitcoin.Hash32
 // processReadyTxs moves txs from pending into the processing channel in the proper order.
 // pendingLock is locked by caller.
 func (server *Server) processReadyTxs(ctx context.Context) {
+	node.LogVerbose(ctx, "Process ready txs")
+	defer node.LogVerbose(ctx, "Processed ready txs")
+
 	toRemove := 0
 	for _, txid := range server.readyTxs {
 		intx, exists := server.pendingTxs[*txid]
@@ -147,6 +151,7 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
+		node.LogVerbose(ctx, "Pending tx doesn't exist for safe : %s", txid.String())
 		return
 	}
 
@@ -166,11 +171,15 @@ func (server *Server) MarkSafe(ctx context.Context, txid *bitcoin.Hash32) {
 }
 
 func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
+	node.LogVerbose(ctx, "Marking tx unsafe : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked unsafe : %s", txid.String())
+
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
+		node.LogVerbose(ctx, "Pending tx doesn't exist for unsafe : %s", txid.String())
 		return
 	}
 
@@ -185,11 +194,15 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid *bitcoin.Hash32) {
 }
 
 func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32) bool {
+	node.LogVerbose(ctx, "Canceling pending tx : %s", txid.String())
+	defer node.LogVerbose(ctx, "Cancelled pending tx : %s", txid.String())
+
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
+		node.LogVerbose(ctx, "Pending tx doesn't exist for cancel : %s", txid.String())
 		return false
 	}
 
@@ -206,11 +219,15 @@ func (server *Server) CancelPendingTx(ctx context.Context, txid *bitcoin.Hash32)
 }
 
 func (server *Server) MarkConfirmed(ctx context.Context, txid *bitcoin.Hash32) {
+	node.LogVerbose(ctx, "Marking tx confirmed : %s", txid.String())
+	defer node.LogVerbose(ctx, "Tx marked confirmed : %s", txid.String())
+
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[*txid]
 	if !exists {
+		node.LogVerbose(ctx, "Pending tx doesn't exist for confirmed : %s", txid.String())
 		return
 	}
 
