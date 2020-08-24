@@ -119,7 +119,13 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	}
 
-	script, err := protocol.Serialize(action, true)
+	theClient, err := client.NewClient(ctx, network(c))
+	if err != nil {
+		fmt.Printf("Failed to create client : %s\n", err)
+		return nil
+	}
+
+	script, err := protocol.Serialize(action, theClient.Config.IsTest)
 	if err != nil {
 		fmt.Printf("Failed to serialize %s op return : %s\n", actionType, err)
 		return nil
@@ -127,15 +133,8 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
 	buildTx, _ := c.Flags().GetBool(FlagTx)
-	var theClient *client.Client
 	var tx *txbuilder.TxBuilder
 	if buildTx {
-
-		theClient, err = client.NewClient(ctx, network(c))
-		if err != nil {
-			fmt.Printf("Failed to create client : %s\n", err)
-			return nil
-		}
 
 		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
@@ -158,7 +157,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		// Determine funding required for contract to be able to post response tx.
 		dustLimit := txbuilder.DustLimit(txbuilder.P2PKHOutputSize, theClient.Config.DustFeeRate)
 		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0,
-			dustLimit, theClient.Config.ContractFee, true)
+			dustLimit, theClient.Config.ContractFee, theClient.Config.IsTest)
 		if err != nil {
 			fmt.Printf("Failed to estimate funding : %s\n", err)
 			return nil

@@ -54,20 +54,21 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 	headers node.BitcoinHeaders) error {
 
 	for intx := range server.incomingTxs.Channel {
-		node.LogVerbose(ctx, "Processing incoming tx : %s", intx.Itx.Hash.String())
+		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
+		node.LogVerbose(txCtx, "Processing incoming tx")
 
-		if err := intx.Itx.Setup(ctx, server.Config.IsTest); err != nil {
-			server.abortPendingTx(ctx, *intx.Itx.Hash)
+		if err := intx.Itx.Setup(txCtx, server.Config.IsTest); err != nil {
+			server.abortPendingTx(txCtx, *intx.Itx.Hash)
 			return errors.Wrap(err, "setup")
 		}
-		if err := intx.Itx.Validate(ctx); err != nil {
-			server.abortPendingTx(ctx, *intx.Itx.Hash)
+		if err := intx.Itx.Validate(txCtx); err != nil {
+			server.abortPendingTx(txCtx, *intx.Itx.Hash)
 			return errors.Wrap(err, "validate")
 		}
-		if err := intx.Itx.Promote(ctx, server.RpcNode); err != nil {
-			server.abortPendingTx(ctx, *intx.Itx.Hash)
+		if err := intx.Itx.Promote(txCtx, server.RpcNode); err != nil {
+			server.abortPendingTx(txCtx, *intx.Itx.Hash)
 			if errors.Cause(err) == rpcnode.ErrNotSeen {
-				node.LogVerbose(ctx, "Failed to promote tx : %s : %s", intx.Itx.Hash.String(), err)
+				node.LogVerbose(txCtx, "Failed to promote tx : %s", err)
 				continue
 			}
 			return errors.Wrap(err, "promote")
@@ -76,26 +77,27 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
 			feeRate, err := intx.Itx.FeeRate()
 			if err != nil {
-				server.abortPendingTx(ctx, *intx.Itx.Hash)
+				server.abortPendingTx(txCtx, *intx.Itx.Hash)
 				return errors.Wrap(err, "fee rate")
 			}
 			if feeRate < server.Config.MinFeeRate {
 				intx.Itx.RejectCode = actions.RejectionsInsufficientTxFeeFunding
-				node.LogWarn(ctx, "Low tx fee rate %f : %s", feeRate, intx.Itx.Hash.String())
+				node.LogWarn(txCtx, "Low tx fee rate %f", feeRate)
 			}
 		}
 
 		switch msg := intx.Itx.MsgProto.(type) {
 		case *actions.Transfer:
-			if err := validateOracles(ctx, masterDB, intx.Itx, msg, headers, server.Config.IsTest); err != nil {
+			if err := validateOracles(txCtx, masterDB, intx.Itx, msg, headers,
+				server.Config.IsTest); err != nil {
 				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
-				node.LogWarn(ctx, "Invalid receiver oracle signature : %s", err)
+				node.LogWarn(txCtx, "Invalid receiver oracle signature : %s", err)
 			}
 		case *actions.ContractOffer:
-			if err := validateContractOracleSig(ctx, masterDB, server.Config, intx.Itx, msg, headers,
-				intx.Timestamp); err != nil {
+			if err := validateContractOracleSig(txCtx, masterDB, server.Config, intx.Itx, msg,
+				headers, intx.Timestamp); err != nil {
 				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
-				node.LogWarn(ctx, "Invalid contract oracle signature : %s", err)
+				node.LogWarn(txCtx, "Invalid contract oracle signature : %s", err)
 			}
 		}
 
@@ -107,7 +109,6 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 
 func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32) {
 	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
-	defer node.LogVerbose(ctx, "Tx marked preprocessed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
@@ -160,6 +161,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 }
 
 func (server *Server) MarkSafe(ctx context.Context, txid bitcoin.Hash32) {
+	node.LogVerbose(ctx, "Marking tx safe : %s", txid.String())
 	server.pendingLock.Lock()
 
 	intx, exists := server.pendingTxs[txid]

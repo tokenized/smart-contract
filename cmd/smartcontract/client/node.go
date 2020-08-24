@@ -43,6 +43,7 @@ type Client struct {
 
 type Config struct {
 	Net         bitcoin.Network
+	IsTest      bool    `envconfig:"IS_TEST"`
 	Key         string  `envconfig:"CLIENT_WALLET_KEY"`
 	FeeRate     float32 `default:"1.0" envconfig:"CLIENT_FEE_RATE"`
 	DustFeeRate float32 `default:"1.0" envconfig:"CLIENT_DUST_FEE_RATE"`

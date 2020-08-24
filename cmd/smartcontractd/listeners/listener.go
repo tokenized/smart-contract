@@ -128,6 +128,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 	}
 
 	ctx = node.ContextWithOutLogSubSystem(ctx)
+	ctx = node.ContextWithLogTrace(ctx, "In Sync")
 	node.Log(ctx, "Node is in sync")
 	node.Log(ctx, "Processing pending : %d responses, %d requests", len(server.pendingResponses),
 		len(server.pendingRequests))
@@ -142,7 +143,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 
 	// Process pending responses
 	for _, itx := range pendingResponses {
-		node.Log(ctx, "Processing pending response: %s", itx.Hash.String())
+		ctx := node.ContextWithLogTrace(ctx, itx.Hash.String())
+		node.Log(ctx, "Processing pending response")
 		if err := server.Handler.Trigger(ctx, "SEE", itx); err != nil {
 			node.LogError(ctx, "Failed to handle pending response tx : %s", err)
 		}
@@ -150,7 +152,8 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 
 	// Process pending requests
 	for _, tx := range pendingRequests {
-		node.Log(ctx, "Processing pending request: %s", tx.Itx.Hash.String())
+		ctx := node.ContextWithLogTrace(ctx, tx.Itx.Hash.String())
+		node.Log(ctx, "Processing pending request")
 		if err := server.Handler.Trigger(ctx, "SEE", tx.Itx); err != nil {
 			node.LogError(ctx, "Failed to handle pending request tx : %s", err)
 		}

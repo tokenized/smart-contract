@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
@@ -42,6 +43,9 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
 			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
+			logger.Info(ctx, "Saving contract formation for %s : %s",
+				bitcoin.NewAddressFromRawAddress(ptx.Itx.Inputs[0].Address, server.Config.Net).String(),
+				ptx.Itx.Hash.String())
 			if err := contract.SaveContractFormation(ctx, server.MasterDB,
 				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
 				node.LogError(ctx, "Failed to save contract formation : %s", err)

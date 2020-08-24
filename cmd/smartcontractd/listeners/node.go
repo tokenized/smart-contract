@@ -110,9 +110,10 @@ func NewServer(
 }
 
 func (server *Server) Load(ctx context.Context) error {
+	ctx = node.ContextWithLogTrace(ctx, "Load")
 	b, err := server.MasterDB.Fetch(ctx, serverKey)
 	if err == nil {
-		if err := server.Deserialize(bytes.NewReader(b)); err != nil {
+		if err := server.Deserialize(ctx, bytes.NewReader(b)); err != nil {
 			return errors.Wrap(err, "deserialize server")
 		}
 	} else if err != db.ErrNotFound {
@@ -445,7 +446,7 @@ func (server *Server) Serialize(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (server *Server) Deserialize(buf *bytes.Reader) error {
+func (server *Server) Deserialize(ctx context.Context, buf *bytes.Reader) error {
 	// Version
 	var version uint8
 	if err := binary.Read(buf, DefaultEndian, &version); err != nil {
@@ -474,6 +475,7 @@ func (server *Server) Deserialize(buf *bytes.Reader) error {
 		}
 		pr.ContractIndex = int(contractIndex)
 		server.pendingRequests = append(server.pendingRequests, pr)
+		node.LogVerbose(ctx, "Loaded pending request : %s", pr.Itx.Hash.String())
 	}
 
 	if err := binary.Read(buf, DefaultEndian, &count); err != nil {
@@ -486,6 +488,7 @@ func (server *Server) Deserialize(buf *bytes.Reader) error {
 			return errors.Wrap(err, "deserialize pending response itx")
 		}
 		server.pendingResponses = append(server.pendingResponses, &itx)
+		node.LogVerbose(ctx, "Loaded pending response : %s", itx.Hash.String())
 	}
 
 	if err := binary.Read(buf, DefaultEndian, &count); err != nil {
@@ -498,6 +501,7 @@ func (server *Server) Deserialize(buf *bytes.Reader) error {
 			return errors.Wrap(err, "deserialize reverted tx")
 		}
 		server.revertedTxs = append(server.revertedTxs, &txid)
+		node.LogVerbose(ctx, "Loaded reverted tx : %s", txid.String())
 	}
 
 	if version >= 1 {
@@ -517,6 +521,7 @@ func (server *Server) Deserialize(buf *bytes.Reader) error {
 				return errors.Wrap(err, "read pending tx")
 			}
 			server.pendingTxs[hash] = &tx
+			node.LogVerbose(ctx, "Loaded pending tx : %s", hash.String())
 		}
 
 		if err := binary.Read(buf, DefaultEndian, &count); err != nil {
@@ -530,6 +535,7 @@ func (server *Server) Deserialize(buf *bytes.Reader) error {
 				return errors.Wrap(err, "read ready tx hash")
 			}
 			server.readyTxs = append(server.readyTxs, &hash)
+			node.LogVerbose(ctx, "Loaded ready txid : %s", hash.String())
 		}
 	}
 

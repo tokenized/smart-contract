@@ -123,6 +123,8 @@ func parseScript(c *cobra.Command, script []byte) error {
 
 	if isTest {
 		fmt.Printf("Uses Test Protocol Signature\n")
+	} else {
+		fmt.Printf("Uses Production Protocol Signature\n")
 	}
 
 	fmt.Printf("Action type : %s\n\n", message.Code())
