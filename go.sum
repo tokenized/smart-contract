@@ -123,6 +123,8 @@ github.com/tokenized/pkg v0.0.0-20200812203208-924bac5a2820 h1:FHFftGBFCTyGiQQYJ
 github.com/tokenized/pkg v0.0.0-20200812203208-924bac5a2820/go.mod h1:StHV+mlXyhmmYZSRghRb+3Zy7QSiJe0jDaQw05SYnyQ=
 github.com/tokenized/pkg v0.0.0-20200814000235-256842f23ba4 h1:yUNWMQX5Qy0uNK8Q3xfkCj66PESxhjBAZlaeylFS8vw=
 github.com/tokenized/pkg v0.0.0-20200814000235-256842f23ba4/go.mod h1:StHV+mlXyhmmYZSRghRb+3Zy7QSiJe0jDaQw05SYnyQ=
+github.com/tokenized/pkg v0.0.0-20200825211351-72a83288a708 h1:ocRs60JLKFqMT67tk0saoeTitXr2TEqP+Li+6Ta2Mog=
+github.com/tokenized/pkg v0.0.0-20200825211351-72a83288a708/go.mod h1:StHV+mlXyhmmYZSRghRb+3Zy7QSiJe0jDaQw05SYnyQ=
 github.com/tokenized/specification v0.2.3-0.20200807044753-edcf86532819 h1:9azWkXPzI3EmyEl7hBHD1uunDwYJkMfzrNYjuKmVqyk=
 github.com/tokenized/specification v0.2.3-0.20200807044753-edcf86532819/go.mod h1:h6OQtCy+RrswcJMlxi8a/LJoewKCWsoBTlJZoYNmKI4=
 github.com/tokenized/specification v0.2.3-0.20200825043423-6bd28278874a h1:XPRHtQzweURqvfvp+sDYdgQFIjsXiX5Hdn2AzQYczkg=

@@ -101,16 +101,11 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 		Address        bitcoin.RawAddress `json:"address,omitempty"`
 		MasterAddress  bitcoin.RawAddress `json:"master_address,omitempty"`
 		ContractFee    uint64             `json:"contract_fee,omitempty"`
-		Error          string             `json:"error,omitempty"`
 		Signature      bitcoin.Signature  `json:"signature,omitempty"`
 	}
 
 	if err := get(ctx, c.URL+"/new_contract", &response); err != nil {
 		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http get")
-	}
-
-	if len(response.Error) > 0 {
-		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.New(response.Error)
 	}
 
 	// Validate signature

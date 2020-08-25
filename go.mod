@@ -9,7 +9,7 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/pkg v0.0.0-20200814000235-256842f23ba4
+	github.com/tokenized/pkg v0.0.0-20200825211351-72a83288a708
 	github.com/tokenized/specification v0.2.3-0.20200825043423-6bd28278874a
 	go.opencensus.io v0.22.2
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
