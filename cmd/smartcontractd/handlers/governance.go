@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -48,8 +47,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Proposal request invalid")
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Proposal invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	// Locate Contract
@@ -299,10 +298,6 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.New("Could not assert as *actions.Vote")
 	}
 
-	if itx.RejectCode != 0 {
-		return errors.New("Vote response invalid")
-	}
-
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
@@ -454,8 +449,8 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Ballot cast request invalid")
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Ballot cast invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
@@ -583,9 +578,6 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	if itx.RejectCode != 0 {
-		return errors.New("Ballot counted response invalid")
-	}
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
@@ -734,10 +726,6 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	if itx.RejectCode != 0 {
-		return errors.New("Result reponse invalid")
-	}
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,

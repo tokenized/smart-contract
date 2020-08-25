@@ -57,6 +57,7 @@ type Transaction struct {
 	Inputs        []Input
 	Outputs       []Output
 	RejectCode    uint32
+	RejectText    string
 
 	lock sync.RWMutex
 }
@@ -127,6 +128,7 @@ func (itx *Transaction) Validate(ctx context.Context) error {
 	if err := itx.MsgProto.Validate(); err != nil {
 		logger.Warn(ctx, "Protocol message is invalid : %s", err)
 		itx.RejectCode = actions.RejectionsMsgMalformed
+		itx.RejectText = err.Error()
 		return nil
 	}
 

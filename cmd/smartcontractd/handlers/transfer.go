@@ -23,7 +23,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -76,13 +75,13 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Transfer request invalid")
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			itx.RejectCode, false, "")
+			itx.RejectCode, false, itx.RejectText)
 	}
 
 	if msg.OfferExpiry != 0 && v.Now.Nano() > msg.OfferExpiry {
 		node.LogWarn(ctx, "Transfer expired : %d", msg.OfferExpiry)
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsTransferExpired, false, "")
+			actions.RejectionsTransferExpired, false, "Transfer expired")
 	}
 
 	if len(msg.Assets) == 0 {
@@ -108,19 +107,19 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractMoved, false, "")
+			actions.RejectionsContractMoved, false, "Contract address changed")
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractFrozen, false, "")
+			actions.RejectionsContractFrozen, false, "Contract frozen")
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsContractExpired, false, "")
+			actions.RejectionsContractExpired, false, "Contract expired")
 	}
 
 	// Transfer Outputs
@@ -146,7 +145,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	if err != nil {
 		node.LogWarn(ctx, "Failed to build settlement tx : %s", err)
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
-			actions.RejectionsMsgMalformed, false, "")
+			actions.RejectionsMsgMalformed, false, err.Error())
 	}
 
 	// Create initial settlement data
@@ -1007,10 +1006,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	msg, ok := itx.MsgProto.(*actions.Settlement)
 	if !ok {
 		return errors.New("Could not assert as *actions.Settlement")
-	}
-
-	if itx.RejectCode != 0 {
-		return errors.New("Settlement response invalid")
 	}
 
 	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])

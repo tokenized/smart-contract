@@ -15,7 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -43,8 +42,8 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Order request invalid")
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Order invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
@@ -686,10 +685,6 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 		return errors.New("Could not assert as *actions.Freeze")
 	}
 
-	if itx.RejectCode != 0 {
-		return errors.New("Freeze response invalid")
-	}
-
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 			w.Config.Net)
@@ -814,10 +809,6 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 	msg, ok := itx.MsgProto.(*actions.Thaw)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Thaw")
-	}
-
-	if itx.RejectCode != 0 {
-		return errors.New("Thaw response invalid")
 	}
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
@@ -958,10 +949,6 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 		return errors.New("Could not assert as *protocol.Confiscation")
 	}
 
-	if itx.RejectCode != 0 {
-		return errors.New("Confiscation response invalid")
-	}
-
 	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])
 
 	// Locate Asset
@@ -1075,10 +1062,6 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	msg, ok := itx.MsgProto.(*actions.Reconciliation)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Reconciliation")
-	}
-
-	if itx.RejectCode != 0 {
-		return errors.New("Reconciliation response invalid")
 	}
 
 	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])

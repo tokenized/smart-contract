@@ -9,9 +9,11 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/pkg v0.0.0-20200812203208-924bac5a2820
-	github.com/tokenized/specification v0.2.3-0.20200807044753-edcf86532819
+	github.com/tokenized/pkg v0.0.0-20200814000235-256842f23ba4
+	github.com/tokenized/specification v0.2.3-0.20200825043423-6bd28278874a
 	go.opencensus.io v0.22.2
+	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
+	golang.org/x/tools v0.0.0-20200107184032-11e9d9cc0042 // indirect
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )
 

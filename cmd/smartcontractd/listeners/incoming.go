@@ -16,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -86,18 +85,23 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 			}
 		}
 
-		switch msg := intx.Itx.MsgProto.(type) {
-		case *actions.Transfer:
-			if err := validateOracles(txCtx, masterDB, intx.Itx, msg, headers,
-				server.Config.IsTest); err != nil {
-				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
-				node.LogWarn(txCtx, "Invalid receiver oracle signature : %s", err)
-			}
-		case *actions.ContractOffer:
-			if err := validateContractOracleSig(txCtx, masterDB, server.Config, intx.Itx, msg,
-				headers, intx.Timestamp); err != nil {
-				intx.Itx.RejectCode = actions.RejectionsInvalidSignature
-				node.LogWarn(txCtx, "Invalid contract oracle signature : %s", err)
+		if intx.Itx.RejectCode == 0 {
+			switch msg := intx.Itx.MsgProto.(type) {
+			case *actions.Transfer:
+				if err := validateOracles(txCtx, masterDB, intx.Itx, msg, headers,
+					server.Config.IsTest); err != nil {
+					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
+					intx.Itx.RejectText = fmt.Sprintf("Invalid receiver oracle signature : %s", err)
+					node.LogWarn(txCtx, "Invalid receiver oracle signature : %s", err)
+				}
+			case *actions.ContractOffer:
+				if err := validateAdminIdentityOracleSig(txCtx, masterDB, server.Config, intx.Itx, msg,
+					headers, intx.Timestamp); err != nil {
+					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
+					intx.Itx.RejectText = fmt.Sprintf("Invalid admin identity oracle signature : %s",
+						err)
+					node.LogWarn(txCtx, "Invalid admin identity oracle signature : %s", err)
+				}
 			}
 		}
 
@@ -522,7 +526,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	return fmt.Errorf("Valid signature not found")
 }
 
-func validateContractOracleSig(ctx context.Context, dbConn *db.DB, config *node.Config,
+func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *node.Config,
 	itx *inspector.Transaction, contractOffer *actions.ContractOffer, headers node.BitcoinHeaders,
 	ts protocol.Timestamp) error {
 	if len(contractOffer.AdminIdentityCertificates) == 0 {

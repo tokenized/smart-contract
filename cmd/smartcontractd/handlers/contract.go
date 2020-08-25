@@ -43,8 +43,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Contract offer request invalid : %d", itx.RejectCode)
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Contract offer invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	// Locate Contract
@@ -242,6 +242,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
 		return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
 	}
+
 	return err
 }
 
@@ -261,8 +262,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Contract amendment request invalid")
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Contract amendment invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	// Locate Contract
@@ -537,9 +538,6 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	if itx.RejectCode != 0 {
-		return errors.New("Contract formation response invalid")
-	}
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
@@ -763,8 +761,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Contract address change request invalid")
-		return node.RespondReject(ctx, w, itx, rk, itx.RejectCode)
+		node.LogWarn(ctx, "Contract address change invalid : %d %s", itx.RejectCode, itx.RejectText)
+		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	// Locate Contract

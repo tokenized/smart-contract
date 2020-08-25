@@ -22,7 +22,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -112,11 +111,6 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	msg, ok := itx.MsgProto.(*actions.Rejection)
 	if !ok {
 		return errors.New("Could not assert as *actions.Rejection")
-	}
-
-	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Rejection message invalid")
-		return nil
 	}
 
 	// Check if message is addressed to this contract.
@@ -355,7 +349,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectionsContractMoved)
+			actions.RejectionsContractMoved, "Contract address changed")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -363,19 +357,19 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectionsContractFrozen)
+			actions.RejectionsContractFrozen, "Contract frozen")
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			actions.RejectionsContractExpired)
+			actions.RejectionsContractExpired, "Contract expired")
 	}
 
 	// Check Oracle Signature
 	if transferTx.RejectCode != 0 {
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk,
-			transferTx.RejectCode)
+			transferTx.RejectCode, transferTx.RejectText)
 	}
 
 	// Add this contract's data to the settlement op return data
@@ -386,7 +380,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
-			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, rejectCode)
+			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transfer, rk, rejectCode,
+				"")
 		} else {
 			return errors.Wrap(err, "Failed to add settlement data")
 		}
@@ -533,7 +528,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 			w.Config.Net)
 		node.LogWarn(ctx, "Contract address changed : %s", address.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectionsContractMoved)
+			actions.RejectionsContractMoved, "Contract address changed")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -541,13 +536,13 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
 		node.LogWarn(ctx, "Contract frozen")
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectionsContractFrozen)
+			actions.RejectionsContractFrozen, "Contract frozen")
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
 		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
 		return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-			actions.RejectionsContractExpired)
+			actions.RejectionsContractExpired, "Contract expired")
 	}
 
 	// Verify all the data for this contract is correct.
@@ -558,7 +553,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		if ok {
 			node.LogWarn(ctx, "Rejecting Transfer : %s", err)
 			return m.respondTransferMessageReject(ctx, w, itx, transferTx, transferMsg, rk,
-				rejectCode)
+				rejectCode, "")
 		} else {
 			return errors.Wrap(err, "Failed to verify settlement data")
 		}
@@ -947,7 +942,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 //   it can send the refund/reject to everyone.
 func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.ResponseWriter,
 	messageTx *inspector.Transaction, transferTx *inspector.Transaction, transfer *actions.Transfer,
-	rk *wallet.Key, code uint32) error {
+	rk *wallet.Key, code uint32, text string) error {
 
 	// Determine if first contract
 	first := firstContractOutputIndex(transfer.Assets, transferTx)
@@ -958,7 +953,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
 		// This is not the first contract. Send reject to only the first contract.
 		w.AddRejectValue(ctx, transferTx.Outputs[first].Address, 0)
-		return node.RespondReject(ctx, w, messageTx, rk, code)
+		return node.RespondRejectText(ctx, w, messageTx, rk, code, text)
 	}
 
 	// Determine UTXOs from transfer tx to fund the reject response.
@@ -1038,7 +1033,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 		w.ClearRejectOutputValues(ct.AdminAddress)
 	}
 
-	return node.RespondReject(ctx, w, transferTx, rk, code)
+	return node.RespondRejectText(ctx, w, transferTx, rk, code, text)
 }
 
 // refundTransferFromReject responds to an M2 Reject, from another contract involved in a multi-contract
