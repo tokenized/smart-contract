@@ -3,8 +3,10 @@ package listeners
 import (
 	"bytes"
 	"context"
+	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -33,22 +35,24 @@ func (server *Server) ContractIsStarted(ctx context.Context, ca bitcoin.RawAddre
 // AddContractKey adds a new contract key to those being monitored.
 func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error {
 	server.walletLock.Lock()
-	defer server.walletLock.Unlock()
 
-	rawAddress, err := bitcoin.NewRawAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()))
+	rawAddress, err := key.Key.RawAddress()
 	if err != nil {
+		server.walletLock.Unlock()
 		return err
 	}
 
-	address, _ := bitcoin.NewAddressPKH(bitcoin.Hash160(key.Key.PublicKey().Bytes()),
-		server.Config.Net)
-	node.Log(ctx, "Adding key : %s", address.String())
+	node.Log(ctx, "Adding key : %s",
+		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net).String())
+
+	server.contractAddresses = append(server.contractAddresses, rawAddress)
+	server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
+
+	server.walletLock.Unlock()
+
 	if err := server.SaveWallet(ctx); err != nil {
 		return err
 	}
-	server.contractAddresses = append(server.contractAddresses, rawAddress)
-
-	server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
 	return nil
 }
 
@@ -81,12 +85,15 @@ func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
 
 func (server *Server) SaveWallet(ctx context.Context) error {
 	node.Log(ctx, "Saving wallet")
-	var buf bytes.Buffer
 
+	var buf bytes.Buffer
+	start := time.Now()
 	if err := server.wallet.Serialize(&buf); err != nil {
 		return errors.Wrap(err, "serialize wallet")
 	}
+	logger.Elapsed(ctx, start, "Serialize wallet")
 
+	defer logger.Elapsed(ctx, time.Now(), "Put wallet")
 	return server.MasterDB.Put(ctx, walletKey, buf.Bytes())
 }
 
