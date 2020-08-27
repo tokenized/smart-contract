@@ -27,10 +27,15 @@ type Client interface {
 	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
 		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error)
 
+	// ApproveEntityPublicKey requests a signature to verify that a public key belongs to the
+	// identity information in the entity.
+	ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
+		xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error)
+
 	// AdminIdentityCertificate requests a admin identity certification for a contract offer.
 	AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
 		entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
-		requiredSigners int) (*actions.AdminIdentityCertificateField, bitcoin.Hash32, error)
+		requiredSigners int) (*actions.AdminIdentityCertificateField, error)
 
 	// GetContractAddress returns the oracle's contract address.
 	GetContractAddress() bitcoin.RawAddress

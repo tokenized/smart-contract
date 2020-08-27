@@ -192,26 +192,63 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 	return result, *blockHash, nil
 }
 
-// AdminIdentityCertificate requests a admin identity certification for a contract offer.
-func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
-	entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
-	requiredSigners int) (*actions.AdminIdentityCertificateField, bitcoin.Hash32, error) {
+// ApproveEntityPublicKey requests a signature from the identity oracle to verify the ownership of
+//   a public key by a specified entity.
+func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
+	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
 
-	adminKey, err := xpubs.ChildKeys(index)
+	key, err := xpub.ChildKey(index)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address key")
-	}
-
-	adminAddress, err := adminKey.RawAddress(requiredSigners)
-	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address")
+		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate public key")
 	}
 
 	// Get random block hash
 	height := rand.Intn(5000)
 	blockHash, err := c.blockHashes.Hash(ctx, height)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "get sig block hash")
+		return ApprovedEntityPublicKey{}, errors.Wrap(err, "get sig block hash")
+	}
+
+	sigHash, err := protocol.EntityPubKeyOracleSigHash(ctx, &entity, key.PublicKey(), *blockHash, 1)
+	if err != nil {
+		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate sig hash")
+	}
+
+	sig, err := c.Key.Sign(sigHash)
+	if err != nil {
+		return ApprovedEntityPublicKey{}, errors.Wrap(err, "sign")
+	}
+
+	result := ApprovedEntityPublicKey{
+		SigAlgorithm: 1,
+		Signature:    sig,
+		BlockHeight:  uint32(height),
+		PublicKey:    key.PublicKey(),
+	}
+
+	return result, nil
+}
+
+// AdminIdentityCertificate requests a admin identity certification for a contract offer.
+func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
+	entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
+	requiredSigners int) (*actions.AdminIdentityCertificateField, error) {
+
+	adminKey, err := xpubs.ChildKeys(index)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate address key")
+	}
+
+	adminAddress, err := adminKey.RawAddress(requiredSigners)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate address")
+	}
+
+	// Get random block hash
+	height := rand.Intn(5000)
+	blockHash, err := c.blockHashes.Hash(ctx, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "get sig block hash")
 	}
 
 	var entity interface{}
@@ -224,12 +261,12 @@ func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer action
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, adminAddress, entity,
 		*blockHash, 0, 1)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate sig hash")
+		return nil, errors.Wrap(err, "generate sig hash")
 	}
 
 	sig, err := c.Key.Sign(sigHash)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "sign")
+		return nil, errors.Wrap(err, "sign")
 	}
 
 	result := &actions.AdminIdentityCertificateField{
@@ -239,7 +276,7 @@ func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer action
 		Expiration:     0,
 	}
 
-	return result, *blockHash, nil
+	return result, nil
 }
 
 // GetContractAddress returns the oracle's contract address.
