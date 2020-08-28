@@ -74,6 +74,14 @@ type MockXPub struct {
 func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityField,
 	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
 
+	for _, xps := range xpubs {
+		for _, xpub := range xps {
+			if xpub.IsPrivate() {
+				return uuid.UUID{}, errors.New("private keys not allowed")
+			}
+		}
+	}
+
 	for _, user := range c.users {
 		for _, uxpub := range user.xpubs {
 			for _, xpub := range xpubs {
@@ -94,6 +102,13 @@ func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 // RegisterXPub registers an xpub under a user with an identity oracle.
 func (c *MockClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys,
 	requiredSigners int) error {
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return errors.New("private keys not allowed")
+		}
+	}
+
 	for _, user := range c.users {
 		if bytes.Equal(user.id[:], c.ClientID[:]) {
 			for _, xpub := range user.xpubs {
@@ -119,6 +134,12 @@ func (c *MockClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
 	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32,
 	requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return nil, bitcoin.Hash32{}, errors.New("private keys not allowed")
+		}
+	}
 
 	// Find xpub
 	found := false
@@ -197,6 +218,10 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
 	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
 
+	if xpub.IsPrivate() {
+		return ApprovedEntityPublicKey{}, errors.New("private keys not allowed")
+	}
+
 	key, err := xpub.ChildKey(index)
 	if err != nil {
 		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate public key")
@@ -233,6 +258,12 @@ func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
 	entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
 	requiredSigners int) (*actions.AdminIdentityCertificateField, error) {
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return nil, errors.New("private keys not allowed")
+		}
+	}
 
 	adminKey, err := xpubs.ChildKeys(index)
 	if err != nil {

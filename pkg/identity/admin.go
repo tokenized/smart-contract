@@ -16,6 +16,12 @@ func (o *HTTPClient) AdminIdentityCertificate(ctx context.Context, issuer action
 	contract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
 	requiredSigners int) (*actions.AdminIdentityCertificateField, error) {
 
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return nil, errors.New("private keys not allowed")
+		}
+	}
+
 	request := struct {
 		XPubs    bitcoin.ExtendedKeys `json:"xpubs" validate:"required"`
 		Index    uint32               `json:"index" validate:"required"`

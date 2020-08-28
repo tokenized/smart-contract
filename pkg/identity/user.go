@@ -18,6 +18,14 @@ import (
 func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityField,
 	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
 
+	for _, xps := range xpubs {
+		for _, xpub := range xps {
+			if xpub.IsPrivate() {
+				return uuid.UUID{}, errors.New("private keys not allowed")
+			}
+		}
+	}
+
 	// Check for existing user for xpubs.
 	for _, xpub := range xpubs {
 
@@ -77,6 +85,12 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 
 	if len(o.ClientID) == 0 {
 		return errors.New("User not registered")
+	}
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return errors.New("private keys not allowed")
+		}
 	}
 
 	// Add xpub to user using identity oracle endpoint.

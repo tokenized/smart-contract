@@ -23,6 +23,10 @@ type ApprovedEntityPublicKey struct {
 func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
 	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
 
+	if xpub.IsPrivate() {
+		return ApprovedEntityPublicKey{}, errors.New("private keys not allowed")
+	}
+
 	key, err := xpub.ChildKey(index)
 	if err != nil {
 		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate public key")

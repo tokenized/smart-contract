@@ -53,6 +53,28 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Reverse hash : %x\n", reverse20(b))
 				return nil
 			}
+
+			xkey, err := bitcoin.ExtendedKeyFromBytes(b)
+			if err == nil {
+				if xkey.IsPrivate() {
+					fmt.Printf("Private extended key : ")
+				} else {
+					fmt.Printf("Public extended key : ")
+				}
+				fmt.Printf("%s\n", xkey.String())
+				return nil
+			}
+
+			xkeys, err := bitcoin.ExtendedKeysFromBytes(b)
+			if err == nil {
+				if xkeys[0].IsPrivate() {
+					fmt.Printf("Private extended key : ")
+				} else {
+					fmt.Printf("Public extended key : ")
+				}
+				fmt.Printf("%s\n", xkeys.String())
+				return nil
+			}
 		}
 
 		key, err := bitcoin.KeyFromStr(args[0])
