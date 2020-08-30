@@ -62,6 +62,8 @@ var cmdConvert = &cobra.Command{
 					fmt.Printf("Public extended key : ")
 				}
 				fmt.Printf("%s\n", xkey.String())
+
+				fmt.Printf("Plural : %s\n", bitcoin.ExtendedKeys{xkey}.String())
 				return nil
 			}
 
@@ -88,6 +90,15 @@ var cmdConvert = &cobra.Command{
 		xkey, err := bitcoin.ExtendedKeyFromStr(args[0])
 		if err == nil {
 			fmt.Printf("Extended public key : %s\n", xkey.ExtendedPublicKey().String())
+
+			fmt.Printf("Plural : %s\n", bitcoin.ExtendedKeys{xkey}.String())
+			return nil
+		}
+
+		xkeys, err := bitcoin.ExtendedKeysFromStr(args[0])
+		if err == nil {
+			fmt.Printf("Extended public key : %s\n", xkeys.ExtendedPublicKeys().String())
+			fmt.Printf("Raw : %x\n", xkeys.Bytes())
 			return nil
 		}
 

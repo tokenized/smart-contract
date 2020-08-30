@@ -214,7 +214,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 }
 
 // ApproveEntityPublicKey requests a signature from the identity oracle to verify the ownership of
-//   a public key by a specified entity.
+// a public key by a specified entity.
 func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
 	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
 

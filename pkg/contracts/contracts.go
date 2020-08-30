@@ -45,11 +45,13 @@ type OutputFetcher interface {
 
 /************************ Implement the SpyNode Listener interface. *******************************/
 
+// HandleBlock handles a block message from spynode. Part of the spynode listener interface.
 func (ch *ContractsHandler) HandleBlock(ctx context.Context, msgType int,
 	block *handlers.BlockMessage) error {
 	return nil
 }
 
+// HandleTx handles a tx message from spynode. Part of the spynode listener interface.
 func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
 	ctx = logger.ContextWithOutLogSubSystem(ctx)
 
@@ -91,7 +93,8 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool,
 				tx.TxIn[0].PreviousOutPoint.Index, len(outputs))
 		}
 
-		caIn, err := bitcoin.RawAddressFromLockingScript(outputs[tx.TxIn[0].PreviousOutPoint.Index].LockingScript)
+		ls := outputs[tx.TxIn[0].PreviousOutPoint.Index].LockingScript
+		caIn, err := bitcoin.RawAddressFromLockingScript(ls)
 		if err != nil {
 			logger.Error(ctx, "Contract formation with invalid input address : %s", err)
 			return false, nil
@@ -118,11 +121,13 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool,
 	return false, nil // we don't really care about tx states
 }
 
+// HandleTxState handles a tx state message from spynode. Part of the spynode listener interface.
 func (ch *ContractsHandler) HandleTxState(ctx context.Context, msgType int,
 	txid bitcoin.Hash32) error {
 	return nil
 }
 
+// HandleInSync handles an in sync message from spynode. Part of the spynode listener interface.
 func (ch *ContractsHandler) HandleInSync(ctx context.Context) error {
 	return nil
 }
