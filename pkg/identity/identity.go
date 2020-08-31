@@ -3,10 +3,16 @@ package identity
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrNotApproved      = errors.New("Not Approved")
+	ErrInvalidSignature = errors.New("Invalid Signature")
 )
 
 // Factory is the interface for creating new identity clients.
@@ -18,7 +24,7 @@ type Factory interface {
 // Client is the interface for interacting with an identity oracle service.
 type Client interface {
 	// RegisterUser registers a user with the identity oracle.
-	RegisterUser(ctx context.Context, entity actions.EntityField, xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error)
+	RegisterUser(ctx context.Context, entity actions.EntityField, xpubs []bitcoin.ExtendedKeys) (*uuid.UUID, error)
 
 	// RegisterXPub registers an xpub under a user with an identity oracle.
 	RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys, requiredSigners int) error
@@ -27,10 +33,15 @@ type Client interface {
 	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
 		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error)
 
+	// ApproveEntityPublicKey requests a signature to verify that a public key belongs to the
+	// identity information in the entity.
+	ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
+		xpub bitcoin.ExtendedKey, index uint32) (*ApprovedEntityPublicKey, error)
+
 	// AdminIdentityCertificate requests a admin identity certification for a contract offer.
 	AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
 		entityContract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
-		requiredSigners int) (*actions.AdminIdentityCertificateField, bitcoin.Hash32, error)
+		requiredSigners int) (*actions.AdminIdentityCertificateField, error)
 
 	// GetContractAddress returns the oracle's contract address.
 	GetContractAddress() bitcoin.RawAddress

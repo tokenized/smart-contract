@@ -3,6 +3,8 @@ package identity
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -13,6 +15,7 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/json"
 	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -111,6 +114,281 @@ func (o *HTTPClient) SetClientID(id uuid.UUID, key bitcoin.Key) {
 // SetClientKey sets the client's authorization key.
 func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
 	o.ClientKey = key
+}
+
+// RegisterUser checks if a user for this entity exists with the identity oracle and if not
+//   registers a new user id.
+func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityField,
+	xpubs []bitcoin.ExtendedKeys) (*uuid.UUID, error) {
+
+	for _, xps := range xpubs {
+		for _, xpub := range xps {
+			if xpub.IsPrivate() {
+				return nil, errors.New("private keys not allowed")
+			}
+		}
+	}
+
+	// Check for existing user for xpubs.
+	for _, xpub := range xpubs {
+
+		request := struct {
+			XPubs bitcoin.ExtendedKeys `json:"xpubs"`
+		}{
+			XPubs: xpub,
+		}
+
+		// Look for 200 OK status with data
+		var response struct {
+			Data struct {
+				UserID uuid.UUID `json:"user_id"`
+			}
+		}
+
+		if err := post(ctx, o.URL+"/oracle/user", request, &response); err != nil {
+			if errors.Cause(err) == ErrNotFound {
+				continue
+			}
+			return nil, errors.Wrap(err, "http post")
+		}
+
+		o.ClientID = response.Data.UserID
+		return &o.ClientID, nil
+	}
+
+	// Call endpoint to register user and get ID.
+	request := struct {
+		Entity    actions.EntityField `json:"entity"`     // hex protobuf
+		PublicKey bitcoin.PublicKey   `json:"public_key"` // hex compressed
+	}{
+		Entity:    entity,
+		PublicKey: o.ClientKey.PublicKey(),
+	}
+
+	// Look for 200 OK status with data
+	var response struct {
+		Data struct {
+			Status string    `json:"status"`
+			UserID uuid.UUID `json:"user_id"`
+		}
+	}
+
+	if err := post(ctx, o.URL+"/oracle/register", request, &response); err != nil {
+		return nil, errors.Wrap(err, "http post")
+	}
+
+	o.ClientID = response.Data.UserID
+	return &o.ClientID, nil
+}
+
+// RegisterXPub checks if the xpub is already added to the identity user and if not adds it to the
+//   identity oracle.
+func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys,
+	requiredSigners int) error {
+
+	if len(o.ClientID) == 0 {
+		return errors.New("User not registered")
+	}
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return errors.New("private keys not allowed")
+		}
+	}
+
+	// Add xpub to user using identity oracle endpoint.
+	request := struct {
+		UserID          uuid.UUID            `json:"user_id"`
+		XPubs           bitcoin.ExtendedKeys `json:"xpubs"`
+		RequiredSigners int                  `json:"required_signers"`
+		Signature       bitcoin.Signature    `json:"signature"` // hex signature of user id and xpub with users public key
+	}{
+		UserID:          o.ClientID,
+		XPubs:           xpubs,
+		RequiredSigners: requiredSigners,
+	}
+
+	s := sha256.New()
+	s.Write(request.UserID[:])
+	s.Write(request.XPubs.Bytes())
+	if err := binary.Write(s, binary.LittleEndian, uint32(request.RequiredSigners)); err != nil {
+		return errors.Wrap(err, "hash signers")
+	}
+	hash := sha256.Sum256(s.Sum(nil))
+
+	var err error
+	request.Signature, err = o.ClientKey.Sign(hash[:])
+	if err != nil {
+		return errors.Wrap(err, "sign")
+	}
+
+	if err := post(ctx, o.URL+"/oracle/addXPub", request, nil); err != nil {
+		return errors.Wrap(err, "http post")
+	}
+
+	return nil
+}
+
+// AdminIdentityCertificate requests a admin identity certification for a contract offer.
+func (o *HTTPClient) AdminIdentityCertificate(ctx context.Context, issuer actions.EntityField,
+	contract bitcoin.RawAddress, xpubs bitcoin.ExtendedKeys, index uint32,
+	requiredSigners int) (*actions.AdminIdentityCertificateField, error) {
+
+	for _, xpub := range xpubs {
+		if xpub.IsPrivate() {
+			return nil, errors.New("private keys not allowed")
+		}
+	}
+
+	request := struct {
+		XPubs    bitcoin.ExtendedKeys `json:"xpubs" validate:"required"`
+		Index    uint32               `json:"index" validate:"required"`
+		Issuer   actions.EntityField  `json:"issuer"`
+		Contract bitcoin.RawAddress   `json:"entity_contract"`
+	}{
+		XPubs:    xpubs,
+		Index:    index,
+		Issuer:   issuer,
+		Contract: contract,
+	}
+
+	var response struct {
+		Data struct {
+			Approved    bool              `json:"approved"`
+			Description string            `json:"description"`
+			Signature   bitcoin.Signature `json:"signature"`
+			BlockHeight uint32            `json:"block_height"`
+			Expiration  uint64            `json:"expiration"`
+		}
+	}
+
+	if err := post(ctx, o.URL+"/identity/verifyAdmin", request, &response); err != nil {
+		return nil, errors.Wrap(err, "http post")
+	}
+
+	result := &actions.AdminIdentityCertificateField{
+		EntityContract: o.ContractAddress.Bytes(),
+		Signature:      response.Data.Signature.Bytes(),
+		BlockHeight:    response.Data.BlockHeight,
+		Expiration:     response.Data.Expiration,
+	}
+
+	if !response.Data.Approved {
+		return result, errors.Wrap(ErrNotApproved, response.Data.Description)
+	}
+
+	return result, nil
+}
+
+// ApproveEntityPublicKey requests a signature from the identity oracle to verify the ownership of
+//   a public key by a specified entity.
+func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
+	xpub bitcoin.ExtendedKey, index uint32) (*ApprovedEntityPublicKey, error) {
+
+	if xpub.IsPrivate() {
+		return nil, errors.New("private keys not allowed")
+	}
+
+	key, err := xpub.ChildKey(index)
+	if err != nil {
+		return nil, errors.Wrap(err, "generate public key")
+	}
+
+	request := struct {
+		XPub   bitcoin.ExtendedKey `json:"xpub" validate:"required"`
+		Index  uint32              `json:"index" validate:"required"`
+		Entity actions.EntityField `json:"entity" validate:"required"`
+	}{
+		XPub:   xpub,
+		Index:  index,
+		Entity: entity,
+	}
+
+	var response struct {
+		Data struct {
+			Approved     bool              `json:"approved"`
+			SigAlgorithm uint32            `json:"algorithm"`
+			Signature    bitcoin.Signature `json:"signature"`
+			BlockHeight  uint32            `json:"block_height"`
+		}
+	}
+
+	if err := post(ctx, o.URL+"/identity/verifyPubKey", request, &response); err != nil {
+		return nil, errors.Wrap(err, "http post")
+	}
+
+	if !response.Data.Approved {
+		return nil, ErrNotApproved
+	}
+
+	result := &ApprovedEntityPublicKey{
+		SigAlgorithm: response.Data.SigAlgorithm,
+		Signature:    response.Data.Signature,
+		BlockHeight:  response.Data.BlockHeight,
+		PublicKey:    key.PublicKey(),
+	}
+
+	return result, nil
+}
+
+// ApproveReceive requests a signature from the identity oracle to approve receipt of a token.
+// quantity is simply placed in the result data structure and not used in the certificate.
+func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
+	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+
+	keys, err := xpubs.ChildKeys(index)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate key")
+	}
+
+	address, err := keys.RawAddress(requiredSigners)
+	if err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address")
+	}
+
+	request := struct {
+		XPubs    bitcoin.ExtendedKeys `json:"xpubs"`
+		Index    uint32               `json:"index"`
+		Contract string               `json:"contract"`
+		AssetID  string               `json:"asset_id"`
+	}{
+		XPubs:    xpubs,
+		Index:    index,
+		Contract: contract,
+		AssetID:  asset,
+	}
+
+	var response struct {
+		Data struct {
+			Approved     bool              `json:"approved"`
+			Description  string            `json:"description"`
+			SigAlgorithm uint32            `json:"algorithm"`
+			Signature    bitcoin.Signature `json:"signature"`
+			BlockHeight  uint32            `json:"block_height"`
+			BlockHash    bitcoin.Hash32    `json:"block_hash"`
+			Expiration   uint64            `json:"expiration"`
+		}
+	}
+
+	if err := post(ctx, o.URL+"/transfer/approve", request, &response); err != nil {
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
+	}
+
+	result := &actions.AssetReceiverField{
+		Address:               address.Bytes(),
+		Quantity:              quantity,
+		OracleSigAlgorithm:    response.Data.SigAlgorithm,
+		OracleIndex:           uint32(oracleIndex),
+		OracleConfirmationSig: response.Data.Signature.Bytes(),
+		OracleSigBlockHeight:  response.Data.BlockHeight,
+		OracleSigExpiry:       response.Data.Expiration,
+	}
+
+	if !response.Data.Approved {
+		return result, response.Data.BlockHash, errors.Wrap(ErrNotApproved, response.Data.Description)
+	}
+
+	return result, response.Data.BlockHash, nil
 }
 
 // post sends an HTTP POST request.

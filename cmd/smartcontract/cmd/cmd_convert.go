@@ -53,6 +53,30 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Reverse hash : %x\n", reverse20(b))
 				return nil
 			}
+
+			xkey, err := bitcoin.ExtendedKeyFromBytes(b)
+			if err == nil {
+				if xkey.IsPrivate() {
+					fmt.Printf("Private extended key : ")
+				} else {
+					fmt.Printf("Public extended key : ")
+				}
+				fmt.Printf("%s\n", xkey.String())
+
+				fmt.Printf("Plural : %s\n", bitcoin.ExtendedKeys{xkey}.String())
+				return nil
+			}
+
+			xkeys, err := bitcoin.ExtendedKeysFromBytes(b)
+			if err == nil {
+				if xkeys[0].IsPrivate() {
+					fmt.Printf("Private extended key : ")
+				} else {
+					fmt.Printf("Public extended key : ")
+				}
+				fmt.Printf("%s\n", xkeys.String())
+				return nil
+			}
 		}
 
 		key, err := bitcoin.KeyFromStr(args[0])
@@ -66,6 +90,15 @@ var cmdConvert = &cobra.Command{
 		xkey, err := bitcoin.ExtendedKeyFromStr(args[0])
 		if err == nil {
 			fmt.Printf("Extended public key : %s\n", xkey.ExtendedPublicKey().String())
+
+			fmt.Printf("Plural : %s\n", bitcoin.ExtendedKeys{xkey}.String())
+			return nil
+		}
+
+		xkeys, err := bitcoin.ExtendedKeysFromStr(args[0])
+		if err == nil {
+			fmt.Printf("Extended public key : %s\n", xkeys.ExtendedPublicKeys().String())
+			fmt.Printf("Raw : %x\n", xkeys.Bytes())
 			return nil
 		}
 
