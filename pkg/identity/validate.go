@@ -1,79 +1,92 @@
 package identity
 
 import (
+	"bytes"
 	"context"
 
+	"github.com/pkg/errors"
 	"github.com/tokenized/pkg/bitcoin"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/pkg/errors"
 )
 
-var (
-	ErrNotApproved      = errors.New("Not Approved")
-	ErrInvalidSignature = errors.New("Invalid Signature")
-)
+// ValidateAdminIdentityCertificate checks the validity of an admin identity certificate.
+func ValidateAdminIdentityCertificate(ctx context.Context,
+	oracleAddress bitcoin.RawAddress, oraclePublicKey bitcoin.PublicKey, blocks BlockHashes,
+	admin bitcoin.RawAddress, issuer actions.EntityField, contract bitcoin.RawAddress,
+	data actions.AdminIdentityCertificateField) error {
 
-// ApproveReceive requests a signature from the identity oracle to approve receipt of a token.
-// quantity is simply placed in the result data structure and not used in the certificate.
-func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
-	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+	if !bytes.Equal(data.EntityContract, oracleAddress.Bytes()) {
+		return errors.New("Wrong oracle entity contract")
+	}
 
-	keys, err := xpubs.ChildKeys(index)
+	signature, err := bitcoin.SignatureFromBytes(data.Signature)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate key")
+		return errors.Wrap(err, "parse signature")
 	}
 
-	address, err := keys.RawAddress(requiredSigners)
+	// Get block hash for tip - 4
+	blockHash, err := blocks.Hash(ctx, int(data.BlockHeight))
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address")
+		return errors.Wrap(err, "block hash")
 	}
 
-	request := struct {
-		XPubs    bitcoin.ExtendedKeys `json:"xpubs"`
-		Index    uint32               `json:"index"`
-		Contract string               `json:"contract"`
-		AssetID  string               `json:"asset_id"`
-	}{
-		XPubs:    xpubs,
-		Index:    index,
-		Contract: contract,
-		AssetID:  asset,
+	var entity interface{}
+	if contract.IsEmpty() {
+		entity = issuer
+	} else {
+		entity = contract
 	}
 
-	var response struct {
-		Data struct {
-			Approved     bool              `json:"approved"`
-			Description  string            `json:"description"`
-			SigAlgorithm uint32            `json:"algorithm"`
-			Signature    bitcoin.Signature `json:"signature"`
-			BlockHeight  uint32            `json:"block_height"`
-			BlockHash    bitcoin.Hash32    `json:"block_hash"`
-			Expiration   uint64            `json:"expiration"`
-		}
+	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, admin, entity, *blockHash,
+		data.Expiration, 1)
+	if err != nil {
+		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if err := post(ctx, o.URL+"/transfer/approve", request, &response); err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
+	if signature.Verify(sigHash, oraclePublicKey) {
+		return nil // valid approval signature
 	}
 
-	result := &actions.AssetReceiverField{
-		Address:               address.Bytes(),
-		Quantity:              quantity,
-		OracleSigAlgorithm:    response.Data.SigAlgorithm,
-		OracleIndex:           uint32(oracleIndex),
-		OracleConfirmationSig: response.Data.Signature.Bytes(),
-		OracleSigBlockHeight:  response.Data.BlockHeight,
-		OracleSigExpiry:       response.Data.Expiration,
+	sigHash, err = protocol.ContractAdminIdentityOracleSigHash(ctx, admin, entity, *blockHash,
+		data.Expiration, 0)
+	if err != nil {
+		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if !response.Data.Approved {
-		return result, response.Data.BlockHash, errors.Wrap(ErrNotApproved, response.Data.Description)
+	if signature.Verify(sigHash, oraclePublicKey) {
+		// Signature is valid, but it is confirming not approved.
+		return ErrNotApproved
 	}
 
-	return result, response.Data.BlockHash, nil
+	// Neither signature verified so it is just invalid.
+	return errors.Wrap(ErrInvalidSignature, "validate signature")
+}
+
+// ValidateReceive checks the validity of an identity oracle signature for a receive.
+func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHashes,
+	entity *actions.EntityField, data ApprovedEntityPublicKey) error {
+
+	if data.SigAlgorithm != 1 {
+		return errors.New("Unsupported signature algorithm")
+	}
+
+	// Get block hash for tip - 4
+	blockHash, err := blocks.Hash(ctx, int(data.BlockHeight))
+	if err != nil {
+		return errors.Wrap(err, "block hash")
+	}
+
+	sigHash, err := protocol.EntityPubKeyOracleSigHash(ctx, entity, data.PublicKey, *blockHash, 1)
+	if err != nil {
+		return errors.Wrap(err, "generate signature")
+	}
+
+	if !data.Signature.Verify(sigHash, o.PublicKey) {
+		return errors.Wrap(ErrInvalidSignature, "validate signature")
+	}
+
+	return nil
 }
 
 // ValidateReceive checks the validity of an identity oracle signature for a receive.

@@ -72,12 +72,12 @@ type MockXPub struct {
 
 // RegisterUser registers a user with the identity oracle.
 func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityField,
-	xpubs []bitcoin.ExtendedKeys) (uuid.UUID, error) {
+	xpubs []bitcoin.ExtendedKeys) (*uuid.UUID, error) {
 
 	for _, xps := range xpubs {
 		for _, xpub := range xps {
 			if xpub.IsPrivate() {
-				return uuid.UUID{}, errors.New("private keys not allowed")
+				return nil, errors.New("private keys not allowed")
 			}
 		}
 	}
@@ -86,7 +86,7 @@ func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 		for _, uxpub := range user.xpubs {
 			for _, xpub := range xpubs {
 				if uxpub.xpubs.Equal(xpub) {
-					return user.id, nil // Already registered
+					return &user.id, nil // Already registered
 				}
 			}
 		}
@@ -96,7 +96,7 @@ func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 	c.users = append(c.users, &MockUser{
 		id: id,
 	})
-	return id, nil
+	return &id, nil
 }
 
 // RegisterXPub registers an xpub under a user with an identity oracle.
@@ -216,35 +216,35 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 // ApproveEntityPublicKey requests a signature from the identity oracle to verify the ownership of
 // a public key by a specified entity.
 func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.EntityField,
-	xpub bitcoin.ExtendedKey, index uint32) (ApprovedEntityPublicKey, error) {
+	xpub bitcoin.ExtendedKey, index uint32) (*ApprovedEntityPublicKey, error) {
 
 	if xpub.IsPrivate() {
-		return ApprovedEntityPublicKey{}, errors.New("private keys not allowed")
+		return nil, errors.New("private keys not allowed")
 	}
 
 	key, err := xpub.ChildKey(index)
 	if err != nil {
-		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate public key")
+		return nil, errors.Wrap(err, "generate public key")
 	}
 
 	// Get random block hash
 	height := rand.Intn(5000)
 	blockHash, err := c.blockHashes.Hash(ctx, height)
 	if err != nil {
-		return ApprovedEntityPublicKey{}, errors.Wrap(err, "get sig block hash")
+		return nil, errors.Wrap(err, "get sig block hash")
 	}
 
 	sigHash, err := protocol.EntityPubKeyOracleSigHash(ctx, &entity, key.PublicKey(), *blockHash, 1)
 	if err != nil {
-		return ApprovedEntityPublicKey{}, errors.Wrap(err, "generate sig hash")
+		return nil, errors.Wrap(err, "generate sig hash")
 	}
 
 	sig, err := c.Key.Sign(sigHash)
 	if err != nil {
-		return ApprovedEntityPublicKey{}, errors.Wrap(err, "sign")
+		return nil, errors.Wrap(err, "sign")
 	}
 
-	result := ApprovedEntityPublicKey{
+	result := &ApprovedEntityPublicKey{
 		SigAlgorithm: 1,
 		Signature:    sig,
 		BlockHeight:  uint32(height),
@@ -348,7 +348,6 @@ func NewRandBlockHashes() *RandBlockHashes {
 }
 
 func (bh *RandBlockHashes) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
-
 	h, exists := bh.hashes[height]
 	if exists {
 		return &h, nil
