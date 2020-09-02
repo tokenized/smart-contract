@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -577,6 +578,9 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 				cert.BlockHeight))
 		}
 
+		logger.Info(ctx, "Admin address : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net))
+
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
 			// Use parent entity contract address in signature instead of entity structure.
@@ -585,10 +589,18 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 				return errors.Wrap(err, "entity address")
 			}
 
+			logger.Info(ctx, "Entity Contract : %s",
+				bitcoin.NewAddressFromRawAddress(entityRA, config.Net))
+
 			entity = entityRA
 		} else {
 			entity = contractOffer.Issuer
+
+			logger.Info(ctx, "Issuer : %+v", *contractOffer.Issuer)
 		}
+
+		logger.Info(ctx, "Block Hash : %s", hash.String())
+		logger.Info(ctx, "Expiration : %d", cert.Expiration)
 
 		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
 			entity, *hash, cert.Expiration, 1)
@@ -596,11 +608,13 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			return err
 		}
 
+		logger.Info(ctx, "Sig Hash : %x", sigHash)
+
 		if !oracleSig.Verify(sigHash, publicKey) {
-			return fmt.Errorf("Contract signature invalid")
+			return fmt.Errorf("Signature invalid")
 		}
 
-		node.Log(ctx, "Contract oracle signature is valid")
+		node.Log(ctx, "Admin identity signature is valid")
 	}
 
 	return nil
