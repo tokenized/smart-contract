@@ -579,7 +579,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 		}
 
 		logger.Info(ctx, "Admin address : %s",
-			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net))
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net).String())
 
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
@@ -590,7 +590,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			}
 
 			logger.Info(ctx, "Entity Contract : %s",
-				bitcoin.NewAddressFromRawAddress(entityRA, config.Net))
+				bitcoin.NewAddressFromRawAddress(entityRA, config.Net).String())
 
 			entity = entityRA
 		} else {
