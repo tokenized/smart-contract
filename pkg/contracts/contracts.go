@@ -43,20 +43,16 @@ type OutputFetcher interface {
 	GetOutputs(ctx context.Context, outpoints []wire.OutPoint) ([]bitcoin.UTXO, error)
 }
 
-/************************ Implement the SpyNode Listener interface. *******************************/
-
-// HandleBlock handles a block message from spynode. Part of the spynode listener interface.
+// HandleBlock handles a block message from spynode.
+// Implements the spynode Listener interface.
 func (ch *ContractsHandler) HandleBlock(ctx context.Context, msgType int,
 	block *handlers.BlockMessage) error {
 	return nil
 }
 
-// HandleTx handles a tx message from spynode. Part of the spynode listener interface.
+// HandleTx handles a tx message from spynode.
+// Implements the spynode Listener interface.
 func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
-	ctx = logger.ContextWithOutLogSubSystem(ctx)
-
-	txid := tx.TxHash()
-	ctx = logger.ContextWithLogTrace(ctx, txid.String())
 
 	for _, output := range tx.TxOut {
 		// Check for C2 for identity oracle, authority oracle, or operator
@@ -73,6 +69,9 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool,
 		if err != nil {
 			return false, nil // not a contract address
 		}
+
+		ctx = logger.ContextWithOutLogSubSystem(ctx)
+		ctx = logger.ContextWithLogTrace(ctx, tx.TxHash().String())
 
 		// Fetch outpoint output to verify input address
 		if tx.TxIn[0].PreviousOutPoint.Index == 0xffffffff {
@@ -121,13 +120,15 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool,
 	return false, nil // we don't really care about tx states
 }
 
-// HandleTxState handles a tx state message from spynode. Part of the spynode listener interface.
+// HandleTxState handles a tx state message from spynode.
+// Implements the spynode Listener interface.
 func (ch *ContractsHandler) HandleTxState(ctx context.Context, msgType int,
 	txid bitcoin.Hash32) error {
 	return nil
 }
 
-// HandleInSync handles an in sync message from spynode. Part of the spynode listener interface.
+// HandleInSync handles an in sync message from spynode.
+// Implements the spynode Listener interface.
 func (ch *ContractsHandler) HandleInSync(ctx context.Context) error {
 	return nil
 }
