@@ -605,7 +605,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash,
+			c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s",
 				itx.Inputs[0].UTXO.Hash.String()))
@@ -652,7 +653,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating contract administration address : %s", address.String())
 		}
 
-		// Operator changes. New operator in second input unless there is also a new administration, then it is in the third input
+		// Operator changes. New operator in second input unless there is also a new administration,
+		// then it is in the third input
 		if amendment != nil && amendment.ChangeOperatorAddress {
 			if len(request.Inputs) <= inputIndex {
 				return errors.New("New operator specified but not included in inputs")
@@ -837,26 +839,6 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			if _, err := actions.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems)); err != nil {
 				return fmt.Errorf("ContractPermissions amendment value is invalid : %s", err)
 			}
-
-		case actions.ContractFieldMasterAddress:
-			return node.NewError(actions.RejectionsContractPermissions,
-				"MasterAddress amendments prohibited")
-
-		case actions.ContractFieldContractRevision:
-			return node.NewError(actions.RejectionsContractPermissions,
-				"Revision amendments prohibited")
-
-		case actions.ContractFieldTimestamp:
-			return node.NewError(actions.RejectionsContractPermissions,
-				"Timestamp amendments prohibited")
-
-		case actions.ContractFieldAdminAddress:
-			return node.NewError(actions.RejectionsContractPermissions,
-				"AdminAddress amendments prohibited")
-
-		case actions.ContractFieldOperatorAddress:
-			return node.NewError(actions.RejectionsContractPermissions,
-				"OperatorAddress amendments prohibited")
 		}
 
 		adjustedFIP, err := cf.ApplyAmendment(fip, amendment.Operation, amendment.Data)
@@ -877,12 +859,14 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			case 1: // Holder
 				if !permission.HolderProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal", adjustedFIP))
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
+							adjustedFIP))
 				}
 			case 2: // Administrative Matter
 				if !permission.AdministrativeMatter {
 					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by administrative vote", adjustedFIP))
+						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
+							adjustedFIP))
 				}
 			default:
 				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
@@ -894,8 +878,8 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 			}
 			if !permission.VotingSystemsAllowed[votingSystem] {
 				return node.NewError(actions.RejectionsContractPermissions,
-					fmt.Sprintf("Field %s amendment not allowed using voting system %d", adjustedFIP,
-						votingSystem))
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
+						adjustedFIP, votingSystem))
 			}
 		} else if !permission.Permitted {
 			return node.NewError(actions.RejectionsContractPermissions,
@@ -914,11 +898,6 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 	cf *actions.ContractFormation, adminCert *actions.AdminIdentityCertificateField,
 	headers node.BitcoinHeaders, isTest bool) error {
-
-	// EntityContract       []byte   `protobuf:"bytes,1,opt,name=EntityContract,proto3" json:"EntityContract,omitempty"`
-	// Signature            []byte   `protobuf:"bytes,2,opt,name=Signature,proto3" json:"Signature,omitempty"`
-	// BlockHeight          uint32   `protobuf:"varint,3,opt,name=BlockHeight,proto3" json:"BlockHeight,omitempty"`
-	// Expiration           uint64   `protobuf:"varint,4,opt,name=Expiration,proto3" json:"Expiration,omitempty"`
 
 	oracleAddress, err := bitcoin.DecodeRawAddress(adminCert.EntityContract)
 	if err != nil {

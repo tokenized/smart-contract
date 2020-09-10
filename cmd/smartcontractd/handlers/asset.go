@@ -753,14 +753,6 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 		}
 
 		switch fip[0] {
-		case actions.AssetFieldAssetCode:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				"AssetCode amendments prohibited")
-
-		case actions.AssetFieldAssetIndex:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				"AssetIndex amendments prohibited")
-
 		case actions.AssetFieldAssetType:
 			return node.NewError(actions.RejectionsAssetNotPermitted,
 				"Asset type amendments prohibited")
@@ -807,14 +799,6 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 
 			ac.AssetPayload = newPayload
 			applied = true // Amendment already applied
-
-		case actions.AssetFieldAssetRevision:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				"Revision amendments prohibited")
-
-		case actions.AssetFieldTimestamp:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				"Timestamp amendments prohibited")
 		}
 
 		if !applied {

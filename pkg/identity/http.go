@@ -160,9 +160,23 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 	request := struct {
 		Entity    actions.EntityField `json:"entity"`     // hex protobuf
 		PublicKey bitcoin.PublicKey   `json:"public_key"` // hex compressed
+		Signature bitcoin.Signature   `json:"signature"`
 	}{
 		Entity:    entity,
 		PublicKey: o.ClientKey.PublicKey(),
+	}
+
+	// Sign entity
+	s := sha256.New()
+	if err := request.Entity.WriteDeterministic(s); err != nil {
+		return nil, errors.Wrap(err, "write entity")
+	}
+	hash := sha256.Sum256(s.Sum(nil))
+
+	var err error
+	request.Signature, err = o.ClientKey.Sign(hash[:])
+	if err != nil {
+		return errors.Wrap(err, "sign")
 	}
 
 	// Look for 200 OK status with data
