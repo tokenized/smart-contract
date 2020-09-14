@@ -3,15 +3,21 @@ package identity
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 var (
-	ErrNotApproved      = errors.New("Not Approved")
+	// ErrNotFound means the user or xpub is not found.
+	ErrNotFound = errors.New("Not Found")
+
+	// ErrNotApproved means the requested approval is not given.
+	ErrNotApproved = errors.New("Not Approved")
+
+	// ErrInvalidSignature means a provided signature is invalid.
 	ErrInvalidSignature = errors.New("Invalid Signature")
 )
 
@@ -28,6 +34,9 @@ type Client interface {
 
 	// RegisterXPub registers an xpub under a user with an identity oracle.
 	RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys, requiredSigners int) error
+
+	// UpdateEntity updates the user's entity information with the identity oracle.
+	UpdateEntity(ctx context.Context, entity actions.EntityField) error
 
 	// ApproveReceive requests an approval signature for a receiver from an identity oracle.
 	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,

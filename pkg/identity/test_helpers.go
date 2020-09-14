@@ -60,8 +60,9 @@ type MockClient struct {
 }
 
 type MockUser struct {
-	id    uuid.UUID
-	xpubs []*MockXPub
+	id     uuid.UUID
+	entity actions.EntityField
+	xpubs  []*MockXPub
 }
 
 type MockXPub struct {
@@ -94,7 +95,8 @@ func (c *MockClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 
 	id := uuid.New()
 	c.users = append(c.users, &MockUser{
-		id: id,
+		id:     id,
+		entity: entity,
 	})
 	return &id, nil
 }
@@ -127,7 +129,20 @@ func (c *MockClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 		}
 	}
 
-	return errors.New("User not found")
+	return ErrNotFound
+}
+
+// UpdateEntity updates the user's entity information with the identity oracle.
+func (c *MockClient) UpdateEntity(ctx context.Context, entity actions.EntityField) error {
+	for _, user := range c.users {
+		if !bytes.Equal(user.id[:], c.ClientID[:]) {
+			continue
+		}
+
+		user.entity = entity
+	}
+
+	return ErrNotFound
 }
 
 // ApproveReceive requests an approval signature for a receiver from an identity oracle.
@@ -157,7 +172,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 	}
 
 	if !found {
-		return nil, bitcoin.Hash32{}, errors.New("User xpub not found")
+		return nil, bitcoin.Hash32{}, ErrNotFound
 	}
 
 	contractAddress, err := bitcoin.DecodeAddress(contract)
