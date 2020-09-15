@@ -210,7 +210,7 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 		UserID          uuid.UUID            `json:"user_id"`
 		XPubs           bitcoin.ExtendedKeys `json:"xpubs"`
 		RequiredSigners int                  `json:"required_signers"`
-		Signature       bitcoin.Signature    `json:"signature"` // hex signature of user id and xpub with users public key
+		Signature       bitcoin.Signature    `json:"signature"`
 	}{
 		UserID:          o.ClientID,
 		XPubs:           xpubs,
@@ -238,8 +238,8 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 	return nil
 }
 
-// UpdateEntity updates the user's entity information with the identity oracle.
-func (o *HTTPClient) UpdateEntity(ctx context.Context, entity actions.EntityField) error {
+// UpdateIdentity updates the user's identity information with the identity oracle.
+func (o *HTTPClient) UpdateIdentity(ctx context.Context, entity actions.EntityField) error {
 
 	if len(o.ClientID) == 0 {
 		return errors.New("User not registered")
@@ -257,6 +257,9 @@ func (o *HTTPClient) UpdateEntity(ctx context.Context, entity actions.EntityFiel
 
 	// Sign entity
 	s := sha256.New()
+	if _, err := s.Write(request.UserID[:]); err != nil {
+		return errors.Wrap(err, "write user id")
+	}
 	if err := request.Entity.WriteDeterministic(s); err != nil {
 		return errors.Wrap(err, "write entity")
 	}
@@ -268,7 +271,7 @@ func (o *HTTPClient) UpdateEntity(ctx context.Context, entity actions.EntityFiel
 		return errors.Wrap(err, "sign")
 	}
 
-	if err := post(ctx, o.URL+"/oracle/updateEntity", request, nil); err != nil {
+	if err := post(ctx, o.URL+"/oracle/updateIdentity", request, nil); err != nil {
 		return errors.Wrap(err, "http post")
 	}
 

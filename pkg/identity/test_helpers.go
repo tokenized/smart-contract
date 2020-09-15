@@ -132,8 +132,8 @@ func (c *MockClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 	return ErrNotFound
 }
 
-// UpdateEntity updates the user's entity information with the identity oracle.
-func (c *MockClient) UpdateEntity(ctx context.Context, entity actions.EntityField) error {
+// UpdateIdentity updates the user's identity information with the identity oracle.
+func (c *MockClient) UpdateIdentity(ctx context.Context, entity actions.EntityField) error {
 	for _, user := range c.users {
 		if !bytes.Equal(user.id[:], c.ClientID[:]) {
 			continue

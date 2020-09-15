@@ -35,8 +35,8 @@ type Client interface {
 	// RegisterXPub registers an xpub under a user with an identity oracle.
 	RegisterXPub(ctx context.Context, path string, xpubs bitcoin.ExtendedKeys, requiredSigners int) error
 
-	// UpdateEntity updates the user's entity information with the identity oracle.
-	UpdateEntity(ctx context.Context, entity actions.EntityField) error
+	// UpdateIdentity updates the user's identity information with the identity oracle.
+	UpdateIdentity(ctx context.Context, entity actions.EntityField) error
 
 	// ApproveReceive requests an approval signature for a receiver from an identity oracle.
 	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
