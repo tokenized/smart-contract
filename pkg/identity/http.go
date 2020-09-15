@@ -21,10 +21,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	ErrNotFound = errors.New("Not Found")
-)
-
 // HTTPFactory implements the factory interface that creates http clients.
 type HTTPFactory struct{}
 
@@ -131,7 +127,6 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 
 	// Check for existing user for xpubs.
 	for _, xpub := range xpubs {
-
 		request := struct {
 			XPubs bitcoin.ExtendedKeys `json:"xpubs"`
 		}{
@@ -160,9 +155,23 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 	request := struct {
 		Entity    actions.EntityField `json:"entity"`     // hex protobuf
 		PublicKey bitcoin.PublicKey   `json:"public_key"` // hex compressed
+		Signature bitcoin.Signature   `json:"signature"`
 	}{
 		Entity:    entity,
 		PublicKey: o.ClientKey.PublicKey(),
+	}
+
+	// Sign entity
+	s := sha256.New()
+	if err := request.Entity.WriteDeterministic(s); err != nil {
+		return nil, errors.Wrap(err, "write entity")
+	}
+	hash := sha256.Sum256(s.Sum(nil))
+
+	var err error
+	request.Signature, err = o.ClientKey.Sign(hash[:])
+	if err != nil {
+		return nil, errors.Wrap(err, "sign")
 	}
 
 	// Look for 200 OK status with data
@@ -201,7 +210,7 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 		UserID          uuid.UUID            `json:"user_id"`
 		XPubs           bitcoin.ExtendedKeys `json:"xpubs"`
 		RequiredSigners int                  `json:"required_signers"`
-		Signature       bitcoin.Signature    `json:"signature"` // hex signature of user id and xpub with users public key
+		Signature       bitcoin.Signature    `json:"signature"`
 	}{
 		UserID:          o.ClientID,
 		XPubs:           xpubs,
@@ -223,6 +232,46 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 	}
 
 	if err := post(ctx, o.URL+"/oracle/addXPub", request, nil); err != nil {
+		return errors.Wrap(err, "http post")
+	}
+
+	return nil
+}
+
+// UpdateIdentity updates the user's identity information with the identity oracle.
+func (o *HTTPClient) UpdateIdentity(ctx context.Context, entity actions.EntityField) error {
+
+	if len(o.ClientID) == 0 {
+		return errors.New("User not registered")
+	}
+
+	// Add xpub to user using identity oracle endpoint.
+	request := struct {
+		UserID    uuid.UUID           `json:"user_id"`
+		Entity    actions.EntityField `json:"entity"`
+		Signature bitcoin.Signature   `json:"signature"`
+	}{
+		UserID: o.ClientID,
+		Entity: entity,
+	}
+
+	// Sign entity
+	s := sha256.New()
+	if _, err := s.Write(request.UserID[:]); err != nil {
+		return errors.Wrap(err, "write user id")
+	}
+	if err := request.Entity.WriteDeterministic(s); err != nil {
+		return errors.Wrap(err, "write entity")
+	}
+	hash := sha256.Sum256(s.Sum(nil))
+
+	var err error
+	request.Signature, err = o.ClientKey.Sign(hash[:])
+	if err != nil {
+		return errors.Wrap(err, "sign")
+	}
+
+	if err := post(ctx, o.URL+"/oracle/updateIdentity", request, nil); err != nil {
 		return errors.Wrap(err, "http post")
 	}
 
@@ -461,6 +510,9 @@ func get(ctx context.Context, url string, response interface{}) error {
 	}
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode > 299 {
+		if httpResponse.StatusCode == 404 {
+			return errors.Wrap(ErrNotFound, httpResponse.Status)
+		}
 		return fmt.Errorf("%v %s", httpResponse.StatusCode, httpResponse.Status)
 	}
 
