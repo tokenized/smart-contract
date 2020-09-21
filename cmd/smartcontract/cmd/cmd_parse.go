@@ -179,6 +179,23 @@ func parseScript(c *cobra.Command, script []byte) error {
 			case *messages.RevertedTx:
 				fmt.Printf("\nEmbedded Reverted tx:\n")
 				parseTx(c, p.Transaction)
+			case *messages.SettlementRequest:
+				fmt.Printf("\nEmbedded settlement:\n")
+
+				action, err := protocol.Deserialize(p.Settlement, isTest)
+				if err != nil {
+					fmt.Printf("Failed to deserialize settlement from settlement request : %s\n",
+						err)
+					return nil
+				}
+
+				settlement, ok := action.(*actions.Settlement)
+				if !ok {
+					fmt.Printf("Settlement Request payload not a settlement\n")
+					return nil
+				}
+
+				dumpJSON(settlement)
 			}
 		}
 	}
