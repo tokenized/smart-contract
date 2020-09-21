@@ -10,7 +10,6 @@ import (
 
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -169,6 +168,18 @@ func parseScript(c *cobra.Command, script []byte) error {
 			fmt.Printf("Failed to deserialize payload : %s", err)
 		} else {
 			dumpJSON(msg)
+
+			switch p := msg.(type) {
+			case *messages.Offer:
+				fmt.Printf("\nEmbedded offer tx:\n")
+				parseTx(c, p.Payload)
+			case *messages.SignatureRequest:
+				fmt.Printf("\nEmbedded signature request tx:\n")
+				parseTx(c, p.Payload)
+			case *messages.RevertedTx:
+				fmt.Printf("\nEmbedded Reverted tx:\n")
+				parseTx(c, p.Transaction)
+			}
 		}
 	}
 
