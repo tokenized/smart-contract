@@ -68,10 +68,12 @@ func (tracer *Tracer) Load(ctx context.Context, masterDB *db.DB) error {
 
 	// Read items
 	tracer.traces = make([]*traceNode, count)
-	for _, trace := range tracer.traces {
-		if err := trace.read(buf); err != nil {
+	for i := range tracer.traces {
+		newTrace := &traceNode{}
+		if err := newTrace.read(buf); err != nil {
 			return err
 		}
+		tracer.traces[i] = newTrace
 	}
 
 	node.LogVerbose(ctx, "Loaded %d traces", len(tracer.traces))
