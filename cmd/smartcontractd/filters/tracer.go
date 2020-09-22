@@ -237,10 +237,12 @@ func (node *traceNode) read(r io.Reader) error {
 
 	// Read items
 	node.children = make([]*traceNode, count)
-	for _, child := range node.children {
+	for i := range node.children {
+		child := &traceNode{}
 		if err := child.read(r); err != nil {
 			return err
 		}
+		node.children[i] = child
 	}
 
 	return nil
