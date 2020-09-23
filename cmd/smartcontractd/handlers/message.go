@@ -64,7 +64,8 @@ func (m *Message) ProcessMessage(ctx context.Context, w *node.ResponseWriter,
 	} else {
 		for _, outputIndex := range msg.ReceiverIndexes {
 			if int(outputIndex) >= len(itx.Outputs) {
-				return fmt.Errorf("Message output index out of range : %d/%d", outputIndex, len(itx.Outputs))
+				return fmt.Errorf("Message output index out of range : %d/%d", outputIndex,
+					len(itx.Outputs))
 			}
 
 			if itx.Outputs[outputIndex].Address.Equal(rk.Address) {
@@ -151,7 +152,8 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	if hash != nil {
 		problemTx, err = transactions.GetTx(ctx, m.MasterDB, hash, m.Config.IsTest)
 	} else {
-		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash, m.Config.IsTest)
+		problemTx, err = transactions.GetTx(ctx, m.MasterDB, &itx.Inputs[0].UTXO.Hash,
+			m.Config.IsTest)
 	}
 	if err != nil {
 		return nil
@@ -161,7 +163,7 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	case *actions.Transfer:
 		// Refund any funds from the transfer tx that were sent to the this contract.
 		return refundTransferFromReject(ctx, m.Config, m.MasterDB, m.HoldingsChannel, m.Scheduler,
-			w, itx, msg, problemTx, problemMsg, rk)
+			m.Tracer, w, itx, msg, problemTx, problemMsg, rk)
 
 	default:
 	}
@@ -169,7 +171,8 @@ func (m *Message) ProcessRejection(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-// ProcessRevert handles a tx that has been reverted either through a reorg or zero conf double spend.
+// ProcessRevert handles a tx that has been reverted either through a reorg or zero conf double
+// spend.
 func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
 
@@ -238,7 +241,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		for _, utxo := range utxos {
-			if err := tx.AddInput(utxo.OutPoint, utxo.Output.PkScript, uint64(utxo.Output.Value)); err != nil {
+			if err := tx.AddInput(utxo.OutPoint, utxo.Output.PkScript,
+				uint64(utxo.Output.Value)); err != nil {
 				return errors.Wrap(err, "Failed add input")
 			}
 		}
@@ -266,7 +270,8 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 
 // processSettlementRequest handles an incoming Message SettlementRequest payload.
 func (m *Message) processSettlementRequest(ctx context.Context, w *node.ResponseWriter,
-	itx *inspector.Transaction, settlementRequest *messages.SettlementRequest, rk *wallet.Key) error {
+	itx *inspector.Transaction, settlementRequest *messages.SettlementRequest,
+	rk *wallet.Key) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Message.processSettlementRequest")
 	defer span.End()
@@ -301,8 +306,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Find "first" contract. The "first" contract of a transfer is the one responsible for
-	//   creating the initial settlement data and passing it to the next contract if there
-	//   are more than one.
+	// creating the initial settlement data and passing it to the next contract if there are more
+	// than one.
 	firstContractIndex := uint16(0)
 	for _, asset := range transfer.Assets {
 		if asset.ContractIndex != uint32(0x0000ffff) {
@@ -317,8 +322,13 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return errors.New("Transfer contract index out of range")
 	}
 
+	firstContractOutput := transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex]
+
+	// Is this contract the first contract
+	isFirstContract := firstContractOutput.Address.Equal(rk.Address)
+
 	// Bitcoin balance of first contract
-	contractBalance := transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex].UTXO.Value
+	contractBalance := firstContractOutput.UTXO.Value
 
 	// Build settle tx
 	settleTx, err := buildSettlementTx(ctx, m.MasterDB, m.Config, transferTx, transfer,
@@ -327,7 +337,8 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		return errors.Wrap(err, "Failed to build settle tx")
 	}
 
-	// Serialize settlement data into OP_RETURN output as a placeholder to be updated by addSettlementData.
+	// Serialize settlement data into OP_RETURN output as a placeholder to be updated by
+	// addSettlementData.
 	var script []byte
 	script, err = protocol.Serialize(settlement, m.Config.IsTest)
 	if err != nil {
@@ -397,7 +408,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		}
 	}
 
-	// Check if settlement data is complete. No other contracts involved
+	// Check if settlement data is complete. No further contracts involved.
 	if settlementIsComplete(ctx, transfer, settlement) {
 		// Sign this contracts input of the settle tx.
 		signed := false
@@ -418,16 +429,18 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 			return errors.New("Failed to find input to sign")
 		}
 
-		// This shouldn't happen because we recieved this from another contract and they couldn't
-		//   have signed it yet since it was incomplete.
-		if settleTx.AllInputsAreSigned() {
-			// Remove tracer for this request.
+		// Remove tracer for this request.
+		if isFirstContract {
 			boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.Address)
 			if boomerangIndex != 0xffffffff {
 				outpoint := wire.OutPoint{Hash: *transferTx.Hash, Index: boomerangIndex}
 				m.Tracer.Remove(ctx, &outpoint)
 			}
+		}
 
+		// This shouldn't happen because we recieved this from another contract and they couldn't
+		// have signed it yet since it was incomplete.
+		if settleTx.AllInputsAreSigned() {
 			node.Log(ctx, "Broadcasting settlement tx")
 			// Send complete settlement tx as response
 			return node.Respond(ctx, w, settleTx.MsgTx)
@@ -443,11 +456,13 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Send to next contract
-	return sendToNextSettlementContract(ctx, w, rk, itx, transferTx, transfer, settleTx, settlement, settlementRequest, m.Tracer)
+	return sendToNextSettlementContract(ctx, w, rk, itx, transferTx, transfer, settleTx, settlement,
+		settlementRequest, m.Tracer)
 }
 
 // settlementIsComplete returns true if the settlement accounts for all assets in the transfer.
-func settlementIsComplete(ctx context.Context, transfer *actions.Transfer, settlement *actions.Settlement) bool {
+func settlementIsComplete(ctx context.Context, transfer *actions.Transfer,
+	settlement *actions.Settlement) bool {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.settlementIsComplete")
 	defer span.End()
 
@@ -456,7 +471,8 @@ func settlementIsComplete(ctx context.Context, transfer *actions.Transfer, settl
 		for _, assetSettle := range settlement.Assets {
 			if assetTransfer.AssetType == assetSettle.AssetType &&
 				bytes.Equal(assetTransfer.AssetCode, assetSettle.AssetCode) {
-				node.LogVerbose(ctx, "Found settlement data for asset : %x", assetTransfer.AssetCode)
+				node.LogVerbose(ctx, "Found settlement data for asset : %x",
+					assetTransfer.AssetCode)
 				found = true
 				break
 			}
@@ -506,8 +522,8 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 	itx *inspector.Transaction, rk *wallet.Key, sigRequest *messages.SignatureRequest,
 	settleWireTx *wire.MsgTx, settlement *actions.Settlement) error {
 	// Get transfer tx
-	transferTx, err := transactions.GetTx(ctx, m.MasterDB, &settleWireTx.TxIn[0].PreviousOutPoint.Hash,
-		m.Config.IsTest)
+	transferTx, err := transactions.GetTx(ctx, m.MasterDB,
+		&settleWireTx.TxIn[0].PreviousOutPoint.Hash, m.Config.IsTest)
 	if err != nil {
 		return errors.New("Failed to get transfer tx")
 	}
@@ -587,8 +603,15 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 		return errors.New("Failed to find input to sign")
 	}
 
-	// This shouldn't happen because we recieved this from another contract and they couldn't
-	//   have signed it yet since it was incomplete.
+	// Remove tracer for this transfer.
+	boomerangIndex := findBoomerangIndex(transferTx, transferMsg, rk.Address)
+	if boomerangIndex != 0xffffffff {
+		outpoint := wire.OutPoint{Hash: *transferTx.Hash, Index: boomerangIndex}
+		m.Tracer.Remove(ctx, &outpoint)
+	}
+
+	// This shouldn't happen because we received this from another contract and they couldn't have
+	// signed it yet since it was incomplete.
 	if settleTx.AllInputsAreSigned() {
 		// Remove pending transfer
 		if err := transfer.Remove(ctx, m.MasterDB, rk.Address,
@@ -1040,8 +1063,8 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 //   transfer with a tx refunding any bitcoin sent to the contract that was requested to be
 //   transferred.
 func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB *db.DB,
-	holdingsChannel *holdings.CacheChannel, sch *scheduler.Scheduler, w *node.ResponseWriter,
-	rejectionTx *inspector.Transaction, rejection *actions.Rejection,
+	holdingsChannel *holdings.CacheChannel, sch *scheduler.Scheduler, tracer *filters.Tracer,
+	w *node.ResponseWriter, rejectionTx *inspector.Transaction, rejection *actions.Rejection,
 	transferTx *inspector.Transaction, transferMsg *actions.Transfer, rk *wallet.Key) error {
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -1050,6 +1073,16 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 	// Remove pending transfer
 	if err := transfer.Remove(ctx, masterDB, rk.Address, transferTxId); err != nil {
 		return errors.Wrap(err, "Failed to save pending transfer")
+	}
+
+	// Remove tracer for this transfer.
+	tfr, ok := transferTx.MsgProto.(*actions.Transfer)
+	if ok {
+		boomerangIndex := findBoomerangIndex(transferTx, tfr, rk.Address)
+		if boomerangIndex != 0xffffffff {
+			outpoint := wire.OutPoint{Hash: *transferTx.Hash, Index: boomerangIndex}
+			tracer.Remove(ctx, &outpoint)
+		}
 	}
 
 	// Cancel transfer timeout

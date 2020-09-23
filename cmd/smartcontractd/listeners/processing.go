@@ -107,7 +107,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			if server.IsInSync() {
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
-					node.LogError(ctx, "Failed to handle tx : %s", err)
+					node.LogWarn(ctx, "Failed to handle tx : %s", err)
 				}
 			} else {
 				// Save tx for response processing after smart contract is in sync with on chain

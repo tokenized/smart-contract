@@ -48,6 +48,8 @@ var testAsset2Code protocol.AssetCode
 var testVoteTxId protocol.TxId
 var testVoteResultTxId protocol.TxId
 
+var tracer *filters.Tracer
+
 // TestMain is the entry point for testing.
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
@@ -69,7 +71,7 @@ func testMain(m *testing.M) int {
 	// =========================================================================
 	// API
 
-	tracer := filters.NewTracer()
+	tracer = filters.NewTracer()
 
 	var err error
 	a, err = handlers.API(
@@ -282,5 +284,6 @@ func resetTest(ctx context.Context) error {
 	vote.Reset(ctx)
 	a.SetResponder(respondTx)
 	a.SetReprocessor(reprocessTx)
+	tracer.Clear()
 	return test.Reset(ctx)
 }
