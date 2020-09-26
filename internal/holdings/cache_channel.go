@@ -6,7 +6,6 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
-
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"

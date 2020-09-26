@@ -159,14 +159,10 @@ func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now proto
 	}
 
 	switch hs.Code {
-	case DebitCode:
-		fallthrough
-	case MultiContractDebitCode:
+	case DebitCode, MultiContractDebitCode:
 		h.FinalizedBalance -= hs.Amount
 		delete(h.HoldingStatuses, *txid)
-	case DepositCode:
-		fallthrough
-	case MultiContractDepositCode:
+	case DepositCode, MultiContractDepositCode:
 		h.FinalizedBalance += hs.Amount
 		delete(h.HoldingStatuses, *txid)
 	default:
@@ -335,13 +331,9 @@ func RevertStatus(h *state.Holding, txid *protocol.TxId) error {
 	}
 
 	switch hs.Code {
-	case DebitCode:
-		fallthrough
-	case MultiContractDebitCode:
+	case DebitCode, MultiContractDebitCode:
 		h.PendingBalance += hs.Amount
-	case DepositCode:
-		fallthrough
-	case MultiContractDepositCode:
+	case DepositCode, MultiContractDepositCode:
 		h.PendingBalance -= hs.Amount
 	}
 

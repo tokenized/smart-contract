@@ -158,6 +158,16 @@ func parseScript(c *cobra.Command, script []byte) error {
 
 		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType,
 			*protocol.AssetCodeFromBytes(m.AssetCode)))
+	case *actions.Transfer:
+		for i, a := range m.Assets {
+			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType,
+				*protocol.AssetCodeFromBytes(a.AssetCode)))
+		}
+	case *actions.Settlement:
+		for i, a := range m.Assets {
+			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType,
+				*protocol.AssetCodeFromBytes(a.AssetCode)))
+		}
 	case *actions.Message:
 		if len(m.MessagePayload) == 0 {
 			fmt.Printf("Empty message payload!\n")
