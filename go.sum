@@ -64,6 +64,8 @@ github.com/google/go-cmp v0.4.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/
 github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
 github.com/google/uuid v1.1.1 h1:Gkbcsh/GbpXz7lPftLA3P6TYMwjCLYm83jiFQZF/3gY=
 github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/google/uuid v1.1.2 h1:EVhdT+1Kseyi1/pUmXKaFxYsDNy9RQYkMWRH68J/W7Y=
+github.com/google/uuid v1.1.2/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=
@@ -119,6 +121,8 @@ github.com/tokenized/pkg v0.0.0-20200528005955-162f9c3d87f8 h1:MP+vLu3T5oyxJGo2g
 github.com/tokenized/pkg v0.0.0-20200528005955-162f9c3d87f8/go.mod h1:qVlOZ6a37XqvfYQFoWhxBUGvGgzY0EkvoCHDBs+cjSA=
 github.com/tokenized/pkg v0.0.0-20200904024208-51f4646cbc01 h1:fwBPxcZJu4BdHAcen42vyxa7Qb3q8ualjK5aOrx+OsI=
 github.com/tokenized/pkg v0.0.0-20200904024208-51f4646cbc01/go.mod h1:StHV+mlXyhmmYZSRghRb+3Zy7QSiJe0jDaQw05SYnyQ=
+github.com/tokenized/pkg v0.0.0-20200927230516-1e1e6558926d h1:5XVrkrYkdA9myN97zuX0rsNDPURYNnBudKlyfJMUjCM=
+github.com/tokenized/pkg v0.0.0-20200927230516-1e1e6558926d/go.mod h1:QJIVlpGu5AUytmnjmMGEZGJo59LUOG4xpi/PUN9RLLg=
 github.com/tokenized/specification v0.2.3-0.20200910014813-505fd0bafcdf h1:WCad0UZDvH94hBfBXkMRojzzG3eUKw/9KTXUhsi9uxY=
 github.com/tokenized/specification v0.2.3-0.20200910014813-505fd0bafcdf/go.mod h1:fwQUzCqTrtww8Ikpta2uVq/myS0dCVsa58RJn/rAc1w=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
