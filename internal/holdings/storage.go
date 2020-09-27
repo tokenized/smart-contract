@@ -10,7 +10,6 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -84,9 +83,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 }
 
 // List provides a list of all holdings in storage for a specified asset.
-func List(ctx context.Context,
-	dbConn *db.DB,
-	contractAddress bitcoin.RawAddress,
+func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode) ([]string, error) {
 
 	contractHash, err := contractAddress.Hash()
@@ -139,10 +136,8 @@ func List(ctx context.Context,
 	return result, nil
 }
 
-// FetchAll fetches aall holdings from storage for a specified asset.
-func FetchAll(ctx context.Context,
-	dbConn *db.DB,
-	contractAddress bitcoin.RawAddress,
+// FetchAll fetches all holdings from storage for a specified asset.
+func FetchAll(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
 	assetCode *protocol.AssetCode) ([]*state.Holding, error) {
 
 	contractHash, err := contractAddress.Hash()
@@ -310,7 +305,8 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 			for addressHash, cu := range assetHoldings {
 				cu.lock.Lock()
 				if cu.modified {
-					if err := write(ctx, dbConn, &contractHash, &assetCode, &addressHash, cu.h); err != nil {
+					if err := write(ctx, dbConn, &contractHash, &assetCode, &addressHash,
+						cu.h); err != nil {
 						cu.lock.Unlock()
 						return err
 					}
@@ -323,7 +319,8 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 	return nil
 }
 
-// Write updates storage for an item from the cache if it has been modified since the last write.
+// WriteCacheUpdate updates storage for an item from the cache if it has been modified since the
+// last write.
 func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
 	assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) error {
 
@@ -371,7 +368,8 @@ func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
 		return errors.Wrap(err, "Failed to serialize holding")
 	}
 
-	if err := dbConn.Put(ctx, buildStoragePath(contractHash, assetCode, addressHash), data); err != nil {
+	if err := dbConn.Put(ctx, buildStoragePath(contractHash, assetCode, addressHash),
+		data); err != nil {
 		return err
 	}
 
@@ -379,7 +377,8 @@ func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) string {
+func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *protocol.AssetCode,
+	addressHash *bitcoin.Hash20) string {
 	return fmt.Sprintf("%s/%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey,
 		assetCode.String(), addressHash.String())
 }
