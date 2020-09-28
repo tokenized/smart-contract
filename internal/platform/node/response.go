@@ -10,7 +10,6 @@ import (
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -25,10 +24,10 @@ var (
 	ErrNoResponse = errors.New("No response given")
 
 	// ErrRejected occurs for a rejected response.
-	ErrRejected = errors.New("Transaction rejected")
+	ErrRejected = errors.New("Request rejected")
 
 	// ErrInsufficientFunds occurs for a poorly funded request.
-	ErrInsufficientFunds = errors.New("Insufficient Payment amount")
+	ErrInsufficientFunds = errors.New("Insufficient funds")
 )
 
 // Error handles all error responses for the API.

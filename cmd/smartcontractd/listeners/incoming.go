@@ -502,7 +502,8 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	if assetReceiver.OracleSigExpiry != 0 {
 		now := uint64(time.Now().UnixNano())
 		if now > assetReceiver.OracleSigExpiry {
-			return fmt.Errorf("Oracle sigature expired : %d > %d", now, assetReceiver.OracleSigExpiry)
+			return fmt.Errorf("Oracle signature expired : %d > %d", now,
+				assetReceiver.OracleSigExpiry)
 		}
 	}
 
