@@ -54,12 +54,7 @@ func New(logFileName string) *Test {
 	// =========================================================================
 	// Logging
 
-	var ctx context.Context
-	if len(logFileName) > 0 {
-		ctx = node.ContextWithDevelopmentFileLogger(NewContext(), logFileName, "text")
-	} else {
-		ctx = node.ContextWithNoLogger(NewContext())
-	}
+	ctx := node.ContextWithLogger(NewContext(), true, true, logFileName)
 
 	// ============================================================
 	// Node
