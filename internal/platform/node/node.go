@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
@@ -39,9 +40,10 @@ type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transac
 // data/logic on this App struct
 type App struct {
 	*protomux.ProtoMux
-	config *Config
-	mw     []Middleware
-	wallet wallet.WalletInterface
+	config   *Config
+	mw       []Middleware
+	masterDB *db.DB
+	wallet   wallet.WalletInterface
 }
 
 // Node configuration
@@ -59,11 +61,12 @@ type Config struct {
 }
 
 // New creates an App value that handle a set of routes for the application.
-func New(config *Config, wallet wallet.WalletInterface, mw ...Middleware) *App {
+func New(config *Config, masterDB *db.DB, wallet wallet.WalletInterface, mw ...Middleware) *App {
 	return &App{
 		ProtoMux: protomux.New(),
 		config:   config,
 		mw:       mw,
+		masterDB: masterDB,
 		wallet:   wallet,
 	}
 }
@@ -79,8 +82,9 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 	h := func(ctx context.Context, itx *inspector.Transaction) error {
 		// Prepare response writer
 		w := &ResponseWriter{
-			Mux:    a.ProtoMux,
-			Config: a.config,
+			Mux:      a.ProtoMux,
+			Config:   a.config,
+			MasterDB: a.masterDB,
 		}
 
 		// For each address controlled by this wallet

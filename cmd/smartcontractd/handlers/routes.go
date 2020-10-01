@@ -27,7 +27,7 @@ func API(
 	holdingsChannel *holdings.CacheChannel,
 ) (protomux.Handler, error) {
 
-	app := node.New(config, masterWallet)
+	app := node.New(config, masterDB, masterWallet)
 
 	// Register contract based events.
 	c := Contract{

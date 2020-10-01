@@ -336,10 +336,6 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 		return err
 	}
 
-	if server.AlternateResponder != nil {
-		server.AlternateResponder(ctx, tx)
-	}
-
 	return nil
 }
 
