@@ -336,10 +336,6 @@ func (server *Server) respondTx(ctx context.Context, tx *wire.MsgTx) error {
 		return err
 	}
 
-	if server.AlternateResponder != nil {
-		server.AlternateResponder(ctx, tx)
-	}
-
 	return nil
 }
 
@@ -347,16 +343,26 @@ func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transactio
 	return server.processingTxs.Add(ProcessingTx{Itx: itx, Event: "END"})
 }
 
-// Remove any pending that are conflicting with this tx.
-// Contract responses use the tx output from the request to the contract as a tx input in the response tx.
-// So if that contract request output is spent by another tx, then the contract has already responded.
-func (server *Server) removeConflictingPending(ctx context.Context, itx *inspector.Transaction) error {
-	for i, pendingTx := range server.pendingRequests {
-		if pendingTx.ContractIndex < len(itx.MsgTx.TxIn) &&
-			itx.MsgTx.TxIn[pendingTx.ContractIndex].PreviousOutPoint.Hash.Equal(pendingTx.Itx.Hash) {
-			node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash.String())
-			server.pendingRequests = append(server.pendingRequests[:i], server.pendingRequests[i+1:]...)
-			return nil
+// removePendingRequests removes any pending requests that this tx is a response to.
+// Contract responses use the tx output from the request to the contract as a tx input in the
+// response tx. So if that contract request output is spent by another tx, then the contract has
+// already responded.
+func (server *Server) removePendingRequests(ctx context.Context, itx *inspector.Transaction) error {
+	if !itx.IsOutgoingMessageType() {
+		return nil
+	}
+
+	// Check each input for a link to a pending request.
+	for _, input := range itx.MsgTx.TxIn {
+		for i, pendingTx := range server.pendingRequests {
+			if int(input.PreviousOutPoint.Index) == pendingTx.ContractIndex &&
+				input.PreviousOutPoint.Hash.Equal(pendingTx.Itx.Hash) {
+
+				node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash.String())
+				server.pendingRequests = append(server.pendingRequests[:i],
+					server.pendingRequests[i+1:]...)
+				break
+			}
 		}
 	}
 

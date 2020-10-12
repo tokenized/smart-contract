@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -64,21 +63,12 @@ func Context() context.Context {
 
 	// -------------------------------------------------------------------------
 	// Logging
-	var logConfig *logger.Config
-	if strings.ToUpper(os.Getenv("CLIENT_LOG_FORMAT")) == "TEXT" {
-		logConfig = logger.NewDevelopmentTextConfig()
-	} else {
-		logConfig = logger.NewDevelopmentConfig()
-	}
-
 	if len(os.Getenv("CLIENT_LOG_FILE_PATH")) > 0 {
 		os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
-		logFileName := filepath.FromSlash(os.Getenv("CLIENT_LOG_FILE_PATH"))
-		if err := logConfig.Main.AddFile(logFileName); err != nil {
-			fmt.Printf("Failed to open log file : %v\n", err)
-			return nil
-		}
 	}
+
+	logConfig := logger.NewConfig(true, strings.ToUpper(os.Getenv("CLIENT_LOG_FORMAT")) == "TEXT",
+		os.Getenv("CLIENT_LOG_FILE_PATH"))
 
 	// logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(spynode.SubSystem)

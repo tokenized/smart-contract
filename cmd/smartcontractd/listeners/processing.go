@@ -34,8 +34,8 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			continue
 		}
 
-		if err := server.removeConflictingPending(ctx, ptx.Itx); err != nil {
-			node.LogError(ctx, "Failed to remove conflicting pending : %s", err)
+		if err := server.removePendingRequests(ctx, ptx.Itx); err != nil {
+			node.LogError(ctx, "Failed to remove pending requests : %s", err)
 			server.walletLock.RUnlock()
 			continue
 		}
@@ -51,28 +51,30 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			}
 		}
 
-		found := false
+		isRelevant := false
 
 		// Save tx to cache so it can be used to process the response
 		for index, output := range ptx.Itx.Outputs {
 			for _, address := range server.contractAddresses {
-				if address.Equal(output.Address) {
-					found = true
-					node.Log(ctx, "Request for contract %s",
-						bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
-					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
-						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
-					}
-					if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
-						node.Log(ctx, "Adding request to pending")
-						// Save pending request to ensure it has a response, and process it if not.
-						server.pendingRequests = append(server.pendingRequests, pendingRequest{
-							Itx:           ptx.Itx,
-							ContractIndex: index,
-						})
-					}
-					break
+				if !address.Equal(output.Address) {
+					continue
 				}
+
+				isRelevant = true
+				node.Log(ctx, "Request for contract %s",
+					bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
+				if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
+					node.LogError(ctx, "Failed to save tx to RPC : %s", err)
+				}
+				if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
+					node.Log(ctx, "Adding request to pending")
+					// Save pending request to ensure it has a response, and process it if not.
+					server.pendingRequests = append(server.pendingRequests, pendingRequest{
+						Itx:           ptx.Itx,
+						ContractIndex: index,
+					})
+				}
+				break
 			}
 		}
 
@@ -85,7 +87,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 					if address.Equal(input.Address) {
 						node.Log(ctx, "Response for contract %s",
 							bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
-						found = true
+						isRelevant = true
 						responseAdded = true
 						if !server.IsInSync() {
 							node.Log(ctx, "Adding response to pending")
@@ -102,7 +104,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		server.walletLock.RUnlock()
 
-		if found { // Tx is associated with one of our contracts.
+		if isRelevant { // Tx is associated with one of our contracts.
 			if server.IsInSync() {
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {

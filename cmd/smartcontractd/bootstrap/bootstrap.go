@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/tokenized/pkg/bitcoin"
@@ -22,22 +20,8 @@ func NewContextWithDevelopmentLogger() context.Context {
 	ctx := context.Background()
 
 	logPath := os.Getenv("LOG_FILE_PATH")
-	if len(logPath) > 0 {
-		os.MkdirAll(path.Dir(os.Getenv("LOG_FILE_PATH")), os.ModePerm)
-		logFileName := filepath.FromSlash(os.Getenv("LOG_FILE_PATH"))
-
-		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
-			ctx = node.ContextWithDevelopmentFileLogger(ctx, logFileName, os.Getenv("LOG_FORMAT"))
-		} else {
-			ctx = node.ContextWithProductionFileLogger(ctx, logFileName, os.Getenv("LOG_FORMAT"))
-		}
-	} else {
-		if strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE" {
-			ctx = node.ContextWithDevelopmentLogger(ctx, os.Getenv("LOG_FORMAT"))
-		} else {
-			ctx = node.ContextWithProductionLogger(ctx, os.Getenv("LOG_FORMAT"))
-		}
-	}
+	ctx = node.ContextWithLogger(ctx, strings.ToUpper(os.Getenv("DEVELOPMENT")) == "TRUE",
+		strings.ToUpper(os.Getenv("LOG_FORMAT")) == "TEXT", logPath)
 
 	return ctx
 }

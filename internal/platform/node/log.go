@@ -2,7 +2,8 @@ package node
 
 import (
 	"context"
-	"strings"
+	"os"
+	"path"
 
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
@@ -11,72 +12,20 @@ import (
 	"github.com/tokenized/pkg/txbuilder"
 )
 
-// ContextWithDevelopmentLogger wraps the context with a development logger configuration.
-func ContextWithDevelopmentLogger(ctx context.Context, format string) context.Context {
-	var logConfig *logger.Config
-	if strings.ToUpper(format) == "TEXT" {
-		logConfig = logger.NewDevelopmentTextConfig()
-	} else {
-		logConfig = logger.NewDevelopmentConfig()
+// ContextWithLogger wraps the context with a development logger configuration.
+func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
+	filePath string) context.Context {
+
+	if len(filePath) > 0 {
+		os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
 	}
+
+	logConfig := logger.NewConfig(isDevelopment, isText, filePath)
 
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
 	logConfig.EnableSubSystem(spynode.SubSystem)
-
-	return logger.ContextWithLogConfig(ctx, logConfig)
-}
-
-// ContextWithDevelopmentFileLogger wraps the context with a development file logger configuration.
-func ContextWithDevelopmentFileLogger(ctx context.Context, logFileName string, format string) context.Context {
-	var logConfig *logger.Config
-	if strings.ToUpper(format) == "TEXT" {
-		logConfig = logger.NewDevelopmentTextConfig()
-	} else {
-		logConfig = logger.NewDevelopmentConfig()
-	}
-
-	logConfig.Main.AddFile(logFileName)
-	logConfig.EnableSubSystem(rpcnode.SubSystem)
-	logConfig.EnableSubSystem(txbuilder.SubSystem)
-	logConfig.EnableSubSystem(scheduler.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
-
-	return logger.ContextWithLogConfig(ctx, logConfig)
-}
-
-// ContextWithProductionLogger wraps the context with a production logger configuration.
-func ContextWithProductionLogger(ctx context.Context, format string) context.Context {
-	var logConfig *logger.Config
-	if strings.ToUpper(format) == "TEXT" {
-		logConfig = logger.NewDevelopmentTextConfig()
-	} else {
-		logConfig = logger.NewDevelopmentConfig()
-	}
-
-	logConfig.EnableSubSystem(rpcnode.SubSystem)
-	logConfig.EnableSubSystem(txbuilder.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
-	logConfig.EnableSubSystem(scheduler.SubSystem)
-
-	return logger.ContextWithLogConfig(ctx, logConfig)
-}
-
-// ContextWithDevelopmentFileLogger wraps the context with a production file logger configuration.
-func ContextWithProductionFileLogger(ctx context.Context, logFileName string, format string) context.Context {
-	var logConfig *logger.Config
-	if strings.ToUpper(format) == "TEXT" {
-		logConfig = logger.NewDevelopmentTextConfig()
-	} else {
-		logConfig = logger.NewDevelopmentConfig()
-	}
-
-	logConfig.Main.AddFile(logFileName)
-	logConfig.EnableSubSystem(rpcnode.SubSystem)
-	logConfig.EnableSubSystem(txbuilder.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
-	logConfig.EnableSubSystem(scheduler.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }
@@ -116,7 +65,9 @@ func LogError(ctx context.Context, format string, values ...interface{}) error {
 	return logger.LogDepth(ctx, logger.LevelError, 1, format, values...)
 }
 
-// LogDepth adds a specified level entry to the log with file data at the specified depth offset in the stack.
-func LogDepth(ctx context.Context, level logger.Level, depth int, format string, values ...interface{}) error {
+// LogDepth adds a specified level entry to the log with file data at the specified depth offset in
+// the stack.
+func LogDepth(ctx context.Context, level logger.Level, depth int, format string,
+	values ...interface{}) error {
 	return logger.LogDepth(ctx, level, depth+1, format, values...)
 }

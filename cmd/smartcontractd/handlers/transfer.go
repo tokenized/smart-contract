@@ -197,7 +197,12 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		err := node.Respond(ctx, w, settleTx.MsgTx)
+		responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx, t.Config.IsTest)
+		if err != nil {
+			return errors.Wrap(err, "inspector from builder")
+		}
+
+		err = node.Respond(ctx, w, responseItx)
 		if err == nil {
 			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
 				rk.Address); err != nil {

@@ -264,8 +264,13 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
+	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, tx, m.Config.IsTest)
+	if err != nil {
+		return errors.Wrap(err, "inspector from builder")
+	}
+
 	// Send tx
-	return node.Respond(ctx, w, tx.MsgTx)
+	return node.Respond(ctx, w, responseItx)
 }
 
 // processSettlementRequest handles an incoming Message SettlementRequest payload.
@@ -441,9 +446,15 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		// This shouldn't happen because we recieved this from another contract and they couldn't
 		// have signed it yet since it was incomplete.
 		if settleTx.AllInputsAreSigned() {
+			responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx,
+				m.Config.IsTest)
+			if err != nil {
+				return errors.Wrap(err, "inspector from builder")
+			}
+
 			node.Log(ctx, "Broadcasting settlement tx")
 			// Send complete settlement tx as response
-			return node.Respond(ctx, w, settleTx.MsgTx)
+			return node.Respond(ctx, w, responseItx)
 		}
 
 		// Send back to previous contract via a M1 - 1002 Signature Request
@@ -631,9 +642,14 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 			}
 		}
 
+		responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx, m.Config.IsTest)
+		if err != nil {
+			return errors.Wrap(err, "inspector from builder")
+		}
+
 		node.Log(ctx, "Broadcasting settlement tx")
 		// Send complete settlement tx as response
-		return node.Respond(ctx, w, settleTx.MsgTx)
+		return node.Respond(ctx, w, responseItx)
 	}
 
 	// Send back to previous contract via a M1 - 1002 Signature Request
