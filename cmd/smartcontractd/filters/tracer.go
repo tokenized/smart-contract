@@ -28,6 +28,16 @@ func NewTracer() *Tracer {
 	return &result
 }
 
+// Count returns the number of active traces.
+func (tracer *Tracer) Count() int {
+	return len(tracer.traces)
+}
+
+// Clear removes all active traces.
+func (tracer *Tracer) Clear() {
+	tracer.traces = nil
+}
+
 func (tracer *Tracer) Save(ctx context.Context, masterDB *db.DB) error {
 	// Save the cache list
 	var buf bytes.Buffer
@@ -91,7 +101,8 @@ func (tracer *Tracer) Add(ctx context.Context, start *wire.OutPoint) {
 // Remove removes a trace containing the specified output.
 func (tracer *Tracer) Remove(ctx context.Context, start *wire.OutPoint) {
 	for i, trace := range tracer.traces {
-		if bytes.Equal(trace.outpoint.Hash[:], start.Hash[:]) && trace.outpoint.Index == start.Index {
+		if bytes.Equal(trace.outpoint.Hash[:], start.Hash[:]) &&
+			trace.outpoint.Index == start.Index {
 			tracer.traces = append(tracer.traces[:i], tracer.traces[i+1:]...)
 			return
 		}
@@ -117,7 +128,8 @@ func (tracer *Tracer) RevertTx(ctx context.Context, txid *bitcoin.Hash32) {
 	}
 }
 
-// Contains returns the hash of the output that was requested to be monitored that contains the tx specified.
+// Contains returns the hash of the output that was requested to be monitored that contains the tx
+// specified.
 func (tracer *Tracer) Contains(ctx context.Context, tx *wire.MsgTx) bool {
 	for _, trace := range tracer.traces {
 		if trace.contains(tx) {
@@ -127,7 +139,8 @@ func (tracer *Tracer) Contains(ctx context.Context, tx *wire.MsgTx) bool {
 	return false
 }
 
-// Retrace returns the hash of the output that was requested to be monitored that contains the tx specified.
+// Retrace returns the hash of the output that was requested to be monitored that contains the tx
+// specified.
 // The trace is also removed.
 func (tracer *Tracer) Retrace(ctx context.Context, tx *wire.MsgTx) *bitcoin.Hash32 {
 	for i, trace := range tracer.traces {
@@ -148,9 +161,15 @@ func (node *traceNode) addTx(tx *wire.MsgTx) bool {
 	result := false
 	if len(node.children) == 0 {
 		for _, input := range tx.TxIn {
-			if bytes.Equal(input.PreviousOutPoint.Hash[:], node.outpoint.Hash[:]) && input.PreviousOutPoint.Index == node.outpoint.Index {
+			if bytes.Equal(input.PreviousOutPoint.Hash[:], node.outpoint.Hash[:]) &&
+				input.PreviousOutPoint.Index == node.outpoint.Index {
 				for index, _ := range tx.TxOut {
-					newNode := traceNode{outpoint: wire.OutPoint{Hash: *tx.TxHash(), Index: uint32(index)}}
+					newNode := traceNode{
+						outpoint: wire.OutPoint{
+							Hash:  *tx.TxHash(),
+							Index: uint32(index),
+						},
+					}
 					node.children = append(node.children, &newNode)
 				}
 				result = true
