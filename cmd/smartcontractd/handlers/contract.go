@@ -157,6 +157,14 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		}
 	}
 
+	if len(msg.MasterAddress) > 0 {
+		if _, err := bitcoin.DecodeRawAddress(msg.MasterAddress); err != nil {
+			node.LogWarn(ctx, "Invalid master address : %s", err)
+			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
+				"invalid master address")
+		}
+	}
+
 	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,

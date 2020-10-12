@@ -384,9 +384,9 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	assetUpdates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
+	assetUpdates := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
-		settlement, m.Headers, assetUpdates, false)
+		settlement, m.Headers, &assetUpdates, false)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -399,7 +399,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	for assetCode, hds := range assetUpdates {
-		for _, h := range hds {
+		for _, h := range *hds {
 			cacheItem, err := holdings.Save(ctx, m.MasterDB, rk.Address, &assetCode, h)
 			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
@@ -471,8 +471,9 @@ func settlementIsComplete(ctx context.Context, transfer *actions.Transfer,
 		for _, assetSettle := range settlement.Assets {
 			if assetTransfer.AssetType == assetSettle.AssetType &&
 				bytes.Equal(assetTransfer.AssetCode, assetSettle.AssetCode) {
-				node.LogVerbose(ctx, "Found settlement data for asset : %x",
-					assetTransfer.AssetCode)
+				assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
+				assetID := protocol.AssetID(assetTransfer.AssetType, *assetCode)
+				node.LogVerbose(ctx, "Found settlement data for asset : %s", assetID)
 				found = true
 				break
 			}
@@ -762,6 +763,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 	for assetOffset, assetTransfer := range transfer.Assets {
 		assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
+		assetID := protocol.AssetID(assetTransfer.AssetType, *assetCode)
 		assetIsBitcoin := assetTransfer.AssetType == "BSV" && assetCode.IsZero()
 
 		var as *state.Asset
@@ -781,7 +783,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			// Locate Asset
 			as, err = asset.Retrieve(ctx, masterDB, rk.Address, assetCode)
 			if err != nil {
-				return fmt.Errorf("Asset code not found : %x : %s", assetTransfer.AssetCode, err)
+				return fmt.Errorf("Asset code not found : %s : %s", assetID, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
 				return node.NewError(actions.RejectionsAssetFrozen, "")
@@ -844,8 +846,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
 						config.Net)
-					node.LogWarn(ctx, "Send invalid : %x %s : %s", assetTransfer.AssetCode,
-						address.String(), err)
+					node.LogWarn(ctx, "Send invalid : %s %s : %s", assetID, address, err)
 					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
@@ -920,8 +921,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				for _, settlementQuantity := range assetSettlement.Settlements {
 					if index == int(settlementQuantity.Index) {
 						if *quantity != settlementQuantity.Quantity {
-							node.LogWarn(ctx, "Incorrect settlment quantity for output %d : %d != %d : %x",
-								index, *quantity, settlementQuantity.Quantity, assetTransfer.AssetCode)
+							node.LogWarn(ctx, "Incorrect settlment quantity for output %d : %d != %d : %s",
+								index, *quantity, settlementQuantity.Quantity, assetID)
 							return fmt.Errorf("Asset settlement quantity wrong")
 						}
 						found = true
@@ -930,8 +931,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				}
 
 				if !found {
-					node.LogWarn(ctx, "Missing settlment for output %d : %x", index,
-						assetTransfer.AssetCode)
+					node.LogWarn(ctx, "Missing settlment for output %d : %s", index, assetID)
 					return fmt.Errorf("Asset settlement missing")
 				}
 			}
@@ -1143,7 +1143,7 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 		balance += uint64(utxo.Value)
 	}
 
-	updates := make(map[protocol.AssetCode]map[bitcoin.Hash20]*state.Holding)
+	updates := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding)
 
 	w.SetRejectUTXOs(ctx, utxos)
 
@@ -1173,7 +1173,7 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 
 			assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
 			updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
-			updates[*assetCode] = updatedHoldings
+			updates[*assetCode] = &updatedHoldings
 
 			// Add all other senders to be notified
 			// Revert sender pending statuses

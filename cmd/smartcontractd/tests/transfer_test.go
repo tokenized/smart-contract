@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -846,6 +845,7 @@ func sendTokens(t *testing.T) {
 		}
 		node.LogVerbose(ctx, "Process holdings cache thread finished")
 	}()
+	defer test.HoldingsChannel.Close()
 
 	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
@@ -1157,8 +1157,6 @@ func sendTokens(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
-
-	test.HoldingsChannel.Close()
 }
 
 func multiExchange(t *testing.T) {
@@ -1167,6 +1165,16 @@ func multiExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
+
+	test.HoldingsChannel.Open(100)
+	go func() {
+		if err := holdings.ProcessCacheItems(ctx, test.MasterDB, test.HoldingsChannel); err != nil {
+			node.LogError(ctx, "Process holdings cache failed : %s", err)
+		}
+		node.LogVerbose(ctx, "Process holdings cache thread finished")
+	}()
+	defer test.HoldingsChannel.Close()
+
 	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
@@ -1188,7 +1196,7 @@ func multiExchange(t *testing.T) {
 	transferData := actions.Transfer{}
 
 	// Transfer asset 1 from user1 to user2
-	transfer1Amount := uint64(50)
+	transfer1Amount := uint64(51)
 	assetTransfer1Data := actions.AssetTransferField{
 		ContractIndex: 0, // first output
 		AssetType:     testAssetType,
@@ -1224,11 +1232,13 @@ func multiExchange(t *testing.T) {
 
 	// From user1
 	transferInputHash := funding1Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// From user2
 	transferInputHash = funding2Tx.TxHash()
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract1
 	script1, _ := test.ContractKey.Address.LockingScript()
@@ -1356,6 +1366,8 @@ func multiExchange(t *testing.T) {
 	// Check the response
 	checkResponse(t, "T2")
 
+	t.Logf("Check cached balances")
+
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
@@ -1371,6 +1383,62 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], user2Key.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user2Holding.FinalizedBalance != transfer1Amount {
+		t.Fatalf("\t%s\tUser 2 token 1 balance incorrect : %d != %d", tests.Failed,
+			user2Holding.FinalizedBalance, transfer1Amount)
+	}
+
+	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
+
+	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
+		&testAsset2Code, userKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+
+	if user1Holding.FinalizedBalance != transfer2Amount {
+		t.Fatalf("\t%s\tUser 1 token 2 balance incorrect : %d != %d", tests.Failed,
+			user1Holding.FinalizedBalance, transfer2Amount)
+	}
+
+	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Holding.FinalizedBalance)
+
+	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
+		&testAsset2Code, user2Key.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user2Holding.FinalizedBalance != user2HoldingBalance-transfer2Amount {
+		t.Fatalf("\t%s\tUser 2 token 2 balance incorrect : %d != %d", tests.Failed,
+			user2Holding.FinalizedBalance, user2HoldingBalance-transfer2Amount)
+	}
+
+	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Holding.FinalizedBalance)
+
+	// Let holdings cache update
+	time.Sleep(500 * time.Millisecond)
+	holdings.Reset(ctx) // Clear cache
+
+	t.Logf("Check storage balances")
+
+	// Check issuer and user balance
+	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], userKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
+	}
+	if user1Holding.FinalizedBalance != user1HoldingBalance-transfer1Amount {
+		t.Fatalf("\t%s\tUser 1 token 1 balance incorrect : %d != %d", tests.Failed,
+			user1Holding.FinalizedBalance, user1HoldingBalance-transfer1Amount)
+	}
+
+	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
+
+	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
 		&testAssetCodes[0], user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)

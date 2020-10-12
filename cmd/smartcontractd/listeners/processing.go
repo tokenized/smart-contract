@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
@@ -43,9 +42,9 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
 			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
-			logger.Info(ctx, "Saving contract formation for %s : %s",
-				bitcoin.NewAddressFromRawAddress(ptx.Itx.Inputs[0].Address, server.Config.Net).String(),
-				ptx.Itx.Hash.String())
+			node.Log(ctx, "Saving contract formation for %s : %s",
+				bitcoin.NewAddressFromRawAddress(ptx.Itx.Inputs[0].Address, server.Config.Net),
+				ptx.Itx.Hash)
 			if err := contract.SaveContractFormation(ctx, server.MasterDB,
 				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
 				node.LogError(ctx, "Failed to save contract formation : %s", err)
@@ -60,7 +59,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				if address.Equal(output.Address) {
 					found = true
 					node.Log(ctx, "Request for contract %s",
-						bitcoin.NewAddressFromRawAddress(address, server.Config.Net).String())
+						bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
 					if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
 						node.LogError(ctx, "Failed to save tx to RPC : %s", err)
 					}
@@ -85,7 +84,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
 						node.Log(ctx, "Response for contract %s",
-							bitcoin.NewAddressFromRawAddress(address, server.Config.Net).String())
+							bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
 						found = true
 						responseAdded = true
 						if !server.IsInSync() {
@@ -107,7 +106,12 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			if server.IsInSync() {
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
-					node.LogWarn(ctx, "Failed to handle tx : %s", err)
+					switch errors.Cause(err) {
+					case node.ErrNoResponse, node.ErrRejected, node.ErrInsufficientFunds:
+						node.Log(ctx, "Failed to handle tx : %s", err)
+					default:
+						node.LogError(ctx, "Failed to handle tx : %s", err)
+					}
 				}
 			} else {
 				// Save tx for response processing after smart contract is in sync with on chain
