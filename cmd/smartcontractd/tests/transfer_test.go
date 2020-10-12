@@ -1275,6 +1275,10 @@ func multiExchange(t *testing.T) {
 
 	t.Logf("\t%s\tTransfer accepted", tests.Success)
 
+	if tracer.Count() != 1 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 1)
+	}
+
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
 	}
@@ -1314,6 +1318,10 @@ func multiExchange(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tSettlement request accepted", tests.Success)
+
+	if tracer.Count() != 1 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 1)
+	}
 
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create settlement request response", tests.Failed)
@@ -1466,6 +1474,10 @@ func multiExchange(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tUser 2 token 2 balance : %d", tests.Success, user2Holding.FinalizedBalance)
+
+	if tracer.Count() != 0 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
+	}
 }
 
 func bitcoinExchange(t *testing.T) {
@@ -1627,8 +1639,13 @@ func multiExchangeLock(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
-		1, "John Bitcoin", true, true, false, false, false)
+
+	if tracer.Count() != 0 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
+	}
+
+	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	user1HoldingBalance := uint64(150)
@@ -1638,11 +1655,11 @@ func multiExchangeLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey.Address,
-		"Test Contract 2", "This is a mock contract and means nothing.", "I",
-		1, "Karl Bitcoin", true, true, false, false, false)
-	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
-		true, false, false)
+	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2",
+		"This is a mock contract and means nothing.", "I", 1, "Karl Bitcoin", true, true, false,
+		false, false)
+	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2, true,
+		false, false)
 
 	user2HoldingBalance := uint64(200)
 	mockUpOtherHolding(t, ctx, otherContractKey, user2Key.Address, user2HoldingBalance)
@@ -1730,6 +1747,10 @@ func multiExchangeLock(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tMulti-contract transfer accepted", tests.Success)
+
+	if tracer.Count() != 1 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 1)
+	}
 
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
@@ -1825,6 +1846,10 @@ func multiExchangeLock(t *testing.T) {
 
 	t.Logf("\t%s\tIntermediate transfer rejected", tests.Success)
 
+	if tracer.Count() != 1 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 1)
+	}
+
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
 	}
@@ -1902,6 +1927,10 @@ func multiExchangeLock(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tMulti-contract transfer cancel processed", tests.Success)
+
+	if tracer.Count() != 0 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
+	}
 
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create transfer reject", tests.Failed)
@@ -1999,6 +2028,10 @@ func multiExchangeLock(t *testing.T) {
 	checkResponse(t, "T2")
 
 	t.Logf("\t%s\tFollow up transfer accepted", tests.Success)
+
+	if tracer.Count() != 0 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
+	}
 }
 
 func multiExchangeTimeout(t *testing.T) {
@@ -2207,6 +2240,10 @@ func multiExchangeTimeout(t *testing.T) {
 
 	t.Logf("\t%s\tIntermediate transfer rejected", tests.Success)
 
+	if tracer.Count() != 1 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 1)
+	}
+
 	if len(responses) == 0 {
 		t.Fatalf("\t%s\tFailed to create transfer response", tests.Failed)
 	}
@@ -2344,6 +2381,10 @@ func multiExchangeTimeout(t *testing.T) {
 	checkResponse(t, "T2")
 
 	t.Logf("\t%s\tFollow up transfer accepted", tests.Success)
+
+	if tracer.Count() != 0 {
+		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
+	}
 }
 
 func oracleTransfer(t *testing.T) {
