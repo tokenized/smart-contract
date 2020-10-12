@@ -357,6 +357,7 @@ func (server *Server) removePendingRequests(ctx context.Context, itx *inspector.
 		for i, pendingTx := range server.pendingRequests {
 			if int(input.PreviousOutPoint.Index) == pendingTx.ContractIndex &&
 				input.PreviousOutPoint.Hash.Equal(pendingTx.Itx.Hash) {
+
 				node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash.String())
 				server.pendingRequests = append(server.pendingRequests[:i],
 					server.pendingRequests[i+1:]...)
