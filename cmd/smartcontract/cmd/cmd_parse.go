@@ -128,6 +128,12 @@ func parseScript(c *cobra.Command, script []byte) error {
 
 	fmt.Printf("Action type : %s\n\n", message.Code())
 
+	if err := message.Validate(); err != nil {
+		fmt.Printf("Action is invalid : %s\n", err)
+	} else {
+		fmt.Printf("Action is valid\n")
+	}
+
 	if err := dumpJSON(message); err != nil {
 		return err
 	}
@@ -142,6 +148,11 @@ func parseScript(c *cobra.Command, script []byte) error {
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s", err)
 		} else {
+			if err := asset.Validate(); err != nil {
+				fmt.Printf("Asset is invalid : %s\n", err)
+			} else {
+				fmt.Printf("Asset is valid\n")
+			}
 			dumpJSON(asset)
 		}
 	case *actions.AssetCreation:
@@ -153,6 +164,9 @@ func parseScript(c *cobra.Command, script []byte) error {
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s\n", err)
 		} else {
+			if err := asset.Validate(); err != nil {
+				fmt.Printf("Asset is invalid : %s\n", err)
+			}
 			dumpJSON(asset)
 		}
 

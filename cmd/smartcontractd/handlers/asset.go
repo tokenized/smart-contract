@@ -16,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -116,7 +115,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if err := assetPayload.Validate(); err != nil {
 		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed, err.Error())
 	}
 
 	// Only one Owner/Administrator Membership asset allowed
@@ -134,11 +133,6 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 			node.LogWarn(ctx, "Only one Administrator Membership asset allowed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
 		}
-	}
-
-	if err := validateAsset(assetPayload); err != nil {
-		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
@@ -708,25 +702,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 					return errors.Wrap(err, "updating contract")
 				}
 			}
-		}
-	}
-
-	return nil
-}
-
-func validateAsset(asset assets.Asset) error {
-	switch a := asset.(type) {
-	case *assets.Currency:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
-		}
-	case *assets.Coupon:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
-		}
-	case *assets.CasinoChip:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
 		}
 	}
 
