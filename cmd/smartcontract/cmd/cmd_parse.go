@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -111,6 +113,23 @@ func parseScript(c *cobra.Command, script []byte) error {
 			isTest = true
 			message, err = protocol.Deserialize(script, isTest)
 			if err != nil {
+				if err == protocol.ErrNotTokenized {
+					r := bytes.NewReader(script)
+					for i := 0; i < 100; i++ {
+						_, pushdata, err := bitcoin.ParsePushDataScript(r)
+						if err == nil {
+							fmt.Printf("OP %02d %x\n", i, pushdata)
+							continue
+						}
+
+						if err == io.EOF { // finished parsing script
+							return nil
+						}
+						if err != bitcoin.ErrNotPushOp { // ignore non push op codes
+							return errors.Wrap(err, "decode bitcoin script")
+						}
+					}
+				}
 				return errors.Wrap(err, "decode op return")
 			}
 		} else {
