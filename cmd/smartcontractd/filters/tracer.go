@@ -241,7 +241,7 @@ func (node *traceNode) write(w io.Writer) error {
 
 func (node *traceNode) read(r io.Reader) error {
 	// Read outpoint
-	if _, err := r.Read(node.outpoint.Hash[:]); err != nil {
+	if _, err := io.ReadFull(r, node.outpoint.Hash[:]); err != nil {
 		return err
 	}
 	if err := binary.Read(r, protocol.DefaultEndian, &node.outpoint.Index); err != nil {

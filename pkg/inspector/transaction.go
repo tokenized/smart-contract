@@ -598,7 +598,7 @@ func (itx *Transaction) Write(w io.Writer) error {
 func (itx *Transaction) Read(r io.Reader, isTest bool) error {
 	// Version
 	var version [1]byte
-	if _, err := r.Read(version[:]); err != nil {
+	if _, err := io.ReadFull(r, version[:]); err != nil {
 		return err
 	}
 	if version[0] != 0 && version[0] != 1 && version[0] != 2 {
@@ -630,7 +630,7 @@ func (itx *Transaction) Read(r io.Reader, isTest bool) error {
 	}
 
 	var rejectCode [1]byte
-	if _, err := r.Read(rejectCode[:]); err != nil {
+	if _, err := io.ReadFull(r, rejectCode[:]); err != nil {
 		return err
 	}
 	itx.RejectCode = uint32(rejectCode[0])
