@@ -103,8 +103,12 @@ var cmdConvert = &cobra.Command{
 		}
 
 		if len(args[0]) == 66 {
-			hash, _ := hex.DecodeString(args[0])
-			ra, _ := bitcoin.NewRawAddressPKH(bitcoin.Hash160(hash))
+			publicKey, err := bitcoin.PublicKeyFromStr(args[0])
+			if err != nil {
+				fmt.Printf("Invalid public key : %s\n", err)
+				return nil
+			}
+			ra, _ := publicKey.RawAddress()
 			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
 			return nil
 		}
