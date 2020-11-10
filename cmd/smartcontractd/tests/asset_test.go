@@ -510,7 +510,7 @@ func assetAmendment(t *testing.T) {
 	// Serialize new token quantity
 	newQuantity := uint64(1200)
 	var buf bytes.Buffer
-	if err := bitcoin.WriteBase128VarInt(&buf, int(newQuantity)); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf, newQuantity); err != nil {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
