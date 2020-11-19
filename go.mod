@@ -10,7 +10,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/pkg v0.2.2-0.20201110033946-14249b576a15
-	github.com/tokenized/specification v0.3.1-0.20201118053550-a7639e9a8fa9
+	github.com/tokenized/specification v0.3.1-0.20201119052819-983f1e8d4678
 	go.opencensus.io v0.22.2
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
 	golang.org/x/tools v0.0.0-20200107184032-11e9d9cc0042 // indirect
