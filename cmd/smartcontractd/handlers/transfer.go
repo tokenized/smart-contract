@@ -65,13 +65,15 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	first := firstContractOutputIndex(msg.Assets, itx)
 
 	if first == 0xffff {
-		node.LogWarn(ctx, "Transfer first contract not found : %x", rk.Address.Bytes())
+		node.LogWarn(ctx, "Transfer first contract not found : %s",
+			bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net))
 		return errors.New("Transfer first contract not found")
 	}
 
 	if !itx.Outputs[first].Address.Equal(rk.Address) {
-		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %x",
-			itx.Outputs[first].Address.Bytes())
+		node.LogVerbose(ctx,
+			"Not contract for first transfer. Waiting for Message SettlementRequest : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
 		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
 			return errors.Wrap(err, "Failed to save tx")
 		}
@@ -943,8 +945,9 @@ func sendToNextSettlementContract(ctx context.Context,
 		return fmt.Errorf("Next contract not found in multi-contract transfer")
 	}
 
-	node.Log(ctx, "Sending settlement offer to %x",
-		transferTx.Outputs[nextContractIndex].Address.Bytes())
+	node.Log(ctx, "Sending settlement offer to %s",
+		bitcoin.NewAddressFromRawAddress(transferTx.Outputs[nextContractIndex].Address,
+		w.Config.Net))
 
 	// Setup M1 response
 	var err error
@@ -1174,8 +1177,9 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					continue
 				}
 
-				node.LogVerbose(ctx, "Bitcoin refund %d : %x", sender.Quantity,
-					transferTx.Inputs[sender.Index].Address.Bytes())
+				node.LogVerbose(ctx, "Bitcoin refund %d : %s", sender.Quantity,
+					bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
+					w.Config.Net))
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
 				refundBalance += sender.Quantity
 			}
