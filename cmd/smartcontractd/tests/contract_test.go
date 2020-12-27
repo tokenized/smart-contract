@@ -856,7 +856,7 @@ func contractListAmendment(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := bitcoin.WriteBase128VarInt(&buf, int(actions.ServiceTypeAuthorityOracle)); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf, uint64(actions.ServiceTypeAuthorityOracle)); err != nil {
 		t.Fatalf("\t%s\tFailed to write oracle type : %s", tests.Failed, err)
 	}
 
@@ -1048,7 +1048,7 @@ func contractOracleAmendment(t *testing.T) {
 	})
 
 	var blockHeightBuf bytes.Buffer
-	if err := bitcoin.WriteBase128VarInt(&blockHeightBuf, int(blockHeight)); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&blockHeightBuf, uint64(blockHeight)); err != nil {
 		t.Fatalf("\t%s\tFailed to serialize block height : %v", tests.Failed, err)
 	}
 

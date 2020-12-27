@@ -7,7 +7,7 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/txbuilder"
-	"github.com/tokenized/pkg/wire"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -163,10 +163,17 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 		return ErrNoResponse
 	}
 
-	if err := Respond(ctx, w, rejectTx.MsgTx); err != nil {
+	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, rejectTx, w.Config.IsTest)
+	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
 	}
+
+	if err := Respond(ctx, w, responseItx); err != nil {
+		Error(ctx, w, err)
+		return ErrNoResponse
+	}
+
 	Log(ctx, "Sending reject : %s", rejection.Message)
 	return ErrRejected
 }
@@ -176,7 +183,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	wk *wallet.Key, msg actions.Action) error {
 
 	// Create respond tx. Use contract address as backup change
-	//address if an output wasn't specified
+	// address if an output wasn't specified
 	respondTx := txbuilder.NewTxBuilder(w.Config.FeeRate, w.Config.DustFeeRate)
 	respondTx.SetChangeAddress(w.Config.FeeAddress, "")
 
@@ -220,7 +227,8 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	err = respondTx.Sign([]bitcoin.Key{wk.Key})
 	if err != nil {
 		if errors.Cause(err) == txbuilder.ErrInsufficientValue {
-			LogWarn(ctx, "Sending reject. Failed to sign tx : %s", err)
+			LogWarn(ctx, "Sending reject. Failed to sign tx : %s\n%s", err,
+				respondTx.String(w.Config.Net))
 			return RespondRejectText(ctx, w, itx, wk, actions.RejectionsInsufficientTxFeeFunding,
 				err.Error())
 		} else {
@@ -229,10 +237,21 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 		}
 	}
 
-	return Respond(ctx, w, respondTx.MsgTx)
+	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, respondTx, w.Config.IsTest)
+	if err != nil {
+		Error(ctx, w, err)
+		return ErrNoResponse
+	}
+
+	return Respond(ctx, w, responseItx)
 }
 
 // Respond sends a TX to the network.
-func Respond(ctx context.Context, w *ResponseWriter, tx *wire.MsgTx) error {
-	return w.Respond(ctx, tx)
+func Respond(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction) error {
+	// Save Tx.
+	if err := transactions.AddTx(ctx, w.MasterDB, itx); err != nil {
+		return errors.Wrap(err, "Failed to save tx")
+	}
+
+	return w.Respond(ctx, itx.MsgTx)
 }

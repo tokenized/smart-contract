@@ -6,6 +6,7 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
+	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 )
 
@@ -16,6 +17,7 @@ type ResponseWriter struct {
 	RejectOutputs []Output
 	RejectAddress bitcoin.RawAddress
 	Config        *Config
+	MasterDB      *db.DB
 	Mux           protomux.Handler
 }
 

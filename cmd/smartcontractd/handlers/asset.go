@@ -16,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -116,7 +115,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if err := assetPayload.Validate(); err != nil {
 		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed, err.Error())
 	}
 
 	// Only one Owner/Administrator Membership asset allowed
@@ -134,11 +133,6 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 			node.LogWarn(ctx, "Only one Administrator Membership asset allowed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
 		}
-	}
-
-	if err := validateAsset(assetPayload); err != nil {
-		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
@@ -714,25 +708,6 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-func validateAsset(asset assets.Asset) error {
-	switch a := asset.(type) {
-	case *assets.Currency:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
-		}
-	case *assets.Coupon:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
-		}
-	case *assets.CasinoChip:
-		if a.Precision == 0 {
-			return errors.New("Currency precision must be specified")
-		}
-	}
-
-	return nil
-}
-
 func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
 	amendments []*actions.AmendmentField, proposed bool, proposalType, votingSystem uint32) error {
 
@@ -740,6 +715,8 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 	if err != nil {
 		return fmt.Errorf("Invalid asset permissions : %s", err)
 	}
+
+	var assetPayload assets.Asset
 
 	for i, amendment := range amendments {
 		applied := false
@@ -758,7 +735,8 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				"Asset type amendments prohibited")
 
 		case actions.AssetFieldAssetPermissions:
-			if _, err := actions.PermissionsFromBytes(amendment.Data, len(votingSystems)); err != nil {
+			if _, err := actions.PermissionsFromBytes(amendment.Data,
+				len(votingSystems)); err != nil {
 				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
 			}
 
@@ -768,21 +746,20 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 					"Amendments on complex fields (AssetPayload) prohibited")
 			}
 
-			// Get payload object
-			assetPayload, err := assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
-			if err != nil {
-				return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
+			if assetPayload == nil {
+				// Get payload object
+				assetPayload, err = assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
+				if err != nil {
+					return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
+				}
 			}
 
-			adjustedFIP, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation, amendment.Data)
+			adjustedFIP, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation,
+				amendment.Data)
 			if err != nil {
 				return err
 			}
 			adjustedFIP = append(fip[1:], adjustedFIP...)
-
-			if err = assetPayload.Validate(); err != nil {
-				return err
-			}
 
 			switch assetPayload.(type) {
 			case *assets.Membership:
@@ -792,12 +769,6 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				}
 			}
 
-			newPayload, err := assetPayload.Bytes()
-			if err != nil {
-				return err
-			}
-
-			ac.AssetPayload = newPayload
 			applied = true // Amendment already applied
 		}
 
@@ -847,6 +818,19 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				fmt.Sprintf("Field %s amendment not permitted without proposal",
 					adjustedFIP.String()))
 		}
+	}
+
+	if assetPayload != nil {
+		if err = assetPayload.Validate(); err != nil {
+			return err
+		}
+
+		newPayload, err := assetPayload.Bytes()
+		if err != nil {
+			return err
+		}
+
+		ac.AssetPayload = newPayload
 	}
 
 	// Check validity of updated asset data

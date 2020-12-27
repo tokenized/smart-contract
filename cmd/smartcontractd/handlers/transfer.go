@@ -54,28 +54,31 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Could not assert as *actions.Transfer")
 	}
 
-	// Find "first" contract.
-	first := firstContractOutputIndex(msg.Assets, itx)
-
-	if first == 0xffff {
-		node.LogWarn(ctx, "Transfer first contract not found : %x", rk.Address.Bytes())
-		return errors.New("Transfer first contract not found")
-	}
-
-	if !itx.Outputs[first].Address.Equal(rk.Address) {
-		node.LogVerbose(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %x",
-			itx.Outputs[first].Address.Bytes())
-		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
-			return errors.Wrap(err, "Failed to save tx")
-		}
-		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
-	}
-
 	// Check pre-processing reject code
 	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Transfer request invalid")
 		return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg, rk,
 			itx.RejectCode, false, itx.RejectText)
+	}
+
+	// Find "first" contract.
+	first := firstContractOutputIndex(msg.Assets, itx)
+
+	if first == 0xffff {
+		node.LogWarn(ctx, "Transfer first contract not found : %s",
+			bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net))
+		return errors.New("Transfer first contract not found")
+	}
+
+	if !itx.Outputs[first].Address.Equal(rk.Address) {
+		node.LogVerbose(ctx,
+			"Not contract for first transfer. Waiting for Message SettlementRequest : %s",
+			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
+		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
+			return errors.Wrap(err, "Failed to save tx")
+		}
+
+		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
 	if msg.OfferExpiry != 0 && v.Now.Nano() > msg.OfferExpiry {
@@ -123,7 +126,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Transfer Outputs
-	//   Contract 1 : amount = calculated fee for settlement tx + contract fees + any bitcoins being transfered
+	//   Contract 1 : amount = calculated fee for settlement tx + contract fees + any bitcoins being
+	//   transfered
 	//   Contract 2 : contract fees if applicable or dust
 	//   Boomerang to Contract 1 : amount = ((n-1) * 2) * (calculated fee for data passing tx)
 	//     where n is number of contracts involved
@@ -195,9 +199,15 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		err := node.Respond(ctx, w, settleTx.MsgTx)
+		responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx, t.Config.IsTest)
+		if err != nil {
+			return errors.Wrap(err, "inspector from builder")
+		}
+
+		err = node.Respond(ctx, w, responseItx)
 		if err == nil {
-			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates, rk.Address); err != nil {
+			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
+				rk.Address); err != nil {
 				return err
 			}
 		}
@@ -225,11 +235,13 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Schedule timeout for transfer in case the other contract(s) don't respond.
-	if err := t.Scheduler.ScheduleJob(ctx, listeners.NewTransferTimeout(t.handler, itx, timeout)); err != nil {
+	if err := t.Scheduler.ScheduleJob(ctx, listeners.NewTransferTimeout(t.handler,
+		itx, timeout)); err != nil {
 		return errors.Wrap(err, "Failed to schedule transfer timeout")
 	}
 
-	if err := saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates, rk.Address); err != nil {
+	if err := saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
+		rk.Address); err != nil {
 		return err
 	}
 
@@ -268,7 +280,8 @@ func revertHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holdi
 	return saveHoldings(ctx, masterDB, holdingsChannel, updates, contractAddress)
 }
 
-// TransferTimeout is called when a multi-contract transfer times out because the other contracts are not responding.
+// TransferTimeout is called when a multi-contract transfer times out because the other contracts
+// are not responding.
 func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
 
@@ -281,10 +294,18 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Remove pending transfer
-	if err := transfer.Remove(ctx, t.MasterDB, rk.Address, protocol.TxIdFromBytes(itx.Hash[:])); err != nil {
+	if err := transfer.Remove(ctx, t.MasterDB, rk.Address,
+		protocol.TxIdFromBytes(itx.Hash[:])); err != nil {
 		if err != transfer.ErrNotFound {
 			return errors.Wrap(err, "Failed to remove pending transfer")
 		}
+	}
+
+	// Remove tracer for this transfer.
+	boomerangIndex := findBoomerangIndex(itx, msg, rk.Address)
+	if boomerangIndex != 0xffffffff {
+		outpoint := wire.OutPoint{Hash: *itx.Hash, Index: boomerangIndex}
+		t.Tracer.Remove(ctx, &outpoint)
 	}
 
 	node.LogWarn(ctx, "Transfer timed out")
@@ -292,12 +313,15 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 		actions.RejectionsTimeout, true, "")
 }
 
-// firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the one
-//   responsible for creating the initial settlement data and passing it to the next contract if
-//   there are more than one.
-func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField, itx *inspector.Transaction) uint32 {
+// firstContractOutputIndex finds the "first" contract. The "first" contract of a transfer is the
+// one responsible for creating the initial settlement data and passing it to the next contract if
+// there are more than one.
+func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField,
+	itx *inspector.Transaction) uint32 {
+
 	for _, asset := range assetTransfers {
-		if asset.AssetType != "BSV" && len(asset.AssetCode) != 0 && int(asset.ContractIndex) < len(itx.Outputs) {
+		if asset.AssetType != "BSV" && len(asset.AssetCode) != 0 &&
+			int(asset.ContractIndex) < len(itx.Outputs) {
 			return asset.ContractIndex
 		}
 	}
@@ -308,7 +332,8 @@ func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField, itx 
 // buildSettlementTx builds the tx for a settlement action.
 func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config,
 	transferTx *inspector.Transaction, transfer *actions.Transfer,
-	settlementRequest *messages.SettlementRequest, contractBalance uint64, rk *wallet.Key) (*txbuilder.TxBuilder, error) {
+	settlementRequest *messages.SettlementRequest, contractBalance uint64,
+	rk *wallet.Key) (*txbuilder.TxBuilder, error) {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.buildSettlementTx")
 	defer span.End()
 
@@ -620,7 +645,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
 			for i, outputAddress := range settleOutputAddresses {
-				if !outputAddress.IsEmpty() && outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
+				if !outputAddress.IsEmpty() &&
+					outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -919,8 +945,9 @@ func sendToNextSettlementContract(ctx context.Context,
 		return fmt.Errorf("Next contract not found in multi-contract transfer")
 	}
 
-	node.Log(ctx, "Sending settlement offer to %x",
-		transferTx.Outputs[nextContractIndex].Address.Bytes())
+	node.Log(ctx, "Sending settlement offer to %s",
+		bitcoin.NewAddressFromRawAddress(transferTx.Outputs[nextContractIndex].Address,
+		w.Config.Net))
 
 	// Setup M1 response
 	var err error
@@ -1150,8 +1177,9 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					continue
 				}
 
-				node.LogVerbose(ctx, "Bitcoin refund %d : %x", sender.Quantity,
-					transferTx.Inputs[sender.Index].Address.Bytes())
+				node.LogVerbose(ctx, "Bitcoin refund %d : %s", sender.Quantity,
+					bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
+					w.Config.Net))
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
 				refundBalance += sender.Quantity
 			}
