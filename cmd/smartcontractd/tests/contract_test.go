@@ -9,7 +9,6 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/spynode/handlers"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
@@ -21,6 +20,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/spynode/pkg/client"
 )
 
 // TestContracts is the entry point for testing contract based functions.
@@ -508,12 +508,10 @@ func oracleContract(t *testing.T) {
 
 	tracer := filters.NewTracer()
 	holdingsChannel := &holdings.CacheChannel{}
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		holdingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, holdingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		t.Fatalf("Failed to load server : %s", err)
@@ -537,14 +535,15 @@ func oracleContract(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	t.Logf("Contract offer tx : %s", offerTx.TxHash().String())
-	if _, err := server.HandleTx(ctx, offerTx); err != nil {
-		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
+	t.Logf("Contract offer tx : %s", offerTx.TxHash())
+	offerCtx := &client.Tx{
+		Tx:      offerTx,
+		Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+		State: client.TxState{
+			Safe: true,
+		},
 	}
-
-	if err := server.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
-		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
-	}
+	server.HandleTx(ctx, offerCtx)
 
 	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
@@ -607,14 +606,8 @@ func oracleContract(t *testing.T) {
 	}
 	offerTx.TxOut[len(offerTx.TxOut)-1] = wire.NewTxOut(0, script)
 
-	t.Logf("Contract offer tx : %s", offerTx.TxHash().String())
-	if _, err := server.HandleTx(ctx, offerTx); err != nil {
-		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
-	}
-
-	if err := server.HandleTxState(ctx, handlers.ListenerMsgTxStateSafe, *offerTx.TxHash()); err != nil {
-		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
-	}
+	t.Logf("Contract offer tx : %s", offerTx.TxHash())
+	server.HandleTx(ctx, offerCtx)
 
 	firstResponse = nil // Request is re-broadcast
 	for {

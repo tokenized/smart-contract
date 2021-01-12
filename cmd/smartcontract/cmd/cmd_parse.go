@@ -86,7 +86,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 			return nil
 		}
 
-		if err := theClient.ShotgunTx(ctx, &tx, 250); err != nil {
+		if err := theClient.BroadcastTx(ctx, &tx); err != nil {
 			fmt.Printf("Failed to send tx : %s\n", err)
 		}
 	}

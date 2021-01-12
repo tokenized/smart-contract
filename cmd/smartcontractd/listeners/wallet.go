@@ -46,7 +46,18 @@ func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error
 		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net).String())
 
 	server.contractAddresses = append(server.contractAddresses, rawAddress)
-	server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
+
+	if server.SpyNode != nil {
+		hashes, err := rawAddress.Hashes()
+		if err != nil {
+			server.walletLock.Unlock()
+			return err
+		}
+
+		for _, hash := range hashes {
+			server.SpyNode.SubscribePushDatas(ctx, [][]byte{hash[:]})
+		}
+	}
 
 	server.walletLock.Unlock()
 
@@ -79,7 +90,22 @@ func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
 		}
 	}
 
-	server.txFilter.RemovePubKey(ctx, publicKey.Bytes())
+	if server.SpyNode != nil {
+		rawAddress, err := publicKey.RawAddress()
+		if err != nil {
+			return err
+		}
+
+		hashes, err := rawAddress.Hashes()
+		if err != nil {
+			return err
+		}
+
+		for _, hash := range hashes {
+			server.SpyNode.UnsubscribePushDatas(ctx, [][]byte{hash[:]})
+		}
+	}
+
 	return nil
 }
 
@@ -128,8 +154,17 @@ func (server *Server) SyncWallet(ctx context.Context) error {
 		// Contract address
 		server.contractAddresses = append(server.contractAddresses, key.Address)
 
-		// Tx Filter
-		server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
+		if server.SpyNode != nil {
+			// Tx Filter
+			hashes, err := key.Address.Hashes()
+			if err != nil {
+				return err
+			}
+
+			for _, hash := range hashes {
+				server.SpyNode.SubscribePushDatas(ctx, [][]byte{hash[:]})
+			}
+		}
 	}
 
 	return nil

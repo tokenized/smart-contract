@@ -94,7 +94,7 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*
 	return NewTransactionFromHashWire(ctx, hash, tx, isTest)
 }
 
-// NewTransactionFromWire builds an ITX from a wire Msg Tx
+// NewTransactionFromHashWire builds an ITX from a wire Msg Tx
 func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
 	// Must have inputs
 	if len(tx.TxIn) == 0 {
@@ -168,7 +168,7 @@ func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) bit
 func NewTransactionFromTxBuilder(ctx context.Context, tx *txbuilder.TxBuilder, isTest bool) (*Transaction, error) {
 	result, err := NewTransactionFromWire(ctx, tx.MsgTx, isTest)
 	if err != nil {
-		return result, errors.Wrap(err, "new from wire")
+		return nil, errors.Wrap(err, "new from wire")
 	}
 
 	utxos := make([]bitcoin.UTXO, 0, len(tx.Inputs))
@@ -185,7 +185,44 @@ func NewTransactionFromTxBuilder(ctx context.Context, tx *txbuilder.TxBuilder, i
 	}
 
 	if err := result.PromoteFromUTXOs(ctx, utxos); err != nil {
-		return result, errors.Wrap(err, "promote")
+		return nil, errors.Wrap(err, "promote")
+	}
+
+	return result, nil
+}
+
+func NewTransactionFromOutputs(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx,
+	outputs []*wire.TxOut, isTest bool) (*Transaction, error) {
+
+	result, err := NewBaseTransactionFromHashWire(ctx, hash, tx)
+	if err != nil {
+		return nil, errors.Wrap(err, "new")
+	}
+
+	if len(tx.TxIn) != len(outputs) {
+		return nil, ErrMissingOutputs
+	}
+
+	utxos := make([]bitcoin.UTXO, 0, len(tx.TxIn))
+	for i, input := range tx.TxIn {
+		if input.PreviousOutPoint.Index == 0xffffffff {
+			continue // skip coinbase inputs
+		}
+
+		utxos = append(utxos, bitcoin.UTXO{
+			Hash:          input.PreviousOutPoint.Hash,
+			Index:         input.PreviousOutPoint.Index,
+			Value:         outputs[i].Value,
+			LockingScript: outputs[i].PkScript,
+		})
+	}
+
+	if err := result.PromoteFromUTXOs(ctx, utxos); err != nil {
+		return nil, errors.Wrap(err, "promote")
+	}
+
+	if err := result.Setup(ctx, isTest); err != nil {
+		return nil, errors.Wrap(err, "setup")
 	}
 
 	return result, nil

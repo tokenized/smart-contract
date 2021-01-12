@@ -10,8 +10,6 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/logger"
-	"github.com/tokenized/pkg/rpcnode"
-	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
@@ -19,17 +17,18 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/spynode/pkg/client"
 
 	"github.com/pkg/errors"
 )
 
 // AddTx adds a tx to the incoming pipeline.
-func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
+func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32) error {
 
 	server.pendingLock.Lock()
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
 	//   original copy of the tx in the current thread.
-	intx, err := NewIncomingTxData(ctx, tx, txid)
+	intx, err := NewIncomingTxData(ctx, tx, txid, server.Config.IsTest)
 	if err != nil {
 		server.pendingLock.Unlock()
 		return err
@@ -38,14 +37,14 @@ func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Ha
 	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
-		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash.String())
+		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash)
 	}
 	server.pendingTxs[*intx.Itx.Hash] = intx
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
 
-	node.LogVerbose(ctx, "Tx added to incoming : %s", intx.Itx.Hash.String())
+	node.LogVerbose(ctx, "Tx added to incoming : %s", intx.Itx.Hash)
 	return nil
 }
 
@@ -57,21 +56,9 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
 		node.LogVerbose(txCtx, "Processing incoming tx")
 
-		if err := intx.Itx.Setup(txCtx, server.Config.IsTest); err != nil {
-			server.abortPendingTx(txCtx, *intx.Itx.Hash)
-			return errors.Wrap(err, "setup")
-		}
 		if err := intx.Itx.Validate(txCtx); err != nil {
 			server.abortPendingTx(txCtx, *intx.Itx.Hash)
 			return errors.Wrap(err, "validate")
-		}
-		if err := intx.Itx.Promote(txCtx, server.RpcNode); err != nil {
-			server.abortPendingTx(txCtx, *intx.Itx.Hash)
-			if errors.Cause(err) == rpcnode.ErrNotSeen {
-				node.LogVerbose(txCtx, "Failed to promote tx : %s", err)
-				continue
-			}
-			return errors.Wrap(err, "promote")
 		}
 
 		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
@@ -351,7 +338,8 @@ func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
 	return nil
 }
 
-func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) (*IncomingTxData, error) {
+func NewIncomingTxData(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32,
+	isTest bool) (*IncomingTxData, error) {
 	result := IncomingTxData{
 		Timestamp:      protocol.CurrentTimestamp(),
 		IsPreprocessed: false,
@@ -359,7 +347,8 @@ func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32)
 		InReady:        false,
 	}
 	var err error
-	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
+
+	result.Itx, err = inspector.NewTransactionFromOutputs(ctx, &txid, tx.Tx, tx.Outputs, isTest)
 	if err != nil {
 		return nil, err
 	}

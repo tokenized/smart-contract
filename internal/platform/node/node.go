@@ -25,7 +25,7 @@ type Values struct {
 }
 
 // BitcoinHeaders provides functions for retrieving information about headers on the currently
-//   longest chain.
+// longest chain.
 type BitcoinHeaders interface {
 	LastHeight(ctx context.Context) int
 	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)

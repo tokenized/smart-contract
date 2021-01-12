@@ -79,7 +79,7 @@ var cmdBench = &cobra.Command{
 
 		// Wait for sync
 		for i := 0; ; i++ {
-			if theClient.IsInSync() && theClient.OutgoingCount() > 4 {
+			if theClient.IsInSync() {
 				break
 			}
 			if i > 60 {
@@ -286,7 +286,7 @@ var cmdBench = &cobra.Command{
 
 		// Send UTXO tx ============================================================================
 		logger.Info(ctx, "Sending utxo tx")
-		if err := theClient.BroadcastTxUntrustedOnly(ctx, utxoTx.MsgTx); err != nil {
+		if err := theClient.BroadcastTx(ctx, utxoTx.MsgTx); err != nil {
 			logger.Warn(ctx, "Failed to broadcast UTXO tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -472,7 +472,7 @@ func transferOpReturn() ([]byte, error) {
 
 func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, name string) *wire.MsgTx {
 	logger.Info(ctx, "Sending %s tx", name)
-	if err := client.BroadcastTxUntrustedOnly(ctx, tx); err != nil {
+	if err := client.BroadcastTx(ctx, tx); err != nil {
 		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
 		return nil
 	}

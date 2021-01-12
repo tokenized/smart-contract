@@ -63,9 +63,6 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				isRelevant = true
 				node.Log(ctx, "Request for contract %s",
 					bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
-				if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
-					node.LogError(ctx, "Failed to save tx to RPC : %s", err)
-				}
 				if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
 					node.Log(ctx, "Adding request to pending")
 					// Save pending request to ensure it has a response, and process it if not.

@@ -325,7 +325,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		send, _ := c.Flags().GetBool(FlagSend)
 		if send {
 			fmt.Printf("Sending to network\n")
-			if err := theClient.ShotgunTx(ctx, tx.MsgTx, 250); err != nil {
+			if err := theClient.BroadcastTx(ctx, tx.MsgTx); err != nil {
 				fmt.Printf("Failed to send tx : %s\n", err)
 			}
 		}

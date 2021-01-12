@@ -154,6 +154,26 @@ func (itx *Transaction) PromoteFromUTXOs(ctx context.Context, utxos []bitcoin.UT
 	return nil
 }
 
+// PromoteFromOutputs will populate the inputs and outputs accordingly using provided spent outputs
+// instead of a node.
+func (itx *Transaction) PromoteFromOutputs(ctx context.Context, outputs []*wire.TxOut) error {
+	itx.lock.Lock()
+
+	if err := itx.ParseOutputsWithoutNode(ctx); err != nil {
+		itx.lock.Unlock()
+		return err
+	}
+
+	if err := itx.ParseInputsFromOutputs(ctx, outputs); err != nil {
+		itx.lock.Unlock()
+		return err
+	}
+
+	itx.lock.Unlock()
+	itx.lock.RLock()
+	return nil
+}
+
 // Promote will populate the inputs and outputs accordingly
 func (itx *Transaction) Promote(ctx context.Context, node NodeInterface) error {
 	itx.lock.Lock()
@@ -268,6 +288,34 @@ func (itx *Transaction) ParseInputsFromUTXOs(ctx context.Context, utxos []bitcoi
 	return nil
 }
 
+// ParseInputsFromOutputs sets the Inputs property of the Transaction
+func (itx *Transaction) ParseInputsFromOutputs(ctx context.Context, outputs []*wire.TxOut) error {
+
+	// Build inputs
+	inputs := make([]Input, 0, len(itx.MsgTx.TxIn))
+	for i, txin := range itx.MsgTx.TxIn {
+		if txin.PreviousOutPoint.Index == 0xffffffff {
+			// Empty coinbase input
+			inputs = append(inputs, Input{
+				UTXO: bitcoin.UTXO{
+					Index: 0xffffffff,
+				},
+			})
+			continue
+		}
+
+		input, err := buildInputFromOutput(txin, outputs[i])
+		if err != nil {
+			return errors.Wrap(err, "build input")
+		}
+
+		inputs = append(inputs, *input)
+	}
+
+	itx.Inputs = inputs
+	return nil
+}
+
 // ParseInputs sets the Inputs property of the Transaction
 func (itx *Transaction) ParseInputs(ctx context.Context, node NodeInterface) error {
 
@@ -300,6 +348,27 @@ func buildInput(utxo bitcoin.UTXO) (*Input, error) {
 	}
 
 	return &input, nil
+}
+
+// buildInputFromOutput builds an input from the output it spends.
+func buildInputFromOutput(input *wire.TxIn, output *wire.TxOut) (*Input, error) {
+	address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the Input
+	result := &Input{
+		Address: address,
+		UTXO: bitcoin.UTXO{
+			Hash:          input.PreviousOutPoint.Hash,
+			Index:         input.PreviousOutPoint.Index,
+			Value:         output.Value,
+			LockingScript: output.PkScript,
+		},
+	}
+
+	return result, nil
 }
 
 // GetPublicKeyForInput attempts to find a public key in the locking and unlocking scripts.

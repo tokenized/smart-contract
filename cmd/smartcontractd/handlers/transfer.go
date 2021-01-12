@@ -947,7 +947,7 @@ func sendToNextSettlementContract(ctx context.Context,
 
 	node.Log(ctx, "Sending settlement offer to %s",
 		bitcoin.NewAddressFromRawAddress(transferTx.Outputs[nextContractIndex].Address,
-		w.Config.Net))
+			w.Config.Net))
 
 	// Setup M1 response
 	var err error
@@ -1179,7 +1179,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 
 				node.LogVerbose(ctx, "Bitcoin refund %d : %s", sender.Quantity,
 					bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					w.Config.Net))
+						w.Config.Net))
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
 				refundBalance += sender.Quantity
 			}
