@@ -49,6 +49,21 @@ var testVoteResultTxId protocol.TxId
 
 var tracer *filters.Tracer
 
+var outgoingMessageTypes = map[string]bool{
+	actions.CodeAssetCreation:     true,
+	actions.CodeContractFormation: true,
+	actions.CodeSettlement:        true,
+	actions.CodeVote:              true,
+	actions.CodeBallotCounted:     true,
+	actions.CodeResult:            true,
+	actions.CodeFreeze:            true,
+	actions.CodeThaw:              true,
+	actions.CodeConfiscation:      true,
+	actions.CodeReconciliation:    true,
+	actions.CodeRejection:         true,
+	actions.CodeMessage:           true,
+}
+
 // TestMain is the entry point for testing.
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
@@ -139,10 +154,19 @@ func testMain(m *testing.M) int {
 }
 
 func respondTx(ctx context.Context, tx *wire.MsgTx) error {
+	if !isOutgoing(tx) {
+		return nil
+	}
+
 	responseLock.Lock()
 	responses = append(responses, tx)
 	responseLock.Unlock()
 	return nil
+}
+
+func isOutgoing(tx *wire.MsgTx) bool {
+	_, exists := outgoingMessageTypes[responseType(tx)]
+	return exists
 }
 
 func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {

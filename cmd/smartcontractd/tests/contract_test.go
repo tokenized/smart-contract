@@ -545,14 +545,14 @@ func oracleContract(t *testing.T) {
 	}
 	server.HandleTx(ctx, offerCtx)
 
-	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	// var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break
@@ -609,13 +609,13 @@ func oracleContract(t *testing.T) {
 	t.Logf("Contract offer tx : %s", offerTx.TxHash())
 	server.HandleTx(ctx, offerCtx)
 
-	firstResponse = nil // Request is re-broadcast
+	// firstResponse = nil // Request is re-broadcast
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break

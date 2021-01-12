@@ -217,12 +217,12 @@ func NewTransactionFromOutputs(ctx context.Context, hash *bitcoin.Hash32, tx *wi
 		})
 	}
 
-	if err := result.PromoteFromUTXOs(ctx, utxos); err != nil {
-		return nil, errors.Wrap(err, "promote")
-	}
-
 	if err := result.Setup(ctx, isTest); err != nil {
 		return nil, errors.Wrap(err, "setup")
+	}
+
+	if err := result.PromoteFromUTXOs(ctx, utxos); err != nil {
+		return nil, errors.Wrap(err, "promote")
 	}
 
 	return result, nil

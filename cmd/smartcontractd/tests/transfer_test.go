@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
@@ -100,7 +101,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		var err error
@@ -162,18 +163,19 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 	b.ResetTimer()
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
 	wgInternal := sync.WaitGroup{}
 	wgInternal.Add(1)
 	go func() {
-		defer wgInternal.Done()
 		for _, request := range requests {
 			server.HandleTx(ctx, request)
 		}
+		wgInternal.Done()
 	}()
 
 	wgInternal.Add(1)
 	go func() {
-		defer wgInternal.Done()
 		responsesProcessed := 0
 		for responsesProcessed < b.N {
 			response := getResponse()
@@ -182,7 +184,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 			}
 			// rType := responseType(response)
 			// if rType != "T2" {
-			// 	b.Fatalf("Invalid response type : %s", rType)
+			// 	continue
 			// }
 
 			server.HandleTx(ctx, &client.Tx{
@@ -195,6 +197,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 
 			responsesProcessed++
 		}
+		wgInternal.Done()
 	}()
 
 	wgInternal.Wait()
@@ -206,14 +209,14 @@ func simpleTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
 	if h.FinalizedBalance != 0 {
-		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
+		b.Fatalf("\t%s\tBalance not zeroized (N=%d) : %d/%d", tests.Failed, b.N, h.PendingBalance,
+			h.FinalizedBalance)
 	}
 }
 
@@ -272,11 +275,12 @@ func separateTransfersBenchmark(b *testing.B) {
 		// From sender
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), senderKey.Address)
 		transferInputHash := fundingTx.TxHash()
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn,
+			wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -327,7 +331,8 @@ func separateTransfersBenchmark(b *testing.B) {
 		}
 	}()
 
-	profFile, err := os.OpenFile("separate_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	profFile, err := os.OpenFile("separate_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR,
+		0644)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
 	}
@@ -474,11 +479,12 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferInputHash := fundingTx.TxHash()
 
 		// From issuer
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn,
+			wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -818,17 +824,6 @@ func treeTransfersBenchmark(b *testing.B) {
 
 	server.Stop(ctx)
 	wg.Wait()
-
-	// Check balance
-	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
-		issuerKey.Address, v.Now)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
-	}
-	if h.FinalizedBalance != 0 {
-		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
-	}
 }
 
 func sendTokens(t *testing.T) {
@@ -1267,6 +1262,8 @@ func multiExchange(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx)
+
+	transactions.AddTx(ctx, test.MasterDB, transferItx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -1740,6 +1737,8 @@ func multiExchangeLock(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx)
+
+	transactions.AddTx(ctx, test.MasterDB, transferItx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -2505,14 +2504,14 @@ func oracleTransfer(t *testing.T) {
 		},
 	})
 
-	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	// var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break
@@ -2697,21 +2696,24 @@ func oracleTransferBad(t *testing.T) {
 	time.Sleep(time.Second)
 
 	server.HandleTx(ctx, &client.Tx{
-		Tx:      transferTx,
-		Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+		Tx: transferTx,
+		Outputs: []*wire.TxOut{
+			fundingTx.TxOut[0],
+			bitcoinFundingTx.TxOut[0],
+		},
 		State: client.TxState{
 			Safe: true,
 		},
 	})
 
-	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	// var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break

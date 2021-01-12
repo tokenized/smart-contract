@@ -14,6 +14,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -24,12 +25,29 @@ import (
 
 // AddTx adds a tx to the incoming pipeline.
 func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32) error {
-
 	server.pendingLock.Lock()
+
+	// The tx may already exist if it was created by smart-contract, but the state will not exist
+	// until it has been received.
+	if _, err := transactions.GetTxState(ctx, server.MasterDB, &txid); err == nil {
+		server.pendingLock.Unlock()
+		return fmt.Errorf("Tx already added : %s", txid)
+	}
+
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
 	//   original copy of the tx in the current thread.
 	intx, err := NewIncomingTxData(ctx, tx, txid, server.Config.IsTest)
 	if err != nil {
+		server.pendingLock.Unlock()
+		return err
+	}
+
+	if err := transactions.AddTx(ctx, server.MasterDB, intx.Itx); err != nil {
+		server.pendingLock.Unlock()
+		return err
+	}
+
+	if err := transactions.AddTxState(ctx, server.MasterDB, intx.Itx.Hash, &tx.State); err != nil {
 		server.pendingLock.Unlock()
 		return err
 	}
@@ -39,6 +57,7 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 		server.pendingLock.Unlock()
 		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash)
 	}
+
 	server.pendingTxs[*intx.Itx.Hash] = intx
 	server.pendingLock.Unlock()
 

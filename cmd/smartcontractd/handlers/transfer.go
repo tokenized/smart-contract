@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
@@ -74,9 +73,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		node.LogVerbose(ctx,
 			"Not contract for first transfer. Waiting for Message SettlementRequest : %s",
 			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
-		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
-			return errors.Wrap(err, "Failed to save tx")
-		}
 
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
@@ -204,8 +200,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "inspector from builder")
 		}
 
-		err = node.Respond(ctx, w, responseItx)
-		if err == nil {
+		if err := node.Respond(ctx, w, responseItx); err == nil {
 			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
 				rk.Address); err != nil {
 				return err
@@ -213,11 +208,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		return err
-	}
-
-	// Save tx
-	if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
-		return errors.Wrap(err, "Failed to save tx")
 	}
 
 	// Send to next contract
