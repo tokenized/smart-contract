@@ -24,6 +24,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
+	logConfig.EnableSubSystem("SpyNode")
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

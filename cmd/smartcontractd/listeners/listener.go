@@ -11,6 +11,8 @@ import (
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/spynode/pkg/client"
+
+	"github.com/pkg/errors"
 )
 
 // Implement the SpyNode Client interface.
@@ -22,13 +24,12 @@ func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 
 	err := server.AddTx(ctx, tx, *txid)
 	if err != nil {
-		node.LogError(ctx, "Failed to add tx : %s", err)
-		return
+		if errors.Cause(err) != ErrDuplicateTx {
+			node.LogError(ctx, "Failed to add tx : %s", err)
+		}
 	}
 
-	if tx.State.Safe {
-		server.MarkSafe(ctx, *txid)
-	}
+	server.handleTxState(ctx, *txid, &tx.State)
 
 	node.Log(ctx, "Handled tx")
 }
@@ -37,17 +38,25 @@ func (server *Server) HandleTxUpdate(ctx context.Context, update *client.TxUpdat
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	ctx = node.ContextWithLogTrace(ctx, update.TxID.String())
 
-	if update.State.UnSafe {
+	server.handleTxState(ctx, update.TxID, &update.State)
+
+	node.Log(ctx, "Handled tx state")
+}
+
+func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
+	state *client.TxState) {
+
+	if state.UnSafe {
 		node.Log(ctx, "Tx unsafe")
-		server.MarkUnsafe(ctx, update.TxID)
-	} else if update.State.Cancelled {
+		server.MarkUnsafe(ctx, txid)
+	} else if state.Cancelled {
 		node.Log(ctx, "Tx cancel")
 
-		if server.CancelPendingTx(ctx, update.TxID) {
+		if server.CancelPendingTx(ctx, txid) {
 			return
 		}
 
-		itx, err := transactions.GetTx(ctx, server.MasterDB, &update.TxID, server.Config.IsTest)
+		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
@@ -56,24 +65,24 @@ func (server *Server) HandleTxUpdate(ctx context.Context, update *client.TxUpdat
 		if err != nil {
 			node.LogWarn(ctx, "Failed to cancel tx : %s", err)
 		}
-	} else if update.State.MerkleProof != nil {
+	} else if state.MerkleProof != nil {
 		node.Log(ctx, "Tx confirm")
 
-		if server.removeFromReverted(ctx, &update.TxID) {
+		if server.removeFromReverted(ctx, &txid) {
 			node.LogVerbose(ctx, "Tx reconfirmed in reorg")
 			return // Already accepted. Reverted and reconfirmed by reorg
 		}
 
-		server.MarkConfirmed(ctx, update.TxID)
-	} else if update.State.Safe {
+		server.MarkConfirmed(ctx, txid)
+	} else if state.Safe {
 		node.Log(ctx, "Tx safe")
 
-		if server.removeFromReverted(ctx, &update.TxID) {
+		if server.removeFromReverted(ctx, &txid) {
 			node.LogVerbose(ctx, "Tx safe again after reorg")
 			return // Already accepted. Reverted by reorg and safe again.
 		}
 
-		server.MarkSafe(ctx, update.TxID)
+		server.MarkSafe(ctx, txid)
 	}
 }
 
@@ -84,6 +93,8 @@ func (server *Server) HandleHeaders(ctx context.Context, headers *client.Headers
 }
 
 func (server *Server) HandleInSync(ctx context.Context) {
+	ctx = node.ContextWithOutLogSubSystem(ctx)
+
 	if server.IsInSync() {
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
@@ -101,7 +112,6 @@ func (server *Server) HandleInSync(ctx context.Context) {
 		return // Only execute below on first sync
 	}
 
-	ctx = node.ContextWithOutLogSubSystem(ctx)
 	ctx = node.ContextWithLogTrace(ctx, "In Sync")
 	node.Log(ctx, "Node is in sync")
 	node.Log(ctx, "Processing pending : %d responses, %d requests", len(server.pendingResponses),

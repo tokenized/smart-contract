@@ -163,8 +163,6 @@ func main() {
 		logger.Fatal(ctx, "Load Server : %s", err)
 	}
 
-	spyNode.RegisterHandler(node)
-
 	// -------------------------------------------------------------------------
 	// Start Node Service
 

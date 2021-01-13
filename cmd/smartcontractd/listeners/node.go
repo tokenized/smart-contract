@@ -31,6 +31,8 @@ const (
 var (
 	// DefaultEndian specifies the order of bytes for encoding integers.
 	DefaultEndian = binary.LittleEndian
+
+	ErrDuplicateTx = errors.New("Duplicate Tx")
 )
 
 type Server struct {
@@ -125,6 +127,7 @@ func (server *Server) Load(ctx context.Context) error {
 	// Register listeners
 	if server.SpyNode != nil {
 		server.SpyNode.RegisterHandler(server)
+		server.SpyNode.SubscribeContracts(ctx)
 	}
 
 	if err := server.Tracer.Load(ctx, server.MasterDB); err != nil {

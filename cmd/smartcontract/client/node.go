@@ -79,6 +79,7 @@ func Context() context.Context {
 
 	// logConfig.Main.MinLevel = logger.LevelDebug
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
+	logConfig.EnableSubSystem("SpyNode")
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

@@ -11,7 +11,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/pkg v0.2.3-0.20210111225910-581552d4ad95
 	github.com/tokenized/specification v0.3.1
-	github.com/tokenized/spynode v0.0.0-20210112060901-de8bb0ce2584
+	github.com/tokenized/spynode v0.0.0-20210113053718-a37a7b592bf1
 	go.opencensus.io v0.22.2
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
 	golang.org/x/tools v0.0.0-20200107184032-11e9d9cc0042 // indirect

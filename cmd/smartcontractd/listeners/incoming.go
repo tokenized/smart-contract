@@ -31,7 +31,7 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 	// until it has been received.
 	if _, err := transactions.GetTxState(ctx, server.MasterDB, &txid); err == nil {
 		server.pendingLock.Unlock()
-		return fmt.Errorf("Tx already added : %s", txid)
+		return errors.Wrap(ErrDuplicateTx, txid.String())
 	}
 
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
@@ -55,10 +55,10 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
-		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash)
+		return errors.Wrap(ErrDuplicateTx, txid.String())
 	}
 
-	server.pendingTxs[*intx.Itx.Hash] = intx
+	server.pendingTxs[txid] = intx
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
