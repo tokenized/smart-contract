@@ -74,7 +74,8 @@ func NewTransaction(ctx context.Context, raw string, isTest bool) (*Transaction,
 }
 
 // NewTransactionFromHash builds an ITX from a transaction hash
-func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string, isTest bool) (*Transaction, error) {
+func NewTransactionFromHash(ctx context.Context, node NodeInterface, hash string,
+	isTest bool) (*Transaction, error) {
 	h, err := bitcoin.NewHash32FromStr(hash)
 	if err != nil {
 		return nil, err
@@ -95,7 +96,8 @@ func NewTransactionFromWire(ctx context.Context, tx *wire.MsgTx, isTest bool) (*
 }
 
 // NewTransactionFromHashWire builds an ITX from a wire Msg Tx
-func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx, isTest bool) (*Transaction, error) {
+func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *wire.MsgTx,
+	isTest bool) (*Transaction, error) {
 	// Must have inputs
 	if len(tx.TxIn) == 0 {
 		return nil, errors.Wrap(ErrMissingInputs, "parsing transaction")

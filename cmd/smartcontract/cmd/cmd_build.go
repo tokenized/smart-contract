@@ -203,7 +203,7 @@ func buildAction(c *cobra.Command, args []string) error {
 
 		// Check with inspector
 		var itx *inspector.Transaction
-		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, true)
+		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, theClient.Config.IsTest)
 		if err != nil {
 			logger.Warn(ctx, "Failed to convert tx to inspector")
 		}

@@ -88,8 +88,9 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 
 func (server *Server) HandleHeaders(ctx context.Context, headers *client.Headers) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
-	node.Log(ctx, "New headers to height %d : %s", int(headers.StartHeight)+len(headers.Headers),
-		headers.Headers[len(headers.Headers)-1].BlockHash())
+	count := len(headers.Headers)
+	node.Log(ctx, "New headers (%d) to height %d : %s", count, int(headers.StartHeight)+count,
+		headers.Headers[count-1].BlockHash())
 }
 
 func (server *Server) HandleInSync(ctx context.Context) {

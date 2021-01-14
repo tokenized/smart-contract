@@ -40,7 +40,7 @@ type Client struct {
 
 type Config struct {
 	Net         bitcoin.Network
-	IsTest      bool    `envconfig:"IS_TEST"`
+	IsTest      bool    `default:"true" envconfig:"IS_TEST"`
 	Key         string  `envconfig:"CLIENT_WALLET_KEY"`
 	FeeRate     float32 `default:"1.0" envconfig:"CLIENT_FEE_RATE"`
 	DustFeeRate float32 `default:"1.0" envconfig:"CLIENT_DUST_FEE_RATE"`
@@ -204,7 +204,21 @@ func (client *Client) RunSpyNode(ctx context.Context, stopOnSync bool) error {
 }
 
 func (client *Client) BroadcastTx(ctx context.Context, tx *wire.MsgTx) error {
-	if err := client.spyNode.SendTx(ctx, tx); err != nil {
+	rpcConfig := &rpcnode.Config{
+		Host:       client.Config.RpcNode.Host,
+		Username:   client.Config.RpcNode.Username,
+		Password:   client.Config.RpcNode.Password,
+		MaxRetries: client.Config.RpcNode.MaxRetries,
+		RetryDelay: client.Config.RpcNode.RetryDelay,
+	}
+
+	rpcNode, err := rpcnode.NewNode(rpcConfig)
+	if err != nil {
+		logger.Warn(ctx, "Failed to create rpc node : %s", err)
+		return err
+	}
+
+	if err := rpcNode.SendRawTransaction(ctx, tx); err != nil {
 		return err
 	}
 	return nil
