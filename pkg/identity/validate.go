@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 // ValidateAdminIdentityCertificate checks the validity of an admin identity certificate.
@@ -26,7 +27,7 @@ func ValidateAdminIdentityCertificate(ctx context.Context,
 	}
 
 	// Get block hash for tip - 4
-	blockHash, err := blocks.Hash(ctx, int(data.BlockHeight))
+	blockHash, err := blocks.BlockHash(ctx, int(data.BlockHeight))
 	if err != nil {
 		return errors.Wrap(err, "block hash")
 	}
@@ -72,7 +73,7 @@ func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHa
 	}
 
 	// Get block hash for tip - 4
-	blockHash, err := blocks.Hash(ctx, int(data.BlockHeight))
+	blockHash, err := blocks.BlockHash(ctx, int(data.BlockHeight))
 	if err != nil {
 		return errors.Wrap(err, "block hash")
 	}
@@ -109,7 +110,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 	}
 
 	// Get block hash for tip - 4
-	blockHash, err := blocks.Hash(ctx, int(receiver.OracleSigBlockHeight))
+	blockHash, err := blocks.BlockHash(ctx, int(receiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, "block hash")
 	}

@@ -48,16 +48,14 @@ type App struct {
 
 // Node configuration
 type Config struct {
-	ContractProviderID string
-	Version            string
-	FeeAddress         bitcoin.RawAddress
-	Net                bitcoin.Network
-	FeeRate            float32
-	DustFeeRate        float32
-	MinFeeRate         float32
-	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
-	PreprocessThreads  int
-	IsTest             bool
+	FeeAddress        bitcoin.RawAddress
+	Net               bitcoin.Network
+	FeeRate           float32
+	DustFeeRate       float32
+	MinFeeRate        float32
+	RequestTimeout    uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
+	PreprocessThreads int
+	IsTest            bool
 }
 
 // New creates an App value that handle a set of routes for the application.

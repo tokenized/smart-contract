@@ -7,12 +7,10 @@ import (
 // Config is used to hold all runtime configuration.
 type Config struct {
 	Contract struct {
-		PrivateKey   string  `envconfig:"PRIV_KEY"`
-		OperatorName string  `envconfig:"OPERATOR_NAME"`
-		Version      string  `envconfig:"VERSION"`
-		FeeAddress   string  `envconfig:"FEE_ADDRESS"`
-		FeeRate      float32 `default:"1.0" envconfig:"FEE_RATE"`
-		DustFeeRate  float32 `default:"1.0" envconfig:"DUST_FEE_RATE"`
+		PrivateKey  string  `envconfig:"PRIV_KEY"`
+		FeeAddress  string  `envconfig:"FEE_ADDRESS"`
+		FeeRate     float32 `default:"1.0" envconfig:"FEE_RATE"`
+		DustFeeRate float32 `default:"1.0" envconfig:"DUST_FEE_RATE"`
 
 		RequestTimeout    uint64  `default:"60000000000" envconfig:"REQUEST_TIMEOUT"` // Default 1 minute
 		PreprocessThreads int     `default:"4" envconfig:"PREPROCESS_THREADS"`

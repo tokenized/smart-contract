@@ -63,15 +63,13 @@ func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 
 func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	appConfig := &node.Config{
-		Net:                bitcoin.NetworkFromString(cfg.Bitcoin.Network),
-		ContractProviderID: cfg.Contract.OperatorName,
-		Version:            cfg.Contract.Version,
-		FeeRate:            cfg.Contract.FeeRate,
-		DustFeeRate:        cfg.Contract.DustFeeRate,
-		MinFeeRate:         cfg.Contract.MinFeeRate,
-		RequestTimeout:     cfg.Contract.RequestTimeout,
-		PreprocessThreads:  cfg.Contract.PreprocessThreads,
-		IsTest:             cfg.Contract.IsTest,
+		Net:               bitcoin.NetworkFromString(cfg.Bitcoin.Network),
+		FeeRate:           cfg.Contract.FeeRate,
+		DustFeeRate:       cfg.Contract.DustFeeRate,
+		MinFeeRate:        cfg.Contract.MinFeeRate,
+		RequestTimeout:    cfg.Contract.RequestTimeout,
+		PreprocessThreads: cfg.Contract.PreprocessThreads,
+		IsTest:            cfg.Contract.IsTest,
 	}
 
 	feeAddress, err := bitcoin.DecodeAddress(cfg.Contract.FeeAddress)
@@ -84,6 +82,26 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	appConfig.FeeAddress = bitcoin.NewRawAddressFromAddress(feeAddress)
 
 	return appConfig
+}
+
+func NewNodeConfigFromValues(
+	net bitcoin.Network,
+	isTest bool,
+	feeRate, dustFeeRate, minFeeRate float32,
+	requestTimeout uint64,
+	preprocessThreads int,
+	feeAddress bitcoin.RawAddress) *node.Config {
+
+	return &node.Config{
+		Net:               net,
+		IsTest:            isTest,
+		FeeRate:           feeRate,
+		DustFeeRate:       dustFeeRate,
+		MinFeeRate:        minFeeRate,
+		RequestTimeout:    requestTimeout,
+		PreprocessThreads: preprocessThreads,
+		FeeAddress:        feeAddress,
+	}
 }
 
 func LoadUTXOsFromDB(ctx context.Context, masterDB *db.DB) *utxos.UTXOs {

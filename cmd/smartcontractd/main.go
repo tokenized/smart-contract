@@ -91,7 +91,7 @@ func main() {
 		return
 	}
 
-	spyNode := spynodeBootstrap.NewNode(spyConfig, spyStorage, rpcNode)
+	spyNode := spynodeBootstrap.NewNode(spyConfig, spyStorage, rpcNode, rpcNode)
 
 	spyNode.SetupRetry(cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
 

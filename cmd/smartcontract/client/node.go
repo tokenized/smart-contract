@@ -147,7 +147,7 @@ func (client *Client) setupSpyNode(ctx context.Context) error {
 		return err
 	}
 
-	client.spyNode = bootstrap.NewNode(spyConfig, spyStorage, rpcNode)
+	client.spyNode = bootstrap.NewNode(spyConfig, spyStorage, rpcNode, rpcNode)
 
 	hashes, err := client.Wallet.Address.Hashes()
 	if err != nil {
@@ -278,6 +278,8 @@ func (client *Client) HandleHeaders(ctx context.Context, headers *client.Headers
 		logger.Info(ctx, "New header (%d) : %s", client.blockHeight, headers.Headers[0].BlockHash())
 	}
 }
+
+func (client *Client) HandleMessage(ctx context.Context, payload client.MessagePayload) {}
 
 func (client *Client) HandleInSync(ctx context.Context) {
 	client.lock.Lock()

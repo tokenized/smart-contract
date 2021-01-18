@@ -17,6 +17,8 @@ import (
 
 // Implement the SpyNode Client interface.
 
+func (server *Server) HandleMessage(ctx context.Context, payload client.MessagePayload) {}
+
 func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	txid := tx.Tx.TxHash()
@@ -89,7 +91,7 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 func (server *Server) HandleHeaders(ctx context.Context, headers *client.Headers) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	count := len(headers.Headers)
-	node.Log(ctx, "New headers (%d) to height %d : %s", count, int(headers.StartHeight)+count,
+	node.Log(ctx, "New headers (%d) to height %d : %s", count, int(headers.StartHeight)+count-1,
 		headers.Headers[count-1].BlockHash())
 }
 
