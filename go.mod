@@ -9,9 +9,9 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/pkg v0.2.3-0.20210115061216-287e4e08c58e
+	github.com/tokenized/pkg v0.2.3-0.20210120232054-033e3826e206
 	github.com/tokenized/specification v0.3.1
-	github.com/tokenized/spynode v0.0.0-20210118025413-c3a7796ff3dc
+	github.com/tokenized/spynode v0.0.0-20210121022332-cbb285fa7768
 	go.opencensus.io v0.22.2
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
 	golang.org/x/tools v0.0.0-20200107184032-11e9d9cc0042 // indirect

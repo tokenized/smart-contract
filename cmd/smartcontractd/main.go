@@ -85,15 +85,14 @@ func main() {
 
 	spyConfig, err := spynodeBootstrap.NewConfig(appConfig.Net, appConfig.IsTest,
 		cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash,
-		cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay, cfg.SpyNode.ShotgunCount)
+		cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay, cfg.SpyNode.ShotgunCount,
+		cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
 		return
 	}
 
 	spyNode := spynodeBootstrap.NewNode(spyConfig, spyStorage, rpcNode, rpcNode)
-
-	spyNode.SetupRetry(cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
 
 	// -------------------------------------------------------------------------
 	// Wallet

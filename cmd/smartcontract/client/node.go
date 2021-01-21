@@ -53,6 +53,10 @@ type Config struct {
 		UntrustedClients int    `default:"16" envconfig:"CLIENT_UNTRUSTED_NODES"`
 		SafeTxDelay      int    `default:"10" envconfig:"CLIENT_SAFE_TX_DELAY"`
 		ShotgunCount     int    `default:"100" envconfig:"SHOTGUN_COUNT"`
+
+		// Retry attempts when bitcoin node connection fails.
+		MaxRetries int `default:"60" envconfig:"NODE_MAX_RETRIES"`
+		RetryDelay int `default:"2000", envconfig:"NODE_RETRY_DELAY"`
 	}
 	RpcNode struct {
 		Host     string `default:"127.0.0.1:8332" envconfig:"RPC_HOST"`
@@ -141,7 +145,8 @@ func (client *Client) setupSpyNode(ctx context.Context) error {
 	spyConfig, err := bootstrap.NewConfig(client.Config.Net, client.Config.IsTest,
 		client.Config.SpyNode.Address, client.Config.SpyNode.UserAgent,
 		client.Config.SpyNode.StartHash, client.Config.SpyNode.UntrustedClients,
-		client.Config.SpyNode.SafeTxDelay, client.Config.SpyNode.ShotgunCount)
+		client.Config.SpyNode.SafeTxDelay, client.Config.SpyNode.ShotgunCount,
+		client.Config.SpyNode.MaxRetries, client.Config.SpyNode.RetryDelay)
 	if err != nil {
 		logger.Warn(ctx, "Failed to create spynode config : %s", err)
 		return err
