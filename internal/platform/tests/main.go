@@ -3,10 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"runtime/debug"
 	"testing"
-	"time"
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
@@ -47,9 +45,6 @@ type Test struct {
 }
 
 func New(logFileName string) *Test {
-
-	// Random value used by helpers
-	testHelperRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// =========================================================================
 	// Logging

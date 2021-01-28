@@ -110,7 +110,7 @@ func holderProposal(t *testing.T) {
 
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteTxId = *hash
 	}
 
 	// Check the response
@@ -384,7 +384,7 @@ func voteResult(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -450,7 +450,7 @@ func voteResultRelative(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -516,7 +516,7 @@ func voteResultAbsolute(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -656,7 +656,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 		return err
 	}
 
-	testVoteTxId = *protocol.TxIdFromBytes(voteItx.Hash[:])
+	testVoteTxId = *voteItx.Hash
 
 	test.RPCNode.SaveTX(ctx, voteTx)
 
@@ -672,7 +672,7 @@ func mockUpProposal(ctx context.Context) error {
 	return mockUpProposalType(ctx, 1, nil) // Administrator
 }
 
-func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *protocol.AssetCode) error {
+func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bitcoin.Hash20) error {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -743,7 +743,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 
-		ProposalTxId: protocol.TxIdFromBytes(proposalItx.Hash[:]),
+		ProposalTxId: proposalItx.Hash,
 		VoteTxId:     &testVoteTxId,
 		Expires:      protocol.NewTimestamp(now.Nano() + 500000000),
 
@@ -768,7 +768,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		}
 	} else {
 		for _, a := range ct.AssetCodes {
-			if a.Equal(ct.AdminMemberAsset) {
+			if a.Equal(&ct.AdminMemberAsset) {
 				continue // Administrative tokens don't count for holder votes.
 			}
 
@@ -874,13 +874,17 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	ts := protocol.CurrentTimestamp()
 	resultData := actions.Result{
 		AssetType:          vt.AssetType,
-		AssetCode:          vt.AssetCode.Bytes(),
 		ProposedAmendments: vt.ProposedAmendments,
 		VoteTxId:           testVoteTxId.Bytes(),
 		OptionTally:        []uint64{1000, 0},
 		Result:             "A",
 		Timestamp:          ts.Nano(),
 	}
+
+	if vt.AssetCode != nil {
+		resultData.AssetCode = vt.AssetCode.Bytes()
+	}
+
 	script, err = protocol.Serialize(&resultData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
@@ -897,7 +901,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		return err
 	}
 
-	testVoteResultTxId = *protocol.TxIdFromBytes(resultItx.Hash[:])
+	testVoteResultTxId = *resultItx.Hash
 
 	if err := transactions.AddTx(ctx, test.MasterDB, resultItx); err != nil {
 		return err

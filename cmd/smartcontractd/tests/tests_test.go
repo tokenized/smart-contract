@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
@@ -42,10 +43,10 @@ var testTokenQty uint64
 var testToken2Qty uint64
 var testAssetType string
 var testAsset2Type string
-var testAssetCodes []protocol.AssetCode
-var testAsset2Code protocol.AssetCode
-var testVoteTxId protocol.TxId
-var testVoteResultTxId protocol.TxId
+var testAssetCodes []bitcoin.Hash20
+var testAsset2Code bitcoin.Hash20
+var testVoteTxId bitcoin.Hash32
+var testVoteResultTxId bitcoin.Hash32
 
 var tracer *filters.Tracer
 

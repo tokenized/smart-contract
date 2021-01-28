@@ -26,7 +26,7 @@ var (
 		Ticker:      "BENCH",
 		Description: "Tokenized protocol benchmarking asset",
 	}
-	assetCode       *protocol.AssetCode
+	assetCode       bitcoin.Hash20
 	receiverAddress bitcoin.RawAddress
 )
 
@@ -432,8 +432,7 @@ func assetOpReturn() ([]byte, error) {
 
 	asset := actions.AssetDefinition{
 		AssetType:          payload.Code(),
-		TransfersPermitted: true,
-		TokenQty:           1000000,
+		AuthorizedTokenQty: 1000000,
 		AssetPayload:       payloadData,
 	}
 

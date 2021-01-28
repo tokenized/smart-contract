@@ -15,7 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -30,7 +29,8 @@ type Contract struct {
 }
 
 // OfferRequest handles an incoming Contract Offer and prepares a Formation response
-func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Offer")
 	defer span.End()
 
@@ -165,7 +165,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter, itx
 		}
 	}
 
-	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions, len(msg.VotingSystems)); err != nil {
+	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions,
+		len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 			fmt.Sprintf("Invalid contract permissions : %s", err))
@@ -282,13 +283,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
-		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		node.LogWarn(ctx, "Contract address changed : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
+		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -308,7 +309,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 		refTxId, err := bitcoin.NewHash32(msg.RefTxID)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
+			return errors.Wrap(err, "Failed to convert bitcoin.Hash32 to Hash32")
 		}
 
 		// Retrieve Vote Result
@@ -325,13 +326,18 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve the vote
-		voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+		voteTxId, err := bitcoin.NewHash32(voteResult.VoteTxId)
+		if err != nil {
+			node.LogWarn(ctx, "Invalid vote txid : %s", err)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+
 		vt, err := vote.Retrieve(ctx, c.MasterDB, rk.Address, voteTxId)
 		if err == vote.ErrNotFound {
-			node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
+			node.LogWarn(ctx, "Vote not found : %s", voteTxId)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 		} else if err != nil {
-			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
+			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId, err)
 			return errors.Wrap(err, "Failed to retrieve vote")
 		}
 
@@ -350,7 +356,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if !vt.AssetCode.IsZero() {
+		if vt.AssetCode != nil && !vt.AssetCode.IsZero() {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -549,8 +555,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Contract formation not from contract : %x",
-			itx.Inputs[0].Address.Bytes())
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
+		return fmt.Errorf("Contract formation not from contract : %s", address)
 	}
 
 	contractName := msg.ContractName
@@ -575,7 +581,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		if ok && len(amendment.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(amendment.RefTxID)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert protocol.TxId to bitcoin.Hash32")
+				return errors.Wrap(err, "Failed to convert bitcoin.Hash32 to bitcoin.Hash32")
 			}
 
 			// Retrieve Vote Result
@@ -590,7 +596,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Retrieve the vote
-			voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+			voteTxId, err := bitcoin.NewHash32(voteResult.VoteTxId)
+			if err != nil {
+				return errors.Wrap(err, "invalid vote txid")
+			}
+
 			vt, err = vote.Retrieve(ctx, c.MasterDB, rk.Address, voteTxId)
 			if err == vote.ErrNotFound {
 				return errors.New("Vote not found for amendment")
@@ -739,7 +749,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			uc.VotingSystems = &msg.VotingSystems
 		}
 
-		if err := contract.Update(ctx, c.MasterDB, rk.Address, &uc, c.Config.IsTest, v.Now); err != nil {
+		if err := contract.Update(ctx, c.MasterDB, rk.Address, &uc, c.Config.IsTest,
+			v.Now); err != nil {
 			return errors.Wrap(err, "Failed to update contract")
 		}
 		node.Log(ctx, "Updated contract")
@@ -747,8 +758,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
 			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
-			if err := vote.MarkApplied(ctx, c.MasterDB, rk.Address, vt.VoteTxId,
-				protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+			if err := vote.MarkApplied(ctx, c.MasterDB, rk.Address, vt.VoteTxId, request.Hash,
+				v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}

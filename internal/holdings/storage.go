@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
@@ -34,20 +35,20 @@ type cacheUpdate struct {
 	lock     sync.Mutex
 }
 
-var cache map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate
+var cache map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate
 var cacheLock sync.Mutex
 
 // Save puts a single holding in cache. A CacheItem is returned and should be put in a CacheChannel
 //   to be written to storage asynchronously, or be synchronously written to storage by immediately
 //   calling Write.
 func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, h *state.Holding) (*CacheItem, error) {
+	assetCode *bitcoin.Hash20, h *state.Holding) (*CacheItem, error) {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 	}
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -55,7 +56,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
-		nc := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		nc := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 		cache[*contractHash] = &nc
 		contract = &nc
 	}
@@ -86,7 +87,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 
 // List provides a list of all holdings in storage for a specified asset.
 func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode) ([]string, error) {
+	assetCode *bitcoin.Hash20) ([]string, error) {
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -103,11 +104,11 @@ func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	resultKeys := make(map[string]bool)
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
-		nc := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		nc := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 		cache[*contractHash] = &nc
 		contract = &nc
 	}
@@ -142,7 +143,7 @@ func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 
 // FetchAll fetches all holdings from storage for a specified asset.
 func FetchAll(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode) ([]*state.Holding, error) {
+	assetCode *bitcoin.Hash20) ([]*state.Holding, error) {
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -159,11 +160,11 @@ func FetchAll(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 	resultKeys := make(map[string]bool)
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
-		nc := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		nc := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 		cache[*contractHash] = &nc
 		contract = &nc
 	}
@@ -213,13 +214,13 @@ func FetchAll(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 
 // Fetch fetches a single holding from storage and places it in the cache.
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, address bitcoin.RawAddress) (*state.Holding, error) {
+	assetCode *bitcoin.Hash20, address bitcoin.RawAddress) (*state.Holding, error) {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 	}
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -227,7 +228,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
-		nc := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		nc := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 		cache[*contractHash] = &nc
 		contract = &nc
 	}
@@ -286,7 +287,7 @@ func ProcessCacheItems(ctx context.Context, dbConn *db.DB, ch *CacheChannel) err
 
 func copyHolding(h *state.Holding) *state.Holding {
 	result := *h
-	result.HoldingStatuses = make(map[protocol.TxId]*state.HoldingStatus)
+	result.HoldingStatuses = make(map[bitcoin.Hash32]*state.HoldingStatus)
 	for key, val := range h.HoldingStatuses {
 		result.HoldingStatuses[key] = val
 	}
@@ -330,17 +331,17 @@ func WriteCache(ctx context.Context, dbConn *db.DB) error {
 // WriteCacheUpdate updates storage for an item from the cache if it has been modified since the
 // last write.
 func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
-	assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20) error {
+	assetCode *bitcoin.Hash20, addressHash *bitcoin.Hash20) error {
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		cache = make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 	}
 	contract, exists := cache[*contractHash]
 	if !exists {
-		nc := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*cacheUpdate)
+		nc := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*cacheUpdate)
 		cache[*contractHash] = &nc
 		contract = &nc
 	}
@@ -371,7 +372,7 @@ func WriteCacheUpdate(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.
 }
 
 func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
-	assetCode *protocol.AssetCode, addressHash *bitcoin.Hash20, h *state.Holding) error {
+	assetCode *bitcoin.Hash20, addressHash *bitcoin.Hash20, h *state.Holding) error {
 
 	data, err := serializeHolding(h)
 	if err != nil {
@@ -387,7 +388,7 @@ func write(ctx context.Context, dbConn *db.DB, contractHash *bitcoin.Hash20,
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *protocol.AssetCode,
+func buildStoragePath(contractHash *bitcoin.Hash20, assetCode *bitcoin.Hash20,
 	addressHash *bitcoin.Hash20) string {
 	return fmt.Sprintf("%s/%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey,
 		assetCode.String(), addressHash.String())
@@ -432,82 +433,82 @@ func serializeHolding(h *state.Holding) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func serializeHoldingStatus(buf *bytes.Buffer, hs *state.HoldingStatus) error {
-	if err := binary.Write(buf, binary.LittleEndian, hs.Code); err != nil {
+func serializeHoldingStatus(w io.Writer, hs *state.HoldingStatus) error {
+	if err := binary.Write(w, binary.LittleEndian, hs.Code); err != nil {
 		return err
 	}
 
-	if err := hs.Expires.Serialize(buf); err != nil {
+	if err := hs.Expires.Serialize(w); err != nil {
 		return err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, hs.Amount); err != nil {
-		return err
-	}
-
-	if err := hs.TxId.Serialize(buf); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, hs.Amount); err != nil {
 		return err
 	}
 
-	if err := binary.Write(buf, binary.LittleEndian, hs.SettleQuantity); err != nil {
+	if err := hs.TxId.Serialize(w); err != nil {
 		return err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, hs.Posted); err != nil {
+
+	if err := binary.Write(w, binary.LittleEndian, hs.SettleQuantity); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, hs.Posted); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func serializeString(buf *bytes.Buffer, v []byte) error {
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v))); err != nil {
+func serializeString(w io.Writer, v []byte) error {
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(v))); err != nil {
 		return err
 	}
-	if _, err := buf.Write(v); err != nil {
+	if _, err := w.Write(v); err != nil {
 		return err
 	}
 	return nil
 }
 
-func deserializeHolding(buf *bytes.Reader) (*state.Holding, error) {
+func deserializeHolding(r io.Reader) (*state.Holding, error) {
 	var result state.Holding
 
 	// Version
 	var version uint8
-	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
 		return &result, err
 	}
 	if version != 0 {
 		return &result, fmt.Errorf("Unknown version : %d", version)
 	}
 
-	err := result.Address.Deserialize(buf)
+	err := result.Address.Deserialize(r)
 	if err != nil {
 		return &result, err
 	}
 
-	if err := binary.Read(buf, binary.LittleEndian, &result.PendingBalance); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &result.PendingBalance); err != nil {
 		return &result, err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &result.FinalizedBalance); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &result.FinalizedBalance); err != nil {
 		return &result, err
 	}
-	result.CreatedAt, err = protocol.DeserializeTimestamp(buf)
+	result.CreatedAt, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return &result, err
 	}
-	result.UpdatedAt, err = protocol.DeserializeTimestamp(buf)
+	result.UpdatedAt, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return &result, err
 	}
 
-	result.HoldingStatuses = make(map[protocol.TxId]*state.HoldingStatus)
+	result.HoldingStatuses = make(map[bitcoin.Hash32]*state.HoldingStatus)
 	var length uint32
-	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return &result, err
 	}
 	for i := 0; i < int(length); i++ {
 		var hs state.HoldingStatus
-		if err := deserializeHoldingStatus(buf, &hs); err != nil {
+		if err := deserializeHoldingStatus(r, &hs); err != nil {
 			return &result, err
 		}
 		result.HoldingStatuses[*hs.TxId] = &hs
@@ -516,40 +517,40 @@ func deserializeHolding(buf *bytes.Reader) (*state.Holding, error) {
 	return &result, nil
 }
 
-func deserializeHoldingStatus(buf *bytes.Reader, hs *state.HoldingStatus) error {
-	if err := binary.Read(buf, binary.LittleEndian, &hs.Code); err != nil {
+func deserializeHoldingStatus(r io.Reader, hs *state.HoldingStatus) error {
+	if err := binary.Read(r, binary.LittleEndian, &hs.Code); err != nil {
 		return err
 	}
 
 	var err error
-	hs.Expires, err = protocol.DeserializeTimestamp(buf)
+	hs.Expires, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &hs.Amount); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &hs.Amount); err != nil {
 		return err
 	}
-	hs.TxId, err = protocol.DeserializeTxId(buf)
-	if err != nil {
+
+	if err := hs.TxId.Deserialize(r); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &hs.SettleQuantity); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &hs.SettleQuantity); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &hs.Posted); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &hs.Posted); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func deserializeString(buf *bytes.Reader) ([]byte, error) {
+func deserializeString(r io.Reader) ([]byte, error) {
 	var length uint32
-	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return nil, err
 	}
 	result := make([]byte, length)
-	if _, err := buf.Read(result); err != nil {
+	if _, err := r.Read(result); err != nil {
 		return nil, err
 	}
 	return result, nil

@@ -496,7 +496,7 @@ func reconcileOrder(t *testing.T) {
 	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
-func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress, quantity uint64) (*protocol.TxId, error) {
+func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress, quantity uint64) (*bitcoin.Hash32, error) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000013, issuerKey.Address)
 
 	orderData := actions.Order{
@@ -550,10 +550,10 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 		return nil, err
 	}
 
-	var freezeTxId *protocol.TxId
+	var freezeTxId *bitcoin.Hash32
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		freezeTxId = protocol.TxIdFromBytes(hash[:])
+		freezeTxId = hash
 
 		test.RPCNode.SaveTX(ctx, responses[0])
 

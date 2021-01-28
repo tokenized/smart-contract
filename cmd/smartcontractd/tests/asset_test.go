@@ -49,20 +49,20 @@ func createAsset(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCodes = []protocol.AssetCode{*protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
+	testAssetCodes = []bitcoin.Hash20{protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
 		AssetType:                  testAssetType,
-		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		TokenQty:                   1000,
+		AuthorizedTokenQty:         1000,
 	}
 
 	assetPayloadData := assets.ShareCommon{
-		Ticker:      "TST  ",
-		Description: "Test common shares",
+		Ticker:             "TST  ",
+		Description:        "Test common shares",
+		TransfersPermitted: true,
 	}
 	assetData.AssetPayload, err = assetPayloadData.Bytes()
 	if err != nil {
@@ -140,9 +140,9 @@ func createAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
-	if h.PendingBalance != assetData.TokenQty {
+	if h.PendingBalance != assetData.AuthorizedTokenQty {
 		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance,
-			assetData.TokenQty)
+			assetData.AuthorizedTokenQty)
 	}
 
 	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
@@ -172,21 +172,21 @@ func adminMemberAsset(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCodes[0] = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
+	testAssetCodes[0] = protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
-		AssetType:                  "MEM",
-		TransfersPermitted:         true,
+		AssetType:                  assets.CodeMembership,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		TokenQty:                   5,
+		AuthorizedTokenQty:         5,
 	}
 
 	assetPayloadData := assets.Membership{
-		MembershipClass: "Administrator",
-		MembershipType:  "Board Member",
-		Description:     "Administrative Matter Voting Token",
+		MembershipClass:    "Administrator",
+		MembershipType:     "Board Member",
+		Description:        "Administrative Matter Voting Token",
+		TransfersPermitted: true,
 	}
 	assetData.AssetPayload, err = assetPayloadData.Bytes()
 	if err != nil {
@@ -264,9 +264,9 @@ func adminMemberAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
-	if h.PendingBalance != assetData.TokenQty {
+	if h.PendingBalance != assetData.AuthorizedTokenQty {
 		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance,
-			assetData.TokenQty)
+			assetData.AuthorizedTokenQty)
 	}
 
 	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
@@ -341,20 +341,20 @@ func assetIndex(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCodes[0] = *protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
+	testAssetCodes[0] = protocol.AssetCodeFromContract(test.ContractKey.Address, 0)
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
 		AssetType:                  testAssetType,
-		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		TokenQty:                   1000,
+		AuthorizedTokenQty:         1000,
 	}
 
 	assetPayloadData := assets.ShareCommon{
-		Ticker:      "TST  ",
-		Description: "Test common shares",
+		Ticker:             "TST  ",
+		Description:        "Test common shares",
+		TransfersPermitted: true,
 	}
 	assetData.AssetPayload, err = assetPayloadData.Bytes()
 	if err != nil {
@@ -434,7 +434,7 @@ func assetIndex(t *testing.T) {
 	// Create another asset --------------------------------------------------
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100021, issuerKey.Address)
 
-	testAssetCodes = append(testAssetCodes, *protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
+	testAssetCodes = append(testAssetCodes, protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
 
 	// Build asset definition transaction
 	assetTx = wire.NewMsgTx(1)
@@ -514,7 +514,7 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
-	fip := actions.FieldIndexPath{actions.AssetFieldTokenQty}
+	fip := actions.FieldIndexPath{actions.AssetFieldAuthorizedTokenQty}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -569,11 +569,12 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve asset : %v", tests.Failed, err)
 	}
 
-	if as.TokenQty != newQuantity {
-		t.Fatalf("\t%s\tAsset token quantity incorrect : %d != %d", tests.Failed, as.TokenQty, 1200)
+	if as.AuthorizedTokenQty != newQuantity {
+		t.Fatalf("\t%s\tAsset token quantity incorrect : %d != %d", tests.Failed,
+			as.AuthorizedTokenQty, 1200)
 	}
 
-	t.Logf("\t%s\tVerified token quantity : %d", tests.Success, as.TokenQty)
+	t.Logf("\t%s\tVerified token quantity : %d", tests.Success, as.AuthorizedTokenQty)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
@@ -708,20 +709,20 @@ func duplicateAsset(t *testing.T) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 102001, issuerKey.Address)
 
 	testAssetType = assets.CodeShareCommon
-	testAssetCodes = []protocol.AssetCode{*protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
+	testAssetCodes = []bitcoin.Hash20{protocol.AssetCodeFromContract(test.ContractKey.Address, 0)}
 
 	// Create AssetDefinition message
 	assetData := actions.AssetDefinition{
 		AssetType:                  testAssetType,
-		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		TokenQty:                   1000,
+		AuthorizedTokenQty:         1000,
 	}
 
 	assetPayloadData := assets.ShareCommon{
-		Ticker:      "TST  ",
-		Description: "Test common shares",
+		Ticker:             "TST  ",
+		Description:        "Test common shares",
+		TransfersPermitted: true,
 	}
 	assetData.AssetPayload, err = assetPayloadData.Bytes()
 	if err != nil {
@@ -790,20 +791,20 @@ func duplicateAsset(t *testing.T) {
 	fundingTx2 := tests.MockFundingTx(ctx, test.RPCNode, 102002, issuerKey.Address)
 
 	testAssetCodes = append(testAssetCodes,
-		*protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
+		protocol.AssetCodeFromContract(test.ContractKey.Address, 1))
 
 	// Create AssetDefinition message
 	assetData2 := actions.AssetDefinition{
 		AssetType:                  testAssetType,
-		TransfersPermitted:         true,
 		EnforcementOrdersPermitted: true,
 		VotingRights:               true,
-		TokenQty:                   2000,
+		AuthorizedTokenQty:         2000,
 	}
 
 	assetPayloadData2 := assets.ShareCommon{
-		Ticker:      "TST2 ",
-		Description: "Test common shares 2",
+		Ticker:             "TST2 ",
+		Description:        "Test common shares 2",
+		TransfersPermitted: true,
 	}
 	assetData2.AssetPayload, err = assetPayloadData2.Bytes()
 	if err != nil {
@@ -870,11 +871,11 @@ func duplicateAsset(t *testing.T) {
 		t.Fatalf("\t%s\tWrong asset code count : %d", tests.Failed, len(ct.AssetCodes))
 	}
 
-	if !ct.AssetCodes[0].Equal(testAssetCodes[0]) {
+	if !ct.AssetCodes[0].Equal(&testAssetCodes[0]) {
 		t.Fatalf("\t%s\tWrong asset code 1 : %s", tests.Failed, ct.AssetCodes[0].String())
 	}
 
-	if !ct.AssetCodes[1].Equal(testAssetCodes[1]) {
+	if !ct.AssetCodes[1].Equal(&testAssetCodes[1]) {
 		t.Fatalf("\t%s\tWrong asset code 2 : %s", tests.Failed, ct.AssetCodes[1].String())
 	}
 
@@ -890,9 +891,9 @@ func duplicateAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
-	if h.PendingBalance != assetData.TokenQty {
+	if h.PendingBalance != assetData.AuthorizedTokenQty {
 		t.Fatalf("\t%s\tIssuer token balance incorrect : %d != %d", tests.Failed, h.PendingBalance,
-			assetData.TokenQty)
+			assetData.AuthorizedTokenQty)
 	}
 
 	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, h.PendingBalance)
@@ -908,30 +909,39 @@ func duplicateAsset(t *testing.T) {
 var currentTimestamp = protocol.CurrentTimestamp()
 
 var sampleAssetPayload = assets.ShareCommon{
-	Ticker:      "TST  ",
-	Description: "Test common shares",
+	Ticker:             "TST  ",
+	Description:        "Test common shares",
+	TransfersPermitted: true,
+}
+
+var sampleAssetPayloadNotPermitted = assets.ShareCommon{
+	Ticker:             "TST  ",
+	Description:        "Test common shares",
+	TransfersPermitted: false,
 }
 
 var sampleAssetPayload2 = assets.ShareCommon{
-	Ticker:      "TS2  ",
-	Description: "Test common shares 2",
+	Ticker:             "TS2  ",
+	Description:        "Test common shares 2",
+	TransfersPermitted: true,
 }
 
 var sampleAdminAssetPayload = assets.Membership{
-	MembershipClass: "Administrator",
-	Description:     "Test admin token",
+	MembershipClass:    "Administrator",
+	Description:        "Test admin token",
+	TransfersPermitted: true,
 }
 
 func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voting bool,
 	quantity uint64, index uint64, payload assets.Asset, permitted, issuer, holder bool) {
 
+	assetCode := protocol.AssetCodeFromContract(test.ContractKey.Address, index)
 	var assetData = state.Asset{
-		Code:                        protocol.AssetCodeFromContract(test.ContractKey.Address, index),
+		Code:                        &assetCode,
 		AssetType:                   payload.Code(),
-		TransfersPermitted:          transfers,
 		EnforcementOrdersPermitted:  enforcement,
 		VotingRights:                voting,
-		TokenQty:                    quantity,
+		AuthorizedTokenQty:          quantity,
 		AssetModificationGovernance: 1,
 		CreatedAt:                   protocol.CurrentTimestamp(),
 		UpdatedAt:                   protocol.CurrentTimestamp(),
@@ -939,7 +949,7 @@ func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voti
 
 	testAssetType = payload.Code()
 	for uint64(len(testAssetCodes)) <= index {
-		testAssetCodes = append(testAssetCodes, protocol.AssetCode{})
+		testAssetCodes = append(testAssetCodes, bitcoin.Hash20{})
 	}
 	testAssetCodes[index] = *assetData.Code
 	testTokenQty = quantity
@@ -972,9 +982,10 @@ func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voti
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
 		UpdatedAt:        assetData.UpdatedAt,
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
-	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0], &issuerHolding)
+	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address,
+		&testAssetCodes[0], &issuerHolding)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to save holdings : %v", tests.Failed, err)
 	}
@@ -994,7 +1005,7 @@ func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voti
 
 	ct.AssetCodes = append(ct.AssetCodes, assetData.Code)
 
-	if payload.Code() == "MEM" {
+	if payload.Code() == assets.CodeMembership {
 		membership, _ := payload.(*assets.Membership)
 		if membership.MembershipClass == "Owner" || membership.MembershipClass == "Administrator" {
 			ct.AdminMemberAsset = *assetData.Code
@@ -1006,16 +1017,16 @@ func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voti
 	}
 }
 
-func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, voting bool, quantity uint64,
-	payload assets.Asset, permitted, issuer, holder bool) {
+func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, voting bool,
+	quantity uint64, payload assets.Asset, permitted, issuer, holder bool) {
 
+	assetCode := protocol.AssetCodeFromContract(test.Contract2Key.Address, 0)
 	var assetData = state.Asset{
-		Code:                       protocol.AssetCodeFromContract(test.Contract2Key.Address, 0),
+		Code:                       &assetCode,
 		AssetType:                  payload.Code(),
-		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
 		VotingRights:               voting,
-		TokenQty:                   quantity,
+		AuthorizedTokenQty:         quantity,
 		CreatedAt:                  protocol.CurrentTimestamp(),
 		UpdatedAt:                  protocol.CurrentTimestamp(),
 	}
@@ -1052,7 +1063,7 @@ func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, vot
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
 		UpdatedAt:        assetData.UpdatedAt,
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
@@ -1078,16 +1089,16 @@ func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, vot
 	}
 }
 
-func mockUpOtherAsset(t testing.TB, ctx context.Context, key *wallet.Key, transfers, enforcement, voting bool,
-	quantity uint64, payload assets.Asset, permitted, issuer, holder bool) {
+func mockUpOtherAsset(t testing.TB, ctx context.Context, key *wallet.Key, transfers, enforcement,
+	voting bool, quantity uint64, payload assets.Asset, permitted, issuer, holder bool) {
 
+	assetCode := protocol.AssetCodeFromContract(key.Address, 0)
 	var assetData = state.Asset{
-		Code:                       protocol.AssetCodeFromContract(key.Address, 0),
+		Code:                       &assetCode,
 		AssetType:                  payload.Code(),
-		TransfersPermitted:         transfers,
 		EnforcementOrdersPermitted: enforcement,
 		VotingRights:               voting,
-		TokenQty:                   quantity,
+		AuthorizedTokenQty:         quantity,
 		CreatedAt:                  protocol.CurrentTimestamp(),
 		UpdatedAt:                  protocol.CurrentTimestamp(),
 	}
@@ -1124,7 +1135,7 @@ func mockUpOtherAsset(t testing.TB, ctx context.Context, key *wallet.Key, transf
 		FinalizedBalance: quantity,
 		CreatedAt:        assetData.CreatedAt,
 		UpdatedAt:        assetData.UpdatedAt,
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAssetCodes[0], &issuerHolding)
 	if err != nil {
@@ -1154,7 +1165,7 @@ func mockUpHolding(t testing.TB, ctx context.Context, address bitcoin.RawAddress
 }
 
 func mockUpAssetHolding(t testing.TB, ctx context.Context, address bitcoin.RawAddress,
-	assetCode protocol.AssetCode, quantity uint64) {
+	assetCode bitcoin.Hash20, quantity uint64) {
 
 	h := state.Holding{
 		Address:          address,
@@ -1162,7 +1173,7 @@ func mockUpAssetHolding(t testing.TB, ctx context.Context, address bitcoin.RawAd
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),
 		UpdatedAt:        protocol.CurrentTimestamp(),
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.ContractKey.Address, &assetCode, &h)
 	if err != nil {
@@ -1178,7 +1189,7 @@ func mockUpHolding2(t testing.TB, ctx context.Context, address bitcoin.RawAddres
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),
 		UpdatedAt:        protocol.CurrentTimestamp(),
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, test.Contract2Key.Address, &testAsset2Code, &h)
 	if err != nil {
@@ -1196,7 +1207,7 @@ func mockUpOtherHolding(t testing.TB, ctx context.Context, key *wallet.Key, addr
 		FinalizedBalance: quantity,
 		CreatedAt:        protocol.CurrentTimestamp(),
 		UpdatedAt:        protocol.CurrentTimestamp(),
-		HoldingStatuses:  make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses:  make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	cacheItem, err := holdings.Save(ctx, test.MasterDB, key.Address, &testAsset2Code, &h)
 	if err != nil {

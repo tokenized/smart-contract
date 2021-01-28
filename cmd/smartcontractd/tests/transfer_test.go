@@ -1261,6 +1261,8 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
+	t.Logf("Transfer : %s", transferItx.Hash)
+
 	test.RPCNode.SaveTX(ctx, transferTx)
 
 	transactions.AddTx(ctx, test.MasterDB, transferItx)
@@ -1561,6 +1563,8 @@ func bitcoinExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
+	t.Logf("Transfer : %s", transferItx.Hash)
+
 	test.RPCNode.SaveTX(ctx, transferTx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
@@ -1735,6 +1739,8 @@ func multiExchangeLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
+
+	t.Logf("Transfer : %s", transferItx.Hash)
 
 	test.RPCNode.SaveTX(ctx, transferTx)
 
@@ -2135,6 +2141,8 @@ func multiExchangeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
+
+	t.Logf("Transfer : %s", transferItx.Hash)
 
 	test.RPCNode.SaveTX(ctx, transferTx)
 
@@ -2870,7 +2878,8 @@ func permittedBad(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayloadNotPermitted, true, false,
+		false)
 
 	user2Holding := uint64(100)
 	mockUpHolding(t, ctx, user2Key.Address, user2Holding)

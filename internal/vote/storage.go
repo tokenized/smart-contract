@@ -10,8 +10,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 
-	"github.com/tokenized/specification/dist/golang/protocol"
-
 	"github.com/pkg/errors"
 )
 
@@ -27,7 +25,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	found := false
 	cacheLock.Lock()
 	for i, cv := range cache {
-		if cv.VoteTxId.Equal(*v.VoteTxId) {
+		if cv.VoteTxId.Equal(v.VoteTxId) {
 			found = true
 			cache[i] = *v
 			break
@@ -62,11 +60,11 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 
 // Fetch a single vote from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	voteTxId *protocol.TxId) (*state.Vote, error) {
+	voteTxId *bitcoin.Hash32) (*state.Vote, error) {
 
 	cacheLock.Lock()
 	for _, cv := range cache {
-		if cv.VoteTxId.Equal(*voteTxId) {
+		if cv.VoteTxId.Equal(voteTxId) {
 			result := cv
 			cacheLock.Unlock()
 			return &result, nil
@@ -145,6 +143,6 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, txid *protocol.TxId) string {
+func buildStoragePath(contractHash *bitcoin.Hash20, txid *bitcoin.Hash32) string {
 	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, txid.String())
 }

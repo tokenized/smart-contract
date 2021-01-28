@@ -10,7 +10,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -24,7 +23,7 @@ var (
 )
 
 // Retrieve gets the specified vote from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *protocol.TxId) (*state.Vote, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *bitcoin.Hash32) (*state.Vote, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Retrieve")
 	defer span.End()
 
@@ -38,7 +37,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 }
 
 // Create the vote
-func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *protocol.TxId, nv *NewVote,
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *bitcoin.Hash32, nv *NewVote,
 	now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Create")
 	defer span.End()
@@ -61,7 +60,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 
 // Update the vote
 func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	voteTxId *protocol.TxId, uv *UpdateVote, now protocol.Timestamp) error {
+	voteTxId *bitcoin.Hash32, uv *UpdateVote, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Update")
 	defer span.End()
 
@@ -103,7 +102,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 
 // Mark the vote as applied
 func MarkApplied(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	voteTxId *protocol.TxId, appliedTxID *protocol.TxId, now protocol.Timestamp) error {
+	voteTxId *bitcoin.Hash32, appliedTxID *bitcoin.Hash32, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.MarkApplied")
 	defer span.End()
 
