@@ -24,6 +24,8 @@ type NewContract struct {
 	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal         bool                         `json:"HolderProposal,omitempty"`
 
+	BodyOfAgreementType uint32 `json:"BodyOfAgreementType,omitempty"`
+
 	Oracles []*actions.OracleField `json:"Oracles,omitempty"`
 }
 
@@ -54,6 +56,8 @@ type UpdateContract struct {
 	VotingSystems          *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	AdministrationProposal *bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal         *bool                         `json:"HolderProposal,omitempty"`
+
+	BodyOfAgreementType *uint32 `json:"BodyOfAgreementType,omitempty"`
 
 	Oracles *[]*actions.OracleField `json:"Oracles,omitempty"`
 }

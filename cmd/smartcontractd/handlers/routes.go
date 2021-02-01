@@ -41,6 +41,16 @@ func API(
 	app.Handle("SEE", actions.CodeContractFormation, c.FormationResponse)
 	app.Handle("SEE", actions.CodeContractAddressChange, c.AddressChange)
 
+	// Register agreement based events.
+	agreement := Agreement{
+		MasterDB: masterDB,
+		Config:   config,
+	}
+
+	app.Handle("SEE", actions.CodeBodyOfAgreementOffer, agreement.OfferRequest)
+	app.Handle("SEE", actions.CodeBodyOfAgreementAmendment, agreement.AmendmentRequest)
+	app.Handle("SEE", actions.CodeBodyOfAgreementFormation, agreement.FormationResponse)
+
 	// Register asset based events.
 	a := Asset{
 		MasterDB:        masterDB,

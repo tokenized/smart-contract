@@ -46,8 +46,8 @@ func createContract(t *testing.T) {
 	// New Contract Offer
 	offerData := actions.ContractOffer{
 		ContractName:        "Test Name",
-		BodyOfAgreementType: 3,
-		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
+		BodyOfAgreementType: 0,
+		BodyOfAgreement:     []byte("HASHHASHHASHHASHHASHHASHHASHHASH"),
 		Issuer: &actions.EntityField{
 			Type:           "I",
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
@@ -154,7 +154,7 @@ func createContract(t *testing.T) {
 
 	// ********************************************************************************************
 	// Correct Contract Offer
-	offerData.BodyOfAgreementType = 2
+	offerData.BodyOfAgreementType = 1
 
 	// Reserialize and update tx
 	script, err = protocol.Serialize(&offerData, test.NodeConfig.IsTest)
@@ -234,9 +234,7 @@ func masterAddress(t *testing.T) {
 
 	// New Contract Offer
 	offerData := actions.ContractOffer{
-		ContractName:        "Test Name",
-		BodyOfAgreementType: 2,
-		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
+		ContractName: "Test Name",
 		Issuer: &actions.EntityField{
 			Type:           "I",
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
@@ -423,9 +421,7 @@ func oracleContract(t *testing.T) {
 
 	// New Contract Offer
 	offerData := actions.ContractOffer{
-		ContractName:        "Test Name",
-		BodyOfAgreementType: 2,
-		BodyOfAgreement:     []byte("This is a test contract and not to be used for any official purpose."),
+		ContractName: "Test Name",
 		Issuer: &actions.EntityField{
 			Type: "I",
 			Administration: []*actions.AdministratorField{
@@ -574,7 +570,8 @@ func oracleContract(t *testing.T) {
 		t.Fatalf("\t%s\tContract offer response doesn't contain tokenized op return", tests.Failed)
 	}
 	if responseMsg.Code() != "M2" {
-		t.Fatalf("\t%s\tContract offer response not a reject : %s", tests.Failed, responseMsg.Code())
+		t.Fatalf("\t%s\tContract offer response not a reject : %s", tests.Failed,
+			responseMsg.Code())
 	}
 	reject, ok := responseMsg.(*actions.Rejection)
 	if !ok {
@@ -654,7 +651,7 @@ func contractAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, true, false, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, true, false, false)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100015, issuerKey.Address)
 
@@ -764,8 +761,7 @@ func contractListAmendment(t *testing.T) {
 		},
 	}
 
-	mockUpContractWithPermissions(t, ctx, "Test Contract",
-		"This is a mock contract and means nothing.", "I", 1, "John Bitcoin", permissions)
+	mockUpContractWithPermissions(t, ctx, "Test Contract", "I", 1, "John Bitcoin", permissions)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address)
 
@@ -1009,8 +1005,7 @@ func contractOracleAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to mock up headers : %v", tests.Failed, err)
 	}
 
-	ct, cf := mockUpContractWithAdminOracle(t, ctx, "Test Contract",
-		"This is a mock contract and means nothing.", "I", 1, "John Bitcoin")
+	ct, cf := mockUpContractWithAdminOracle(t, ctx, "Test Contract", "I", 1, "John Bitcoin")
 
 	blockHeight := uint32(test.Headers.LastHeight(ctx) - 4)
 	blockHash, err := test.Headers.Hash(ctx, int(blockHeight))
@@ -1122,7 +1117,7 @@ func contractProposalAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, true, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, true, false)
 
 	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
@@ -1204,8 +1199,9 @@ func contractProposalAmendment(t *testing.T) {
 	t.Logf("\t%s\tVerified contract name : %s", tests.Success, cf.ContractName)
 }
 
-func mockUpContract(t testing.TB, ctx context.Context, name, agreement string, issuerType string,
-	issuerRole uint32, issuerName string, issuerProposal, holderProposal, permitted, issuer, holder bool) (*state.Contract, *actions.ContractFormation) {
+func mockUpContract(t testing.TB, ctx context.Context, name string, issuerType string,
+	issuerRole uint32, issuerName string, issuerProposal, holderProposal, permitted, issuer,
+	holder bool) (*state.Contract, *actions.ContractFormation) {
 
 	contractData := &state.Contract{
 		Address:   test.ContractKey.Address,
@@ -1214,9 +1210,7 @@ func mockUpContract(t testing.TB, ctx context.Context, name, agreement string, i
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
@@ -1271,7 +1265,7 @@ func mockUpContract(t testing.TB, ctx context.Context, name, agreement string, i
 	return contractData, cf
 }
 
-func mockUpContract2(t testing.TB, ctx context.Context, name, agreement string, issuerType string,
+func mockUpContract2(t testing.TB, ctx context.Context, name string, issuerType string,
 	issuerRole uint32, issuerName string, issuerProposal, holderProposal, permitted, issuer, holder bool) (*state.Contract, *actions.ContractFormation) {
 
 	contractData := &state.Contract{
@@ -1281,9 +1275,7 @@ func mockUpContract2(t testing.TB, ctx context.Context, name, agreement string, 
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
@@ -1338,7 +1330,73 @@ func mockUpContract2(t testing.TB, ctx context.Context, name, agreement string, 
 	return contractData, cf
 }
 
-func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddress, name, agreement string,
+func mockUpContractForAgreement(t testing.TB, ctx context.Context, name string, issuerType string,
+	issuerRole uint32, issuerName string, issuerProposal, holderProposal, permitted, issuer, holder bool) (*state.Contract, *actions.ContractFormation) {
+
+	contractData := &state.Contract{
+		Address:   test.ContractKey.Address,
+		CreatedAt: protocol.CurrentTimestamp(),
+		UpdatedAt: protocol.CurrentTimestamp(),
+	}
+
+	cf := &actions.ContractFormation{
+		ContractName:        name,
+		BodyOfAgreementType: actions.ContractBodyOfAgreementTypeFull,
+		Issuer: &actions.EntityField{
+			Type:           issuerType,
+			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+		},
+		VotingSystems: []*actions.VotingSystemField{
+			&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
+			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000},
+		},
+		AdministrationProposal: issuerProposal,
+		HolderProposal:         holderProposal,
+		ContractFee:            1000,
+
+		AdminAddress:  issuerKey.Address.Bytes(),
+		MasterAddress: test.MasterKey.Address.Bytes(),
+	}
+
+	// Define permissions for contract fields
+	permissions := actions.Permissions{
+		actions.Permission{
+			Permitted:              permitted, // Issuer can update field without proposal
+			AdministrationProposal: issuer,    // Issuer can update field with a proposal
+			HolderProposal:         holder,    // Holder's can initiate proposals to update field
+		},
+	}
+
+	permissions[0].VotingSystemsAllowed = make([]bool, len(cf.VotingSystems))
+	permissions[0].VotingSystemsAllowed[0] = true // Enable this voting system for proposals on this field.
+
+	var err error
+	cf.ContractPermissions, err = permissions.Bytes()
+	if err != nil {
+		t.Fatalf("Failed to serialize contract permissions : %s", err)
+	}
+
+	if err := node.Convert(ctx, cf, contractData); err != nil {
+		t.Fatalf("Failed to convert contract : %s", err)
+	}
+
+	if err := contract.ExpandOracles(ctx, test.MasterDB, contractData, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("Failed to expand oracles : %s", err)
+	}
+
+	if err := contract.Save(ctx, test.MasterDB, contractData, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("Failed to save contract : %s", err)
+	}
+
+	if err := contract.SaveContractFormation(ctx, test.MasterDB, test.ContractKey.Address, cf,
+		test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("Failed to save contract formation : %s", err)
+	}
+
+	return contractData, cf
+}
+
+func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddress, name string,
 	issuerType string, issuerRole uint32, issuerName string,
 	issuerProposal, holderProposal, permitted, issuer, holder bool) (*state.Contract, *actions.ContractFormation) {
 
@@ -1349,9 +1407,7 @@ func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddres
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
@@ -1405,7 +1461,7 @@ func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddres
 	return contractData, cf
 }
 
-func mockUpContractWithOracle(t testing.TB, ctx context.Context, name, agreement string, issuerType string,
+func mockUpContractWithOracle(t testing.TB, ctx context.Context, name string, issuerType string,
 	issuerRole uint32, issuerName string) (*state.Contract, *actions.ContractFormation) {
 
 	oracleContractKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
@@ -1428,9 +1484,7 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name, agreement
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
@@ -1491,7 +1545,7 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name, agreement
 	return contractData, cf
 }
 
-func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agreement string,
+func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name string,
 	issuerType string, issuerRole uint32, issuerName string) (*state.Contract, *actions.ContractFormation) {
 
 	oracleContractKey, err := bitcoin.GenerateKey(test.NodeConfig.Net)
@@ -1516,9 +1570,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agre
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
@@ -1581,7 +1633,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name, agre
 	return contractData, cf
 }
 
-func mockUpContractWithPermissions(t testing.TB, ctx context.Context, name, agreement string, issuerType string,
+func mockUpContractWithPermissions(t testing.TB, ctx context.Context, name string, issuerType string,
 	issuerRole uint32, issuerName string, permissions actions.Permissions) (*state.Contract, *actions.ContractFormation) {
 
 	oracleContract1Key, err := bitcoin.GenerateKey(test.NodeConfig.Net)
@@ -1617,9 +1669,7 @@ func mockUpContractWithPermissions(t testing.TB, ctx context.Context, name, agre
 	}
 
 	cf := &actions.ContractFormation{
-		ContractName:        name,
-		BodyOfAgreementType: 1,
-		BodyOfAgreement:     []byte(agreement),
+		ContractName: name,
 		Issuer: &actions.EntityField{
 			Type:           issuerType,
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},

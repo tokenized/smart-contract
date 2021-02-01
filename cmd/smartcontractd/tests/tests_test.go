@@ -51,18 +51,19 @@ var testVoteResultTxId bitcoin.Hash32
 var tracer *filters.Tracer
 
 var outgoingMessageTypes = map[string]bool{
-	actions.CodeAssetCreation:     true,
-	actions.CodeContractFormation: true,
-	actions.CodeSettlement:        true,
-	actions.CodeVote:              true,
-	actions.CodeBallotCounted:     true,
-	actions.CodeResult:            true,
-	actions.CodeFreeze:            true,
-	actions.CodeThaw:              true,
-	actions.CodeConfiscation:      true,
-	actions.CodeReconciliation:    true,
-	actions.CodeRejection:         true,
-	actions.CodeMessage:           true,
+	actions.CodeAssetCreation:            true,
+	actions.CodeContractFormation:        true,
+	actions.CodeBodyOfAgreementFormation: true,
+	actions.CodeSettlement:               true,
+	actions.CodeVote:                     true,
+	actions.CodeBallotCounted:            true,
+	actions.CodeResult:                   true,
+	actions.CodeFreeze:                   true,
+	actions.CodeThaw:                     true,
+	actions.CodeConfiscation:             true,
+	actions.CodeReconciliation:           true,
+	actions.CodeRejection:                true,
+	actions.CodeMessage:                  true,
 }
 
 // TestMain is the entry point for testing.

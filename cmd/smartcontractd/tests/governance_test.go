@@ -40,7 +40,7 @@ func holderProposal(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 150)
@@ -148,7 +148,7 @@ func sendBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -234,7 +234,7 @@ func adminBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 10, 0, &sampleAdminAssetPayload, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 1, &sampleAssetPayload, true, false, false)
@@ -368,7 +368,7 @@ func voteResult(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -429,7 +429,7 @@ func voteResultRelative(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -495,7 +495,7 @@ func voteResultAbsolute(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)

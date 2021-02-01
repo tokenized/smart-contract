@@ -38,7 +38,7 @@ func createAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, false, false)
 
 	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
 		test.NodeConfig.IsTest)
@@ -161,7 +161,7 @@ func adminMemberAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, false, false)
 
 	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
 		test.NodeConfig.IsTest)
@@ -330,7 +330,7 @@ func assetIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, false, false)
 
 	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
 		test.NodeConfig.IsTest)
@@ -496,7 +496,7 @@ func assetAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true, true, false, false, false)
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address)
@@ -596,7 +596,7 @@ func assetProposalAmendment(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, true, true)
 
@@ -697,7 +697,7 @@ func duplicateAsset(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 
 	ct, err := contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,

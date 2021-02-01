@@ -20,30 +20,33 @@ import (
 var (
 	// Incoming protocol message types (requests)
 	incomingMessageTypes = map[string]bool{
-		actions.CodeContractOffer:         true,
-		actions.CodeContractAmendment:     true,
-		actions.CodeAssetDefinition:       true,
-		actions.CodeAssetModification:     true,
-		actions.CodeTransfer:              true,
-		actions.CodeProposal:              true,
-		actions.CodeBallotCast:            true,
-		actions.CodeOrder:                 true,
-		actions.CodeContractAddressChange: true,
+		actions.CodeContractOffer:            true,
+		actions.CodeContractAmendment:        true,
+		actions.CodeBodyOfAgreementOffer:     true,
+		actions.CodeBodyOfAgreementAmendment: true,
+		actions.CodeAssetDefinition:          true,
+		actions.CodeAssetModification:        true,
+		actions.CodeTransfer:                 true,
+		actions.CodeProposal:                 true,
+		actions.CodeBallotCast:               true,
+		actions.CodeOrder:                    true,
+		actions.CodeContractAddressChange:    true,
 	}
 
 	// Outgoing protocol message types (responses)
 	outgoingMessageTypes = map[string]bool{
-		actions.CodeAssetCreation:     true,
-		actions.CodeContractFormation: true,
-		actions.CodeSettlement:        true,
-		actions.CodeVote:              true,
-		actions.CodeBallotCounted:     true,
-		actions.CodeResult:            true,
-		actions.CodeFreeze:            true,
-		actions.CodeThaw:              true,
-		actions.CodeConfiscation:      true,
-		actions.CodeReconciliation:    true,
-		actions.CodeRejection:         true,
+		actions.CodeContractFormation:        true,
+		actions.CodeBodyOfAgreementFormation: true,
+		actions.CodeAssetCreation:            true,
+		actions.CodeSettlement:               true,
+		actions.CodeVote:                     true,
+		actions.CodeBallotCounted:            true,
+		actions.CodeResult:                   true,
+		actions.CodeFreeze:                   true,
+		actions.CodeThaw:                     true,
+		actions.CodeConfiscation:             true,
+		actions.CodeReconciliation:           true,
+		actions.CodeRejection:                true,
 	}
 )
 

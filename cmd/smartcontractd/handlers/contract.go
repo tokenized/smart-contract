@@ -48,16 +48,12 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Locate Contract
-	_, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
-	if err != contract.ErrNotFound {
-		if err == nil {
-			address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
-			node.LogWarn(ctx, "Contract already exists : %s", address.String())
-			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsContractExists,
-				fmt.Sprintf("Contract already exists : %s", address.String()))
-		} else {
-			return errors.Wrap(err, "Failed to retrieve contract")
-		}
+	if _, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest); err == nil {
+		address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
+		node.LogWarn(ctx, "Contract already exists : %s", address)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExists)
+	} else if errors.Cause(err) != contract.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
 	if msg.BodyOfAgreementType == 1 && len(msg.BodyOfAgreement) != 32 {
@@ -165,7 +161,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	if _, err = actions.PermissionsFromBytes(msg.ContractPermissions,
+	if _, err := actions.PermissionsFromBytes(msg.ContractPermissions,
 		len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
@@ -174,7 +170,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Validate voting systems are all valid.
 	for _, votingSystem := range msg.VotingSystems {
-		if err = vote.ValidateVotingSystem(votingSystem); err != nil {
+		if err := vote.ValidateVotingSystem(votingSystem); err != nil {
 			node.LogWarn(ctx, "Invalid voting system : %s", err)
 			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 				fmt.Sprintf("Invalid voting system : %s", err))
@@ -217,9 +213,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Contract Formation <- Contract Offer
 	cf := &actions.ContractFormation{}
-
-	err = node.Convert(ctx, &msg, cf)
-	if err != nil {
+	if err := node.Convert(ctx, &msg, cf); err != nil {
 		return err
 	}
 
@@ -244,15 +238,15 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Save Tx for when formation is processed.
 	if err := transactions.AddTx(ctx, c.MasterDB, itx); err != nil {
-		return errors.Wrap(err, "Failed to save tx")
+		return errors.Wrap(err, "save tx")
 	}
 
 	// Respond with a formation
-	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
-		return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
+	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err != nil {
+		return errors.Wrap(err, "respond success")
 	}
 
-	return err
+	return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
 }
 
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
@@ -278,6 +272,11 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Locate Contract
 	ct, err := contract.Retrieve(ctx, c.MasterDB, rk.Address, c.Config.IsTest)
 	if err != nil {
+		if errors.Cause(err) == contract.ErrNotFound {
+			address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
+			node.LogWarn(ctx, "Contract doesn't exist : %s", address)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractDoesNotExist)
+		}
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
@@ -450,7 +449,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if err := applyContractAmendments(cf, msg.Amendments, proposed, proposalType,
 		votingSystem); err != nil {
-		node.LogWarn(ctx, "Failed to apply amendments to check admin oracle sig : %s", err)
+		node.LogWarn(ctx, "Failed to apply amendments : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
@@ -567,7 +566,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 	if ct != nil && !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
-		return fmt.Errorf("Contract address changed : %s", address.String())
+		return fmt.Errorf("Contract address changed : %s", address)
 	}
 
 	// Get request tx
@@ -715,6 +714,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		if ct.HolderProposal != msg.HolderProposal {
 			uc.HolderProposal = &msg.HolderProposal
 			node.Log(ctx, "Updating contract holder proposal : %t", *uc.HolderProposal)
+		}
+
+		if ct.BodyOfAgreementType != msg.BodyOfAgreementType {
+			uc.BodyOfAgreementType = &msg.BodyOfAgreementType
+			node.Log(ctx, "Updating contract body of agreement type : %t", *uc.BodyOfAgreementType)
 		}
 
 		// Check if oracles are different

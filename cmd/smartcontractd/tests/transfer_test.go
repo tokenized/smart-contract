@@ -64,7 +64,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
@@ -227,7 +227,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
@@ -417,8 +417,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(b, ctx, "Test Contract", "This is a mock contract and means nothing.",
-		"I", 1, "John Bitcoin")
+	mockUpContractWithOracle(b, ctx, "Test Contract", "I", 1, "John Bitcoin")
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
 	err := test.Headers.Populate(ctx, 50000, 12)
@@ -718,7 +717,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 
 	levels := uint(1)
@@ -842,7 +841,7 @@ func sendTokens(t *testing.T) {
 	}()
 	defer test.HoldingsChannel.Close()
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1170,14 +1169,14 @@ func multiExchange(t *testing.T) {
 	}()
 	defer test.HoldingsChannel.Close()
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	user1HoldingBalance := uint64(100)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
-	mockUpContract2(t, ctx, "Test Contract 2", "This is a mock contract and means nothing.", "I",
+	mockUpContract2(t, ctx, "Test Contract 2", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
 	mockUpAsset2(t, ctx, true, true, true, 1500, &sampleAssetPayload2, true, false, false)
 
@@ -1485,7 +1484,7 @@ func bitcoinExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1645,7 +1644,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
 	}
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1656,9 +1655,8 @@ func multiExchangeLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2",
-		"This is a mock contract and means nothing.", "I", 1, "Karl Bitcoin", true, true, false,
-		false, false)
+	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
+		true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2, true,
 		false, false)
 
@@ -2045,7 +2043,7 @@ func multiExchangeTimeout(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2056,9 +2054,8 @@ func multiExchangeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey.Address,
-		"Test Contract 2", "This is a mock contract and means nothing.", "I",
-		1, "Karl Bitcoin", true, true, false, false, false)
+	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
+		true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
 		true, false, false)
 
@@ -2400,7 +2397,7 @@ func oracleTransfer(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2575,7 +2572,7 @@ func oracleTransferBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2777,7 +2774,7 @@ func permitted(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2876,7 +2873,7 @@ func permittedBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayloadNotPermitted, true, false,
 		false)

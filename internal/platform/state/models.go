@@ -34,11 +34,22 @@ type Contract struct {
 	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal         bool                         `json:"HolderProposal,omitempty"`
 
+	BodyOfAgreementType uint32 `json:"BodyOfAgreementType,omitempty"`
+
 	Oracles []*actions.OracleField `json:"Oracles,omitempty"`
 
 	AssetCodes []*bitcoin.Hash20 `json:"AssetCodes,omitempty"`
 
 	FullOracles []Oracle `json:"_,omitempty"`
+}
+
+type Agreement struct {
+	Chapters    []*actions.ChapterField     `json:"Chapters,omitempty"`
+	Definitions []*actions.DefinedTermField `json:"Definitions,omitempty"`
+	Revision    uint32                      `json:"Revision,omitempty"`
+	CreatedAt   protocol.Timestamp          `json:"CreatedAt,omitempty"`
+	Timestamp   protocol.Timestamp          `json:"Timestamp,omitempty"`
+	UpdatedAt   protocol.Timestamp          `json:"UpdatedAt,omitempty"`
 }
 
 type Oracle struct {

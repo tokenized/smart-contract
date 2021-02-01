@@ -38,7 +38,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	msg, ok := itx.MsgProto.(*actions.AssetDefinition)
 	if !ok {
-		return errors.New("Could not assert as *protocol.AssetDefinition")
+		return errors.New("Could not assert as *actions.AssetDefinition")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -180,12 +180,12 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
 func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
+	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Modification")
 	defer span.End()
 
 	msg, ok := itx.MsgProto.(*actions.AssetModification)
 	if !ok {
-		return errors.New("Could not assert as *protocol.AssetModification")
+		return errors.New("Could not assert as *actions.AssetModification")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)

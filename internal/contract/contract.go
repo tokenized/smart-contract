@@ -26,7 +26,8 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, isTest bool) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	isTest bool) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
@@ -130,6 +131,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	}
 	if upd.HolderProposal != nil {
 		c.HolderProposal = *upd.HolderProposal
+	}
+
+	if upd.BodyOfAgreementType != nil {
+		c.BodyOfAgreementType = *upd.BodyOfAgreementType
 	}
 
 	if upd.Oracles != nil {
