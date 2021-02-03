@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -70,8 +71,8 @@ func createAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -194,8 +195,8 @@ func adminMemberAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -362,8 +363,8 @@ func assetIndex(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -514,7 +515,7 @@ func assetAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize new quantity : %v", tests.Failed, err)
 	}
 
-	fip := actions.FieldIndexPath{actions.AssetFieldAuthorizedTokenQty}
+	fip := permissions.FieldIndexPath{actions.AssetFieldAuthorizedTokenQty}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -600,7 +601,7 @@ func assetProposalAmendment(t *testing.T) {
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, true, true)
 
-	fip := actions.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
+	fip := permissions.FieldIndexPath{actions.AssetFieldAssetPayload, assets.ShareCommonFieldDescription}
 	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -730,8 +731,8 @@ func duplicateAsset(t *testing.T) {
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -961,8 +962,8 @@ func mockUpAsset(t testing.TB, ctx context.Context, transfers, enforcement, voti
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1042,8 +1043,8 @@ func mockUpAsset2(t testing.TB, ctx context.Context, transfers, enforcement, vot
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1114,8 +1115,8 @@ func mockUpOtherAsset(t testing.TB, ctx context.Context, key *wallet.Key, transf
 	}
 
 	// Define permissions for asset fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field

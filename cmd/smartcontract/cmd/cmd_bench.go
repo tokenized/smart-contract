@@ -12,9 +12,9 @@ import (
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -415,7 +415,7 @@ func contractOpReturn() ([]byte, error) {
 	}
 
 	var err error
-	empty := actions.Permissions{}
+	empty := permissions.Permissions{}
 	contract.ContractPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err
@@ -436,7 +436,7 @@ func assetOpReturn() ([]byte, error) {
 		AssetPayload:       payloadData,
 	}
 
-	empty := actions.Permissions{}
+	empty := permissions.Permissions{}
 	asset.AssetPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err

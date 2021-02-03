@@ -15,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -445,14 +446,19 @@ func applyAgreementAmendments(formation *actions.BodyOfAgreementFormation, permi
 	votingSystemsCount int, amendments []*actions.AmendmentField, proposed bool, proposalType,
 	votingSystem uint32) error {
 
-	permissions, err := actions.PermissionsFromBytes(permissionBytes, votingSystemsCount)
+	perms, err := permissions.PermissionsFromBytes(permissionBytes, votingSystemsCount)
 	if err != nil {
-		return fmt.Errorf("Invalid contract permissions : %s", err)
+		return errors.Wrap(err, "parse permissions")
+	}
+
+	perms, err = perms.SubPermissions(
+		permissions.FieldIndexPath{actions.ContractFieldBodyOfAgreement}, 0, false)
+	if err != nil {
+		return errors.Wrap(err, "sub permissions")
 	}
 
 	for i, amendment := range amendments {
-
-		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		fip, err := permissions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
@@ -460,55 +466,53 @@ func applyAgreementAmendments(formation *actions.BodyOfAgreementFormation, permi
 			return fmt.Errorf("Amendment %d has no field specified", i)
 		}
 
-		adjustedFIP, err := formation.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+		fieldPermissions, err := formation.ApplyAmendment(fip, amendment.Operation, amendment.Data,
+			perms)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "apply amendment %d", i)
+		}
+		if len(fieldPermissions) == 0 {
+			return errors.New("Invalid field permissions")
 		}
 
-		// Add body of agreement in front to show the path is within the body of agreement even
-		// though the path will not contain that because this amendment is specific to the body of
-		// agreement.
-		adjustedFIP = append(actions.FieldIndexPath{actions.ContractFieldBodyOfAgreement},
-			adjustedFIP...)
-
-		// adjustedFIP has element indexes removed, which is how permissions are specified.
-		permission := permissions.PermissionOf(adjustedFIP)
+		// fieldPermissions are the permissions that apply to the field that was changed in the
+		// amendment.
+		permission := fieldPermissions[0]
 		if proposed {
 			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
-							adjustedFIP))
+							fip))
 				}
 			case 1: // Holder
 				if !permission.HolderProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
-							adjustedFIP))
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
 				}
 			case 2: // Administrative Matter
 				if !permission.AdministrativeMatter {
 					return node.NewError(actions.RejectionsContractPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
-							adjustedFIP))
+							fip))
 				}
 			default:
 				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
 			}
 
 			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
-				return fmt.Errorf("Field %s amendment voting system out of range : %d", adjustedFIP,
+				return fmt.Errorf("Field %s amendment voting system out of range : %d", fip,
 					votingSystem)
 			}
 			if !permission.VotingSystemsAllowed[votingSystem] {
 				return node.NewError(actions.RejectionsContractPermissions,
 					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
-						adjustedFIP, votingSystem))
+						fip, votingSystem))
 			}
 		} else if !permission.Permitted {
 			return node.NewError(actions.RejectionsContractPermissions,
-				fmt.Sprintf("Field %s amendment not permitted without proposal", adjustedFIP))
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
 		}
 	}
 

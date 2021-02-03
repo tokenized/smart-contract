@@ -19,6 +19,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/spynode/pkg/client"
 )
@@ -57,8 +58,8 @@ func createContract(t *testing.T) {
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -461,8 +462,8 @@ func oracleContract(t *testing.T) {
 	offerData.AdminIdentityCertificates[0].Signature = sig.Bytes()
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -659,7 +660,7 @@ func contractAmendment(t *testing.T) {
 		ContractRevision: 0,
 	}
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	amendmentData.Amendments = append(amendmentData.Amendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -745,23 +746,27 @@ func contractListAmendment(t *testing.T) {
 	mockIdentityContract(t, ctx, newKey, oracleKey.Key.PublicKey(),
 		actions.EntitiesPublicCompany, actions.RolesCEO, "John Bitcoin")
 
-	permissions := actions.Permissions{
-		actions.Permission{
+	perms := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              false, // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
 		},
-		actions.Permission{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
-			Fields: []actions.FieldIndexPath{
-				actions.FieldIndexPath{actions.ContractFieldOracles, actions.OracleFieldEntityContract},
+			Fields: []permissions.FieldIndexPath{
+				permissions.FieldIndexPath{
+					actions.ContractFieldOracles,
+					0, // all oracles
+					actions.OracleFieldEntityContract,
+				},
 			},
 		},
 	}
 
-	mockUpContractWithPermissions(t, ctx, "Test Contract", "I", 1, "John Bitcoin", permissions)
+	mockUpContractWithPermissions(t, ctx, "Test Contract", "I", 1, "John Bitcoin", perms)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100002, issuerKey.Address)
 
@@ -769,7 +774,7 @@ func contractListAmendment(t *testing.T) {
 		ContractRevision: 0,
 	}
 
-	fip := actions.FieldIndexPath{
+	fip := permissions.FieldIndexPath{
 		actions.ContractFieldOracles,
 		1, // Oracles list index to second item
 		actions.OracleFieldEntityContract,
@@ -787,7 +792,8 @@ func contractListAmendment(t *testing.T) {
 	amendmentInputHash := fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -835,7 +841,8 @@ func contractListAmendment(t *testing.T) {
 			ct.Oracles[1].EntityContract, newAddress.Bytes())
 	}
 
-	t.Logf("\t%s\tVerified contract oracle 2 contract : %x", tests.Success, ct.Oracles[1].EntityContract)
+	t.Logf("\t%s\tVerified contract oracle 2 contract : %x", tests.Success,
+		ct.Oracles[1].EntityContract)
 
 	// Try to modify URL, which should not be allowed
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100004, issuerKey.Address)
@@ -845,11 +852,12 @@ func contractListAmendment(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := bitcoin.WriteBase128VarInt(&buf, uint64(actions.ServiceTypeAuthorityOracle)); err != nil {
+	if err := bitcoin.WriteBase128VarInt(&buf,
+		uint64(actions.ServiceTypeAuthorityOracle)); err != nil {
 		t.Fatalf("\t%s\tFailed to write oracle type : %s", tests.Failed, err)
 	}
 
-	fip = actions.FieldIndexPath{
+	fip = permissions.FieldIndexPath{
 		actions.ContractFieldOracles,
 		1, // Oracles list index to second item
 		actions.OracleFieldOracleTypes,
@@ -870,7 +878,8 @@ func contractListAmendment(t *testing.T) {
 	amendmentInputHash = fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	script, _ = test.ContractKey.Address.LockingScript()
@@ -928,8 +937,8 @@ func contractListAmendment(t *testing.T) {
 	amendmentInputHash = fundingTx.TxHash()
 
 	// From issuer
-	amendmentTx.TxIn = append(amendmentTx.TxIn, wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0),
-		make([]byte, 130)))
+	amendmentTx.TxIn = append(amendmentTx.TxIn,
+		wire.NewTxIn(wire.NewOutPoint(amendmentInputHash, 0), make([]byte, 130)))
 
 	// To contract
 	script, _ = test.ContractKey.Address.LockingScript()
@@ -971,14 +980,14 @@ func contractListAmendment(t *testing.T) {
 	t.Logf("Contract Oracle Amendment Tx : %s", amendmentTx.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", amendmentItx)
-	if err != nil {
-		t.Errorf("\t%s\tFailed to accept amendment : %v", tests.Failed, err)
-	} else {
-		t.Logf("\t%s\tAmendment accepted", tests.Success)
+	if err == nil {
+		t.Fatalf("\t%s\tFailed to reject amendment : %v", tests.Failed, err)
 	}
 
+	t.Logf("\t%s\tAmendment rejected", tests.Success)
+
 	// Check the response
-	checkResponse(t, "C2")
+	checkResponse(t, "M2") // reject for permissions
 
 	// Check oracle type
 	ct, err = contract.Retrieve(ctx, test.MasterDB, test.ContractKey.Address,
@@ -987,12 +996,10 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to retrieve contract : %v", tests.Failed, err)
 	}
 
-	if ct.Oracles[1].OracleTypes[0] != actions.ServiceTypeAuthorityOracle {
+	if ct.Oracles[1].OracleTypes[0] != actions.ServiceTypeIdentityOracle {
 		t.Fatalf("\t%s\tContract oracle 2 type 1 incorrect : %d != %d", tests.Failed,
-			ct.Oracles[1].OracleTypes[0], actions.ServiceTypeAuthorityOracle)
+			ct.Oracles[1].OracleTypes[0], actions.ServiceTypeIdentityOracle)
 	}
-
-	t.Logf("\t%s\tVerified contract oracle 2 type 1 : %d", tests.Success, ct.Oracles[1].OracleTypes[0])
 }
 
 func contractOracleAmendment(t *testing.T) {
@@ -1024,7 +1031,7 @@ func contractOracleAmendment(t *testing.T) {
 		ChangeAdministrationAddress: true,
 	}
 
-	fip := actions.FieldIndexPath{
+	fip := permissions.FieldIndexPath{
 		actions.ContractFieldAdminIdentityCertificates,
 		0, // index to first certificate
 		actions.AdminIdentityCertificateFieldSignature,
@@ -1040,7 +1047,7 @@ func contractOracleAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to serialize block height : %v", tests.Failed, err)
 	}
 
-	fip = actions.FieldIndexPath{
+	fip = permissions.FieldIndexPath{
 		actions.ContractFieldAdminIdentityCertificates,
 		0, // index to first certificate
 		actions.AdminIdentityCertificateFieldBlockHeight,
@@ -1119,7 +1126,7 @@ func contractProposalAmendment(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, true, false)
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	assetAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -1228,8 +1235,8 @@ func mockUpContract(t testing.TB, ctx context.Context, name string, issuerType s
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1293,8 +1300,8 @@ func mockUpContract2(t testing.TB, ctx context.Context, name string, issuerType 
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1359,8 +1366,8 @@ func mockUpContractForAgreement(t testing.TB, ctx context.Context, name string, 
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1425,8 +1432,8 @@ func mockUpOtherContract(t testing.TB, ctx context.Context, ra bitcoin.RawAddres
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              permitted, // Issuer can update field without proposal
 			AdministrationProposal: issuer,    // Issuer can update field with a proposal
 			HolderProposal:         holder,    // Holder's can initiate proposals to update field
@@ -1509,8 +1516,8 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name string, is
 	}
 
 	// Define permissions for contract fields
-	permissions := actions.Permissions{
-		actions.Permission{
+	permissions := permissions.Permissions{
+		permissions.Permission{
 			Permitted:              true,  // Issuer can update field without proposal
 			AdministrationProposal: false, // Issuer can update field with a proposal
 			HolderProposal:         false, // Holder's can initiate proposals to update field
@@ -1634,7 +1641,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name strin
 }
 
 func mockUpContractWithPermissions(t testing.TB, ctx context.Context, name string, issuerType string,
-	issuerRole uint32, issuerName string, permissions actions.Permissions) (*state.Contract, *actions.ContractFormation) {
+	issuerRole uint32, issuerName string, permissions permissions.Permissions) (*state.Contract, *actions.ContractFormation) {
 
 	oracleContract1Key, err := bitcoin.GenerateKey(test.NodeConfig.Net)
 	if err != nil {

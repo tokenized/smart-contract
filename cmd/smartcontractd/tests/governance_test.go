@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -58,7 +59,7 @@ func holderProposal(t *testing.T) {
 		VoteCutOffTimestamp: v.Now.Nano() + 10000000000,
 	}
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -690,7 +691,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bit
 		proposalData.AssetCode = assetCode.Bytes()
 	}
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,

@@ -16,6 +16,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -161,7 +162,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	if _, err := actions.PermissionsFromBytes(msg.ContractPermissions,
+	if _, err := permissions.PermissionsFromBytes(msg.ContractPermissions,
 		len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
 		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
@@ -252,6 +253,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 // AmendmentRequest handles an incoming Contract Amendment and prepares a Formation response
 func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
+
+	node.Log(ctx, "Amendment Tx : %s", itx.Hash)
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Amendment")
 	defer span.End()
@@ -843,13 +846,14 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
 func applyContractAmendments(cf *actions.ContractFormation, amendments []*actions.AmendmentField,
 	proposed bool, proposalType, votingSystem uint32) error {
 
-	permissions, err := actions.PermissionsFromBytes(cf.ContractPermissions, len(cf.VotingSystems))
+	perms, err := permissions.PermissionsFromBytes(cf.ContractPermissions,
+		len(cf.VotingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid contract permissions : %s", err)
 	}
 
 	for i, amendment := range amendments {
-		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		fip, err := permissions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
@@ -859,54 +863,58 @@ func applyContractAmendments(cf *actions.ContractFormation, amendments []*action
 
 		switch fip[0] {
 		case actions.ContractFieldContractPermissions:
-			if _, err := actions.PermissionsFromBytes(amendment.Data, len(cf.VotingSystems)); err != nil {
+			if _, err := permissions.PermissionsFromBytes(amendment.Data,
+				len(cf.VotingSystems)); err != nil {
 				return fmt.Errorf("ContractPermissions amendment value is invalid : %s", err)
 			}
 		}
 
-		adjustedFIP, err := cf.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+		fieldPermissions, err := cf.ApplyAmendment(fip, amendment.Operation, amendment.Data, perms)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "apply amendment %d", i)
+		}
+		if len(fieldPermissions) == 0 {
+			return errors.New("Invalid field permissions")
 		}
 
-		// adjustedFIP has element indexes removed, which is how permissions are specified.
-		permission := permissions.PermissionOf(adjustedFIP)
+		// fieldPermissions are the permissions that apply to the field that was changed in the
+		// amendment.
+		permission := fieldPermissions[0]
 		if proposed {
 			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
-							adjustedFIP))
+							fip))
 				}
 			case 1: // Holder
 				if !permission.HolderProposal {
 					return node.NewError(actions.RejectionsContractPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
-							adjustedFIP))
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
 				}
 			case 2: // Administrative Matter
 				if !permission.AdministrativeMatter {
 					return node.NewError(actions.RejectionsContractPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
-							adjustedFIP))
+							fip))
 				}
 			default:
 				return fmt.Errorf("Invalid proposal initiator type : %d", proposalType)
 			}
 
 			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
-				return fmt.Errorf("Field %s amendment voting system out of range : %d", adjustedFIP,
+				return fmt.Errorf("Field %s amendment voting system out of range : %d", fip,
 					votingSystem)
 			}
 			if !permission.VotingSystemsAllowed[votingSystem] {
 				return node.NewError(actions.RejectionsContractPermissions,
 					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
-						adjustedFIP, votingSystem))
+						fip, votingSystem))
 			}
 		} else if !permission.Permitted {
 			return node.NewError(actions.RejectionsContractPermissions,
-				fmt.Sprintf("Field %s amendment not permitted without proposal", adjustedFIP))
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
 		}
 	}
 

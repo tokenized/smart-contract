@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/golang/protobuf/proto"
@@ -571,7 +572,7 @@ func agreementAmendment(t *testing.T) {
 			},
 		})
 
-	chaptersFIP := actions.FieldIndexPath{actions.BodyOfAgreementFieldChapters}
+	chaptersFIP := permissions.FieldIndexPath{actions.BodyOfAgreementFieldChapters}
 	chaptersFIPBytes, err := chaptersFIP.Bytes()
 	if err != nil {
 		t.Fatalf("Failed to get bytes for chapter field index path : %s", err)
