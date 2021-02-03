@@ -133,6 +133,8 @@ github.com/tokenized/specification v0.3.2-0.20210203034309-7391daf60a08 h1:ILReL
 github.com/tokenized/specification v0.3.2-0.20210203034309-7391daf60a08/go.mod h1:JniSldpaQ7j9ba+y5QCtc/639mRNiY5Z376JTel3YXo=
 github.com/tokenized/spynode v0.0.0-20210127041920-c95b23e97042 h1:iJZ4g1jSwQqeh3fw5n/Q+j6XCYEuDNDby9tODDiUrSo=
 github.com/tokenized/spynode v0.0.0-20210127041920-c95b23e97042/go.mod h1:SkH5rVL4oibrr27kMciZBZp1jkrcItdaPeCYIzX234A=
+github.com/tokenized/spynode v0.0.0-20210203041909-3d64ca0ad944 h1:FzwKbIdivNKMMd1/q23QjXe0GDMjz3SPewRzt27oGvE=
+github.com/tokenized/spynode v0.0.0-20210203041909-3d64ca0ad944/go.mod h1:2Dt4pQ+UQcADIRqES8TKPtKcR29ttEDO61Y0AhN5N3Y=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
