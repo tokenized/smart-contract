@@ -11,6 +11,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+	"github.com/tokenized/spynode/pkg/client"
 
 	"github.com/pkg/errors"
 )
@@ -21,7 +22,7 @@ func (server *Server) ContractIsStarted(ctx context.Context, ca bitcoin.RawAddre
 	c, err := contract.Retrieve(ctx, server.MasterDB, ca, server.Config.IsTest)
 	if err == nil && c != nil {
 		node.Log(ctx, "Contract found : %s",
-			bitcoin.NewAddressFromRawAddress(ca, server.Config.Net).String())
+			bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
 		return true, nil
 	}
 	if err != contract.ErrNotFound {
@@ -43,7 +44,7 @@ func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error
 	}
 
 	node.Log(ctx, "Adding key : %s",
-		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net).String())
+		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net))
 
 	server.contractAddresses = append(server.contractAddresses, rawAddress)
 
@@ -75,8 +76,7 @@ func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	node.Log(ctx, "Removing key : %s",
-		bitcoin.NewAddressFromRawAddress(ca, server.Config.Net).String())
+	node.Log(ctx, "Removing key : %s", bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
 	server.wallet.RemoveAddress(ca)
 	if err := server.SaveWallet(ctx); err != nil {
 		return err
@@ -153,17 +153,12 @@ func (server *Server) SyncWallet(ctx context.Context) error {
 	for _, key := range keys {
 		// Contract address
 		server.contractAddresses = append(server.contractAddresses, key.Address)
+	}
 
-		if server.SpyNode != nil {
-			// Tx Filter
-			hashes, err := key.Address.Hashes()
-			if err != nil {
-				return err
-			}
-
-			for _, hash := range hashes {
-				server.SpyNode.SubscribePushDatas(ctx, [][]byte{hash[:]})
-			}
+	if server.SpyNode != nil {
+		logger.Info(ctx, "Subscribing to %d addresses", len(server.contractAddresses))
+		if err := client.SubscribeAddresses(ctx, server.contractAddresses, server.SpyNode); err != nil {
+			return errors.Wrap(err, "subscribe contract addresses")
 		}
 	}
 

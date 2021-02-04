@@ -951,7 +951,7 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	hash, err := headers.Hash(ctx, int(adminCert.BlockHeight))
+	hash, err := headers.BlockHash(ctx, int(adminCert.BlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
 			adminCert.BlockHeight))

@@ -445,8 +445,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-		blockHeight := test.Headers.LastHeight(ctx) - 5
-		blockHash, err := test.Headers.Hash(ctx, blockHeight)
+		blockHeight := 50000 - 5
+		blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
@@ -2421,8 +2421,8 @@ func oracleTransfer(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	blockHeight := test.Headers.LastHeight(ctx) - 5
-	blockHash, err := test.Headers.Hash(ctx, blockHeight)
+	blockHeight := 50000 - 5
+	blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -2597,8 +2597,8 @@ func oracleTransferBad(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	blockHeight := test.Headers.LastHeight(ctx) - 4
-	blockHash, err := test.Headers.Hash(ctx, blockHeight)
+	blockHeight := 50000 - 4
+	blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}

@@ -6,7 +6,9 @@ import (
 	"sort"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
@@ -17,12 +19,53 @@ import (
 
 // Implement the SpyNode Client interface.
 
-func (server *Server) HandleMessage(ctx context.Context, payload client.MessagePayload) {}
+func (server *Server) HandleMessage(ctx context.Context, payload client.MessagePayload) {
+	switch payload.(type) {
+	case *client.AcceptRegister:
+		logger.Info(ctx, "SpyNode registration accepted")
+
+		if server.SpyNode != nil {
+			if err := server.SpyNode.SubscribeContracts(ctx); err != nil {
+				logger.Error(ctx, "Failed to subscribe to contracts : %s", err)
+			}
+
+			keys := server.wallet.ListAll()
+			addresses := make([]bitcoin.RawAddress, len(keys))
+			for i, key := range keys {
+				addresses[i] = key.Address
+			}
+
+			logger.Info(ctx, "Subscribing to %d addresses", len(addresses))
+			if err := client.SubscribeAddresses(ctx, addresses, server.SpyNode); err != nil {
+				logger.Error(ctx, "Failed to subscribe to contract addresses : %s", err)
+			}
+
+			nextMessageID, err := state.GetNextMessageID(ctx, server.MasterDB)
+			if err != nil {
+				logger.Error(ctx, "Failed to get next message id : %s", err)
+				return
+			}
+
+			if err := server.SpyNode.Ready(ctx, *nextMessageID); err != nil {
+				logger.Error(ctx, "Failed to notify spynode ready : %s", err)
+				return
+			}
+
+			logger.Info(ctx, "SpyNode client ready at next message %d", *nextMessageID)
+		}
+	}
+}
 
 func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 	txid := tx.Tx.TxHash()
 	ctx = node.ContextWithLogTrace(ctx, txid.String())
+
+	if tx.ID != 0 {
+		if err := state.SaveNextMessageID(ctx, server.MasterDB, tx.ID+1); err != nil {
+			logger.Error(ctx, "Failed to save next message id : %s", err)
+		}
+	}
 
 	err := server.AddTx(ctx, tx, *txid)
 	if err != nil {

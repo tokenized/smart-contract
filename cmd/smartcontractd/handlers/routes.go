@@ -67,7 +67,6 @@ func API(
 		handler:         app,
 		MasterDB:        masterDB,
 		Config:          config,
-		Headers:         headers,
 		Tracer:          tracer,
 		Scheduler:       sch,
 		HoldingsChannel: holdingsChannel,
@@ -109,7 +108,6 @@ func API(
 	m := Message{
 		MasterDB:        masterDB,
 		Config:          config,
-		Headers:         headers,
 		Tracer:          tracer,
 		Scheduler:       sch,
 		UTXOs:           utxos,

@@ -15,6 +15,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
@@ -158,7 +159,7 @@ func (server *Server) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := server.ProcessIncomingTxs(ctx, server.MasterDB, server.Headers); err != nil {
+			if err := server.ProcessIncomingTxs(ctx); err != nil {
 				node.LogError(ctx, "Pre-process failed : %s", err)
 				server.Scheduler.Stop(ctx)
 				server.incomingTxs.Close()
@@ -219,6 +220,13 @@ func (server *Server) Save(ctx context.Context) error {
 
 	if err := server.Tracer.Save(ctx, server.MasterDB); err != nil {
 		return errors.Wrap(err, "save tracer")
+	}
+
+	if server.SpyNode != nil {
+		if err := state.SaveNextMessageID(ctx, server.MasterDB,
+			server.SpyNode.NextMessageID()); err != nil {
+			return errors.Wrap(err, "next message id")
+		}
 	}
 
 	return nil

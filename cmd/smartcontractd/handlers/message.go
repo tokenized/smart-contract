@@ -33,7 +33,6 @@ import (
 type Message struct {
 	MasterDB        *db.DB
 	Config          *node.Config
-	Headers         node.BitcoinHeaders
 	Tracer          *filters.Tracer
 	Scheduler       *scheduler.Scheduler
 	UTXOs           *utxos.UTXOs
@@ -392,7 +391,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	// Add this contract's data to the settlement op return data
 	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
-		settlement, m.Headers, &assetUpdates, false)
+		settlement, &assetUpdates, false)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -579,7 +578,7 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 
 	// Verify all the data for this contract is correct.
 	err = verifySettlement(ctx, w.Config, m.MasterDB, rk, transferTx, transferMsg, settleWireTx,
-		settlement, m.Headers)
+		settlement)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -725,7 +724,7 @@ func sendToPreviousSettlementContract(ctx context.Context, config *node.Config, 
 // verifySettlement verifies that all settlement data related to this contract and bitcoin transfers are correct.
 func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *actions.Transfer, settleTx *wire.MsgTx,
-	settlement *actions.Settlement, headers node.BitcoinHeaders) error {
+	settlement *actions.Settlement) error {
 
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.verifySettlement")
 	defer span.End()

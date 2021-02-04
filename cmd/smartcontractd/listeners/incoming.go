@@ -68,8 +68,7 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 }
 
 // ProcessIncomingTxs performs preprocessing on transactions coming into the smart contract.
-func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
-	headers node.BitcoinHeaders) error {
+func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 
 	for intx := range server.incomingTxs.Channel {
 		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
@@ -95,15 +94,15 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		if intx.Itx.RejectCode == 0 {
 			switch msg := intx.Itx.MsgProto.(type) {
 			case *actions.Transfer:
-				if err := validateOracles(txCtx, masterDB, intx.Itx, msg, headers,
+				if err := validateOracles(txCtx, server.MasterDB, intx.Itx, msg, server.Headers,
 					server.Config.IsTest); err != nil {
 					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 					intx.Itx.RejectText = fmt.Sprintf("Invalid receiver oracle signature : %s", err)
 					node.LogWarn(txCtx, "Invalid receiver oracle signature : %s", err)
 				}
 			case *actions.ContractOffer:
-				if err := validateAdminIdentityOracleSig(txCtx, masterDB, server.Config, intx.Itx, msg,
-					headers, intx.Timestamp); err != nil {
+				if err := validateAdminIdentityOracleSig(txCtx, server.MasterDB, server.Config,
+					intx.Itx, msg, server.Headers, intx.Timestamp); err != nil {
 					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 					intx.Itx.RejectText = fmt.Sprintf("Invalid admin identity oracle signature : %s",
 						err)
@@ -501,7 +500,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	oracle := ct.FullOracles[assetReceiver.OracleIndex]
-	hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
+	hash, err := headers.BlockHash(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
 			assetReceiver.OracleSigBlockHeight))
@@ -571,24 +570,24 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		// Check if block time is beyond expiration
 		// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-		expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
-		blockTime, err := headers.Time(ctx, int(cert.BlockHeight))
+		expire := time.Now().Add(6 * time.Hour)
+		header, err := headers.GetHeaders(ctx, int(cert.BlockHeight), 1)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
+			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve block header for height %d",
 				cert.BlockHeight))
 		}
-		if blockTime < expire {
-			return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
+		if len(header) == 0 {
+			return fmt.Errorf("Failed to retrieve block header for height %d", cert.BlockHeight)
+		}
+		if header[0].Timestamp.After(expire) {
+			return fmt.Errorf("Oracle sig block hash expired : %d < %d", header[0].Timestamp.Unix(),
+				expire.Unix())
 		}
 
-		hash, err := headers.Hash(ctx, int(cert.BlockHeight))
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-				cert.BlockHeight))
-		}
+		hash := header[0].BlockHash()
 
 		logger.Info(ctx, "Admin address : %s",
-			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net).String())
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net))
 
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
@@ -608,7 +607,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			logger.Info(ctx, "Issuer : %+v", *contractOffer.Issuer)
 		}
 
-		logger.Info(ctx, "Block Hash : %s", hash.String())
+		logger.Info(ctx, "Block Hash : %s", hash)
 		logger.Info(ctx, "Expiration : %d", cert.Expiration)
 
 		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,

@@ -449,7 +449,8 @@ func oracleContract(t *testing.T) {
 		},
 	}
 
-	blockHash, err := test.Headers.Hash(ctx, int(offerData.AdminIdentityCertificates[0].BlockHeight))
+	blockHash, err := test.Headers.BlockHash(ctx,
+		int(offerData.AdminIdentityCertificates[0].BlockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuerKey.Address,
 		offerData.Issuer, *blockHash, 0, 0)
 	if err != nil {
@@ -1014,8 +1015,8 @@ func contractOracleAmendment(t *testing.T) {
 
 	ct, cf := mockUpContractWithAdminOracle(t, ctx, "Test Contract", "I", 1, "John Bitcoin")
 
-	blockHeight := uint32(test.Headers.LastHeight(ctx) - 4)
-	blockHash, err := test.Headers.Hash(ctx, int(blockHeight))
+	blockHeight := uint32(50000 - 4)
+	blockHash, err := test.Headers.BlockHash(ctx, int(blockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuer2Key.Address, cf.Issuer,
 		*blockHash, 0, 1)
 	if err != nil {
@@ -1612,7 +1613,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name strin
 		t.Fatalf("Failed to convert contract : %s", err)
 	}
 
-	blockHash, err := test.Headers.Hash(ctx, int(sigBlockHeight))
+	blockHash, err := test.Headers.BlockHash(ctx, int(sigBlockHeight))
 	sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, issuerKey.Address, cf.Issuer,
 		*blockHash, 0, 0)
 	if err != nil {

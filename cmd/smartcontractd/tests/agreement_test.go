@@ -241,7 +241,7 @@ func agreementWithDefinitions(t *testing.T) {
 		Chapters: []*actions.ChapterField{
 			&actions.ChapterField{
 				Title:    "First Chapter",
-				Preamble: "This is a chapter that has a {term} defined.",
+				Preamble: "This is a chapter that has a [term]() defined.",
 			},
 		},
 		Definitions: []*actions.DefinedTermField{
@@ -348,7 +348,7 @@ func agreementMissingDefinition(t *testing.T) {
 		Chapters: []*actions.ChapterField{
 			&actions.ChapterField{
 				Title:    "First Chapter",
-				Preamble: "This is a chapter that has a {term} defined.",
+				Preamble: "This is a chapter that has a [term]() defined.",
 			},
 		},
 	}
@@ -562,7 +562,7 @@ func agreementAmendment(t *testing.T) {
 		[]*actions.ChapterField{
 			&actions.ChapterField{
 				Title:    "First Chapter",
-				Preamble: "This is a chapter that has a {term} defined.",
+				Preamble: "This is a chapter that has a [term]() defined.",
 			},
 		},
 		[]*actions.DefinedTermField{

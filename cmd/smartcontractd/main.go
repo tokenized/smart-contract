@@ -39,7 +39,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Config
 
-	cfg := bootstrap.NewConfigFromEnv(ctx)
+	cfg := bootstrap.NewConfig(ctx)
 
 	// -------------------------------------------------------------------------
 	// App Starting

@@ -40,6 +40,8 @@ func (a *Agreement) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
+	node.Log(ctx, "Agreement offer tx : %s", itx.Hash)
+
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
 		node.LogWarn(ctx, "Agreement offer invalid : %d %s", itx.RejectCode, itx.RejectText)

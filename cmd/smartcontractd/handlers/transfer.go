@@ -34,7 +34,6 @@ type Transfer struct {
 	handler         protomux.Handler
 	MasterDB        *db.DB
 	Config          *node.Config
-	Headers         node.BitcoinHeaders
 	Tracer          *filters.Tracer
 	Scheduler       *scheduler.Scheduler
 	HoldingsChannel *holdings.CacheChannel
@@ -168,7 +167,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	isSingleContract := transferIsSingleContract(ctx, itx, msg, rk)
 	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement,
-		t.Headers, &assetUpdates, isSingleContract)
+		&assetUpdates, isSingleContract)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -514,7 +513,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *actions.Transfer, settleTx *txbuilder.TxBuilder,
-	settlement *actions.Settlement, headers node.BitcoinHeaders,
+	settlement *actions.Settlement,
 	updates *map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding, isSingleContract bool) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()

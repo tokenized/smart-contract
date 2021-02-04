@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -27,9 +28,8 @@ type Values struct {
 // BitcoinHeaders provides functions for retrieving information about headers on the currently
 // longest chain.
 type BitcoinHeaders interface {
-	LastHeight(ctx context.Context) int
-	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
-	Time(ctx context.Context, height int) (uint32, error)
+	GetHeaders(context.Context, int, int) ([]*wire.BlockHeader, error)
+	BlockHash(context.Context, int) (*bitcoin.Hash32, error)
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
