@@ -20,7 +20,7 @@ import (
 // Implement the SpyNode Client interface.
 
 func (server *Server) HandleMessage(ctx context.Context, payload client.MessagePayload) {
-	switch payload.(type) {
+	switch msg := payload.(type) {
 	case *client.AcceptRegister:
 		logger.Info(ctx, "SpyNode registration accepted")
 
@@ -40,10 +40,16 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 				logger.Error(ctx, "Failed to subscribe to contract addresses : %s", err)
 			}
 
-			nextMessageID, err := state.GetNextMessageID(ctx, server.MasterDB)
-			if err != nil {
-				logger.Error(ctx, "Failed to get next message id : %s", err)
-				return
+			var nextMessageID uint64
+
+			if msg.NextMessageID == 0 {
+				nextMessageID = 1 // either first startup or server reset
+			} else {
+				nextMessageID, err = state.GetNextMessageID(ctx, server.MasterDB)
+				if err != nil {
+					logger.Error(ctx, "Failed to get next message id : %s", err)
+					return
+				}
 			}
 
 			if err := server.SpyNode.Ready(ctx, *nextMessageID); err != nil {
