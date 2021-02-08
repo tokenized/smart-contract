@@ -41,23 +41,23 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 			}
 
 			var nextMessageID uint64
-
-			if msg.NextMessageID == 0 {
+			if msg.MessageCount == 0 {
 				nextMessageID = 1 // either first startup or server reset
 			} else {
-				nextMessageID, err = state.GetNextMessageID(ctx, server.MasterDB)
+				nextID, err := state.GetNextMessageID(ctx, server.MasterDB)
 				if err != nil {
 					logger.Error(ctx, "Failed to get next message id : %s", err)
 					return
 				}
+				nextMessageID = *nextID
 			}
 
-			if err := server.SpyNode.Ready(ctx, *nextMessageID); err != nil {
+			if err := server.SpyNode.Ready(ctx, nextMessageID); err != nil {
 				logger.Error(ctx, "Failed to notify spynode ready : %s", err)
 				return
 			}
 
-			logger.Info(ctx, "SpyNode client ready at next message %d", *nextMessageID)
+			logger.Info(ctx, "SpyNode client ready at next message %d", nextMessageID)
 		}
 	}
 }

@@ -59,11 +59,12 @@ func main() {
 	// -------------------------------------------------------------------------
 	// RPC Node
 	rpcConfig := &rpcnode.Config{
-		Host:       cfg.RpcNode.Host,
-		Username:   cfg.RpcNode.Username,
-		Password:   cfg.RpcNode.Password,
-		MaxRetries: cfg.RpcNode.MaxRetries,
-		RetryDelay: cfg.RpcNode.RetryDelay,
+		Host:                   cfg.RpcNode.Host,
+		Username:               cfg.RpcNode.Username,
+		Password:               cfg.RpcNode.Password,
+		MaxRetries:             cfg.RpcNode.MaxRetries,
+		RetryDelay:             cfg.RpcNode.RetryDelay,
+		IgnoreAlreadyInMempool: true, // multiple clients might send the same tx
 	}
 
 	rpcNode, err := rpcnode.NewNode(rpcConfig)
