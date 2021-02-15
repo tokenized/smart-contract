@@ -11,13 +11,12 @@ import (
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/spynode"
-	"github.com/tokenized/pkg/spynode/handlers/data"
 	"github.com/tokenized/pkg/storage"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
+	spynodeBootstrap "github.com/tokenized/spynode/cmd/spynoded/bootstrap"
 )
 
 var (
@@ -40,7 +39,7 @@ func main() {
 	// -------------------------------------------------------------------------
 	// Config
 
-	cfg := bootstrap.NewConfigFromEnv(ctx)
+	cfg := bootstrap.NewConfig(ctx)
 
 	// -------------------------------------------------------------------------
 	// App Starting
@@ -58,6 +57,22 @@ func main() {
 	appConfig := bootstrap.NewNodeConfig(ctx, cfg)
 
 	// -------------------------------------------------------------------------
+	// RPC Node
+	rpcConfig := &rpcnode.Config{
+		Host:                   cfg.RpcNode.Host,
+		Username:               cfg.RpcNode.Username,
+		Password:               cfg.RpcNode.Password,
+		MaxRetries:             cfg.RpcNode.MaxRetries,
+		RetryDelay:             cfg.RpcNode.RetryDelay,
+		IgnoreAlreadyInMempool: true, // multiple clients might send the same tx
+	}
+
+	rpcNode, err := rpcnode.NewNode(rpcConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	// -------------------------------------------------------------------------
 	// SPY Node
 	spyStorageConfig := storage.NewConfig(cfg.NodeStorage.Bucket, cfg.NodeStorage.Root)
 	spyStorageConfig.SetupRetry(cfg.AWS.MaxRetries, cfg.AWS.RetryDelay)
@@ -69,32 +84,16 @@ func main() {
 		spyStorage = storage.NewS3Storage(spyStorageConfig)
 	}
 
-	spyConfig, err := data.NewConfig(appConfig.Net, cfg.SpyNode.Address, cfg.SpyNode.UserAgent,
-		cfg.SpyNode.StartHash, cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay,
-		cfg.SpyNode.ShotgunCount)
+	spyConfig, err := spynodeBootstrap.NewConfig(appConfig.Net, appConfig.IsTest,
+		cfg.SpyNode.Address, cfg.SpyNode.UserAgent, cfg.SpyNode.StartHash,
+		cfg.SpyNode.UntrustedNodes, cfg.SpyNode.SafeTxDelay, cfg.SpyNode.ShotgunCount,
+		cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
 	if err != nil {
 		logger.Fatal(ctx, "Failed to create spynode config : %s", err)
 		return
 	}
 
-	spyNode := spynode.NewNode(spyConfig, spyStorage)
-
-	spyNode.SetupRetry(cfg.SpyNode.MaxRetries, cfg.SpyNode.RetryDelay)
-
-	// -------------------------------------------------------------------------
-	// RPC Node
-	rpcConfig := &rpcnode.Config{
-		Host:       cfg.RpcNode.Host,
-		Username:   cfg.RpcNode.Username,
-		Password:   cfg.RpcNode.Password,
-		MaxRetries: cfg.RpcNode.MaxRetries,
-		RetryDelay: cfg.RpcNode.RetryDelay,
-	}
-
-	rpcNode, err := rpcnode.NewNode(rpcConfig)
-	if err != nil {
-		panic(err)
-	}
+	spyNode := spynodeBootstrap.NewNode(spyConfig, spyStorage, rpcNode, rpcNode)
 
 	// -------------------------------------------------------------------------
 	// Wallet
@@ -107,13 +106,6 @@ func main() {
 	contractAddress := bitcoin.NewAddressFromRawAddress(masterWallet.KeyStore.GetAddresses()[0],
 		appConfig.Net)
 	logger.Info(ctx, "Contract address : %s", contractAddress.String())
-
-	// -------------------------------------------------------------------------
-	// Tx Filter
-
-	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(tracer, appConfig.IsTest)
-	spyNode.AddTxFilter(txFilter)
 
 	// -------------------------------------------------------------------------
 	// Start Database / Storage
@@ -131,6 +123,8 @@ func main() {
 	utxos := bootstrap.LoadUTXOsFromDB(ctx, masterDB)
 
 	holdingsChannel := bootstrap.CreateHoldingsCacheChannel(ctx)
+
+	tracer := filters.NewTracer()
 
 	appHandlers, apiErr := handlers.API(
 		ctx,
@@ -153,13 +147,11 @@ func main() {
 		appHandlers,
 		appConfig,
 		masterDB,
-		rpcNode,
 		spyNode,
 		spyNode,
 		&sch,
 		tracer,
 		utxos,
-		txFilter,
 		holdingsChannel,
 	)
 
@@ -179,13 +171,30 @@ func main() {
 	serverErrors := make(chan error, 1)
 
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 
 	// Start the service listening for requests.
+	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		logger.Info(ctx, "Node Running")
 		serverErrors <- node.Run(ctx)
+		logger.Info(ctx, "Node Finished")
+		wg.Done()
+	}()
+
+	// -------------------------------------------------------------------------
+	// Start Spynode
+
+	// Make a channel to listen for errors coming from the listener. Use a
+	// buffered channel so the goroutine can exit if we don't collect this error.
+	spynodeErrors := make(chan error, 1)
+
+	// Start the service listening for requests.
+	wg.Add(1)
+	go func() {
+		logger.Info(ctx, "SpyNode Running")
+		spynodeErrors <- spyNode.Run(ctx)
+		logger.Info(ctx, "SpyNode Finished")
+		wg.Done()
 	}()
 
 	// -------------------------------------------------------------------------
@@ -206,10 +215,26 @@ func main() {
 			logger.Error(ctx, "Error starting server: %s", err)
 		}
 
+		if err := spyNode.Stop(ctx); err != nil {
+			logger.Error(ctx, "Could not stop spynode: %s", err)
+		}
+
+	case err := <-spynodeErrors:
+		if err != nil {
+			logger.Error(ctx, "Error starting server: %s", err)
+		}
+
+		if err := node.Stop(ctx); err != nil {
+			logger.Error(ctx, "Could not stop server: %s", err)
+		}
+
 	case <-osSignals:
 		logger.Info(ctx, "Shutting down")
 
-		// Asking listener to shutdown and load shed.
+		if err := spyNode.Stop(ctx); err != nil {
+			logger.Error(ctx, "Could not stop spynode: %s", err)
+		}
+
 		if err := node.Stop(ctx); err != nil {
 			logger.Error(ctx, "Could not stop server: %s", err)
 		}
@@ -217,8 +242,8 @@ func main() {
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()
-	err = utxos.Save(ctx, masterDB)
-	if err != nil {
+
+	if err := utxos.Save(ctx, masterDB); err != nil {
 		logger.Error(ctx, "Save UTXOs : %s", err)
 	}
 }

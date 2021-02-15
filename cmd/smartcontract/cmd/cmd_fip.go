@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -18,7 +18,7 @@ var cmdFIP = &cobra.Command{
 			return errors.New("Incorrect argument count")
 		}
 
-		indexes := make(actions.FieldIndexPath, 0, len(args))
+		indexes := make(permissions.FieldIndexPath, 0, len(args))
 		for _, arg := range args {
 			index, err := strconv.Atoi(arg)
 			if err != nil {

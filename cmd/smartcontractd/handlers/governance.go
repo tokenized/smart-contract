@@ -34,7 +34,8 @@ type Governance struct {
 }
 
 // ProposalRequest handles an incoming proposal request and prepares a Vote response
-func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ProposalRequest")
 	defer span.End()
 
@@ -122,27 +123,32 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 	}
 
 	if len(msg.AssetCode) > 0 {
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(msg.AssetCode))
+		assetCode, err := bitcoin.NewHash20(msg.AssetCode)
 		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %x", msg.AssetCode)
+			node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		if err != nil {
+			node.LogWarn(ctx, "Asset not found : %s", assetCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
-			node.LogWarn(ctx, "Proposal failed. Asset frozen : %x", msg.AssetCode)
+			node.LogWarn(ctx, "Proposal failed. Asset frozen : %s", assetCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetFrozen)
 		}
 
 		// Asset does not allow voting
 		if err := asset.ValidateVoting(ctx, as, msg.Type, ct.VotingSystems[msg.VoteSystem]); err != nil {
-			node.LogWarn(ctx, "Asset does not allow voting: %x : %s", msg.AssetCode, err)
+			node.LogWarn(ctx, "Asset does not allow voting: %s : %s", assetCode, err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetPermissions)
 		}
 
 		// Check sender balance
-		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(msg.AssetCode), itx.Inputs[0].Address, v.Now)
+		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address, assetCode, itx.Inputs[0].Address,
+			v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get requestor holding")
 		}
@@ -151,7 +157,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				w.Config.Net)
-			node.LogWarn(ctx, "Requestor is not a holder : %x %s", msg.AssetCode, address.String())
+			node.LogWarn(ctx, "Requestor is not a holder : %s %s", assetCode, address)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 
@@ -221,7 +227,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		// Sender does not have any balance of the asset
 		if msg.Type == 1 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
-			node.LogWarn(ctx, "Requestor is not a holder : %x", msg.AssetCode)
+			node.LogWarn(ctx, "Requestor is not a holder")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	}
@@ -327,14 +333,12 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.New("Proposal invalid for vote")
 	}
 
-	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
-
-	_, err = vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
+	_, err = vote.Retrieve(ctx, g.MasterDB, rk.Address, itx.Hash)
 	if err != vote.ErrNotFound {
 		if err != nil {
-			return fmt.Errorf("Failed to retrieve vote : %s : %s", voteTxId.String(), err)
+			return fmt.Errorf("Failed to retrieve vote : %s : %s", itx.Hash, err)
 		} else {
-			return fmt.Errorf("Vote already exists : %s", voteTxId.String())
+			return fmt.Errorf("Vote already exists : %s", itx.Hash)
 		}
 	}
 
@@ -344,17 +348,22 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to convert vote message to new vote")
 	}
 
-	nv.VoteTxId = *voteTxId
-	nv.ProposalTxId = *protocol.TxIdFromBytes(proposalTx.Hash[:])
+	nv.VoteTxId = *itx.Hash
+	nv.ProposalTxId = *proposalTx.Hash
 	nv.Expires = protocol.NewTimestamp(proposal.VoteCutOffTimestamp)
 	nv.Timestamp = protocol.NewTimestamp(msg.Timestamp)
 	nv.Ballots = make(map[bitcoin.Hash20]state.Ballot)
 
 	if len(proposal.AssetCode) > 0 {
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		assetCode, err := bitcoin.NewHash20(proposal.AssetCode)
 		if err != nil {
-			return fmt.Errorf("Asset not found : %x", proposal.AssetCode)
+			node.LogWarn(ctx, "Invalid asset code : %s", assetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		if err != nil {
+			return fmt.Errorf("Asset not found : %s", assetCode)
 		}
 
 		if as.AssetModificationGovernance == 1 { // Contract wide asset governance
@@ -362,9 +371,9 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 			nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
 				ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
 		} else if ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted {
-			nv.TokenQty = as.TokenQty * uint64(as.VoteMultiplier)
+			nv.TokenQty = as.AuthorizedTokenQty * uint64(as.VoteMultiplier)
 		} else {
-			nv.TokenQty = as.TokenQty
+			nv.TokenQty = as.AuthorizedTokenQty
 		}
 	} else {
 		nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
@@ -374,14 +383,13 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	// Populate nv.Ballots with current holdings that apply to the vote
 	if proposal.Type == 2 { // Administrative Token holders only
 		if ct.AdminMemberAsset.IsZero() {
-			node.LogWarn(ctx, "Admin Member Asset not defined : %s", proposal.String())
+			node.LogWarn(ctx, "Admin Member Asset not defined")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, &ct.AdminMemberAsset)
 		if err != nil {
-			node.LogWarn(ctx, "Admin Member Asset not found : %s", proposal.String())
+			node.LogWarn(ctx, "Admin Member Asset not found : %s", ct.AdminMemberAsset)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
@@ -391,10 +399,15 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 			return errors.Wrap(err, "append ballots")
 		}
 	} else if len(proposal.AssetCode) > 0 && !nv.ContractWideVote {
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address,
-			protocol.AssetCodeFromBytes(proposal.AssetCode))
+		assetCode, err := bitcoin.NewHash20(proposal.AssetCode)
 		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %s", proposal.String())
+			node.LogWarn(ctx, "Invalid asset code : %s", assetCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+
+		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		if err != nil {
+			node.LogWarn(ctx, "Asset not found : %s", assetCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 		}
 
@@ -405,7 +418,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		}
 	} else { // Contract Vote
 		for _, a := range ct.AssetCodes {
-			if a.Equal(ct.AdminMemberAsset) {
+			if a.Equal(&ct.AdminMemberAsset) {
 				continue // Administrative tokens don't count for holder votes.
 			}
 			as, err := asset.Retrieve(ctx, g.MasterDB, ct.Address, a)
@@ -421,7 +434,7 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		}
 	}
 
-	if err := vote.Create(ctx, g.MasterDB, rk.Address, voteTxId, &nv, v.Now); err != nil {
+	if err := vote.Create(ctx, g.MasterDB, rk.Address, itx.Hash, &nv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to save vote")
 	}
 
@@ -459,24 +472,28 @@ func (g *Governance) BallotCastRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	if !ct.MovedTo.IsEmpty() {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			w.Config.Net)
-		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
+		node.LogWarn(ctx, "Contract address changed : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
-	voteTxId := protocol.TxIdFromBytes(msg.VoteTxId)
+	voteTxId, err := bitcoin.NewHash32(msg.VoteTxId)
+	if err != nil {
+		node.LogWarn(ctx, "Invalid vote txid : 0x%x", msg.VoteTxId)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
 	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err == vote.ErrNotFound {
-		node.LogWarn(ctx, "Vote not found : %s", voteTxId.String())
+		node.LogWarn(ctx, "Vote not found : %s", voteTxId)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 	} else if err != nil {
-		node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId.String(), err)
+		node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteTxId, err)
 		return errors.Wrap(err, "Failed to retrieve vote")
 	}
 
 	if vt.Expires.Nano() <= v.Now.Nano() {
-		node.LogWarn(ctx, "Vote expired : %s", voteTxId.String())
+		node.LogWarn(ctx, "Vote expired : %s", voteTxId)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteClosed)
 	}
 
@@ -606,7 +623,11 @@ func (g *Governance) BallotCountedResponse(ctx context.Context, w *node.Response
 		return fmt.Errorf("Ballot cast invalid for ballot counted")
 	}
 
-	voteTxId := protocol.TxIdFromBytes(cast.VoteTxId)
+	voteTxId, err := bitcoin.NewHash32(cast.VoteTxId)
+	if err != nil {
+		return errors.Wrap(err, "invalid vote txid")
+	}
+
 	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
@@ -662,8 +683,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 	}
 
 	// Retrieve vote
-	voteTxId := protocol.TxIdFromBytes(itx.Hash[:])
-	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, voteTxId)
+	vt, err := vote.Retrieve(ctx, g.MasterDB, rk.Address, itx.Hash)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve vote for ballot cast")
 	}
@@ -687,7 +707,7 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 		return errors.Wrap(err, "Failed to convert vote proposal to result")
 	}
 
-	voteResult.VoteTxId = voteTxId.Bytes()
+	voteResult.VoteTxId = itx.Hash.Bytes()
 	voteResult.Timestamp = v.Now.Nano()
 
 	// Calculate Results
@@ -716,7 +736,8 @@ func (g *Governance) FinalizeVote(ctx context.Context, w *node.ResponseWriter, i
 }
 
 // ResultResponse handles an outgoing Result action and writes it to the state
-func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter, itx *inspector.Transaction, rk *wallet.Key) error {
+func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
+	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Governance.ResultResponse")
 	defer span.End()
 
@@ -728,9 +749,8 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		return fmt.Errorf("Vote result not from contract : %x", address.String())
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
+		return fmt.Errorf("Vote result not from contract : %s", address)
 	}
 
 	ct, err := contract.Retrieve(ctx, g.MasterDB, rk.Address, g.Config.IsTest)
@@ -753,7 +773,11 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 	ts := protocol.NewTimestamp(msg.Timestamp)
 	uv.CompletedAt = &ts
 
-	voteTxId := protocol.TxIdFromBytes(msg.VoteTxId)
+	voteTxId, err := bitcoin.NewHash32(msg.VoteTxId)
+	if err != nil {
+		return errors.Wrap(err, "invalid vote txid")
+	}
+
 	if err := vote.Update(ctx, g.MasterDB, rk.Address, voteTxId, &uv, v.Now); err != nil {
 		return errors.Wrap(err, "Failed to update vote")
 	}

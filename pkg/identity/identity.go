@@ -70,5 +70,5 @@ type Client interface {
 
 // BlockHashes is an interface for a system that provides block hashes for specified block heights.
 type BlockHashes interface {
-	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
+	BlockHash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 }

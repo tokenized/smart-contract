@@ -29,7 +29,7 @@ var cmdState = &cobra.Command{
 
 		ctx := bootstrap.NewContextWithDevelopmentLogger()
 
-		cfg := bootstrap.NewConfigFromEnv(ctx)
+		cfg := bootstrap.NewConfig(ctx)
 
 		address, err := bitcoin.DecodeAddress(args[0])
 		if err != nil {

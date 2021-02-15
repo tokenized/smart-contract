@@ -9,7 +9,6 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
 const storageKey = "contracts"
@@ -39,7 +38,7 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 
 // Fetch a single pending transfer from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	transferTxId *protocol.TxId) (*state.PendingTransfer, error) {
+	transferTxId *bitcoin.Hash32) (*state.PendingTransfer, error) {
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -66,7 +65,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 }
 
 func Remove(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	transferTxId *protocol.TxId) error {
+	transferTxId *bitcoin.Hash32) error {
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
@@ -112,6 +111,6 @@ func List(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, txid *protocol.TxId) string {
+func buildStoragePath(contractHash *bitcoin.Hash20, txid *bitcoin.Hash32) string {
 	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, txid.String())
 }

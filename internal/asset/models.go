@@ -14,7 +14,6 @@ type NewAsset struct {
 	AssetType                   string   `json:"AssetType,omitempty"`
 	AssetIndex                  uint64   `json:"AssetIndex,omitempty"`
 	AssetPermissions            []byte   `json:"AssetPermissions,omitempty"`
-	TransfersPermitted          bool     `json:"TransfersPermitted,omitempty"`
 	TradeRestrictions           []string `json:"TradeRestrictions,omitempty"`
 	EnforcementOrdersPermitted  bool     `json:"EnforcementOrdersPermitted,omitempty"`
 	VotingRights                bool     `json:"VotingRights,omitempty"`
@@ -37,7 +36,6 @@ type UpdateAsset struct {
 	Timestamp *protocol.Timestamp `json:"Timestamp,omitempty"`
 
 	AssetPermissions            *[]byte             `json:"AssetPermissions,omitempty"`
-	TransfersPermitted          *bool               `json:"TransfersPermitted,omitempty"`
 	TradeRestrictions           *[]string           `json:"TradeRestrictions,omitempty"`
 	EnforcementOrdersPermitted  *bool               `json:"EnforcementOrdersPermitted,omitempty"`
 	VotingRights                *bool               `json:"VotingRights,omitempty"`
@@ -45,7 +43,7 @@ type UpdateAsset struct {
 	AdministrationProposal      *bool               `json:"AdministrationProposal,omitempty"`
 	HolderProposal              *bool               `json:"HolderProposal,omitempty"`
 	AssetModificationGovernance *uint32             `json:"AssetModificationGovernance,omitempty"`
-	TokenQty                    *uint64             `json:"TokenQty,omitempty"`
+	AuthorizedTokenQty          *uint64             `json:"AuthorizedTokenQty,omitempty"`
 	AssetPayload                *[]byte             `json:"AssetPayload,omitempty"`
 	FreezePeriod                *protocol.Timestamp `json:"FreezePeriod,omitempty"`
 }

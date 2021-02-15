@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/spynode"
 	"github.com/tokenized/pkg/txbuilder"
 )
 
@@ -25,7 +24,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
+	logConfig.EnableSubSystem("SpyNode")
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

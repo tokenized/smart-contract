@@ -20,7 +20,8 @@ const (
 	blockHeaderSize = 80
 )
 
-// Blocks uses spynode storage to fetch block headers and hashes.
+// Blocks uses spynode storage to fetch block headers and hashes. This only works with the standard
+// embedded spynode.
 type Blocks struct {
 	store storage.Storage
 }
@@ -33,7 +34,7 @@ func NewBlocks(st storage.Storage) *Blocks {
 }
 
 // Hash returns the hash of the block header at the specified block height.
-func (b *Blocks) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
+func (b *Blocks) BlockHash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	header, err := b.Header(ctx, height)
 	if err != nil {
 		return nil, err

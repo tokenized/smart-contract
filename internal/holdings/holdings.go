@@ -7,7 +7,6 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -40,7 +39,7 @@ const (
 
 // GetHolding returns the holding data for a PKH.
 func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
+	assetCode *bitcoin.Hash20, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
 
 	result, err := Fetch(ctx, dbConn, contractAddress, assetCode, address)
 	if err == nil {
@@ -54,7 +53,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawA
 		Address:         address,
 		CreatedAt:       now,
 		UpdatedAt:       now,
-		HoldingStatuses: make(map[protocol.TxId]*state.HoldingStatus),
+		HoldingStatuses: make(map[bitcoin.Hash32]*state.HoldingStatus),
 	}
 	return result, nil
 }
@@ -147,7 +146,7 @@ func UnfrozenBalance(h *state.Holding, now protocol.Timestamp) uint64 {
 // FinalizeTx finalizes any pending changes involved with a tx.
 // When a holding status does not exist to finalize, like when in recovery mode, the balance is just
 //   set to the specified balance.
-func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now protocol.Timestamp) error {
+func FinalizeTx(h *state.Holding, txid *bitcoin.Hash32, balance uint64, now protocol.Timestamp) error {
 	h.UpdatedAt = now
 
 	hs, exists := h.HoldingStatuses[*txid]
@@ -173,7 +172,7 @@ func FinalizeTx(h *state.Holding, txid *protocol.TxId, balance uint64, now proto
 }
 
 // AddDebit adds a pending send amount to a holding.
-func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleContract bool,
+func AddDebit(h *state.Holding, txid *bitcoin.Hash32, amount uint64, isSingleContract bool,
 	now protocol.Timestamp) error {
 
 	_, exists := h.HoldingStatuses[*txid]
@@ -215,7 +214,7 @@ func AddDebit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleCont
 }
 
 // AddDeposit adds a pending receive amount to a holding.
-func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleContract bool,
+func AddDeposit(h *state.Holding, txid *bitcoin.Hash32, amount uint64, isSingleContract bool,
 	now protocol.Timestamp) error {
 
 	_, exists := h.HoldingStatuses[*txid]
@@ -249,7 +248,7 @@ func AddDeposit(h *state.Holding, txid *protocol.TxId, amount uint64, isSingleCo
 }
 
 // AddFreeze adds a freeze amount to a holding.
-func AddFreeze(h *state.Holding, txid *protocol.TxId, amount uint64,
+func AddFreeze(h *state.Holding, txid *bitcoin.Hash32, amount uint64,
 	timeout protocol.Timestamp, now protocol.Timestamp) error {
 
 	_, exists := h.HoldingStatuses[*txid]
@@ -271,7 +270,7 @@ func AddFreeze(h *state.Holding, txid *protocol.TxId, amount uint64,
 }
 
 // CheckDebit checks that the debit amount matches that specified.
-func CheckDebit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64, error) {
+func CheckDebit(h *state.Holding, txid *bitcoin.Hash32, amount uint64) (uint64, error) {
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
 		return 0, errors.New("Missing settlement")
@@ -289,7 +288,7 @@ func CheckDebit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64, e
 }
 
 // CheckDeposit checks that the deposit amount matches that specified
-func CheckDeposit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64, error) {
+func CheckDeposit(h *state.Holding, txid *bitcoin.Hash32, amount uint64) (uint64, error) {
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
 		return 0, errors.New("Missing settlement")
@@ -306,7 +305,7 @@ func CheckDeposit(h *state.Holding, txid *protocol.TxId, amount uint64) (uint64,
 	return hs.SettleQuantity, nil
 }
 
-func CheckFreeze(h *state.Holding, txid *protocol.TxId, amount uint64) error {
+func CheckFreeze(h *state.Holding, txid *bitcoin.Hash32, amount uint64) error {
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
 		return fmt.Errorf("Missing freeze : %s", txid.String())
@@ -324,7 +323,7 @@ func CheckFreeze(h *state.Holding, txid *protocol.TxId, amount uint64) error {
 }
 
 // RevertStatus removes a holding status for a specific txid.
-func RevertStatus(h *state.Holding, txid *protocol.TxId) error {
+func RevertStatus(h *state.Holding, txid *bitcoin.Hash32) error {
 	hs, exists := h.HoldingStatuses[*txid]
 	if !exists {
 		return errors.New("Status not found") // No status to revert

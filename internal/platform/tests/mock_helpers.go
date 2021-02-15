@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -13,7 +14,8 @@ import (
 )
 
 // Generate a fake funding tx so inspector can build off of it.
-func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64, address bitcoin.RawAddress) *wire.MsgTx {
+func MockFundingTx(ctx context.Context, node *mockRpcNode, value uint64,
+	address bitcoin.RawAddress) *wire.MsgTx {
 	result := wire.NewMsgTx(2)
 	script, _ := address.LockingScript()
 	result.TxOut = append(result.TxOut, wire.NewTxOut(value, script))
@@ -54,7 +56,8 @@ func (cache *mockRpcNode) GetTX(ctx context.Context, txid *bitcoin.Hash32) (*wir
 	return nil, errors.New("Couldn't find tx in cache")
 }
 
-func (cache *mockRpcNode) GetOutputs(ctx context.Context, outpoints []wire.OutPoint) ([]bitcoin.UTXO, error) {
+func (cache *mockRpcNode) GetOutputs(ctx context.Context,
+	outpoints []wire.OutPoint) ([]bitcoin.UTXO, error) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 
@@ -84,10 +87,9 @@ func (cache *mockRpcNode) GetOutputs(ctx context.Context, outpoints []wire.OutPo
 // Headers
 
 type mockHeaders struct {
-	height int
-	hashes []*bitcoin.Hash32
-	times  []uint32
-	lock   sync.Mutex
+	height  int
+	headers []*wire.BlockHeader
+	lock    sync.Mutex
 }
 
 func newMockHeaders() *mockHeaders {
@@ -103,30 +105,31 @@ func (h *mockHeaders) LastHeight(ctx context.Context) int {
 	return h.height
 }
 
-func (h *mockHeaders) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
+func (h *mockHeaders) BlockHash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	if height > h.height {
 		return nil, errors.New("Above current height")
 	}
-	if h.height-height >= len(h.hashes) {
+	if h.height-height >= len(h.headers) {
 		return nil, errors.New("Hash unavailable")
 	}
-	return h.hashes[h.height-height], nil
+	return h.headers[h.height-height].BlockHash(), nil
 }
 
-func (h *mockHeaders) Time(ctx context.Context, height int) (uint32, error) {
+func (h *mockHeaders) GetHeaders(ctx context.Context, height,
+	count int) ([]*wire.BlockHeader, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	if height > h.height {
-		return 0, errors.New("Above current height")
+	if height+count > h.height {
+		return nil, errors.New("Above current height")
 	}
-	if h.height-height >= len(h.hashes) {
-		return 0, errors.New("Time unavailable")
+	if h.height-height >= len(h.headers) {
+		return nil, errors.New("Headers unavailable")
 	}
-	return h.times[h.height-height], nil
+	return h.headers[h.height-height : h.height-height+count], nil
 }
 
 func (h *mockHeaders) Reset() {
@@ -134,8 +137,7 @@ func (h *mockHeaders) Reset() {
 	defer h.lock.Unlock()
 
 	h.height = 0
-	h.hashes = nil
-	h.times = nil
+	h.headers = nil
 }
 
 func (h *mockHeaders) Populate(ctx context.Context, height, count int) error {
@@ -143,14 +145,22 @@ func (h *mockHeaders) Populate(ctx context.Context, height, count int) error {
 	defer h.lock.Unlock()
 
 	h.height = height
-	h.hashes = nil
-	h.times = nil
-
-	timestamp := uint32(time.Now().Unix())
+	timestamp := time.Now()
+	h.headers = make([]*wire.BlockHeader, count)
+	prevHash := &bitcoin.Hash32{}
+	rand.Read(prevHash[:])
 	for i := 0; i < count; i++ {
-		h.hashes = append(h.hashes, RandomHash())
-		h.times = append(h.times, timestamp)
-		timestamp -= 600
+		newHeader := &wire.BlockHeader{
+			Version:   0,
+			PrevBlock: *prevHash,
+			Timestamp: timestamp,
+			Bits:      rand.Uint32(),
+			Nonce:     rand.Uint32(),
+		}
+		rand.Read(newHeader.MerkleRoot[:])
+		h.headers[i] = newHeader
+		timestamp.Add(10 * time.Minute)
+		prevHash = newHeader.BlockHash()
 	}
 	return nil
 }

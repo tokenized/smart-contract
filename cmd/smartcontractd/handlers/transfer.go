@@ -19,7 +19,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
@@ -35,7 +34,6 @@ type Transfer struct {
 	handler         protomux.Handler
 	MasterDB        *db.DB
 	Config          *node.Config
-	Headers         node.BitcoinHeaders
 	Tracer          *filters.Tracer
 	Scheduler       *scheduler.Scheduler
 	HoldingsChannel *holdings.CacheChannel
@@ -74,9 +72,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		node.LogVerbose(ctx,
 			"Not contract for first transfer. Waiting for Message SettlementRequest : %s",
 			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
-		if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
-			return errors.Wrap(err, "Failed to save tx")
-		}
 
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
@@ -170,9 +165,9 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Add this contract's data to the settlement op return data
 	isSingleContract := transferIsSingleContract(ctx, itx, msg, rk)
-	assetUpdates := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding)
+	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, t.MasterDB, t.Config, rk, itx, msg, settleTx, &settlement,
-		t.Headers, &assetUpdates, isSingleContract)
+		&assetUpdates, isSingleContract)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -204,8 +199,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "inspector from builder")
 		}
 
-		err = node.Respond(ctx, w, responseItx)
-		if err == nil {
+		if err := node.Respond(ctx, w, responseItx); err == nil {
 			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
 				rk.Address); err != nil {
 				return err
@@ -213,11 +207,6 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		return err
-	}
-
-	// Save tx
-	if err := transactions.AddTx(ctx, t.MasterDB, itx); err != nil {
-		return errors.Wrap(err, "Failed to save tx")
 	}
 
 	// Send to next contract
@@ -228,8 +217,10 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Save pending transfer
 	timeout := protocol.NewTimestamp(v.Now.Nano() + t.Config.RequestTimeout)
-	pendingTransfer := state.PendingTransfer{TransferTxId: protocol.TxIdFromBytes(itx.Hash[:]),
-		Timeout: timeout}
+	pendingTransfer := state.PendingTransfer{
+		TransferTxId: itx.Hash,
+		Timeout:      timeout,
+	}
 	if err := transfer.Save(ctx, t.MasterDB, rk.Address, &pendingTransfer); err != nil {
 		return errors.Wrap(err, "Failed to save pending transfer")
 	}
@@ -249,7 +240,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 }
 
 func saveHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holdings.CacheChannel,
-	updates map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding,
+	updates map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding,
 	contractAddress bitcoin.RawAddress) error {
 
 	for assetCode, hds := range updates {
@@ -266,8 +257,8 @@ func saveHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holding
 }
 
 func revertHoldings(ctx context.Context, masterDB *db.DB, holdingsChannel *holdings.CacheChannel,
-	updates map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding,
-	contractAddress bitcoin.RawAddress, txid *protocol.TxId) error {
+	updates map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding,
+	contractAddress bitcoin.RawAddress, txid *bitcoin.Hash32) error {
 
 	for _, hds := range updates {
 		for _, h := range *hds {
@@ -294,8 +285,7 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Remove pending transfer
-	if err := transfer.Remove(ctx, t.MasterDB, rk.Address,
-		protocol.TxIdFromBytes(itx.Hash[:])); err != nil {
+	if err := transfer.Remove(ctx, t.MasterDB, rk.Address, itx.Hash); err != nil {
 		if err != transfer.ErrNotFound {
 			return errors.Wrap(err, "Failed to remove pending transfer")
 		}
@@ -523,8 +513,8 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 // addSettlementData appends data to a pending settlement action.
 func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config, rk *wallet.Key,
 	transferTx *inspector.Transaction, transfer *actions.Transfer, settleTx *txbuilder.TxBuilder,
-	settlement *actions.Settlement, headers node.BitcoinHeaders,
-	updates *map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding, isSingleContract bool) error {
+	settlement *actions.Settlement,
+	updates *map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding, isSingleContract bool) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.addSettlementData")
 	defer span.End()
 
@@ -584,7 +574,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			continue // This asset is not ours. Skip it.
 		}
 
-		assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
+		assetCode, err := bitcoin.NewHash20(assetTransfer.AssetCode)
+		if err != nil {
+			return errors.Wrap(err, "invalid asset code")
+		}
 		assetID := protocol.AssetID(assetTransfer.AssetType, *assetCode)
 
 		// Locate Asset
@@ -596,6 +589,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		if err := asset.IsTransferable(ctx, as, v.Now); err != nil {
 			return err
 		}
+
+		transfersPermitted := as.TransfersPermitted()
 
 		// Find contract input
 		contractInputIndex := uint32(0x0000ffff)
@@ -622,7 +617,6 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		fromAdministration := uint64(0)
 		toNonAdministration := uint64(0)
 		toAdministration := uint64(0)
-		txid := protocol.TxIdFromBytes(transferTx.Hash[:])
 		hds := make([]*state.Holding, len(settleTx.Outputs))
 		updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
 		(*updates)[*assetCode] = &updatedHoldings
@@ -679,7 +673,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
 				config.Net)
-			if err := holdings.AddDebit(h, txid, sender.Quantity, isSingleContract, v.Now); err != nil {
+			if err := holdings.AddDebit(h, transferTx.Hash, sender.Quantity, isSingleContract, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: asset=%s party=%s : %d/%d", assetID,
 						address.String(), sender.Quantity, holdings.SafeBalance(h))
@@ -739,7 +733,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				return node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
-			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode, receiverAddress, v.Now)
+			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode, receiverAddress,
+				v.Now)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get holding")
 			}
@@ -751,7 +746,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			updatedHoldings[*hash] = h
 
 			address := bitcoin.NewAddressFromRawAddress(receiverAddress, config.Net)
-			if err := holdings.AddDeposit(h, txid, receiver.Quantity, isSingleContract, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, transferTx.Hash, receiver.Quantity, isSingleContract,
+				v.Now); err != nil {
 				if err == holdings.ErrHoldingsLocked {
 					node.LogWarn(ctx, "Locked funds: asset=%s party=%s", assetID, address)
 					return node.NewError(actions.RejectionsHoldingsLocked, "")
@@ -774,7 +770,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 				assetOffset, sendBalance)
 		}
 
-		if !as.TransfersPermitted {
+		if !transfersPermitted {
 			if fromNonAdministration > toAdministration {
 				node.LogWarn(ctx, "Transfers not permitted. Sending tokens not all to administration : %d/%d",
 					fromNonAdministration, toAdministration)
@@ -790,7 +786,10 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		for index, holding := range hds {
 			if holding != nil {
 				assetSettlement.Settlements = append(assetSettlement.Settlements,
-					&actions.QuantityIndexField{Index: uint32(index), Quantity: holding.PendingBalance})
+					&actions.QuantityIndexField{
+						Index:    uint32(index),
+						Quantity: holding.PendingBalance,
+					})
 			}
 		}
 
@@ -947,7 +946,7 @@ func sendToNextSettlementContract(ctx context.Context,
 
 	node.Log(ctx, "Sending settlement offer to %s",
 		bitcoin.NewAddressFromRawAddress(transferTx.Outputs[nextContractIndex].Address,
-		w.Config.Net))
+			w.Config.Net))
 
 	// Setup M1 response
 	var err error
@@ -1026,7 +1025,6 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return errors.New("Could not assert as *actions.Settlement")
 	}
 
-	txid := protocol.TxIdFromBytes(itx.Inputs[0].UTXO.Hash[:])
 	ct, err := contract.Retrieve(ctx, t.MasterDB, rk.Address, t.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -1038,7 +1036,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	assetUpdates := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding)
+	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	for assetIndex, assetSettlement := range msg.Assets {
 		if assetSettlement.AssetType == "BSV" && len(assetSettlement.AssetCode) == 0 {
 			continue // Bitcoin transaction
@@ -1057,7 +1055,10 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 			continue // Asset not under this contract
 		}
 
-		assetCode := protocol.AssetCodeFromBytes(assetSettlement.AssetCode)
+		assetCode, err := bitcoin.NewHash20(assetSettlement.AssetCode)
+		if err != nil {
+			return errors.Wrap(err, "invalid asset code")
+		}
 		assetID := protocol.AssetID(assetSettlement.AssetType, *assetCode)
 
 		hds := make(map[bitcoin.Hash20]*state.Holding)
@@ -1080,7 +1081,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 			ra := itx.Outputs[settlementQuantity.Index].Address
 			address := bitcoin.NewAddressFromRawAddress(ra, w.Config.Net)
-			if err = holdings.FinalizeTx(h, txid, settlementQuantity.Quantity,
+			if err = holdings.FinalizeTx(h, &itx.Inputs[0].UTXO.Hash, settlementQuantity.Quantity,
 				timestamp); err != nil {
 				return fmt.Errorf("Failed settlement finalize for holding : %s %s : %s", assetID,
 					address, err)
@@ -1120,7 +1121,6 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	started bool, text string) error {
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	transferTxId := protocol.TxIdFromBytes(transferTx.Hash[:])
 
 	// Determine UTXOs to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
@@ -1153,7 +1153,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 		balance += uint64(utxo.Value)
 	}
 
-	updates := make(map[protocol.AssetCode]*map[bitcoin.Hash20]*state.Holding)
+	updates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 
 	w.SetRejectUTXOs(ctx, utxos)
 
@@ -1179,7 +1179,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 
 				node.LogVerbose(ctx, "Bitcoin refund %d : %s", sender.Quantity,
 					bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					w.Config.Net))
+						w.Config.Net))
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
 				refundBalance += sender.Quantity
 			}
@@ -1202,7 +1202,10 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					continue // This asset is not ours. Skip it.
 				}
 
-				assetCode := protocol.AssetCodeFromBytes(assetTransfer.AssetCode)
+				assetCode, err := bitcoin.NewHash20(assetTransfer.AssetCode)
+				if err != nil {
+					return errors.Wrap(err, "invalid asset code")
+				}
 				updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
 				updates[*assetCode] = &updatedHoldings
 
@@ -1222,7 +1225,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					updatedHoldings[*hash] = h
 
 					// Revert holding status
-					err = holdings.RevertStatus(h, transferTxId)
+					err = holdings.RevertStatus(h, transferTx.Hash)
 					if err != nil {
 						return errors.Wrap(err, "revert status")
 					}
@@ -1248,7 +1251,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					updatedHoldings[*hash] = h
 
 					// Revert holding status
-					err = holdings.RevertStatus(h, transferTxId)
+					err = holdings.RevertStatus(h, transferTx.Hash)
 					if err != nil {
 						return errors.Wrap(err, "revert status")
 					}

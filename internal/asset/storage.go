@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
@@ -17,7 +18,7 @@ import (
 const storageKey = "contracts"
 const storageSubKey = "assets"
 
-var cache map[protocol.AssetCode]*state.Asset
+var cache map[bitcoin.Hash20]*state.Asset
 
 // Put a single asset in storage
 func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
@@ -37,14 +38,15 @@ func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	}
 
 	if cache == nil {
-		cache = make(map[protocol.AssetCode]*state.Asset)
+		cache = make(map[bitcoin.Hash20]*state.Asset)
 	}
 	cache[*asset.Code] = asset
 	return nil
 }
 
 // Fetch a single asset from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, assetCode *protocol.AssetCode) (*state.Asset, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	assetCode *bitcoin.Hash20) (*state.Asset, error) {
 	if cache != nil {
 		result, exists := cache[*assetCode]
 		if exists {
@@ -81,8 +83,8 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, asset *protocol.AssetCode) string {
-	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash.String(), storageSubKey, asset.String())
+func buildStoragePath(contractHash *bitcoin.Hash20, asset *bitcoin.Hash20) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash, storageSubKey, asset)
 }
 
 func serializeAsset(as *state.Asset) ([]byte, error) {
@@ -122,9 +124,6 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := serializeString(&buf, as.AssetPermissions); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&buf, binary.LittleEndian, as.TransfersPermitted); err != nil {
-		return nil, err
-	}
 
 	if err := binary.Write(&buf, binary.LittleEndian, uint32(len(as.TradeRestrictions))); err != nil {
 		return nil, err
@@ -155,7 +154,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, as.AssetModificationGovernance); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&buf, binary.LittleEndian, as.TokenQty); err != nil {
+	if err := binary.Write(&buf, binary.LittleEndian, as.AuthorizedTokenQty); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(&buf, binary.LittleEndian, as.AdministrationProposal); err != nil {
@@ -175,105 +174,103 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func serializeString(buf *bytes.Buffer, v []byte) error {
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v))); err != nil {
+func serializeString(w io.Writer, v []byte) error {
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(v))); err != nil {
 		return err
 	}
-	if _, err := buf.Write(v); err != nil {
+	if _, err := w.Write(v); err != nil {
 		return err
 	}
 	return nil
 }
 
-func deserializeAsset(buf *bytes.Reader, as *state.Asset) error {
+func deserializeAsset(r io.Reader, as *state.Asset) error {
 	// Version
 	var version uint8
-	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
 		return err
 	}
 	if version != 0 {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
+
+	if err := as.Code.Deserialize(r); err != nil {
+		return err
+	}
+	if err := binary.Read(r, binary.LittleEndian, &as.Revision); err != nil {
+		return err
+	}
+
 	var err error
-	as.Code, err = protocol.DeserializeAssetCode(buf)
+	as.CreatedAt, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.Revision); err != nil {
-		return err
-	}
-	as.CreatedAt, err = protocol.DeserializeTimestamp(buf)
+	as.UpdatedAt, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return err
 	}
-	as.UpdatedAt, err = protocol.DeserializeTimestamp(buf)
+	as.Timestamp, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return err
 	}
-	as.Timestamp, err = protocol.DeserializeTimestamp(buf)
-	if err != nil {
-		return err
-	}
-	data, err := deserializeString(buf)
+	data, err := deserializeString(r)
 	if err != nil {
 		return err
 	}
 	as.AssetType = string(data)
-	if err := binary.Read(buf, binary.LittleEndian, &as.AssetIndex); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AssetIndex); err != nil {
 		return err
 	}
-	as.AssetPermissions, err = deserializeString(buf)
+	as.AssetPermissions, err = deserializeString(r)
 	if err != nil {
-		return err
-	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.TransfersPermitted); err != nil {
 		return err
 	}
 
 	var length uint32
-	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return err
 	}
 	for i := 0; i < int(length); i++ {
 		var rest [3]byte
-		if _, err := buf.Read(rest[:]); err != nil {
+		if _, err := r.Read(rest[:]); err != nil {
 			return err
 		}
 		as.TradeRestrictions = append(as.TradeRestrictions, string(rest[:]))
 	}
 
-	if err := binary.Read(buf, binary.LittleEndian, &as.EnforcementOrdersPermitted); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.EnforcementOrdersPermitted); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.VotingRights); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.VotingRights); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.VoteMultiplier); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.VoteMultiplier); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.AdministrationProposal); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AdministrationProposal); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.HolderProposal); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.HolderProposal); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.AssetModificationGovernance); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AssetModificationGovernance); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.TokenQty); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AuthorizedTokenQty); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.AdministrationProposal); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AdministrationProposal); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &as.AdministrationProposal); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.AdministrationProposal); err != nil {
 		return err
 	}
-	as.AssetPayload, err = deserializeString(buf)
+	as.AssetPayload, err = deserializeString(r)
 	if err != nil {
 		return err
 	}
-	as.FreezePeriod, err = protocol.DeserializeTimestamp(buf)
+	as.FreezePeriod, err = protocol.DeserializeTimestamp(r)
 	if err != nil {
 		return err
 	}
@@ -281,13 +278,13 @@ func deserializeAsset(buf *bytes.Reader, as *state.Asset) error {
 	return nil
 }
 
-func deserializeString(buf *bytes.Reader) ([]byte, error) {
+func deserializeString(r io.Reader) ([]byte, error) {
 	var length uint32
-	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return nil, err
 	}
 	result := make([]byte, length)
-	if _, err := buf.Read(result); err != nil {
+	if _, err := r.Read(result); err != nil {
 		return nil, err
 	}
 	return result, nil

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/tokenized/pkg/bitcoin"
-
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -19,7 +18,12 @@ var cmdConvert = &cobra.Command{
 		if len(args) == 2 {
 			b, err := hex.DecodeString(args[1])
 			if err == nil {
-				assetID := protocol.AssetID(args[0], *protocol.AssetCodeFromBytes(b))
+				hash, err := bitcoin.NewHash20(b)
+				if err != nil {
+					fmt.Printf("Invalid hash : %s\n", err)
+					return nil
+				}
+				assetID := protocol.AssetID(args[0], *hash)
 				fmt.Printf("Asset ID : %s\n", assetID)
 				return nil
 			}

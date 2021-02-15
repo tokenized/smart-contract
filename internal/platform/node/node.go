@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -25,11 +26,10 @@ type Values struct {
 }
 
 // BitcoinHeaders provides functions for retrieving information about headers on the currently
-//   longest chain.
+// longest chain.
 type BitcoinHeaders interface {
-	LastHeight(ctx context.Context) int
-	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
-	Time(ctx context.Context, height int) (uint32, error)
+	GetHeaders(context.Context, int, int) ([]*wire.BlockHeader, error)
+	BlockHash(context.Context, int) (*bitcoin.Hash32, error)
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
@@ -48,16 +48,14 @@ type App struct {
 
 // Node configuration
 type Config struct {
-	ContractProviderID string
-	Version            string
-	FeeAddress         bitcoin.RawAddress
-	Net                bitcoin.Network
-	FeeRate            float32
-	DustFeeRate        float32
-	MinFeeRate         float32
-	RequestTimeout     uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
-	PreprocessThreads  int
-	IsTest             bool
+	FeeAddress        bitcoin.RawAddress
+	Net               bitcoin.Network
+	FeeRate           float32
+	DustFeeRate       float32
+	MinFeeRate        float32
+	RequestTimeout    uint64 // Nanoseconds until a request to another contract times out and the original request is rejected.
+	PreprocessThreads int
+	IsTest            bool
 }
 
 // New creates an App value that handle a set of routes for the application.

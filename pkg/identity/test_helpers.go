@@ -188,7 +188,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 
 	// Get random block hash
 	height := rand.Intn(5000)
-	blockHash, err := c.blockHashes.Hash(ctx, height)
+	blockHash, err := c.blockHashes.BlockHash(ctx, height)
 	if err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "get sig block hash")
 	}
@@ -244,7 +244,7 @@ func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 
 	// Get random block hash
 	height := rand.Intn(5000)
-	blockHash, err := c.blockHashes.Hash(ctx, height)
+	blockHash, err := c.blockHashes.BlockHash(ctx, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "get sig block hash")
 	}
@@ -292,7 +292,7 @@ func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer action
 
 	// Get random block hash
 	height := rand.Intn(5000)
-	blockHash, err := c.blockHashes.Hash(ctx, height)
+	blockHash, err := c.blockHashes.BlockHash(ctx, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "get sig block hash")
 	}
@@ -362,7 +362,7 @@ func NewRandBlockHashes() *RandBlockHashes {
 	}
 }
 
-func (bh *RandBlockHashes) Hash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
+func (bh *RandBlockHashes) BlockHash(ctx context.Context, height int) (*bitcoin.Hash32, error) {
 	h, exists := bh.hashes[height]
 	if exists {
 		return &h, nil

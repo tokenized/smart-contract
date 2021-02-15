@@ -32,7 +32,7 @@ func freezeOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
@@ -112,7 +112,7 @@ func freezeAuthorityOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
@@ -207,7 +207,7 @@ func thawOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
@@ -289,7 +289,7 @@ func confiscateOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -386,7 +386,7 @@ func reconcileOrder(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 150)
@@ -496,7 +496,7 @@ func reconcileOrder(t *testing.T) {
 	t.Logf("\t%s\tVerified user balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
-func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress, quantity uint64) (*protocol.TxId, error) {
+func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress, quantity uint64) (*bitcoin.Hash32, error) {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 1000013, issuerKey.Address)
 
 	orderData := actions.Order{
@@ -550,10 +550,10 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 		return nil, err
 	}
 
-	var freezeTxId *protocol.TxId
+	var freezeTxId *bitcoin.Hash32
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		freezeTxId = protocol.TxIdFromBytes(hash[:])
+		freezeTxId = hash
 
 		test.RPCNode.SaveTX(ctx, responses[0])
 

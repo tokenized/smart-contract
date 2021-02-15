@@ -16,9 +16,9 @@ import (
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -93,7 +93,7 @@ func buildAction(c *cobra.Command, args []string) error {
 	switch m := action.(type) {
 	case *actions.ContractOffer:
 		fmt.Printf("Checking Contract Offer\n")
-		_, err := actions.PermissionsFromBytes(m.ContractPermissions, len(m.VotingSystems))
+		_, err := permissions.PermissionsFromBytes(m.ContractPermissions, len(m.VotingSystems))
 		if err != nil {
 			fmt.Printf("Invalid permissions\n")
 		}
@@ -112,7 +112,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 		fmt.Printf("Checking Asset Definition\n")
-		_, err = actions.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
+		_, err = permissions.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
 		if err != nil {
 			fmt.Printf("Invalid permissions\n")
 		}
@@ -203,7 +203,7 @@ func buildAction(c *cobra.Command, args []string) error {
 
 		// Check with inspector
 		var itx *inspector.Transaction
-		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, true)
+		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, theClient.Config.IsTest)
 		if err != nil {
 			logger.Warn(ctx, "Failed to convert tx to inspector")
 		}
@@ -312,7 +312,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 
 		for i, mod := range assetModification.Amendments {
-			fip, err := actions.FieldIndexPathFromBytes(mod.FieldIndexPath)
+			fip, err := permissions.FieldIndexPathFromBytes(mod.FieldIndexPath)
 			if err != nil {
 				fmt.Printf("Invalid field index path : %s\n", err)
 				return nil
@@ -325,7 +325,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		send, _ := c.Flags().GetBool(FlagSend)
 		if send {
 			fmt.Printf("Sending to network\n")
-			if err := theClient.ShotgunTx(ctx, tx.MsgTx, 250); err != nil {
+			if err := theClient.BroadcastTx(ctx, tx.MsgTx); err != nil {
 				fmt.Printf("Failed to send tx : %s\n", err)
 			}
 		}
