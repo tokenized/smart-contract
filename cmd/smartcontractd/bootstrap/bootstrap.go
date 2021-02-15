@@ -34,11 +34,11 @@ func NewConfig(ctx context.Context) *smartContractConfig.Config {
 
 	cfg := &smartContractConfig.Config{}
 	// load config using sane fallbacks
-	if err := config.LoadConfig(ctx, &cfg); err != nil {
+	if err := config.LoadConfig(ctx, cfg); err != nil {
 		logger.Fatal(ctx, "main : LoadConfig : %v", err)
 	}
 
-	config.DumpSafe(ctx, &cfg)
+	config.DumpSafe(ctx, cfg)
 
 	return cfg
 }
