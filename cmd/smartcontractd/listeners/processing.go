@@ -5,11 +5,9 @@ import (
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/pkg/errors"
 )
@@ -38,17 +36,6 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			node.LogError(ctx, "Failed to remove pending requests : %s", err)
 			server.walletLock.RUnlock()
 			continue
-		}
-
-		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
-			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
-			node.Log(ctx, "Saving contract formation for %s : %s",
-				bitcoin.NewAddressFromRawAddress(ptx.Itx.Inputs[0].Address, server.Config.Net),
-				ptx.Itx.Hash)
-			if err := contract.SaveContractFormation(ctx, server.MasterDB,
-				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
-				node.LogError(ctx, "Failed to save contract formation : %s", err)
-			}
 		}
 
 		isRelevant := false

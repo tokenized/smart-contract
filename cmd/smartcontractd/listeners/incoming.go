@@ -42,6 +42,17 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 		return err
 	}
 
+	if intx.Itx.MsgProto != nil && intx.Itx.MsgProto.Code() == actions.CodeContractFormation {
+		cf := intx.Itx.MsgProto.(*actions.ContractFormation)
+		node.Log(ctx, "Saving contract formation for %s : %s",
+			bitcoin.NewAddressFromRawAddress(intx.Itx.Inputs[0].Address, server.Config.Net),
+			intx.Itx.Hash)
+		if err := contract.SaveContractFormation(ctx, server.MasterDB,
+			intx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
+			node.LogError(ctx, "Failed to save contract formation : %s", err)
+		}
+	}
+
 	if err := transactions.AddTx(ctx, server.MasterDB, intx.Itx); err != nil {
 		server.pendingLock.Unlock()
 		return err

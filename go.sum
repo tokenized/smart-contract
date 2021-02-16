@@ -137,6 +137,8 @@ github.com/tokenized/pkg v0.2.3-0.20210208044411-3c67bb806929 h1:jpUHBC0hEGsHPMt
 github.com/tokenized/pkg v0.2.3-0.20210208044411-3c67bb806929/go.mod h1:zT1FbBVDooQj/tuBhu8uXWIrK2TZexH4Kas4IJGCnN4=
 github.com/tokenized/pkg v0.2.3-0.20210215032936-22eb80850323 h1:LdXtgpDDGsPBEeMHZMzhenPVBRm05Dq7PtDJPHu0JdM=
 github.com/tokenized/pkg v0.2.3-0.20210215032936-22eb80850323/go.mod h1:zT1FbBVDooQj/tuBhu8uXWIrK2TZexH4Kas4IJGCnN4=
+github.com/tokenized/pkg v0.2.3-0.20210216234704-f79bde77e36e h1:ixFIMDDOnURZxDWib9ocEd/Gr1yYPwIkrMFlvB7/teM=
+github.com/tokenized/pkg v0.2.3-0.20210216234704-f79bde77e36e/go.mod h1:zT1FbBVDooQj/tuBhu8uXWIrK2TZexH4Kas4IJGCnN4=
 github.com/tokenized/specification v0.3.2-0.20210204063746-19087b198166 h1:Nj2A7fDMURfFo++2TIhS0nYDq2FN3uH9D1DP8aeNhP8=
 github.com/tokenized/specification v0.3.2-0.20210204063746-19087b198166/go.mod h1:JniSldpaQ7j9ba+y5QCtc/639mRNiY5Z376JTel3YXo=
 github.com/tokenized/specification v0.3.2-0.20210215033303-500855fe1923 h1:YqpejYb0JCGUVAmc/qoQYoQrChXibh2IECADqTM72XQ=
@@ -147,6 +149,8 @@ github.com/tokenized/spynode v0.0.0-20210208044547-8ddbf8dd808b h1:zFzk5G296reBa
 github.com/tokenized/spynode v0.0.0-20210208044547-8ddbf8dd808b/go.mod h1:vQEx5gz3Ge4anwKiyl6JsjAfMoeGbouFEZ0B2SwtbRY=
 github.com/tokenized/spynode v0.0.0-20210215215304-ad61cf200c54 h1:TuasdSnYDLR5QA/gartNuU4h6LvGyuM15YD+qaShow4=
 github.com/tokenized/spynode v0.0.0-20210215215304-ad61cf200c54/go.mod h1:vQEx5gz3Ge4anwKiyl6JsjAfMoeGbouFEZ0B2SwtbRY=
+github.com/tokenized/spynode v0.0.0-20210216235004-c255ac554c45 h1:tMNE6eKDk5bM1nk/Da3s5xBA1Xj5pSGPvLGYyEAm6YQ=
+github.com/tokenized/spynode v0.0.0-20210216235004-c255ac554c45/go.mod h1:U0AoWBik93B3zHsdnfxJaKBSHUu7WTf44/hFA0nGeJE=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
