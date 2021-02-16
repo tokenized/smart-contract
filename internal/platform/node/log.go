@@ -9,6 +9,7 @@ import (
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/txbuilder"
+	spynodeBootstrap "github.com/tokenized/spynode/cmd/spynoded/bootstrap"
 )
 
 // ContextWithLogger wraps the context with a development logger configuration.
@@ -24,7 +25,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
-	logConfig.EnableSubSystem("SpyNode")
+	logConfig.EnableSubSystem(spynodeBootstrap.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

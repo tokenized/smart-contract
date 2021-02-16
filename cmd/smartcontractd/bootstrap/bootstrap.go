@@ -16,6 +16,11 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wallet"
 )
 
+const (
+	// SubSystem is used by the logger package
+	SubSystem = "SpyNode"
+)
+
 func NewContextWithDevelopmentLogger() context.Context {
 	ctx := context.Background()
 

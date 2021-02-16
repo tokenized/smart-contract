@@ -576,15 +576,15 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve block header for height %d",
 				cert.BlockHeight))
 		}
-		if len(header) == 0 {
+		if len(header.Headers) == 0 {
 			return fmt.Errorf("Failed to retrieve block header for height %d", cert.BlockHeight)
 		}
-		if header[0].Timestamp.After(expire) {
-			return fmt.Errorf("Oracle sig block hash expired : %d < %d", header[0].Timestamp.Unix(),
-				expire.Unix())
+		if header.Headers[0].Timestamp.After(expire) {
+			return fmt.Errorf("Oracle sig block hash expired : %d < %d",
+				header.Headers[0].Timestamp.Unix(), expire.Unix())
 		}
 
-		hash := header[0].BlockHash()
+		hash := header.Headers[0].BlockHash()
 
 		logger.Info(ctx, "Admin address : %s",
 			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net))

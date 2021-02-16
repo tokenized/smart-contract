@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/spynode/pkg/client"
 )
 
 // ctxKey represents the type of value for the context key.
@@ -28,7 +28,7 @@ type Values struct {
 // BitcoinHeaders provides functions for retrieving information about headers on the currently
 // longest chain.
 type BitcoinHeaders interface {
-	GetHeaders(context.Context, int, int) ([]*wire.BlockHeader, error)
+	GetHeaders(context.Context, int, int) (*client.Headers, error)
 	BlockHash(context.Context, int) (*bitcoin.Hash32, error)
 }
 

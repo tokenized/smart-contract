@@ -9,6 +9,7 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
+	"github.com/tokenized/spynode/pkg/client"
 
 	"github.com/pkg/errors"
 )
@@ -118,8 +119,7 @@ func (h *mockHeaders) BlockHash(ctx context.Context, height int) (*bitcoin.Hash3
 	return h.headers[h.height-height].BlockHash(), nil
 }
 
-func (h *mockHeaders) GetHeaders(ctx context.Context, height,
-	count int) ([]*wire.BlockHeader, error) {
+func (h *mockHeaders) GetHeaders(ctx context.Context, height, count int) (*client.Headers, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
@@ -129,7 +129,12 @@ func (h *mockHeaders) GetHeaders(ctx context.Context, height,
 	if h.height-height >= len(h.headers) {
 		return nil, errors.New("Headers unavailable")
 	}
-	return h.headers[h.height-height : h.height-height+count], nil
+
+	return &client.Headers{
+		RequestHeight: int32(height),
+		StartHeight:   uint32(h.height - height),
+		Headers:       h.headers[h.height-height : h.height-height+count],
+	}, nil
 }
 
 func (h *mockHeaders) Reset() {
