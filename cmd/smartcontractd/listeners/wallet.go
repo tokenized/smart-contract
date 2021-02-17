@@ -11,7 +11,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/pkg/wallet"
-	"github.com/tokenized/spynode/pkg/client"
 
 	"github.com/pkg/errors"
 )
@@ -153,13 +152,6 @@ func (server *Server) SyncWallet(ctx context.Context) error {
 	for _, key := range keys {
 		// Contract address
 		server.contractAddresses = append(server.contractAddresses, key.Address)
-	}
-
-	if server.SpyNode != nil {
-		logger.Info(ctx, "Subscribing to %d addresses", len(server.contractAddresses))
-		if err := client.SubscribeAddresses(ctx, server.contractAddresses, server.SpyNode); err != nil {
-			return errors.Wrap(err, "subscribe contract addresses")
-		}
 	}
 
 	return nil

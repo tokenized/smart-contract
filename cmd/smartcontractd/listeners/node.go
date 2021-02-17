@@ -137,9 +137,7 @@ func (server *Server) Load(ctx context.Context) error {
 	return nil
 }
 
-func (server *Server) Run(ctx context.Context) error {
-	wg := sync.WaitGroup{}
-
+func (server *Server) Start(ctx context.Context, wg *sync.WaitGroup) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -187,7 +185,8 @@ func (server *Server) Run(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := holdings.ProcessCacheItems(ctx, server.MasterDB, server.holdingsChannel); err != nil {
+		if err := holdings.ProcessCacheItems(ctx, server.MasterDB,
+			server.holdingsChannel); err != nil {
 			node.LogError(ctx, "Process holdings cache failed : %s", err)
 			server.Scheduler.Stop(ctx)
 			server.incomingTxs.Close()
@@ -195,6 +194,16 @@ func (server *Server) Run(ctx context.Context) error {
 		}
 		node.LogVerbose(ctx, "Process holdings cache thread finished")
 	}()
+
+	return nil
+}
+
+func (server *Server) Run(ctx context.Context) error {
+	wg := sync.WaitGroup{}
+
+	if err := server.Start(ctx, &wg); err != nil {
+		return errors.Wrap(err, "start")
+	}
 
 	// Block until goroutines finish as a result of Stop()
 	wg.Wait()

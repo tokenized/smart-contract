@@ -148,6 +148,7 @@ func (server *Server) HandleInSync(ctx context.Context) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
 
 	if server.IsInSync() {
+		node.Log(ctx, "Node already in sync")
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
 			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
