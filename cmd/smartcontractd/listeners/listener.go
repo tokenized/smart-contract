@@ -40,9 +40,11 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 				logger.Error(ctx, "Failed to subscribe to contract addresses : %s", err)
 			}
 
+			saveNeeded := false
 			var nextMessageID uint64
 			if msg.MessageCount == 0 {
 				nextMessageID = 1 // either first startup or server reset
+				saveNeeded = true
 			} else {
 				nextID, err := state.GetNextMessageID(ctx, server.MasterDB)
 				if err != nil {
@@ -50,11 +52,22 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 					return
 				}
 				nextMessageID = *nextID
+
+				if nextMessageID > msg.MessageCount {
+					nextMessageID = 1 // reset because something is out of sync
+					saveNeeded = true
+				}
 			}
 
 			if err := server.SpyNode.Ready(ctx, nextMessageID); err != nil {
 				logger.Error(ctx, "Failed to notify spynode ready : %s", err)
 				return
+			}
+
+			if saveNeeded {
+				if err := state.SaveNextMessageID(ctx, server.MasterDB, nextMessageID); err != nil {
+					logger.Error(ctx, "Failed to save next message id : %s", err)
+				}
 			}
 
 			logger.Info(ctx, "SpyNode client ready at next message %d", nextMessageID)
