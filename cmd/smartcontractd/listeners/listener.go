@@ -13,6 +13,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/spynode/pkg/client"
+	"go.uber.org/zap"
 
 	"github.com/pkg/errors"
 )
@@ -43,6 +44,7 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 			saveNeeded := false
 			var nextMessageID uint64
 			if msg.MessageCount == 0 {
+				logger.Warn(ctx, "Message count zero")
 				nextMessageID = 1 // either first startup or server reset
 				saveNeeded = true
 			} else {
@@ -54,6 +56,8 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 				nextMessageID = *nextID
 
 				if nextMessageID > msg.MessageCount {
+					logger.Warn(ctx, "Message count %d below message id %d", msg.MessageCount,
+						nextMessageID)
 					nextMessageID = 1 // reset because something is out of sync
 					saveNeeded = true
 				}
@@ -86,10 +90,11 @@ func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 		}
 	}
 
-	err := server.AddTx(ctx, tx, *txid)
-	if err != nil {
+	if err := server.AddTx(ctx, tx, *txid); err != nil {
 		if errors.Cause(err) != ErrDuplicateTx {
 			node.LogError(ctx, "Failed to add tx : %s", err)
+		} else {
+			node.Log(ctx, "Already added tx")
 		}
 	}
 
@@ -125,12 +130,14 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
 
-		err = server.cancelTx(ctx, itx)
-		if err != nil {
+		if err := server.cancelTx(ctx, itx); err != nil {
 			node.LogWarn(ctx, "Failed to cancel tx : %s", err)
 		}
 	} else if state.MerkleProof != nil {
 		node.Log(ctx, "Tx confirm")
+		logger.InfoWithZapFields(ctx, []zap.Field{
+			zap.Stringer("block_hash", state.MerkleProof.BlockHeader.BlockHash()),
+		}, "Tx confirm")
 
 		if server.removeFromReverted(ctx, &txid) {
 			node.LogVerbose(ctx, "Tx reconfirmed in reorg")
@@ -139,7 +146,9 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 
 		server.MarkConfirmed(ctx, txid)
 	} else if state.Safe {
-		node.Log(ctx, "Tx safe")
+		logger.InfoWithZapFields(ctx, []zap.Field{
+			zap.Uint32("unconfirmed_depth", state.UnconfirmedDepth),
+		}, "Tx safe")
 
 		if server.removeFromReverted(ctx, &txid) {
 			node.LogVerbose(ctx, "Tx safe again after reorg")

@@ -55,12 +55,12 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 
 	if err := transactions.AddTx(ctx, server.MasterDB, intx.Itx); err != nil {
 		server.pendingLock.Unlock()
-		return err
+		return errors.Wrap(err, "add tx")
 	}
 
 	if err := transactions.AddTxState(ctx, server.MasterDB, intx.Itx.Hash, &tx.State); err != nil {
 		server.pendingLock.Unlock()
-		return err
+		return errors.Wrap(err, "add tx state")
 	}
 
 	_, exists := server.pendingTxs[*intx.Itx.Hash]
@@ -74,7 +74,7 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 
 	server.incomingTxs.Add(intx)
 
-	node.LogVerbose(ctx, "Tx added to incoming : %s", intx.Itx.Hash)
+	node.Log(ctx, "Tx added to incoming : %s", intx.Itx.Hash)
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 
 	for intx := range server.incomingTxs.Channel {
 		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
-		node.LogVerbose(txCtx, "Processing incoming tx")
+		node.Log(txCtx, "Processing incoming tx")
 
 		if err := intx.Itx.Validate(txCtx); err != nil {
 			server.abortPendingTx(txCtx, *intx.Itx.Hash)
@@ -129,14 +129,14 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 }
 
 func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32) {
-	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
+	node.Log(ctx, "Marking tx preprocessed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[txid]
 	if !exists {
-		node.LogVerbose(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
+		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
 		return
 	}
 

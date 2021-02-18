@@ -45,6 +45,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferRequest")
 	defer span.End()
 
+	node.Log(ctx, "Transfer request")
+
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	msg, ok := itx.MsgProto.(*actions.Transfer)
@@ -69,10 +71,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !itx.Outputs[first].Address.Equal(rk.Address) {
-		node.LogVerbose(ctx,
-			"Not contract for first transfer. Waiting for Message SettlementRequest : %s",
+		node.Log(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %s",
 			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
-
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
@@ -156,11 +156,11 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	script, err = protocol.Serialize(&settlement, t.Config.IsTest)
 	if err != nil {
 		node.LogWarn(ctx, "Failed to serialize settlement : %s", err)
-		return err
+		return errors.Wrap(err, "serialize response")
 	}
 	err = settleTx.AddOutput(script, 0, false, false)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "add response output")
 	}
 
 	// Add this contract's data to the settlement op return data
@@ -175,7 +175,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx, msg,
 				rk, rejectCode, false, "")
 		} else {
-			return errors.Wrap(err, "Failed to add settlement data")
+			return errors.Wrap(err, "add settlement data")
 		}
 	}
 
@@ -188,9 +188,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 				return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx,
 					msg, rk, actions.RejectionsInsufficientTxFeeFunding, false, err.Error())
 			} else {
-				node.LogWarn(ctx, "Failed to sign settlement tx : %s", err)
-				return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx,
-					msg, rk, actions.RejectionsMsgMalformed, false, "")
+				return errors.Wrap(err, "sign response")
 			}
 		}
 
@@ -202,17 +200,17 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		if err := node.Respond(ctx, w, responseItx); err == nil {
 			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
 				rk.Address); err != nil {
-				return err
+				return errors.Wrap(err, "save holdings")
 			}
 		}
 
-		return err
+		return errors.Wrap(err, "send response")
 	}
 
 	// Send to next contract
 	if err := sendToNextSettlementContract(ctx, w, rk, itx, itx, msg, settleTx, &settlement,
 		&settlementRequest, t.Tracer); err != nil {
-		return err
+		return errors.Wrap(err, "send to next contract")
 	}
 
 	// Save pending transfer
@@ -226,14 +224,14 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Schedule timeout for transfer in case the other contract(s) don't respond.
-	if err := t.Scheduler.ScheduleJob(ctx, listeners.NewTransferTimeout(t.handler,
-		itx, timeout)); err != nil {
+	if err := t.Scheduler.ScheduleJob(ctx, listeners.NewTransferTimeout(t.handler, itx,
+		timeout)); err != nil {
 		return errors.Wrap(err, "Failed to schedule transfer timeout")
 	}
 
 	if err := saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, assetUpdates,
 		rk.Address); err != nil {
-		return err
+		return errors.Wrap(err, "save holdings")
 	}
 
 	return nil
@@ -1019,6 +1017,8 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.SettlementResponse")
 	defer span.End()
+
+	node.Log(ctx, "Settlement response")
 
 	msg, ok := itx.MsgProto.(*actions.Settlement)
 	if !ok {

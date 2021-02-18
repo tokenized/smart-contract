@@ -42,6 +42,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		// Save tx to cache so it can be used to process the response
 		for index, output := range ptx.Itx.Outputs {
+			if output.Address.IsEmpty() {
+				continue
+			}
+
 			for _, address := range server.contractAddresses {
 				if !address.Equal(output.Address) {
 					continue
@@ -69,6 +73,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		if ptx.Itx.IsOutgoingMessageType() {
 			responseAdded := false
 			for _, input := range ptx.Itx.Inputs {
+				if input.Address.IsEmpty() {
+					continue
+				}
+
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
 						node.Log(ctx, "Response for contract %s",
@@ -92,6 +100,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		if isRelevant { // Tx is associated with one of our contracts.
 			if server.IsInSync() {
+				node.Log(ctx, "Triggering response")
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
 					switch errors.Cause(err) {
@@ -103,7 +112,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				}
 			} else {
 				// Save tx for response processing after smart contract is in sync with on chain
-				//   data.
+				// data.
 				if err := transactions.AddTx(ctx, server.MasterDB, ptx.Itx); err != nil {
 					node.LogError(ctx, "Failed to save tx : %s", err)
 				}
