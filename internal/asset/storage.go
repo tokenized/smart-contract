@@ -194,6 +194,7 @@ func deserializeAsset(r io.Reader, as *state.Asset) error {
 		return fmt.Errorf("Unknown version : %d", version)
 	}
 
+	as.Code = &bitcoin.Hash20{}
 	if err := as.Code.Deserialize(r); err != nil {
 		return err
 	}
