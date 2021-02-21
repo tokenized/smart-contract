@@ -17,7 +17,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	filePath string) context.Context {
 
 	if len(filePath) > 0 {
-		os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
+		os.MkdirAll(path.Dir(filePath), os.ModePerm)
 	}
 
 	logConfig := logger.NewConfig(isDevelopment, isText, filePath)

@@ -721,7 +721,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		if ct.BodyOfAgreementType != msg.BodyOfAgreementType {
 			uc.BodyOfAgreementType = &msg.BodyOfAgreementType
-			node.Log(ctx, "Updating contract body of agreement type : %t", *uc.BodyOfAgreementType)
+			node.Log(ctx, "Updating contract body of agreement type : %d", *uc.BodyOfAgreementType)
 		}
 
 		// Check if oracles are different
