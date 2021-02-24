@@ -10,7 +10,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/config v0.0.3
-	github.com/tokenized/pkg v0.2.3-0.20210221212508-f39035736f6e
+	github.com/tokenized/pkg v0.2.3-0.20210221224604-0728c19f7c5d
 	github.com/tokenized/specification v0.3.2-0.20210215033303-500855fe1923
 	github.com/tokenized/spynode v0.0.0-20210219225128-eab322ee5e44
 	go.opencensus.io v0.22.2

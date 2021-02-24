@@ -54,7 +54,7 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 				}
 				nextMessageID = *nextID
 
-				if nextMessageID > msg.MessageCount {
+				if nextMessageID > msg.MessageCount+1 {
 					logger.Warn(ctx, "Message count %d below message id %d", msg.MessageCount,
 						nextMessageID)
 					nextMessageID = 1 // reset because something is out of sync
