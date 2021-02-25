@@ -19,6 +19,9 @@ var (
 
 	// ErrInvalidSignature means a provided signature is invalid.
 	ErrInvalidSignature = errors.New("Invalid Signature")
+
+	// ErrUnauthorized means authorization failed.
+	ErrUnauthorized = errors.New("Unauthorized")
 )
 
 // Factory is the interface for creating new identity clients.
