@@ -572,7 +572,10 @@ func agreementAmendment(t *testing.T) {
 			},
 		})
 
-	chaptersFIP := permissions.FieldIndexPath{actions.BodyOfAgreementFieldChapters}
+	chaptersFIP := permissions.FieldIndexPath{
+		actions.BodyOfAgreementFieldChapters,
+		1, // add as second element
+	}
 	chaptersFIPBytes, err := chaptersFIP.Bytes()
 	if err != nil {
 		t.Fatalf("Failed to get bytes for chapter field index path : %s", err)
