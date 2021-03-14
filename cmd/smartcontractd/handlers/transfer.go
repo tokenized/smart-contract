@@ -308,7 +308,7 @@ func firstContractOutputIndex(assetTransfers []*actions.AssetTransferField,
 	itx *inspector.Transaction) uint32 {
 
 	for _, asset := range assetTransfers {
-		if asset.AssetType != "BSV" && len(asset.AssetCode) != 0 &&
+		if asset.AssetType != protocol.BSVAssetID && len(asset.AssetCode) != 0 &&
 			int(asset.ContractIndex) < len(itx.Outputs) {
 			return asset.ContractIndex
 		}
@@ -341,7 +341,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 	// Setup inputs from outputs of the Transfer tx. One from each contract involved.
 	for assetOffset, assetTransfer := range transfer.Assets {
 		if assetTransfer.ContractIndex == uint32(0x0000ffff) ||
-			(assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0) {
+			(assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0) {
 			continue
 		}
 
@@ -367,7 +367,8 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 	//   One to each receiver, including any bitcoins received, or dust.
 	//   One to each sender with dust amount.
 	for assetOffset, assetTransfer := range transfer.Assets {
-		assetIsBitcoin := assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0
+		assetIsBitcoin := assetTransfer.AssetType == protocol.BSVAssetID &&
+			len(assetTransfer.AssetCode) == 0
 		assetBalance := uint64(0)
 
 		// Add all senders
@@ -557,7 +558,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	for assetOffset, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
 			node.LogVerbose(ctx, "Asset transfer for bitcoin")
 			continue // Skip bitcoin transfers since they should be handled already
 		}
@@ -852,7 +853,7 @@ func findBoomerangIndex(transferTx *inspector.Transaction,
 	outputUsed := make([]bool, len(transferTx.Outputs))
 	for _, assetTransfer := range transfer.Assets {
 		if assetTransfer.ContractIndex == uint32(0x0000ffff) ||
-			(assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0) {
+			(assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0) {
 			continue
 		}
 
@@ -996,7 +997,7 @@ func transferIsSingleContract(ctx context.Context, itx *inspector.Transaction,
 	defer span.End()
 
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "BSV" {
+		if assetTransfer.AssetType == protocol.BSVAssetID {
 			continue // All contracts can handle bitcoin transfers
 		}
 
@@ -1038,7 +1039,7 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	for assetIndex, assetSettlement := range msg.Assets {
-		if assetSettlement.AssetType == "BSV" && len(assetSettlement.AssetCode) == 0 {
+		if assetSettlement.AssetType == protocol.BSVAssetID && len(assetSettlement.AssetCode) == 0 {
 			continue // Bitcoin transaction
 		}
 
@@ -1170,7 +1171,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 
 	refundBalance := uint64(0)
 	for assetOffset, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
 			// Process bitcoin senders refunds
 			for _, sender := range assetTransfer.AssetSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {

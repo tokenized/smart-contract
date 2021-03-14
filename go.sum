@@ -136,10 +136,14 @@ github.com/tokenized/pkg v0.2.3-0.20210120232054-033e3826e206/go.mod h1:zT1FbBVD
 github.com/tokenized/pkg v0.2.3-0.20210219224445-ef80b9d38a72/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
 github.com/tokenized/pkg v0.2.3-0.20210221224604-0728c19f7c5d h1:0132DgiSn/+Dm5N+gdecjiCdzFzCrK33XkzqfNq/fqc=
 github.com/tokenized/pkg v0.2.3-0.20210221224604-0728c19f7c5d/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
+github.com/tokenized/pkg v0.2.3-0.20210314201644-d2a20a2c1493 h1:y6sWYg77uOSJbDtZfNVaqRFg9gWr9SYljDIsGNjQUXE=
+github.com/tokenized/pkg v0.2.3-0.20210314201644-d2a20a2c1493/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
 github.com/tokenized/specification v0.3.2-0.20210215033303-500855fe1923 h1:YqpejYb0JCGUVAmc/qoQYoQrChXibh2IECADqTM72XQ=
 github.com/tokenized/specification v0.3.2-0.20210215033303-500855fe1923/go.mod h1:JniSldpaQ7j9ba+y5QCtc/639mRNiY5Z376JTel3YXo=
 github.com/tokenized/specification v0.3.2-0.20210301224952-d89d3693233d h1:WZblo7pDf33pHlgsKTgevOs1Owmv6hd1qhWXsqxAUxA=
 github.com/tokenized/specification v0.3.2-0.20210301224952-d89d3693233d/go.mod h1:JniSldpaQ7j9ba+y5QCtc/639mRNiY5Z376JTel3YXo=
+github.com/tokenized/specification v0.3.2-0.20210314202103-84945e38c376 h1:3RRXSxm0kpUBXlL38RuMjNPGnQvYNeFbvuHbHgun/z4=
+github.com/tokenized/specification v0.3.2-0.20210314202103-84945e38c376/go.mod h1:lL0tVINIyNs8Vy1mD8DQ1CxiFFz3284g3AmF2ZpXO40=
 github.com/tokenized/spynode v0.0.0-20210219225128-eab322ee5e44 h1:QIppadurjnkNjMapTurgO8BETrpCcoze7y449rJ7Wnk=
 github.com/tokenized/spynode v0.0.0-20210219225128-eab322ee5e44/go.mod h1:seOZ0NBefF1a8UEQmocjB0D/cmVc9/7LsvCVeDaPhjg=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
