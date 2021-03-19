@@ -113,18 +113,18 @@ func createAssetContract(t *testing.T) {
 			parent: nil,
 			valid:  true,
 		},
-		{
-			name: "AssetWithMissingEntity",
-			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
-				ContractName: "Test Name",
-				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
-					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-				EntityContract: test.Contract2Key.Address.Bytes(),
-			},
-			parent: nil,
-			valid:  false, // Entity contract formation won't exist
-		},
+		// { // This is currently allowed so an entity contract address can represent an off chain entity
+		// 	name: "AssetWithMissingEntity",
+		// 	offer: &actions.ContractOffer{
+		// 		ContractType: actions.ContractTypeAsset,
+		// 		ContractName: "Test Name",
+		// 		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
+		// 			VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+		// 		EntityContract: test.Contract2Key.Address.Bytes(),
+		// 	},
+		// 	parent: nil,
+		// 	valid:  false, // Entity contract formation won't exist
+		// },
 		{
 			name: "AssetWithInvalidEntityAddress",
 			offer: &actions.ContractOffer{
