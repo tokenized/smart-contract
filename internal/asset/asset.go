@@ -181,9 +181,9 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.Coupon:
-		if data.ExpiryDate != 0 && data.ExpiryDate < now.Nano() {
+		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
 			return node.NewError(actions.RejectionsAssetNotPermitted,
-				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpiryDate)))
+				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
 	case *assets.LoyaltyPoints:
@@ -193,10 +193,6 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.TicketAdmission:
-		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.ExpirationTimestamp)))
-		}
 	}
 
 	return nil
