@@ -193,6 +193,10 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.TicketAdmission:
+		if data.EventEndTimestamp != 0 && data.EventEndTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsAssetNotPermitted,
+				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.EventEndTimestamp)))
+		}
 	}
 
 	return nil
