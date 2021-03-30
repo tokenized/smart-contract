@@ -83,6 +83,8 @@ func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 	txid := tx.Tx.TxHash()
 	ctx = node.ContextWithLogTrace(ctx, txid.String())
 
+	node.Log(ctx, "Handling tx")
+
 	if tx.ID != 0 {
 		if err := state.SaveNextMessageID(ctx, server.MasterDB, tx.ID+1); err != nil {
 			logger.Error(ctx, "Failed to save next message id : %s", err)
@@ -98,8 +100,6 @@ func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 	}
 
 	server.handleTxState(ctx, *txid, &tx.State)
-
-	node.Log(ctx, "Handled tx")
 }
 
 func (server *Server) HandleTxUpdate(ctx context.Context, update *client.TxUpdate) {
