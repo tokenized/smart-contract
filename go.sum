@@ -138,8 +138,8 @@ github.com/tokenized/pkg v0.2.3-0.20210318205230-1b68053795c1 h1:SPgp6cuZvjS7Xye
 github.com/tokenized/pkg v0.2.3-0.20210318205230-1b68053795c1/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
 github.com/tokenized/specification v0.3.2-0.20210314213431-1e69d62c6198 h1:WXpf6lQ3qyIAKTsnc5c0zIXFAo8Qs/QCS552Jn8lASE=
 github.com/tokenized/specification v0.3.2-0.20210314213431-1e69d62c6198/go.mod h1:qd4H7msAuB4FUrUK6XS2s0A4IHWckfzD8pYRt8qlWas=
-github.com/tokenized/specification v0.3.2-0.20210329235637-1f901b0432ce h1:CVSr/HBL0DxrmozH0hlgulg+Q/LnSvLuvk/QlV/ENvA=
-github.com/tokenized/specification v0.3.2-0.20210329235637-1f901b0432ce/go.mod h1:qd4H7msAuB4FUrUK6XS2s0A4IHWckfzD8pYRt8qlWas=
+github.com/tokenized/specification v1.0.0 h1:4v2551Us9Ib9jmlJfyC2AbXCePbK9aI7UGmdAo/6Llg=
+github.com/tokenized/specification v1.0.0/go.mod h1:qd4H7msAuB4FUrUK6XS2s0A4IHWckfzD8pYRt8qlWas=
 github.com/tokenized/spynode v0.0.0-20210314214409-1fa9f64838d7 h1:HE/p7wtVt2y8IydzsZ2SXSRoIW8hWiWsh7gn78DdhLw=
 github.com/tokenized/spynode v0.0.0-20210314214409-1fa9f64838d7/go.mod h1:QMwz15sOSG2dPzRJTiu1FCdPY2o7Ugc6faCQeNplFck=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
