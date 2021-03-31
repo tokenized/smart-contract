@@ -19,6 +19,9 @@ var (
 
 	// ErrInvalidSignature means a provided signature is invalid.
 	ErrInvalidSignature = errors.New("Invalid Signature")
+
+	// ErrUnauthorized means authorization failed.
+	ErrUnauthorized = errors.New("Unauthorized")
 )
 
 // Factory is the interface for creating new identity clients.
@@ -70,5 +73,5 @@ type Client interface {
 
 // BlockHashes is an interface for a system that provides block hashes for specified block heights.
 type BlockHashes interface {
-	Hash(ctx context.Context, height int) (*bitcoin.Hash32, error)
+	BlockHash(ctx context.Context, height int) (*bitcoin.Hash32, error)
 }

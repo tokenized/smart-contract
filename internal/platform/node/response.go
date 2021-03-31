@@ -248,7 +248,10 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 // Respond sends a TX to the network.
 func Respond(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction) error {
-	// Save Tx.
+	Log(ctx, "Responding with tx : %s", itx.Hash)
+
+	// Save Tx. Since state isn't saved it will not be considered already processed and will be
+	// processed normally when it feeds back through from spynode.
 	if err := transactions.AddTx(ctx, w.MasterDB, itx); err != nil {
 		return errors.Wrap(err, "Failed to save tx")
 	}

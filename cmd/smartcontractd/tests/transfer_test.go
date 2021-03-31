@@ -10,18 +10,19 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
-	spynodeHandlers "github.com/tokenized/pkg/spynode/handlers"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	"github.com/tokenized/smart-contract/internal/holdings"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/spynode/pkg/client"
 )
 
 // TestTransfers is the entry point for testing transfer functions.
@@ -63,11 +64,11 @@ func simpleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
-	requests := make([]*wire.MsgTx, 0, b.N)
+	requests := make([]*client.Tx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
@@ -96,11 +97,11 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferInputHash := fundingTx.TxHash()
 
 		// From issuer
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+		transferTx.AddTxIn(wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		var err error
@@ -111,7 +112,13 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
 		test.RPCNode.SaveTX(ctx, transferTx)
-		requests = append(requests, transferTx)
+		requests = append(requests, &client.Tx{
+			Tx:      transferTx,
+			Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+			State: client.TxState{
+				Safe: true,
+			},
+		})
 		hash := transferTx.TxHash()
 		hashes = append(hashes, hash)
 	}
@@ -119,12 +126,10 @@ func simpleTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		test.HoldingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, test.HoldingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		b.Fatalf("Failed to load server : %s", err)
@@ -158,44 +163,41 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 	b.ResetTimer()
 
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
 	wgInternal := sync.WaitGroup{}
 	wgInternal.Add(1)
 	go func() {
-		defer wgInternal.Done()
-		for i, request := range requests {
-			if _, err := server.HandleTx(ctx, request); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
-
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
+		for _, request := range requests {
+			server.HandleTx(ctx, request)
 		}
+		wgInternal.Done()
 	}()
 
 	wgInternal.Add(1)
 	go func() {
-		defer wgInternal.Done()
 		responsesProcessed := 0
 		for responsesProcessed < b.N {
 			response := getResponse()
 			if response == nil {
 				continue
 			}
-			responsesProcessed++
 			// rType := responseType(response)
 			// if rType != "T2" {
-			// 	b.Fatalf("Invalid response type : %s", rType)
+			// 	continue
 			// }
 
-			if _, err := server.HandleTx(ctx, response); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			server.HandleTx(ctx, &client.Tx{
+				Tx:      response,
+				Outputs: []*wire.TxOut{requests[responsesProcessed].Tx.TxOut[0]},
+				State: client.TxState{
+					Safe: true,
+				},
+			})
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			responsesProcessed++
 		}
+		wgInternal.Done()
 	}()
 
 	wgInternal.Wait()
@@ -207,14 +209,14 @@ func simpleTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	v := ctx.Value(node.KeyValues).(*node.Values)
 	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
 	if h.FinalizedBalance != 0 {
-		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
+		b.Fatalf("\t%s\tBalance not zeroized (N=%d) : %d/%d", tests.Failed, b.N, h.PendingBalance,
+			h.FinalizedBalance)
 	}
 }
 
@@ -225,11 +227,11 @@ func separateTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
-	requests := make([]*wire.MsgTx, 0, b.N)
+	requests := make([]*client.Tx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	senders := make([]*wallet.Key, 0, b.N)
 	receivers := make([]*wallet.Key, 0, b.N)
@@ -273,11 +275,12 @@ func separateTransfersBenchmark(b *testing.B) {
 		// From sender
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), senderKey.Address)
 		transferInputHash := fundingTx.TxHash()
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn,
+			wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -287,7 +290,13 @@ func separateTransfersBenchmark(b *testing.B) {
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
 		test.RPCNode.SaveTX(ctx, transferTx)
-		requests = append(requests, transferTx)
+		requests = append(requests, &client.Tx{
+			Tx:      transferTx,
+			Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+			State: client.TxState{
+				Safe: true,
+			},
+		})
 		hash := transferTx.TxHash()
 		hashes = append(hashes, hash)
 	}
@@ -295,12 +304,10 @@ func separateTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		test.HoldingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, test.HoldingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		b.Fatalf("Failed to load server : %s", err)
@@ -324,7 +331,8 @@ func separateTransfersBenchmark(b *testing.B) {
 		}
 	}()
 
-	profFile, err := os.OpenFile("separate_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	profFile, err := os.OpenFile("separate_transfer_cpu.prof", os.O_CREATE|os.O_TRUNC|os.O_RDWR,
+		0644)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to create prof file : %v", tests.Failed, err)
 	}
@@ -338,14 +346,8 @@ func separateTransfersBenchmark(b *testing.B) {
 	wgInternal.Add(1)
 	go func() {
 		defer wgInternal.Done()
-		for i, request := range requests {
-			if _, err := server.HandleTx(ctx, request); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
-
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
+		for _, request := range requests {
+			server.HandleTx(ctx, request)
 		}
 	}()
 
@@ -358,19 +360,20 @@ func separateTransfersBenchmark(b *testing.B) {
 			if response == nil {
 				continue
 			}
-			responsesProcessed++
 			// rType := responseType(response)
 			// if rType != "T2" {
 			// 	b.Fatalf("Invalid response type : %s", rType)
 			// }
 
-			if _, err := server.HandleTx(ctx, response); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			server.HandleTx(ctx, &client.Tx{
+				Tx:      response,
+				Outputs: []*wire.TxOut{requests[responsesProcessed].Tx.TxOut[0]},
+				State: client.TxState{
+					Safe: true,
+				},
+			})
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			responsesProcessed++
 		}
 	}()
 
@@ -414,8 +417,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(b, ctx, "Test Contract", "This is a mock contract and means nothing.",
-		"I", 1, "John Bitcoin")
+	mockUpContractWithOracle(b, ctx, "Test Contract", "I", 1, "John Bitcoin")
 	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
 
 	err := test.Headers.Populate(ctx, 50000, 12)
@@ -425,7 +427,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
 
-	requests := make([]*wire.MsgTx, 0, b.N)
+	requests := make([]*client.Tx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100000+uint64(i), issuerKey.Address)
@@ -443,8 +445,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-		blockHeight := test.Headers.LastHeight(ctx) - 5
-		blockHash, err := test.Headers.Hash(ctx, blockHeight)
+		blockHeight := 50000 - 5
+		blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
@@ -476,11 +478,12 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferInputHash := fundingTx.TxHash()
 
 		// From issuer
-		transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+		transferTx.TxIn = append(transferTx.TxIn,
+			wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
 
 		// To contract
 		script, _ := test.ContractKey.Address.LockingScript()
-		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(2000, script))
+		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(3000, script))
 
 		// Data output
 		script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
@@ -490,7 +493,13 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferTx.TxOut = append(transferTx.TxOut, wire.NewTxOut(0, script))
 
 		test.RPCNode.SaveTX(ctx, transferTx)
-		requests = append(requests, transferTx)
+		requests = append(requests, &client.Tx{
+			Tx:      transferTx,
+			Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+			State: client.TxState{
+				Safe: true,
+			},
+		})
 		hash := transferTx.TxHash()
 		hashes = append(hashes, hash)
 	}
@@ -498,12 +507,10 @@ func oracleTransfersBenchmark(b *testing.B) {
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		test.HoldingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, test.HoldingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		b.Fatalf("Failed to load server : %s", err)
@@ -541,14 +548,8 @@ func oracleTransfersBenchmark(b *testing.B) {
 	wgInternal.Add(1)
 	go func() {
 		defer wgInternal.Done()
-		for i, request := range requests {
-			if _, err := server.HandleTx(ctx, request); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
-
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
+		for _, request := range requests {
+			server.HandleTx(ctx, request)
 
 			// Commented because validation isn't part of smartcontract benchmark.
 			// Uncomment to ensure benchmark is still functioning properly.
@@ -565,19 +566,20 @@ func oracleTransfersBenchmark(b *testing.B) {
 			if response == nil {
 				continue
 			}
-			responsesProcessed++
 			// rType := responseType(response)
 			// if rType != "T2" {
 			// 	b.Fatalf("Invalid response type : %s", rType)
 			// }
 
-			if _, err := server.HandleTx(ctx, response); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			server.HandleTx(ctx, &client.Tx{
+				Tx:      response,
+				Outputs: []*wire.TxOut{requests[responsesProcessed].Tx.TxOut[0]},
+				State: client.TxState{
+					Safe: true,
+				},
+			})
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			responsesProcessed++
 		}
 	}()
 
@@ -602,7 +604,9 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 // splitTransfer creates a transfer transaction that splits the senders balance and sends it to two
 //   new users. It returns the transfer tx, and the new user's keys.
-func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64) (*wire.MsgTx, *wallet.Key, *wallet.Key) {
+func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key,
+	balance uint64) (*client.Tx, *wallet.Key, *wallet.Key) {
+
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 30000+balance, sender.Address)
 
 	receiver1, err := tests.GenerateKey(test.NodeConfig.Net)
@@ -650,7 +654,8 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 	transferInputHash := fundingTx.TxHash()
 
 	// From issuer
-	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0), make([]byte, 130)))
+	transferTx.TxIn = append(transferTx.TxIn, wire.NewTxIn(wire.NewOutPoint(transferInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -665,22 +670,28 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key, balanc
 
 	test.RPCNode.SaveTX(ctx, transferTx)
 
-	return transferTx, receiver1, receiver2
+	return &client.Tx{
+		Tx:      transferTx,
+		Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+		State: client.TxState{
+			Safe: true,
+		},
+	}, receiver1, receiver2
 }
 
 func splitTransferRecurse(b *testing.B, ctx context.Context, sender *wallet.Key, balance uint64,
-	levels uint) ([]*wire.MsgTx, []*wallet.Key) {
+	levels uint) ([]*client.Tx, []*wallet.Key) {
 
 	// split this transfer
 	tx, receiver1, receiver2 := splitTransfer(b, ctx, sender, balance)
 
 	if levels == 1 {
-		return []*wire.MsgTx{tx}, []*wallet.Key{receiver1, receiver2}
+		return []*client.Tx{tx}, []*wallet.Key{receiver1, receiver2}
 	}
 
 	// Create another level
 	childCount := (1 << (levels + 1)) - 1
-	txs := make([]*wire.MsgTx, 0, childCount+1)
+	txs := make([]*client.Tx, 0, childCount+1)
 	receivers := make([]*wallet.Key, 0, 2+(2*childCount))
 
 	txs = append(txs, tx)
@@ -706,7 +717,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	if err := resetTest(ctx); err != nil {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(b, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 
 	levels := uint(1)
@@ -722,19 +733,17 @@ func treeTransfersBenchmark(b *testing.B) {
 	requests, _ := splitTransferRecurse(b, ctx, issuerKey, uint64(nodes)*2, levels)
 	hashes := make([]*bitcoin.Hash32, 0, nodes)
 	for _, request := range requests {
-		hash := request.TxHash()
+		hash := request.Tx.TxHash()
 		hashes = append(hashes, hash)
 	}
 
 	test.NodeConfig.PreprocessThreads = 4
 
 	tracer := filters.NewTracer()
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		test.HoldingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, test.HoldingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		b.Fatalf("Failed to load server : %s", err)
@@ -773,13 +782,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	go func() {
 		defer wgInternal.Done()
 		for i, request := range requests {
-			if _, err := server.HandleTx(ctx, request); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
-
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *hashes[i]); err != nil {
-				b.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-			}
+			server.HandleTx(ctx, request)
 
 			if i >= b.N {
 				break
@@ -796,19 +799,21 @@ func treeTransfersBenchmark(b *testing.B) {
 			if response == nil {
 				continue
 			}
-			responsesProcessed++
+
 			// rType := responseType(response)
 			// if rType != "T2" {
 			// 	b.Fatalf("Invalid response type : %s", rType)
 			// }
 
-			if _, err := server.HandleTx(ctx, response); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			server.HandleTx(ctx, &client.Tx{
+				Tx:      response,
+				Outputs: []*wire.TxOut{requests[responsesProcessed].Tx.TxOut[0]},
+				State: client.TxState{
+					Safe: true,
+				},
+			})
 
-			if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *response.TxHash()); err != nil {
-				b.Fatalf("\t%s\tSettlement handle failed : %v", tests.Failed, err)
-			}
+			responsesProcessed++
 		}
 	}()
 
@@ -818,17 +823,6 @@ func treeTransfersBenchmark(b *testing.B) {
 
 	server.Stop(ctx)
 	wg.Wait()
-
-	// Check balance
-	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
-		issuerKey.Address, v.Now)
-	if err != nil {
-		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
-	}
-	if h.FinalizedBalance != 0 {
-		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
-	}
 }
 
 func sendTokens(t *testing.T) {
@@ -847,7 +841,7 @@ func sendTokens(t *testing.T) {
 	}()
 	defer test.HoldingsChannel.Close()
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1175,14 +1169,14 @@ func multiExchange(t *testing.T) {
 	}()
 	defer test.HoldingsChannel.Close()
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
 	user1HoldingBalance := uint64(100)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
-	mockUpContract2(t, ctx, "Test Contract 2", "This is a mock contract and means nothing.", "I",
+	mockUpContract2(t, ctx, "Test Contract 2", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
 	mockUpAsset2(t, ctx, true, true, true, 1500, &sampleAssetPayload2, true, false, false)
 
@@ -1266,7 +1260,11 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
+	t.Logf("Transfer : %s", transferItx.Hash)
+
 	test.RPCNode.SaveTX(ctx, transferTx)
+
+	transactions.AddTx(ctx, test.MasterDB, transferItx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -1486,7 +1484,7 @@ func bitcoinExchange(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1519,7 +1517,7 @@ func bitcoinExchange(t *testing.T) {
 	transfer2Amount := uint64(1050)
 	assetTransfer2Data := actions.AssetTransferField{
 		ContractIndex: 0, // first output
-		AssetType:     "BSV",
+		AssetType:     protocol.BSVAssetID,
 	}
 
 	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
@@ -1563,6 +1561,8 @@ func bitcoinExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
+
+	t.Logf("Transfer : %s", transferItx.Hash)
 
 	test.RPCNode.SaveTX(ctx, transferTx)
 
@@ -1644,7 +1644,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Errorf("\t%s\tWrong tracer count : got %d, want %d", tests.Failed, tracer.Count(), 0)
 	}
 
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I", 1,
+	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -1655,9 +1655,8 @@ func multiExchangeLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2",
-		"This is a mock contract and means nothing.", "I", 1, "Karl Bitcoin", true, true, false,
-		false, false)
+	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
+		true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2, true,
 		false, false)
 
@@ -1739,7 +1738,11 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
 
+	t.Logf("Transfer : %s", transferItx.Hash)
+
 	test.RPCNode.SaveTX(ctx, transferTx)
+
+	transactions.AddTx(ctx, test.MasterDB, transferItx)
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err != nil {
@@ -2040,7 +2043,7 @@ func multiExchangeTimeout(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2051,9 +2054,8 @@ func multiExchangeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to generate other contract key : %v", tests.Failed, err)
 	}
-	mockUpOtherContract(t, ctx, otherContractKey.Address,
-		"Test Contract 2", "This is a mock contract and means nothing.", "I",
-		1, "Karl Bitcoin", true, true, false, false, false)
+	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
+		true, true, false, false, false)
 	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
 		true, false, false)
 
@@ -2136,6 +2138,8 @@ func multiExchangeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
+
+	t.Logf("Transfer : %s", transferItx.Hash)
 
 	test.RPCNode.SaveTX(ctx, transferTx)
 
@@ -2393,7 +2397,7 @@ func oracleTransfer(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2417,8 +2421,8 @@ func oracleTransfer(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	blockHeight := test.Headers.LastHeight(ctx) - 5
-	blockHash, err := test.Headers.Hash(ctx, blockHeight)
+	blockHeight := 50000 - 5
+	blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -2469,12 +2473,10 @@ func oracleTransfer(t *testing.T) {
 
 	tracer := filters.NewTracer()
 	holdingsChannel := &holdings.CacheChannel{}
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		holdingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, holdingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		t.Fatalf("Failed to load server : %s", err)
@@ -2498,23 +2500,23 @@ func oracleTransfer(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	t.Logf("Transfer tx : %s", transferTx.TxHash().String())
-	if _, err := server.HandleTx(ctx, transferTx); err != nil {
-		t.Fatalf("\t%s\tTransfer handle failed : %v", tests.Failed, err)
-	}
+	t.Logf("Transfer tx : %s", transferTx.TxHash())
+	server.HandleTx(ctx, &client.Tx{
+		Tx:      transferTx,
+		Outputs: []*wire.TxOut{fundingTx.TxOut[0]},
+		State: client.TxState{
+			Safe: true,
+		},
+	})
 
-	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *transferTx.TxHash()); err != nil {
-		t.Fatalf("\t%s\tTransfer handle state failed : %v", tests.Failed, err)
-	}
-
-	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	// var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break
@@ -2570,7 +2572,7 @@ func oracleTransferBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContractWithOracle(t, ctx, "Test Contract", "This is a mock contract and means nothing.",
+	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2595,8 +2597,8 @@ func oracleTransferBad(t *testing.T) {
 	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
-	blockHeight := test.Headers.LastHeight(ctx) - 4
-	blockHash, err := test.Headers.Hash(ctx, blockHeight)
+	blockHeight := 50000 - 4
+	blockHash, err := test.Headers.BlockHash(ctx, blockHeight)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 	}
@@ -2626,7 +2628,7 @@ func oracleTransferBad(t *testing.T) {
 	bitcoinTransferAmount := uint64(50000)
 	bitcoinTransferData := actions.AssetTransferField{
 		ContractIndex: uint32(0x0000ffff),
-		AssetType:     "BSV",
+		AssetType:     protocol.BSVAssetID,
 	}
 
 	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders,
@@ -2671,12 +2673,10 @@ func oracleTransferBad(t *testing.T) {
 
 	tracer := filters.NewTracer()
 	holdingsChannel := &holdings.CacheChannel{}
-	txFilter := filters.NewTxFilter(tracer, true)
 	test.Scheduler = &scheduler.Scheduler{}
 
-	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB,
-		test.RPCNode, nil, test.Headers, test.Scheduler, tracer, test.UTXOs, txFilter,
-		holdingsChannel)
+	server := listeners.NewServer(test.Wallet, a, &test.NodeConfig, test.MasterDB, nil,
+		test.Headers, test.Scheduler, tracer, test.UTXOs, holdingsChannel)
 
 	if err := server.Load(ctx); err != nil {
 		t.Fatalf("Failed to load server : %s", err)
@@ -2700,22 +2700,25 @@ func oracleTransferBad(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	if _, err := server.HandleTx(ctx, transferTx); err != nil {
-		t.Fatalf("\t%s\tContract handle failed : %v", tests.Failed, err)
-	}
+	server.HandleTx(ctx, &client.Tx{
+		Tx: transferTx,
+		Outputs: []*wire.TxOut{
+			fundingTx.TxOut[0],
+			bitcoinFundingTx.TxOut[0],
+		},
+		State: client.TxState{
+			Safe: true,
+		},
+	})
 
-	if err := server.HandleTxState(ctx, spynodeHandlers.ListenerMsgTxStateSafe, *transferTx.TxHash()); err != nil {
-		t.Fatalf("\t%s\tContract offer handle state failed : %v", tests.Failed, err)
-	}
-
-	var firstResponse *wire.MsgTx // Request tx is re-broadcast now
+	// var firstResponse *wire.MsgTx // Request tx is re-broadcast now
 	var response *wire.MsgTx
 	for {
-		if firstResponse == nil {
-			firstResponse = getResponse()
-			time.Sleep(time.Millisecond)
-			continue
-		}
+		// if firstResponse == nil {
+		// 	firstResponse = getResponse()
+		// 	time.Sleep(time.Millisecond)
+		// 	continue
+		// }
 		response = getResponse()
 		if response != nil {
 			break
@@ -2771,7 +2774,7 @@ func permitted(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 
@@ -2870,9 +2873,10 @@ func permittedBad(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayloadNotPermitted, true, false,
+		false)
 
 	user2Holding := uint64(100)
 	mockUpHolding(t, ctx, user2Key.Address, user2Holding)

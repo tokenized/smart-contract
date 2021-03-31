@@ -26,7 +26,8 @@ var (
 )
 
 // Retrieve gets the specified contract from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, isTest bool) (*state.Contract, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	isTest bool) (*state.Contract, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Retrieve")
 	defer span.End()
 
@@ -132,6 +133,10 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.HolderProposal = *upd.HolderProposal
 	}
 
+	if upd.BodyOfAgreementType != nil {
+		c.BodyOfAgreementType = *upd.BodyOfAgreementType
+	}
+
 	if upd.Oracles != nil {
 		c.Oracles = *upd.Oracles
 		if c.Oracles == nil {
@@ -217,7 +222,7 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 // AddAssetCode adds an asset code to a contract. If the asset code is already there, then it will
 //   not add it again.
 func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, isTest bool, now protocol.Timestamp) error {
+	assetCode *bitcoin.Hash20, isTest bool, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
@@ -228,7 +233,7 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.Ra
 	}
 
 	for _, ac := range ct.AssetCodes {
-		if ac.Equal(*assetCode) {
+		if ac.Equal(assetCode) {
 			return nil
 		}
 	}
@@ -293,9 +298,9 @@ func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 		}
 
 		if applyMultiplier {
-			result += as.TokenQty * uint64(as.VoteMultiplier)
+			result += as.AuthorizedTokenQty * uint64(as.VoteMultiplier)
 		} else {
-			result += as.TokenQty
+			result += as.AuthorizedTokenQty
 		}
 	}
 
@@ -308,7 +313,7 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 
 	result := uint64(0)
 	for _, a := range ct.AssetCodes {
-		if a.Equal(ct.AdminMemberAsset) {
+		if a.Equal(&ct.AdminMemberAsset) {
 			continue // Administrative tokens don't count for holder votes.
 		}
 		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)

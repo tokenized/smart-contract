@@ -10,68 +10,84 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/logger"
-	"github.com/tokenized/pkg/rpcnode"
-	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
+	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/spynode/pkg/client"
 
 	"github.com/pkg/errors"
 )
 
 // AddTx adds a tx to the incoming pipeline.
-func (server *Server) AddTx(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) error {
-
+func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32) error {
 	server.pendingLock.Lock()
+
+	// The tx may already exist if it was created by smart-contract, but the state will not exist
+	// until it has been received.
+	if _, err := transactions.GetTxState(ctx, server.MasterDB, &txid); err == nil {
+		server.pendingLock.Unlock()
+		return errors.Wrap(ErrDuplicateTx, txid.String())
+	}
+
 	// Copy tx within lock to ensure that there is no possibility of a race condition with the
 	//   original copy of the tx in the current thread.
-	intx, err := NewIncomingTxData(ctx, tx, txid)
+	intx, err := NewIncomingTxData(ctx, tx, txid, server.Config.IsTest)
 	if err != nil {
 		server.pendingLock.Unlock()
 		return err
 	}
 
+	if intx.Itx.MsgProto != nil && intx.Itx.MsgProto.Code() == actions.CodeContractFormation {
+		cf := intx.Itx.MsgProto.(*actions.ContractFormation)
+		node.Log(ctx, "Saving contract formation for %s : %s",
+			bitcoin.NewAddressFromRawAddress(intx.Itx.Inputs[0].Address, server.Config.Net),
+			intx.Itx.Hash)
+		if err := contract.SaveContractFormation(ctx, server.MasterDB,
+			intx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
+			node.LogError(ctx, "Failed to save contract formation : %s", err)
+		}
+	}
+
+	if err := transactions.AddTx(ctx, server.MasterDB, intx.Itx); err != nil {
+		server.pendingLock.Unlock()
+		return errors.Wrap(err, "add tx")
+	}
+
+	if err := transactions.AddTxState(ctx, server.MasterDB, intx.Itx.Hash, &tx.State); err != nil {
+		server.pendingLock.Unlock()
+		return errors.Wrap(err, "add tx state")
+	}
+
 	_, exists := server.pendingTxs[*intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
-		return fmt.Errorf("Tx already added : %s", intx.Itx.Hash.String())
+		return errors.Wrap(ErrDuplicateTx, txid.String())
 	}
-	server.pendingTxs[*intx.Itx.Hash] = intx
+
+	server.pendingTxs[txid] = intx
 	server.pendingLock.Unlock()
 
 	server.incomingTxs.Add(intx)
 
-	node.LogVerbose(ctx, "Tx added to incoming : %s", intx.Itx.Hash.String())
+	node.Log(ctx, "Tx added to incoming : %s", intx.Itx.Hash)
 	return nil
 }
 
 // ProcessIncomingTxs performs preprocessing on transactions coming into the smart contract.
-func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
-	headers node.BitcoinHeaders) error {
+func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 
 	for intx := range server.incomingTxs.Channel {
 		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
-		node.LogVerbose(txCtx, "Processing incoming tx")
+		node.Log(txCtx, "Processing incoming tx")
 
-		if err := intx.Itx.Setup(txCtx, server.Config.IsTest); err != nil {
-			server.abortPendingTx(txCtx, *intx.Itx.Hash)
-			return errors.Wrap(err, "setup")
-		}
 		if err := intx.Itx.Validate(txCtx); err != nil {
 			server.abortPendingTx(txCtx, *intx.Itx.Hash)
 			return errors.Wrap(err, "validate")
-		}
-		if err := intx.Itx.Promote(txCtx, server.RpcNode); err != nil {
-			server.abortPendingTx(txCtx, *intx.Itx.Hash)
-			if errors.Cause(err) == rpcnode.ErrNotSeen {
-				node.LogVerbose(txCtx, "Failed to promote tx : %s", err)
-				continue
-			}
-			return errors.Wrap(err, "promote")
 		}
 
 		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
@@ -89,15 +105,15 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 		if intx.Itx.RejectCode == 0 {
 			switch msg := intx.Itx.MsgProto.(type) {
 			case *actions.Transfer:
-				if err := validateOracles(txCtx, masterDB, intx.Itx, msg, headers,
+				if err := validateOracles(txCtx, server.MasterDB, intx.Itx, msg, server.Headers,
 					server.Config.IsTest); err != nil {
 					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 					intx.Itx.RejectText = fmt.Sprintf("Invalid receiver oracle signature : %s", err)
 					node.LogWarn(txCtx, "Invalid receiver oracle signature : %s", err)
 				}
 			case *actions.ContractOffer:
-				if err := validateAdminIdentityOracleSig(txCtx, masterDB, server.Config, intx.Itx, msg,
-					headers, intx.Timestamp); err != nil {
+				if err := validateAdminIdentityOracleSig(txCtx, server.MasterDB, server.Config,
+					intx.Itx, msg, server.Headers, intx.Timestamp); err != nil {
 					intx.Itx.RejectCode = actions.RejectionsInvalidSignature
 					intx.Itx.RejectText = fmt.Sprintf("Invalid admin identity oracle signature : %s",
 						err)
@@ -113,14 +129,14 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context, masterDB *db.DB,
 }
 
 func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32) {
-	node.LogVerbose(ctx, "Marking tx preprocessed : %s", txid.String())
+	node.Log(ctx, "Marking tx preprocessed : %s", txid.String())
 
 	server.pendingLock.Lock()
 	defer server.pendingLock.Unlock()
 
 	intx, exists := server.pendingTxs[txid]
 	if !exists {
-		node.LogVerbose(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
+		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
 		return
 	}
 
@@ -351,7 +367,8 @@ func (itd *IncomingTxData) Deserialize(buf *bytes.Reader, isTest bool) error {
 	return nil
 }
 
-func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32) (*IncomingTxData, error) {
+func NewIncomingTxData(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32,
+	isTest bool) (*IncomingTxData, error) {
 	result := IncomingTxData{
 		Timestamp:      protocol.CurrentTimestamp(),
 		IsPreprocessed: false,
@@ -359,7 +376,8 @@ func NewIncomingTxData(ctx context.Context, tx *wire.MsgTx, txid bitcoin.Hash32)
 		InReady:        false,
 	}
 	var err error
-	result.Itx, err = inspector.NewBaseTransactionFromHashWire(ctx, &txid, tx)
+
+	result.Itx, err = inspector.NewTransactionFromOutputs(ctx, &txid, tx.Tx, tx.Outputs, isTest)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +429,7 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 	transfer *actions.Transfer, headers node.BitcoinHeaders, isTest bool) error {
 
 	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == "BSV" && len(assetTransfer.AssetCode) == 0 {
+		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 
@@ -493,7 +511,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	oracle := ct.FullOracles[assetReceiver.OracleIndex]
-	hash, err := headers.Hash(ctx, int(assetReceiver.OracleSigBlockHeight))
+	hash, err := headers.BlockHash(ctx, int(assetReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
 			assetReceiver.OracleSigBlockHeight))
@@ -563,24 +581,26 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		// Check if block time is beyond expiration
 		// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-		expire := uint32((time.Now().Unix())) - 21600 // 6 hours ago, unix timestamp in seconds
-		blockTime, err := headers.Time(ctx, int(cert.BlockHeight))
+		expire := time.Now().Add(6 * time.Hour)
+		header, err := headers.GetHeaders(ctx, int(cert.BlockHeight), 1)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve time for block height %d",
+			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve block header for height %d",
 				cert.BlockHeight))
 		}
-		if blockTime < expire {
-			return fmt.Errorf("Oracle sig block hash expired : %d < %d", blockTime, expire)
+		if len(header.Headers) == 0 {
+			return fmt.Errorf("Failed to retrieve block header for height %d", cert.BlockHeight)
+		}
+		if header.Headers[0].Timestamp.After(expire) {
+			return fmt.Errorf("Oracle sig block hash expired : %d < %d",
+				header.Headers[0].Timestamp.Unix(), expire.Unix())
 		}
 
-		hash, err := headers.Hash(ctx, int(cert.BlockHeight))
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-				cert.BlockHeight))
-		}
+		hash := header.Headers[0].BlockHash()
 
-		logger.Info(ctx, "Admin address : %s",
-			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net).String())
+		logFields := []logger.Field{}
+
+		logFields = append(logFields, logger.Stringer("admin_address",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net)))
 
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
@@ -590,18 +610,18 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 				return errors.Wrap(err, "entity address")
 			}
 
-			logger.Info(ctx, "Entity Contract : %s",
-				bitcoin.NewAddressFromRawAddress(entityRA, config.Net).String())
+			logFields = append(logFields, logger.Stringer("entity_contract",
+				bitcoin.NewAddressFromRawAddress(entityRA, config.Net)))
 
 			entity = entityRA
 		} else {
 			entity = contractOffer.Issuer
 
-			logger.Info(ctx, "Issuer : %+v", *contractOffer.Issuer)
+			logFields = append(logFields, logger.JSON("issuer", *contractOffer.Issuer))
 		}
 
-		logger.Info(ctx, "Block Hash : %s", hash.String())
-		logger.Info(ctx, "Expiration : %d", cert.Expiration)
+		logFields = append(logFields, logger.Stringer("block_hash", hash))
+		logFields = append(logFields, logger.Uint64("expiration", cert.Expiration))
 
 		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
 			entity, *hash, cert.Expiration, 1)
@@ -609,13 +629,14 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			return err
 		}
 
-		logger.Info(ctx, "Sig Hash : %x", sigHash)
+		logFields = append(logFields, logger.Formatter("sig_hash", "%x", sigHash))
 
 		if !oracleSig.Verify(sigHash, publicKey) {
+			logger.WarnWithFields(ctx, logFields, "Admin identity signature is invalid")
 			return fmt.Errorf("Signature invalid")
 		}
 
-		node.Log(ctx, "Admin identity signature is valid")
+		logger.InfoWithFields(ctx, logFields, "Admin identity signature is valid")
 	}
 
 	return nil

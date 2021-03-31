@@ -24,6 +24,8 @@ type NewContract struct {
 	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal         bool                         `json:"HolderProposal,omitempty"`
 
+	BodyOfAgreementType uint32 `json:"BodyOfAgreementType,omitempty"`
+
 	Oracles []*actions.OracleField `json:"Oracles,omitempty"`
 }
 
@@ -40,8 +42,8 @@ type UpdateContract struct {
 	AdminAddress    *bitcoin.RawAddress `json:"AdminAddress,omitempty"`
 	OperatorAddress *bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
 
-	AdminMemberAsset *protocol.AssetCode `json:"AdminMemberAsset,omitempty"`
-	OwnerMemberAsset *protocol.AssetCode `json:"OwnerMemberAsset,omitempty"`
+	AdminMemberAsset *bitcoin.Hash20 `json:"AdminMemberAsset,omitempty"`
+	OwnerMemberAsset *bitcoin.Hash20 `json:"OwnerMemberAsset,omitempty"`
 
 	FreezePeriod *protocol.Timestamp `json:"FreezePeriod,omitempty"`
 
@@ -54,6 +56,8 @@ type UpdateContract struct {
 	VotingSystems          *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	AdministrationProposal *bool                         `json:"AdministrationProposal,omitempty"`
 	HolderProposal         *bool                         `json:"HolderProposal,omitempty"`
+
+	BodyOfAgreementType *uint32 `json:"BodyOfAgreementType,omitempty"`
 
 	Oracles *[]*actions.OracleField `json:"Oracles,omitempty"`
 }

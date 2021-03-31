@@ -86,7 +86,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 			return nil
 		}
 
-		if err := theClient.ShotgunTx(ctx, &tx, 250); err != nil {
+		if err := theClient.BroadcastTx(ctx, &tx); err != nil {
 			fmt.Printf("Failed to send tx : %s\n", err)
 		}
 	}
@@ -189,17 +189,29 @@ func parseScript(c *cobra.Command, script []byte) error {
 			dumpJSON(asset)
 		}
 
-		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType,
-			*protocol.AssetCodeFromBytes(m.AssetCode)))
+		hash, err := bitcoin.NewHash20(m.AssetCode)
+		if err != nil {
+			fmt.Printf("Invalid hash : %s\n", err)
+			return nil
+		}
+		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType, *hash))
 	case *actions.Transfer:
 		for i, a := range m.Assets {
-			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType,
-				*protocol.AssetCodeFromBytes(a.AssetCode)))
+			hash, err := bitcoin.NewHash20(a.AssetCode)
+			if err != nil {
+				fmt.Printf("Invalid hash : %s\n", err)
+				return nil
+			}
+			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
 		}
 	case *actions.Settlement:
 		for i, a := range m.Assets {
-			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType,
-				*protocol.AssetCodeFromBytes(a.AssetCode)))
+			hash, err := bitcoin.NewHash20(a.AssetCode)
+			if err != nil {
+				fmt.Printf("Invalid hash : %s\n", err)
+				return nil
+			}
+			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
 		}
 	case *actions.Message:
 		if len(m.MessagePayload) == 0 {

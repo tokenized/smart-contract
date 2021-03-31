@@ -8,8 +8,8 @@ import (
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/spynode"
 	"github.com/tokenized/pkg/txbuilder"
+	spynodeBootstrap "github.com/tokenized/spynode/cmd/spynoded/bootstrap"
 )
 
 // ContextWithLogger wraps the context with a development logger configuration.
@@ -17,7 +17,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	filePath string) context.Context {
 
 	if len(filePath) > 0 {
-		os.MkdirAll(path.Dir(os.Getenv("CLIENT_LOG_FILE_PATH")), os.ModePerm)
+		os.MkdirAll(path.Dir(filePath), os.ModePerm)
 	}
 
 	logConfig := logger.NewConfig(isDevelopment, isText, filePath)
@@ -25,7 +25,7 @@ func ContextWithLogger(ctx context.Context, isDevelopment, isText bool,
 	logConfig.EnableSubSystem(rpcnode.SubSystem)
 	logConfig.EnableSubSystem(txbuilder.SubSystem)
 	logConfig.EnableSubSystem(scheduler.SubSystem)
-	logConfig.EnableSubSystem(spynode.SubSystem)
+	logConfig.EnableSubSystem(spynodeBootstrap.SubSystem)
 
 	return logger.ContextWithLogConfig(ctx, logConfig)
 }

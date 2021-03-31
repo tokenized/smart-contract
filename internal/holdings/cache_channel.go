@@ -6,7 +6,6 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
 )
@@ -14,12 +13,12 @@ import (
 // CacheItem is a reference to an item in the cache that needs to be written to storage.
 type CacheItem struct {
 	contractHash *bitcoin.Hash20
-	asset        *protocol.AssetCode
+	asset        *bitcoin.Hash20
 	addressHash  *bitcoin.Hash20
 }
 
 // NewCacheItem creates a new CacheItem.
-func NewCacheItem(contractHash *bitcoin.Hash20, asset *protocol.AssetCode,
+func NewCacheItem(contractHash *bitcoin.Hash20, asset *bitcoin.Hash20,
 	addressHash *bitcoin.Hash20) *CacheItem {
 	result := CacheItem{
 		contractHash: contractHash,

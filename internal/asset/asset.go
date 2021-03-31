@@ -9,7 +9,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -25,7 +24,7 @@ var (
 
 // Retrieve gets the specified asset from the database.
 func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode) (*state.Asset, error) {
+	assetCode *bitcoin.Hash20) (*state.Asset, error) {
 
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Retrieve")
 	defer span.End()
@@ -41,7 +40,7 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 
 // Create the asset
 func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, nu *NewAsset, now protocol.Timestamp) error {
+	assetCode *bitcoin.Hash20, nu *NewAsset, now protocol.Timestamp) error {
 
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Create")
 	defer span.End()
@@ -78,7 +77,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 
 // Update the asset
 func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *protocol.AssetCode, upd *UpdateAsset, now protocol.Timestamp) error {
+	assetCode *bitcoin.Hash20, upd *UpdateAsset, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
 	defer span.End()
 
@@ -99,9 +98,6 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.AssetPermissions != nil {
 		a.AssetPermissions = *upd.AssetPermissions
 	}
-	if upd.TransfersPermitted != nil {
-		a.TransfersPermitted = *upd.TransfersPermitted
-	}
 	if upd.TradeRestrictions != nil {
 		a.TradeRestrictions = *upd.TradeRestrictions
 	}
@@ -120,8 +116,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.AssetModificationGovernance != nil {
 		a.AssetModificationGovernance = *upd.AssetModificationGovernance
 	}
-	if upd.TokenQty != nil {
-		a.TokenQty = *upd.TokenQty
+	if upd.AuthorizedTokenQty != nil {
+		a.AuthorizedTokenQty = *upd.AuthorizedTokenQty
 	}
 	if upd.AssetPayload != nil {
 		a.AssetPayload = *upd.AssetPayload
@@ -185,9 +181,9 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.Coupon:
-		if data.ExpiryDate != 0 && data.ExpiryDate < now.Nano() {
+		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
 			return node.NewError(actions.RejectionsAssetNotPermitted,
-				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpiryDate)))
+				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
 	case *assets.LoyaltyPoints:
@@ -197,9 +193,9 @@ func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp
 		}
 
 	case *assets.TicketAdmission:
-		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
+		if data.EventEndTimestamp != 0 && data.EventEndTimestamp < now.Nano() {
 			return node.NewError(actions.RejectionsAssetNotPermitted,
-				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.ExpirationTimestamp)))
+				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.EventEndTimestamp)))
 		}
 	}
 

@@ -21,7 +21,7 @@ func (server *Server) ContractIsStarted(ctx context.Context, ca bitcoin.RawAddre
 	c, err := contract.Retrieve(ctx, server.MasterDB, ca, server.Config.IsTest)
 	if err == nil && c != nil {
 		node.Log(ctx, "Contract found : %s",
-			bitcoin.NewAddressFromRawAddress(ca, server.Config.Net).String())
+			bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
 		return true, nil
 	}
 	if err != contract.ErrNotFound {
@@ -43,10 +43,21 @@ func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error
 	}
 
 	node.Log(ctx, "Adding key : %s",
-		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net).String())
+		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net))
 
 	server.contractAddresses = append(server.contractAddresses, rawAddress)
-	server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
+
+	if server.SpyNode != nil {
+		hashes, err := rawAddress.Hashes()
+		if err != nil {
+			server.walletLock.Unlock()
+			return err
+		}
+
+		for _, hash := range hashes {
+			server.SpyNode.SubscribePushDatas(ctx, [][]byte{hash[:]})
+		}
+	}
 
 	server.walletLock.Unlock()
 
@@ -64,8 +75,7 @@ func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	node.Log(ctx, "Removing key : %s",
-		bitcoin.NewAddressFromRawAddress(ca, server.Config.Net).String())
+	node.Log(ctx, "Removing key : %s", bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
 	server.wallet.RemoveAddress(ca)
 	if err := server.SaveWallet(ctx); err != nil {
 		return err
@@ -79,7 +89,22 @@ func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
 		}
 	}
 
-	server.txFilter.RemovePubKey(ctx, publicKey.Bytes())
+	if server.SpyNode != nil {
+		rawAddress, err := publicKey.RawAddress()
+		if err != nil {
+			return err
+		}
+
+		hashes, err := rawAddress.Hashes()
+		if err != nil {
+			return err
+		}
+
+		for _, hash := range hashes {
+			server.SpyNode.UnsubscribePushDatas(ctx, [][]byte{hash[:]})
+		}
+	}
+
 	return nil
 }
 
@@ -127,9 +152,6 @@ func (server *Server) SyncWallet(ctx context.Context) error {
 	for _, key := range keys {
 		// Contract address
 		server.contractAddresses = append(server.contractAddresses, key.Address)
-
-		// Tx Filter
-		server.txFilter.AddPubKey(ctx, key.Key.PublicKey().Bytes())
 	}
 
 	return nil

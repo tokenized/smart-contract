@@ -5,11 +5,9 @@ import (
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
-	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/pkg/errors"
 )
@@ -40,39 +38,31 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 			continue
 		}
 
-		if ptx.Itx.MsgProto != nil && ptx.Itx.MsgProto.Code() == actions.CodeContractFormation {
-			cf := ptx.Itx.MsgProto.(*actions.ContractFormation)
-			node.Log(ctx, "Saving contract formation for %s : %s",
-				bitcoin.NewAddressFromRawAddress(ptx.Itx.Inputs[0].Address, server.Config.Net),
-				ptx.Itx.Hash)
-			if err := contract.SaveContractFormation(ctx, server.MasterDB,
-				ptx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
-				node.LogError(ctx, "Failed to save contract formation : %s", err)
-			}
-		}
-
 		isRelevant := false
 
 		// Save tx to cache so it can be used to process the response
 		for index, output := range ptx.Itx.Outputs {
+			if output.Address.IsEmpty() {
+				continue
+			}
+
 			for _, address := range server.contractAddresses {
 				if !address.Equal(output.Address) {
 					continue
 				}
 
 				isRelevant = true
-				node.Log(ctx, "Request for contract %s",
-					bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
-				if err := server.RpcNode.SaveTX(ctx, ptx.Itx.MsgTx); err != nil {
-					node.LogError(ctx, "Failed to save tx to RPC : %s", err)
-				}
-				if !server.IsInSync() && ptx.Itx.IsIncomingMessageType() {
-					node.Log(ctx, "Adding request to pending")
-					// Save pending request to ensure it has a response, and process it if not.
-					server.pendingRequests = append(server.pendingRequests, pendingRequest{
-						Itx:           ptx.Itx,
-						ContractIndex: index,
-					})
+				if ptx.Itx.IsIncomingMessageType() {
+					node.Log(ctx, "Request for contract %s",
+						bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
+					if !server.IsInSync() {
+						node.Log(ctx, "Adding request to pending")
+						// Save pending request to ensure it has a response, and process it if not.
+						server.pendingRequests = append(server.pendingRequests, pendingRequest{
+							Itx:           ptx.Itx,
+							ContractIndex: index,
+						})
+					}
 				}
 				break
 			}
@@ -83,6 +73,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		if ptx.Itx.IsOutgoingMessageType() {
 			responseAdded := false
 			for _, input := range ptx.Itx.Inputs {
+				if input.Address.IsEmpty() {
+					continue
+				}
+
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
 						node.Log(ctx, "Response for contract %s",
@@ -106,6 +100,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		if isRelevant { // Tx is associated with one of our contracts.
 			if server.IsInSync() {
+				node.Log(ctx, "Triggering response")
 				// Process this tx
 				if err := server.Handler.Trigger(ctx, ptx.Event, ptx.Itx); err != nil {
 					switch errors.Cause(err) {
@@ -117,7 +112,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 				}
 			} else {
 				// Save tx for response processing after smart contract is in sync with on chain
-				//   data.
+				// data.
 				if err := transactions.AddTx(ctx, server.MasterDB, ptx.Itx); err != nil {
 					node.LogError(ctx, "Failed to save tx : %s", err)
 				}

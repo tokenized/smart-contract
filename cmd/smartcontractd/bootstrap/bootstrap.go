@@ -2,18 +2,23 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 
+	"github.com/tokenized/config"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/holdings"
-	"github.com/tokenized/smart-contract/internal/platform/config"
+	smartContractConfig "github.com/tokenized/smart-contract/internal/platform/config"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/utxos"
 	"github.com/tokenized/smart-contract/pkg/wallet"
+)
+
+const (
+	// SubSystem is used by the logger package
+	SubSystem = "SpyNode"
 )
 
 func NewContextWithDevelopmentLogger() context.Context {
@@ -30,24 +35,20 @@ func NewWallet() *wallet.Wallet {
 	return wallet.New()
 }
 
-func NewConfigFromEnv(ctx context.Context) *config.Config {
-	cfg, err := config.Environment()
-	if err != nil {
-		logger.Fatal(ctx, "Parsing Config : %s", err)
+func NewConfig(ctx context.Context) *smartContractConfig.Config {
+
+	cfg := &smartContractConfig.Config{}
+	// load config using sane fallbacks
+	if err := config.LoadConfig(ctx, cfg); err != nil {
+		logger.Fatal(ctx, "main : LoadConfig : %v", err)
 	}
 
-	// Mask sensitive values
-	cfgSafe := config.SafeConfig(*cfg)
-	cfgJSON, err := json.MarshalIndent(cfgSafe, "", "    ")
-	if err != nil {
-		logger.Fatal(ctx, "Marshalling Config to JSON : %s", err)
-	}
-	logger.Info(ctx, "Config : %v", string(cfgJSON))
+	config.DumpSafe(ctx, cfg)
 
 	return cfg
 }
 
-func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
+func NewMasterDB(ctx context.Context, cfg *smartContractConfig.Config) *db.DB {
 	masterDB, err := db.New(&db.StorageConfig{
 		Bucket:     cfg.Storage.Bucket,
 		Root:       cfg.Storage.Root,
@@ -61,17 +62,30 @@ func NewMasterDB(ctx context.Context, cfg *config.Config) *db.DB {
 	return masterDB
 }
 
-func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
+func NewMasterDBFromValues(ctx context.Context, bucket, root string,
+	maxRetries, retryDelay int) *db.DB {
+	masterDB, err := db.New(&db.StorageConfig{
+		Bucket:     bucket,
+		Root:       root,
+		MaxRetries: maxRetries,
+		RetryDelay: retryDelay,
+	})
+	if err != nil {
+		logger.Fatal(ctx, "Register DB : %s", err)
+	}
+
+	return masterDB
+}
+
+func NewNodeConfig(ctx context.Context, cfg *smartContractConfig.Config) *node.Config {
 	appConfig := &node.Config{
-		Net:                bitcoin.NetworkFromString(cfg.Bitcoin.Network),
-		ContractProviderID: cfg.Contract.OperatorName,
-		Version:            cfg.Contract.Version,
-		FeeRate:            cfg.Contract.FeeRate,
-		DustFeeRate:        cfg.Contract.DustFeeRate,
-		MinFeeRate:         cfg.Contract.MinFeeRate,
-		RequestTimeout:     cfg.Contract.RequestTimeout,
-		PreprocessThreads:  cfg.Contract.PreprocessThreads,
-		IsTest:             cfg.Contract.IsTest,
+		Net:               bitcoin.NetworkFromString(cfg.Bitcoin.Network),
+		FeeRate:           cfg.Contract.FeeRate,
+		DustFeeRate:       cfg.Contract.DustFeeRate,
+		MinFeeRate:        cfg.Contract.MinFeeRate,
+		RequestTimeout:    cfg.Contract.RequestTimeout,
+		PreprocessThreads: cfg.Contract.PreprocessThreads,
+		IsTest:            cfg.Contract.IsTest,
 	}
 
 	feeAddress, err := bitcoin.DecodeAddress(cfg.Contract.FeeAddress)
@@ -84,6 +98,26 @@ func NewNodeConfig(ctx context.Context, cfg *config.Config) *node.Config {
 	appConfig.FeeAddress = bitcoin.NewRawAddressFromAddress(feeAddress)
 
 	return appConfig
+}
+
+func NewNodeConfigFromValues(
+	net bitcoin.Network,
+	isTest bool,
+	feeRate, dustFeeRate, minFeeRate float32,
+	requestTimeout uint64,
+	preprocessThreads int,
+	feeAddress bitcoin.RawAddress) *node.Config {
+
+	return &node.Config{
+		Net:               net,
+		IsTest:            isTest,
+		FeeRate:           feeRate,
+		DustFeeRate:       dustFeeRate,
+		MinFeeRate:        minFeeRate,
+		RequestTimeout:    requestTimeout,
+		PreprocessThreads: preprocessThreads,
+		FeeAddress:        feeAddress,
+	}
 }
 
 func LoadUTXOsFromDB(ctx context.Context, masterDB *db.DB) *utxos.UTXOs {

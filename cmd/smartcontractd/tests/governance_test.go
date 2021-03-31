@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/vote"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -40,7 +41,7 @@ func holderProposal(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 150)
@@ -58,7 +59,7 @@ func holderProposal(t *testing.T) {
 		VoteCutOffTimestamp: v.Now.Nano() + 10000000000,
 	}
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -110,7 +111,7 @@ func holderProposal(t *testing.T) {
 
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteTxId = *hash
 	}
 
 	// Check the response
@@ -148,7 +149,7 @@ func sendBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -234,7 +235,7 @@ func adminBallot(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
 	mockUpAsset(t, ctx, true, true, true, 10, 0, &sampleAdminAssetPayload, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 1, &sampleAssetPayload, true, false, false)
@@ -368,7 +369,7 @@ func voteResult(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -384,7 +385,7 @@ func voteResult(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -429,7 +430,7 @@ func voteResultRelative(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -450,7 +451,7 @@ func voteResultRelative(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -495,7 +496,7 @@ func voteResultAbsolute(t *testing.T) {
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "This is a mock contract and means nothing.", "I",
+	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
 	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
@@ -516,7 +517,7 @@ func voteResultAbsolute(t *testing.T) {
 	responseLock.Lock()
 	if len(responses) > 0 {
 		hash := responses[0].TxHash()
-		testVoteResultTxId = *protocol.TxIdFromBytes(hash[:])
+		testVoteResultTxId = *hash
 	}
 	responseLock.Unlock()
 
@@ -656,7 +657,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 		return err
 	}
 
-	testVoteTxId = *protocol.TxIdFromBytes(voteItx.Hash[:])
+	testVoteTxId = *voteItx.Hash
 
 	test.RPCNode.SaveTX(ctx, voteTx)
 
@@ -672,7 +673,7 @@ func mockUpProposal(ctx context.Context) error {
 	return mockUpProposalType(ctx, 1, nil) // Administrator
 }
 
-func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *protocol.AssetCode) error {
+func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bitcoin.Hash20) error {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -690,7 +691,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		proposalData.AssetCode = assetCode.Bytes()
 	}
 
-	fip := actions.FieldIndexPath{actions.ContractFieldContractName}
+	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
 	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments, &actions.AmendmentField{
 		FieldIndexPath: fipBytes,
@@ -743,7 +744,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 
-		ProposalTxId: protocol.TxIdFromBytes(proposalItx.Hash[:]),
+		ProposalTxId: proposalItx.Hash,
 		VoteTxId:     &testVoteTxId,
 		Expires:      protocol.NewTimestamp(now.Nano() + 500000000),
 
@@ -768,7 +769,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *pro
 		}
 	} else {
 		for _, a := range ct.AssetCodes {
-			if a.Equal(ct.AdminMemberAsset) {
+			if a.Equal(&ct.AdminMemberAsset) {
 				continue // Administrative tokens don't count for holder votes.
 			}
 
@@ -874,13 +875,17 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	ts := protocol.CurrentTimestamp()
 	resultData := actions.Result{
 		AssetType:          vt.AssetType,
-		AssetCode:          vt.AssetCode.Bytes(),
 		ProposedAmendments: vt.ProposedAmendments,
 		VoteTxId:           testVoteTxId.Bytes(),
 		OptionTally:        []uint64{1000, 0},
 		Result:             "A",
 		Timestamp:          ts.Nano(),
 	}
+
+	if vt.AssetCode != nil {
+		resultData.AssetCode = vt.AssetCode.Bytes()
+	}
+
 	script, err = protocol.Serialize(&resultData, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
@@ -897,7 +902,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		return err
 	}
 
-	testVoteResultTxId = *protocol.TxIdFromBytes(resultItx.Hash[:])
+	testVoteResultTxId = *resultItx.Hash
 
 	if err := transactions.AddTx(ctx, test.MasterDB, resultItx); err != nil {
 		return err

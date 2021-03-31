@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
@@ -42,12 +43,28 @@ var testTokenQty uint64
 var testToken2Qty uint64
 var testAssetType string
 var testAsset2Type string
-var testAssetCodes []protocol.AssetCode
-var testAsset2Code protocol.AssetCode
-var testVoteTxId protocol.TxId
-var testVoteResultTxId protocol.TxId
+var testAssetCodes []bitcoin.Hash20
+var testAsset2Code bitcoin.Hash20
+var testVoteTxId bitcoin.Hash32
+var testVoteResultTxId bitcoin.Hash32
 
 var tracer *filters.Tracer
+
+var outgoingMessageTypes = map[string]bool{
+	actions.CodeAssetCreation:            true,
+	actions.CodeContractFormation:        true,
+	actions.CodeBodyOfAgreementFormation: true,
+	actions.CodeSettlement:               true,
+	actions.CodeVote:                     true,
+	actions.CodeBallotCounted:            true,
+	actions.CodeResult:                   true,
+	actions.CodeFreeze:                   true,
+	actions.CodeThaw:                     true,
+	actions.CodeConfiscation:             true,
+	actions.CodeReconciliation:           true,
+	actions.CodeRejection:                true,
+	actions.CodeMessage:                  true,
+}
 
 // TestMain is the entry point for testing.
 func TestMain(m *testing.M) {
@@ -139,10 +156,19 @@ func testMain(m *testing.M) int {
 }
 
 func respondTx(ctx context.Context, tx *wire.MsgTx) error {
+	if !isOutgoing(tx) {
+		return nil
+	}
+
 	responseLock.Lock()
 	responses = append(responses, tx)
 	responseLock.Unlock()
 	return nil
+}
+
+func isOutgoing(tx *wire.MsgTx) bool {
+	_, exists := outgoingMessageTypes[responseType(tx)]
+	return exists
 }
 
 func reprocessTx(ctx context.Context, itx *inspector.Transaction) error {

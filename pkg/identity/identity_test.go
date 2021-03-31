@@ -97,7 +97,7 @@ func TestApproveReceive(t *testing.T) {
 		contractAddress, err := contractKey.RawAddress()
 		contract := bitcoin.NewAddressFromRawAddress(contractAddress, bitcoin.MainNet).String()
 		assetCode := protocol.AssetCodeFromContract(contractAddress, 0)
-		asset := protocol.AssetID(assets.CodeCurrency, *assetCode)
+		asset := protocol.AssetID(assets.CodeCurrency, assetCode)
 
 		receiver, blockHash, err := or.ApproveReceive(ctx, contract, asset, 1, 3, xpubs, 0, 1)
 		if err != nil {

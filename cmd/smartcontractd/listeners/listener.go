@@ -6,85 +6,122 @@ import (
 	"sort"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/spynode/handlers"
-	"github.com/tokenized/pkg/wire"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/node"
+	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/transfer"
 	"github.com/tokenized/smart-contract/internal/vote"
+	"github.com/tokenized/spynode/pkg/client"
+
+	"github.com/pkg/errors"
 )
 
-// Implement the SpyNode Listener interface.
+// Implement the SpyNode Client interface.
 
-func (server *Server) HandleBlock(ctx context.Context, msgType int, block *handlers.BlockMessage) error {
-	ctx = node.ContextWithOutLogSubSystem(ctx)
-	switch msgType {
-	case handlers.ListenerMsgBlock:
-		node.Log(ctx, "New Block (%d) : %s", block.Height, block.Hash.String())
-	case handlers.ListenerMsgBlockRevert:
-		node.Log(ctx, "Reverted Block (%d) : %s", block.Height, block.Hash.String())
+func (server *Server) HandleMessage(ctx context.Context, payload client.MessagePayload) {
+	switch msg := payload.(type) {
+	case *client.AcceptRegister:
+		logger.Info(ctx, "SpyNode registration accepted")
+
+		if server.SpyNode != nil {
+			if err := server.SpyNode.SubscribeContracts(ctx); err != nil {
+				logger.Error(ctx, "Failed to subscribe to contracts : %s", err)
+			}
+
+			keys := server.wallet.ListAll()
+			addresses := make([]bitcoin.RawAddress, len(keys))
+			for i, key := range keys {
+				addresses[i] = key.Address
+			}
+
+			logger.Info(ctx, "Subscribing to %d addresses", len(addresses))
+			if err := client.SubscribeAddresses(ctx, addresses, server.SpyNode); err != nil {
+				logger.Error(ctx, "Failed to subscribe to contract addresses : %s", err)
+			}
+
+			saveNeeded := false
+			var nextMessageID uint64
+			if msg.MessageCount == 0 {
+				logger.Warn(ctx, "Message count zero")
+				nextMessageID = 1 // either first startup or server reset
+				saveNeeded = true
+			} else {
+				nextID, err := state.GetNextMessageID(ctx, server.MasterDB)
+				if err != nil {
+					logger.Error(ctx, "Failed to get next message id : %s", err)
+					return
+				}
+				nextMessageID = *nextID
+
+				if nextMessageID > msg.MessageCount+1 {
+					logger.Warn(ctx, "Message count %d below message id %d", msg.MessageCount,
+						nextMessageID)
+					nextMessageID = 1 // reset because something is out of sync
+					saveNeeded = true
+				}
+			}
+
+			if err := server.SpyNode.Ready(ctx, nextMessageID); err != nil {
+				logger.Error(ctx, "Failed to notify spynode ready : %s", err)
+				return
+			}
+
+			if saveNeeded {
+				if err := state.SaveNextMessageID(ctx, server.MasterDB, nextMessageID); err != nil {
+					logger.Error(ctx, "Failed to save next message id : %s", err)
+				}
+			}
+
+			logger.Info(ctx, "SpyNode client ready at next message %d", nextMessageID)
+		}
 	}
-	return nil
 }
 
-func (server *Server) HandleTx(ctx context.Context, tx *wire.MsgTx) (bool, error) {
+func (server *Server) HandleTx(ctx context.Context, tx *client.Tx) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
-	txid := tx.TxHash()
+	txid := tx.Tx.TxHash()
 	ctx = node.ContextWithLogTrace(ctx, txid.String())
 
-	err := server.AddTx(ctx, tx, *txid)
-	if err != nil {
-		node.LogError(ctx, "Failed to add tx : %s", err)
-		return true, nil
-	}
+	node.Log(ctx, "Handling tx")
 
-	node.Log(ctx, "Handled tx")
-	return true, nil
-}
-
-func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash32) bool {
-	for i, id := range server.revertedTxs {
-		if bytes.Equal(id[:], txid[:]) {
-			server.revertedTxs = append(server.revertedTxs[:i], server.revertedTxs[i+1:]...)
-			return true
+	if tx.ID != 0 {
+		if err := state.SaveNextMessageID(ctx, server.MasterDB, tx.ID+1); err != nil {
+			logger.Error(ctx, "Failed to save next message id : %s", err)
 		}
 	}
 
-	return false
+	if err := server.AddTx(ctx, tx, *txid); err != nil {
+		if errors.Cause(err) != ErrDuplicateTx {
+			node.LogError(ctx, "Failed to add tx : %s", err)
+		} else {
+			node.Log(ctx, "Already added tx")
+		}
+	}
+
+	server.handleTxState(ctx, *txid, &tx.State)
 }
 
-func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitcoin.Hash32) error {
+func (server *Server) HandleTxUpdate(ctx context.Context, update *client.TxUpdate) {
 	ctx = node.ContextWithOutLogSubSystem(ctx)
-	ctx = node.ContextWithLogTrace(ctx, txid.String())
+	ctx = node.ContextWithLogTrace(ctx, update.TxID.String())
 
-	switch msgType {
-	case handlers.ListenerMsgTxStateSafe:
-		node.Log(ctx, "Tx safe")
+	server.handleTxState(ctx, update.TxID, &update.State)
 
-		if server.removeFromReverted(ctx, &txid) {
-			node.LogVerbose(ctx, "Tx safe again after reorg")
-			return nil // Already accepted. Reverted by reorg and safe again.
-		}
+	node.Log(ctx, "Handled tx state")
+}
 
-		server.MarkSafe(ctx, txid)
-		return nil
+func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
+	state *client.TxState) {
 
-	case handlers.ListenerMsgTxStateConfirm:
-		node.Log(ctx, "Tx confirm")
-
-		if server.removeFromReverted(ctx, &txid) {
-			node.LogVerbose(ctx, "Tx reconfirmed in reorg")
-			return nil // Already accepted. Reverted and reconfirmed by reorg
-		}
-
-		server.MarkConfirmed(ctx, txid)
-		return nil
-
-	case handlers.ListenerMsgTxStateCancel:
+	if state.UnSafe {
+		node.Log(ctx, "Tx unsafe")
+		server.MarkUnsafe(ctx, txid)
+	} else if state.Cancelled {
 		node.Log(ctx, "Tx cancel")
 
 		if server.CancelPendingTx(ctx, txid) {
-			return nil
+			return
 		}
 
 		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.IsTest)
@@ -92,25 +129,47 @@ func (server *Server) HandleTxState(ctx context.Context, msgType int, txid bitco
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
 
-		err = server.cancelTx(ctx, itx)
-		if err != nil {
+		if err := server.cancelTx(ctx, itx); err != nil {
 			node.LogWarn(ctx, "Failed to cancel tx : %s", err)
 		}
+	} else if state.MerkleProof != nil {
+		node.Log(ctx, "Tx confirm")
+		logger.InfoWithFields(ctx, []logger.Field{
+			logger.Stringer("block_hash", state.MerkleProof.BlockHeader.BlockHash()),
+		}, "Tx confirm")
 
-	case handlers.ListenerMsgTxStateUnsafe:
-		node.Log(ctx, "Tx unsafe")
-		server.MarkUnsafe(ctx, txid)
+		if server.removeFromReverted(ctx, &txid) {
+			node.LogVerbose(ctx, "Tx reconfirmed in reorg")
+			return // Already accepted. Reverted and reconfirmed by reorg
+		}
 
-	case handlers.ListenerMsgTxStateRevert:
-		node.Log(ctx, "Tx revert")
-		server.revertedTxs = append(server.revertedTxs, &txid)
+		server.MarkConfirmed(ctx, txid)
+	} else if state.Safe {
+		logger.InfoWithFields(ctx, []logger.Field{
+			logger.Uint32("unconfirmed_depth", state.UnconfirmedDepth),
+		}, "Tx safe")
+
+		if server.removeFromReverted(ctx, &txid) {
+			node.LogVerbose(ctx, "Tx safe again after reorg")
+			return // Already accepted. Reverted by reorg and safe again.
+		}
+
+		server.MarkSafe(ctx, txid)
 	}
-
-	return nil
 }
 
-func (server *Server) HandleInSync(ctx context.Context) error {
+func (server *Server) HandleHeaders(ctx context.Context, headers *client.Headers) {
+	ctx = node.ContextWithOutLogSubSystem(ctx)
+	count := len(headers.Headers)
+	node.Log(ctx, "New headers (%d) to height %d : %s", count, int(headers.StartHeight)+count-1,
+		headers.Headers[count-1].BlockHash())
+}
+
+func (server *Server) HandleInSync(ctx context.Context) {
+	ctx = node.ContextWithOutLogSubSystem(ctx)
+
 	if server.IsInSync() {
+		node.Log(ctx, "Node already in sync")
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
 			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
@@ -124,10 +183,9 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			}
 		}
 		server.revertedTxs = nil
-		return nil // Only execute below on first sync
+		return // Only execute below on first sync
 	}
 
-	ctx = node.ContextWithOutLogSubSystem(ctx)
 	ctx = node.ContextWithLogTrace(ctx, "In Sync")
 	node.Log(ctx, "Node is in sync")
 	node.Log(ctx, "Processing pending : %d responses, %d requests", len(server.pendingResponses),
@@ -146,7 +204,12 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		ctx := node.ContextWithLogTrace(ctx, itx.Hash.String())
 		node.Log(ctx, "Processing pending response")
 		if err := server.Handler.Trigger(ctx, "SEE", itx); err != nil {
-			node.LogError(ctx, "Failed to handle pending response tx : %s", err)
+			switch errors.Cause(err) {
+			case node.ErrNoResponse, node.ErrRejected, node.ErrInsufficientFunds:
+				node.Log(ctx, "Failed to handle tx : %s", err)
+			default:
+				node.LogError(ctx, "Failed to handle pending response tx : %s", err)
+			}
 		}
 	}
 
@@ -155,7 +218,12 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		ctx := node.ContextWithLogTrace(ctx, tx.Itx.Hash.String())
 		node.Log(ctx, "Processing pending request")
 		if err := server.Handler.Trigger(ctx, "SEE", tx.Itx); err != nil {
-			node.LogError(ctx, "Failed to handle pending request tx : %s", err)
+			switch errors.Cause(err) {
+			case node.ErrNoResponse, node.ErrRejected, node.ErrInsufficientFunds:
+				node.Log(ctx, "Failed to handle tx : %s", err)
+			default:
+				node.LogError(ctx, "Failed to handle pending request tx : %s", err)
+			}
 		}
 	}
 
@@ -167,7 +235,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		votes, err := vote.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list votes : %s", err)
-			return nil
+			return
 		}
 		for _, vt := range votes {
 			if vt.CompletedAt.Nano() != 0 {
@@ -179,18 +247,18 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			hash, err = bitcoin.NewHash32(vt.VoteTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
-				return nil
+				return
 			}
 			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve vote tx : %s", err)
-				return nil
+				return
 			}
 
 			// Schedule vote finalizer
 			if err = server.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(server.Handler, voteTx, vt.Expires)); err != nil {
 				node.LogWarn(ctx, "Failed to schedule vote finalizer : %s", err)
-				return nil
+				return
 			}
 		}
 	}
@@ -202,7 +270,7 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 		transfers, err := transfer.List(ctx, server.MasterDB, key.Address)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to list transfers : %s", err)
-			return nil
+			return
 		}
 		for _, pt := range transfers {
 			// Retrieve transferTx
@@ -210,21 +278,30 @@ func (server *Server) HandleInSync(ctx context.Context) error {
 			hash, err = bitcoin.NewHash32(pt.TransferTxId.Bytes())
 			if err != nil {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
-				return nil
+				return
 			}
 			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve transfer tx : %s", err)
-				return nil
+				return
 			}
 
 			// Schedule transfer timeout
 			if err = server.Scheduler.ScheduleJob(ctx, NewTransferTimeout(server.Handler, transferTx, pt.Timeout)); err != nil {
 				node.LogWarn(ctx, "Failed to schedule transfer timeout : %s", err)
-				return nil
+				return
 			}
 		}
 	}
+}
 
-	return nil
+func (server *Server) removeFromReverted(ctx context.Context, txid *bitcoin.Hash32) bool {
+	for i, id := range server.revertedTxs {
+		if bytes.Equal(id[:], txid[:]) {
+			server.revertedTxs = append(server.revertedTxs[:i], server.revertedTxs[i+1:]...)
+			return true
+		}
+	}
+
+	return false
 }

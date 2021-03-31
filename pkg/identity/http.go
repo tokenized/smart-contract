@@ -78,7 +78,8 @@ func GetHTTPClient(ctx context.Context, baseURL string) (*HTTPClient, error) {
 }
 
 // NewHTTPClient creates an HTTP oracle client from specified data.
-func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*HTTPClient, error) {
+func NewHTTPClient(contractAddress bitcoin.RawAddress, url string,
+	publicKey bitcoin.PublicKey) (*HTTPClient, error) {
 	return &HTTPClient{
 		ContractAddress: contractAddress,
 		URL:             url,
@@ -113,7 +114,7 @@ func (o *HTTPClient) SetClientKey(key bitcoin.Key) {
 }
 
 // RegisterUser checks if a user for this entity exists with the identity oracle and if not
-//   registers a new user id.
+// registers a new user id.
 func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityField,
 	xpubs []bitcoin.ExtendedKeys) (*uuid.UUID, error) {
 
@@ -467,10 +468,14 @@ func post(ctx context.Context, url string, request, response interface{}) error 
 	}
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode > 299 {
-		if httpResponse.StatusCode == 404 {
+		switch httpResponse.StatusCode {
+		case http.StatusNotFound:
 			return errors.Wrap(ErrNotFound, httpResponse.Status)
+		case http.StatusUnauthorized:
+			return errors.Wrap(ErrUnauthorized, httpResponse.Status)
 		}
-		return fmt.Errorf("%v %s", httpResponse.StatusCode, httpResponse.Status)
+
+		return fmt.Errorf("%d %s", httpResponse.StatusCode, httpResponse.Status)
 	}
 
 	defer httpResponse.Body.Close()
@@ -510,8 +515,11 @@ func get(ctx context.Context, url string, response interface{}) error {
 	}
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode > 299 {
-		if httpResponse.StatusCode == 404 {
+		switch httpResponse.StatusCode {
+		case http.StatusNotFound:
 			return errors.Wrap(ErrNotFound, httpResponse.Status)
+		case http.StatusUnauthorized:
+			return errors.Wrap(ErrUnauthorized, httpResponse.Status)
 		}
 		return fmt.Errorf("%v %s", httpResponse.StatusCode, httpResponse.Status)
 	}

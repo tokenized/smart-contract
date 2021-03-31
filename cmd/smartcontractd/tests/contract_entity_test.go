@@ -113,18 +113,18 @@ func createAssetContract(t *testing.T) {
 			parent: nil,
 			valid:  true,
 		},
-		{
-			name: "AssetWithMissingEntity",
-			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
-				ContractName: "Test Name",
-				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
-					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-				EntityContract: test.Contract2Key.Address.Bytes(),
-			},
-			parent: nil,
-			valid:  false, // Entity contract formation won't exist
-		},
+		// { // This is currently allowed so an entity contract address can represent an off chain entity
+		// 	name: "AssetWithMissingEntity",
+		// 	offer: &actions.ContractOffer{
+		// 		ContractType: actions.ContractTypeAsset,
+		// 		ContractName: "Test Name",
+		// 		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
+		// 			VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+		// 		EntityContract: test.Contract2Key.Address.Bytes(),
+		// 	},
+		// 	parent: nil,
+		// 	valid:  false, // Entity contract formation won't exist
+		// },
 		{
 			name: "AssetWithInvalidEntityAddress",
 			offer: &actions.ContractOffer{
@@ -146,9 +146,8 @@ func createAssetContract(t *testing.T) {
 			}
 
 			if tt.parent != nil {
-				mockUpOtherContract(t, ctx, *tt.parent, "Test Contract",
-					"This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true,
-					true, false, false, false)
+				mockUpOtherContract(t, ctx, *tt.parent, "Test Contract", "I", 1, "John Bitcoin",
+					true, true, false, false, false)
 			}
 
 			// Create funding tx
@@ -481,9 +480,8 @@ func identityContracts(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 			}
 
-			mockUpOtherContract(t, ctx, test.Contract2Key.Address, "Test Contract",
-				"This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true,
-				true, false, false, false)
+			mockUpOtherContract(t, ctx, test.Contract2Key.Address, "Test Contract", "I", 1,
+				"John Bitcoin", true, true, false, false, false)
 
 			if tt.idContractKey != nil {
 				mockIdentityContract(t, ctx, *tt.idContractKey, idKey.PublicKey(), "C", 1, "John")
@@ -727,16 +725,17 @@ func operatorContracts(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 			}
 
-			mockUpOtherContract(t, ctx, test.Contract2Key.Address, "Test Contract",
-				"This is a mock contract and means nothing.", "I", 1, "John Bitcoin", true,
-				true, false, false, false)
+			mockUpOtherContract(t, ctx, test.Contract2Key.Address, "Test Contract", "I", 1,
+				"John Bitcoin", true, true, false, false, false)
 
 			if tt.opContractKey != nil {
-				mockOperatorContract(t, ctx, *tt.opContractKey, tt.opServiceKey.PublicKey(), "C", 1, "John")
+				mockOperatorContract(t, ctx, *tt.opContractKey, tt.opServiceKey.PublicKey(), "C", 1,
+					"John")
 			}
 
 			if tt.idContractKey != nil {
-				mockIdentityContract(t, ctx, *tt.idContractKey, tt.opServiceKey.PublicKey(), "C", 1, "John")
+				mockIdentityContract(t, ctx, *tt.idContractKey, tt.opServiceKey.PublicKey(), "C", 1,
+					"John")
 			}
 
 			// Build offer transaction

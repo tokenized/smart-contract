@@ -12,9 +12,9 @@ import (
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -26,7 +26,7 @@ var (
 		Ticker:      "BENCH",
 		Description: "Tokenized protocol benchmarking asset",
 	}
-	assetCode       *protocol.AssetCode
+	assetCode       bitcoin.Hash20
 	receiverAddress bitcoin.RawAddress
 )
 
@@ -79,7 +79,7 @@ var cmdBench = &cobra.Command{
 
 		// Wait for sync
 		for i := 0; ; i++ {
-			if theClient.IsInSync() && theClient.OutgoingCount() > 4 {
+			if theClient.IsInSync() {
 				break
 			}
 			if i > 60 {
@@ -286,7 +286,7 @@ var cmdBench = &cobra.Command{
 
 		// Send UTXO tx ============================================================================
 		logger.Info(ctx, "Sending utxo tx")
-		if err := theClient.BroadcastTxUntrustedOnly(ctx, utxoTx.MsgTx); err != nil {
+		if err := theClient.BroadcastTx(ctx, utxoTx.MsgTx); err != nil {
 			logger.Warn(ctx, "Failed to broadcast UTXO tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -415,7 +415,7 @@ func contractOpReturn() ([]byte, error) {
 	}
 
 	var err error
-	empty := actions.Permissions{}
+	empty := permissions.Permissions{}
 	contract.ContractPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err
@@ -432,12 +432,11 @@ func assetOpReturn() ([]byte, error) {
 
 	asset := actions.AssetDefinition{
 		AssetType:          payload.Code(),
-		TransfersPermitted: true,
-		TokenQty:           1000000,
+		AuthorizedTokenQty: 1000000,
 		AssetPayload:       payloadData,
 	}
 
-	empty := actions.Permissions{}
+	empty := permissions.Permissions{}
 	asset.AssetPermissions, err = empty.Bytes()
 	if err != nil {
 		return nil, err
@@ -472,7 +471,7 @@ func transferOpReturn() ([]byte, error) {
 
 func sendRequest(ctx context.Context, client *client.Client, tx *wire.MsgTx, name string) *wire.MsgTx {
 	logger.Info(ctx, "Sending %s tx", name)
-	if err := client.BroadcastTxUntrustedOnly(ctx, tx); err != nil {
+	if err := client.BroadcastTx(ctx, tx); err != nil {
 		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
 		return nil
 	}

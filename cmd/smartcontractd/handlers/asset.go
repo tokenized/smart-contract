@@ -18,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -38,7 +39,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	msg, ok := itx.MsgProto.(*actions.AssetDefinition)
 	if !ok {
-		return errors.New("Could not assert as *protocol.AssetDefinition")
+		return errors.New("Could not assert as *actions.AssetDefinition")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -71,7 +72,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = actions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
+	if _, err = permissions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
@@ -88,7 +89,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	assetCode := protocol.AssetCodeFromContract(rk.Address, uint64(len(ct.AssetCodes)))
 
 	// Locate Asset
-	_, err = asset.Retrieve(ctx, a.MasterDB, rk.Address, assetCode)
+	_, err = asset.Retrieve(ctx, a.MasterDB, rk.Address, &assetCode)
 	if err != asset.ErrNotFound {
 		if err == nil {
 			node.LogWarn(ctx, "Asset already exists : %s", assetCode.String())
@@ -119,7 +120,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Only one Owner/Administrator Membership asset allowed
-	if msg.AssetType == "MEM" && (!ct.AdminMemberAsset.IsZero() || !ct.OwnerMemberAsset.IsZero()) {
+	if msg.AssetType == assets.CodeMembership &&
+		(!ct.AdminMemberAsset.IsZero() || !ct.OwnerMemberAsset.IsZero()) {
 		membership, ok := assetPayload.(*assets.Membership)
 		if !ok {
 			node.LogWarn(ctx, "Membership payload is wrong type")
@@ -168,7 +170,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Add the asset code now rather than when the asset creation is processed in case another asset
 	//   definition is received before then.
-	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, a.Config.IsTest, v.Now); err != nil {
+	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, &assetCode, a.Config.IsTest,
+		v.Now); err != nil {
 		return err
 	}
 
@@ -178,12 +181,12 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 // ModificationRequest handles an incoming Asset Modification and prepares a Creation response
 func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
+	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Modification")
 	defer span.End()
 
 	msg, ok := itx.MsgProto.(*actions.AssetModification)
 	if !ok {
-		return errors.New("Could not assert as *protocol.AssetModification")
+		return errors.New("Could not assert as *actions.AssetModification")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -202,17 +205,21 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
-		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		node.LogWarn(ctx, "Contract address changed : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %x %s", msg.AssetCode, address.String())
+		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
-	assetCode := protocol.AssetCodeFromBytes(msg.AssetCode)
+	assetCode, err := bitcoin.NewHash20(msg.AssetCode)
+	if err != nil {
+		node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
 	as, err := asset.Retrieve(ctx, a.MasterDB, rk.Address, assetCode)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve asset")
@@ -220,13 +227,13 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Asset could not be found
 	if as == nil {
-		node.LogVerbose(ctx, "Asset ID not found: %x", msg.AssetCode)
+		node.LogVerbose(ctx, "Asset ID not found: %s", assetCode)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
 	}
 
 	// Revision mismatch
 	if as.Revision != msg.AssetRevision {
-		node.LogVerbose(ctx, "Asset Revision does not match current: %x", msg.AssetCode)
+		node.LogVerbose(ctx, "Asset Revision does not match current: %s", assetCode)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetRevision)
 	}
 
@@ -240,7 +247,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		refTxId, err := bitcoin.NewHash32(msg.RefTxID)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
+			return errors.Wrap(err, "Failed to convert bitcoin.Hash32 to Hash32")
 		}
 
 		// Retrieve Vote Result
@@ -257,13 +264,18 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve the vote
-		voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+		voteTxId, err := bitcoin.NewHash32(voteResult.VoteTxId)
+		if err != nil {
+			node.LogWarn(ctx, "Invalid vote txid : 0x%x", voteResult.VoteTxId)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		}
+
 		vt, err := vote.Retrieve(ctx, a.MasterDB, rk.Address, voteTxId)
 		if err == vote.ErrNotFound {
-			node.LogWarn(ctx, "Vote not found : %x", voteResult.VoteTxId)
+			node.LogWarn(ctx, "Vote not found : %s", voteResult.VoteTxId)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsVoteNotFound)
 		} else if err != nil {
-			node.LogWarn(ctx, "Failed to retrieve vote : %x : %s", voteResult.VoteTxId, err)
+			node.LogWarn(ctx, "Failed to retrieve vote : %s : %s", voteResult.VoteTxId, err)
 			return errors.Wrap(err, "Failed to retrieve vote")
 		}
 
@@ -317,7 +329,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	ac.Timestamp = v.Now.Nano()
 	ac.AssetCode = msg.AssetCode // Asset code not in state data
 
-	node.Log(ctx, "Amending asset : %x", msg.AssetCode)
+	node.Log(ctx, "Amending asset : %s", assetCode)
 
 	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
 		proposalType, votingSystem); err != nil {
@@ -331,7 +343,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 	var h *state.Holding
 	updateHoldings := false
-	if ac.TokenQty != as.TokenQty {
+	if ac.AuthorizedTokenQty != as.AuthorizedTokenQty {
 		updateHoldings = true
 
 		// Check administration balance for token quantity reductions. Administration has to hold
@@ -341,19 +353,20 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
 
-		txid := protocol.TxIdFromBytes(itx.Hash[:])
-
-		if ac.TokenQty < as.TokenQty {
-			if err := holdings.AddDebit(h, txid, as.TokenQty-ac.TokenQty, true, v.Now); err != nil {
+		if ac.AuthorizedTokenQty < as.AuthorizedTokenQty {
+			if err := holdings.AddDebit(h, itx.Hash, as.AuthorizedTokenQty-ac.AuthorizedTokenQty, true,
+				v.Now); err != nil {
 				node.LogWarn(ctx, "Failed to reduce administration holdings : %s", err)
 				if err == holdings.ErrInsufficientHoldings {
-					return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
+					return node.RespondReject(ctx, w, itx, rk,
+						actions.RejectionsInsufficientQuantity)
 				} else {
 					return errors.Wrap(err, "Failed to reduce holdings")
 				}
 			}
 		} else {
-			if err := holdings.AddDeposit(h, txid, ac.TokenQty-as.TokenQty, true, v.Now); err != nil {
+			if err := holdings.AddDeposit(h, itx.Hash, ac.AuthorizedTokenQty-as.AuthorizedTokenQty,
+				true, v.Now); err != nil {
 				node.LogWarn(ctx, "Failed to increase administration holdings : %s", err)
 				return errors.Wrap(err, "Failed to increase holdings")
 			}
@@ -403,8 +416,8 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 	// Locate Asset
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		return fmt.Errorf("Asset Creation not from contract : %x",
-			itx.Inputs[0].Address.Bytes())
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
+		return fmt.Errorf("Asset Creation not from contract : %s", address)
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
@@ -418,7 +431,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	assetCode := protocol.AssetCodeFromBytes(msg.AssetCode)
+	assetCode, err := bitcoin.NewHash20(msg.AssetCode)
+	if err != nil {
+		node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
+		return errors.Wrap(err, "invalid asset code")
+	}
 	as, err := asset.Retrieve(ctx, a.MasterDB, rk.Address, assetCode)
 	if err != nil && err != asset.ErrNotFound {
 		return errors.Wrap(err, "Failed to retrieve asset")
@@ -438,7 +455,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		if ok && len(modification.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(modification.RefTxID)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert protocol.TxId to Hash32")
+				return errors.Wrap(err, "Failed to convert bitcoin.Hash32 to Hash32")
 			}
 
 			// Retrieve Vote Result
@@ -453,7 +470,11 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			}
 
 			// Retrieve the vote
-			voteTxId := protocol.TxIdFromBytes(voteResult.VoteTxId)
+			voteTxId, err := bitcoin.NewHash32(voteResult.VoteTxId)
+			if err != nil {
+				return errors.Wrap(err, "invalid vote txid")
+			}
+
 			vt, err = vote.Retrieve(ctx, a.MasterDB, rk.Address, voteTxId)
 			if err == vote.ErrNotFound {
 				return errors.New("Vote not found for modification")
@@ -492,9 +513,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
-		txid := protocol.TxIdFromBytes(itx.Hash[:])
-		holdings.AddDeposit(h, txid, msg.TokenQty, true, protocol.NewTimestamp(msg.Timestamp))
-		holdings.FinalizeTx(h, txid, msg.TokenQty, protocol.NewTimestamp(msg.Timestamp))
+		holdings.AddDeposit(h, itx.Hash, msg.AuthorizedTokenQty, true,
+			protocol.NewTimestamp(msg.Timestamp))
+		holdings.FinalizeTx(h, itx.Hash, msg.AuthorizedTokenQty,
+			protocol.NewTimestamp(msg.Timestamp))
 		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
 		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
@@ -502,7 +524,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		a.HoldingsChannel.Add(cacheItem)
 
 		// Update Owner/Administrator Membership asset in contract
-		if msg.AssetType == "MEM" {
+		if msg.AssetType == assets.CodeMembership {
 			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
@@ -543,45 +565,41 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
 			ua.AssetPermissions = &msg.AssetPermissions
-			node.Log(ctx, "Updating asset permissions (%x) : %x", msg.AssetCode,
+			node.Log(ctx, "Updating asset permissions (%s) : %s", assetCode,
 				*ua.AssetPermissions)
-		}
-		if as.TransfersPermitted != msg.TransfersPermitted {
-			ua.TransfersPermitted = &msg.TransfersPermitted
-			node.Log(ctx, "Updating asset transfers permitted (%x) : %t", msg.AssetCode,
-				*ua.TransfersPermitted)
 		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
-			node.Log(ctx, "Updating asset enforcement orders permitted (%x) : %t", msg.AssetCode,
+			node.Log(ctx, "Updating asset enforcement orders permitted (%s) : %t", assetCode,
 				*ua.EnforcementOrdersPermitted)
 		}
 		if as.VoteMultiplier != msg.VoteMultiplier {
 			ua.VoteMultiplier = &msg.VoteMultiplier
-			node.Log(ctx, "Updating asset vote multiplier (%x) : %02x", msg.AssetCode,
+			node.Log(ctx, "Updating asset vote multiplier (%s) : %02x", assetCode,
 				*ua.VoteMultiplier)
 		}
 		if as.AdministrationProposal != msg.AdministrationProposal {
 			ua.AdministrationProposal = &msg.AdministrationProposal
-			node.Log(ctx, "Updating asset administration proposal (%x) : %t", msg.AssetCode,
+			node.Log(ctx, "Updating asset administration proposal (%s) : %t", assetCode,
 				*ua.AdministrationProposal)
 		}
 		if as.HolderProposal != msg.HolderProposal {
 			ua.HolderProposal = &msg.HolderProposal
-			node.Log(ctx, "Updating asset holder proposal (%x) : %t", msg.AssetCode,
+			node.Log(ctx, "Updating asset holder proposal (%s) : %t", assetCode,
 				*ua.HolderProposal)
 		}
 		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
 			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			node.Log(ctx, "Updating asset modification governance (%x) : %d", msg.AssetCode,
+			node.Log(ctx, "Updating asset modification governance (%s) : %d", assetCode,
 				*ua.AssetModificationGovernance)
 		}
 
 		var h *state.Holding
 		updateHoldings := false
-		if as.TokenQty != msg.TokenQty {
-			ua.TokenQty = &msg.TokenQty
-			node.Log(ctx, "Updating asset token quantity %d : %x", *ua.TokenQty, msg.AssetCode)
+		if as.AuthorizedTokenQty != msg.AuthorizedTokenQty {
+			ua.AuthorizedTokenQty = &msg.AuthorizedTokenQty
+			node.Log(ctx, "Updating asset token quantity %d : %s", *ua.AuthorizedTokenQty,
+				assetCode)
 
 			h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
 				ct.AdminAddress, v.Now)
@@ -589,28 +607,26 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				return errors.Wrap(err, "Failed to get admin holding")
 			}
 
-			txid := protocol.TxIdFromBytes(itx.Hash[:])
-
-			if msg.TokenQty > as.TokenQty {
-				node.Log(ctx, "Increasing token quantity by %d to %d : %x",
-					msg.TokenQty-as.TokenQty, *ua.TokenQty, msg.AssetCode)
-				holdings.FinalizeTx(h, txid, h.FinalizedBalance+(msg.TokenQty-as.TokenQty),
+			if msg.AuthorizedTokenQty > as.AuthorizedTokenQty {
+				node.Log(ctx, "Increasing token quantity by %d to %d : %s",
+					msg.AuthorizedTokenQty-as.AuthorizedTokenQty, *ua.AuthorizedTokenQty, assetCode)
+				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance+(msg.AuthorizedTokenQty-as.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			} else {
-				node.Log(ctx, "Decreasing token quantity by %d to %d : %x",
-					as.TokenQty-msg.TokenQty, *ua.TokenQty, msg.AssetCode)
-				holdings.FinalizeTx(h, txid, h.FinalizedBalance-(as.TokenQty-msg.TokenQty),
+				node.Log(ctx, "Decreasing token quantity by %d to %d : %s",
+					as.AuthorizedTokenQty-msg.AuthorizedTokenQty, *ua.AuthorizedTokenQty, assetCode)
+				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance-(as.AuthorizedTokenQty-msg.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			}
 			updateHoldings = true
 			if err != nil {
-				node.LogWarn(ctx, "Failed to update administration holding : %x", msg.AssetCode)
+				node.LogWarn(ctx, "Failed to update administration holding : %s", assetCode)
 				return err
 			}
 		}
 		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
 			ua.AssetPayload = &msg.AssetPayload
-			node.Log(ctx, "Updating asset payload (%x) : %s", msg.AssetCode, *ua.AssetPayload)
+			node.Log(ctx, "Updating asset payload (%s) : %s", assetCode, *ua.AssetPayload)
 		}
 
 		// Check if trade restrictions are different
@@ -636,21 +652,22 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			a.HoldingsChannel.Add(cacheItem)
 		}
 		if err := asset.Update(ctx, a.MasterDB, rk.Address, assetCode, &ua, v.Now); err != nil {
-			node.LogWarn(ctx, "Failed to update asset : %x", msg.AssetCode)
+			node.LogWarn(ctx, "Failed to update asset : %s", assetCode)
 			return err
 		}
-		node.Log(ctx, "Updated asset %d : %s", msg.AssetIndex, assetCode.String())
+		node.Log(ctx, "Updated asset %d : %s", msg.AssetIndex, assetCode)
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
-			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
-			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, protocol.TxIdFromBytes(request.Hash[:]), v.Now); err != nil {
+			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId)
+			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, request.Hash,
+				v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
 		}
 
 		// Update Owner/Administrator Membership asset in contract
-		if msg.AssetType == "MEM" {
+		if msg.AssetType == assets.CodeMembership {
 			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
@@ -663,7 +680,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			if membership.MembershipClass == "Administrator" && !assetCode.Equal(ct.AdminMemberAsset) {
+			if membership.MembershipClass == "Administrator" && !assetCode.Equal(&ct.AdminMemberAsset) {
 				// Set contract AdminMemberAsset
 				updateContract := &contract.UpdateContract{
 					AdminMemberAsset: assetCode,
@@ -672,10 +689,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
-			} else if membership.MembershipClass != "Administrator" && assetCode.Equal(ct.AdminMemberAsset) {
+			} else if membership.MembershipClass != "Administrator" && assetCode.Equal(&ct.AdminMemberAsset) {
 				// Clear contract AdminMemberAsset
 				updateContract := &contract.UpdateContract{
-					AdminMemberAsset: &protocol.AssetCode{}, // zero asset code
+					AdminMemberAsset: &bitcoin.Hash20{}, // zero asset code
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -683,7 +700,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				}
 			}
 
-			if membership.MembershipClass == "Owner" && !assetCode.Equal(ct.OwnerMemberAsset) {
+			if membership.MembershipClass == "Owner" && !assetCode.Equal(&ct.OwnerMemberAsset) {
 				// Set contract OwnerMemberAsset
 				updateContract := &contract.UpdateContract{
 					OwnerMemberAsset: assetCode,
@@ -692,10 +709,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
-			} else if membership.MembershipClass != "Owner" && assetCode.Equal(ct.OwnerMemberAsset) {
+			} else if membership.MembershipClass != "Owner" && assetCode.Equal(&ct.OwnerMemberAsset) {
 				// Clear contract OwnerMemberAsset
 				updateContract := &contract.UpdateContract{
-					OwnerMemberAsset: &protocol.AssetCode{}, // zero asset code
+					OwnerMemberAsset: &bitcoin.Hash20{}, // zero asset code
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -711,7 +728,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
 	amendments []*actions.AmendmentField, proposed bool, proposalType, votingSystem uint32) error {
 
-	permissions, err := actions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
+	perms, err := permissions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
 	if err != nil {
 		return fmt.Errorf("Invalid asset permissions : %s", err)
 	}
@@ -720,8 +737,8 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 
 	for i, amendment := range amendments {
 		applied := false
-		adjustedFIP := actions.FieldIndexPath{}
-		fip, err := actions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
+		var fieldPermissions permissions.Permissions
+		fip, err := permissions.FieldIndexPathFromBytes(amendment.FieldIndexPath)
 		if err != nil {
 			return fmt.Errorf("Failed to read amendment %d field index path : %s", i, err)
 		}
@@ -735,7 +752,7 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				"Asset type amendments prohibited")
 
 		case actions.AssetFieldAssetPermissions:
-			if _, err := actions.PermissionsFromBytes(amendment.Data,
+			if _, err := permissions.PermissionsFromBytes(amendment.Data,
 				len(votingSystems)); err != nil {
 				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
 			}
@@ -754,12 +771,17 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				}
 			}
 
-			adjustedFIP, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation,
-				amendment.Data)
+			payloadPermissions, err := perms.SubPermissions(
+				permissions.FieldIndexPath{actions.AssetFieldAssetPayload}, 0, false)
+
+			fieldPermissions, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation,
+				amendment.Data, payloadPermissions)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "apply amendment %d", i)
 			}
-			adjustedFIP = append(fip[1:], adjustedFIP...)
+			if len(fieldPermissions) == 0 {
+				return errors.New("Invalid field permissions")
+			}
 
 			switch assetPayload.(type) {
 			case *assets.Membership:
@@ -773,50 +795,54 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 		}
 
 		if !applied {
-			adjustedFIP, err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data)
+			fieldPermissions, err = ac.ApplyAmendment(fip, amendment.Operation, amendment.Data,
+				perms)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "apply amendment %d", i)
+			}
+			if len(fieldPermissions) == 0 {
+				return errors.New("Invalid field permissions")
 			}
 		}
 
-		permission := permissions.PermissionOf(adjustedFIP)
+		// fieldPermissions are the permissions that apply to the field that was changed in the
+		// amendment.
+		permission := fieldPermissions[0]
 		if proposed {
 			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
 					return node.NewError(actions.RejectionsAssetPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
-							adjustedFIP.String()))
+							fip))
 				}
 			case 1: // Holder
 				if !permission.HolderProposal {
 					return node.NewError(actions.RejectionsAssetPermissions,
-						fmt.Sprintf("Field %s amendment not permitted by holder proposal",
-							adjustedFIP.String()))
+						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
 				}
 			case 2: // Administrative Matter
 				if !permission.AdministrativeMatter {
 					return node.NewError(actions.RejectionsAssetPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
-							adjustedFIP.String()))
+							fip))
 				}
 			default:
 				return fmt.Errorf("Invalid proposal type : %d", proposalType)
 			}
 
 			if int(votingSystem) >= len(permission.VotingSystemsAllowed) {
-				return fmt.Errorf("Field %s amendment voting system out of range : %d",
-					adjustedFIP.String(), votingSystem)
+				return fmt.Errorf("Field %s amendment voting system out of range : %d", fip,
+					votingSystem)
 			}
 			if !permission.VotingSystemsAllowed[votingSystem] {
 				return node.NewError(actions.RejectionsAssetPermissions,
-					fmt.Sprintf("Field %s amendment not allowed using voting system %d",
-						adjustedFIP.String(), votingSystem))
+					fmt.Sprintf("Field %s amendment not allowed using voting system %d", fip,
+						votingSystem))
 			}
 		} else if !permission.Permitted {
 			return node.NewError(actions.RejectionsAssetPermissions,
-				fmt.Sprintf("Field %s amendment not permitted without proposal",
-					adjustedFIP.String()))
+				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
 		}
 	}
 
