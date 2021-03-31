@@ -204,7 +204,12 @@ func (server *Server) HandleInSync(ctx context.Context) {
 		ctx := node.ContextWithLogTrace(ctx, itx.Hash.String())
 		node.Log(ctx, "Processing pending response")
 		if err := server.Handler.Trigger(ctx, "SEE", itx); err != nil {
-			node.LogError(ctx, "Failed to handle pending response tx : %s", err)
+			switch errors.Cause(err) {
+			case node.ErrNoResponse, node.ErrRejected, node.ErrInsufficientFunds:
+				node.Log(ctx, "Failed to handle tx : %s", err)
+			default:
+				node.LogError(ctx, "Failed to handle pending response tx : %s", err)
+			}
 		}
 	}
 
@@ -213,7 +218,12 @@ func (server *Server) HandleInSync(ctx context.Context) {
 		ctx := node.ContextWithLogTrace(ctx, tx.Itx.Hash.String())
 		node.Log(ctx, "Processing pending request")
 		if err := server.Handler.Trigger(ctx, "SEE", tx.Itx); err != nil {
-			node.LogError(ctx, "Failed to handle pending request tx : %s", err)
+			switch errors.Cause(err) {
+			case node.ErrNoResponse, node.ErrRejected, node.ErrInsufficientFunds:
+				node.Log(ctx, "Failed to handle tx : %s", err)
+			default:
+				node.LogError(ctx, "Failed to handle pending request tx : %s", err)
+			}
 		}
 	}
 

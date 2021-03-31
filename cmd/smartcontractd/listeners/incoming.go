@@ -597,8 +597,10 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		hash := header.Headers[0].BlockHash()
 
-		logger.Info(ctx, "Admin address : %s",
-			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net))
+		logFields := []logger.Field{}
+
+		logFields = append(logFields, logger.Stringer("admin_address",
+			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net)))
 
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
@@ -608,18 +610,18 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 				return errors.Wrap(err, "entity address")
 			}
 
-			logger.Info(ctx, "Entity Contract : %s",
-				bitcoin.NewAddressFromRawAddress(entityRA, config.Net).String())
+			logFields = append(logFields, logger.Stringer("entity_contract",
+				bitcoin.NewAddressFromRawAddress(entityRA, config.Net)))
 
 			entity = entityRA
 		} else {
 			entity = contractOffer.Issuer
 
-			logger.Info(ctx, "Issuer : %+v", *contractOffer.Issuer)
+			logFields = append(logFields, logger.JSON("issuer", *contractOffer.Issuer))
 		}
 
-		logger.Info(ctx, "Block Hash : %s", hash)
-		logger.Info(ctx, "Expiration : %d", cert.Expiration)
+		logFields = append(logFields, logger.Stringer("block_hash", hash))
+		logFields = append(logFields, logger.Uint64("expiration", cert.Expiration))
 
 		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
 			entity, *hash, cert.Expiration, 1)
@@ -627,13 +629,14 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 			return err
 		}
 
-		logger.Info(ctx, "Sig Hash : %x", sigHash)
+		logFields = append(logFields, logger.Formatter("sig_hash", "%x", sigHash))
 
 		if !oracleSig.Verify(sigHash, publicKey) {
+			logger.WarnWithFields(ctx, logFields, "Admin identity signature is invalid")
 			return fmt.Errorf("Signature invalid")
 		}
 
-		node.Log(ctx, "Admin identity signature is valid")
+		logger.InfoWithFields(ctx, logFields, "Admin identity signature is valid")
 	}
 
 	return nil
