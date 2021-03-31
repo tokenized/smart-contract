@@ -94,7 +94,8 @@ func createAsset(t *testing.T) {
 	assetInputHash := fundingTx.TxHash()
 
 	// From issuer (Note: empty sig script)
-	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0), make([]byte, 130)))
+	assetTx.TxIn = append(assetTx.TxIn, wire.NewTxIn(wire.NewOutPoint(assetInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -151,6 +152,11 @@ func createAsset(t *testing.T) {
 	if as.AssetType != assetData.AssetType {
 		t.Fatalf("\t%s\tAsset type incorrect : %s != %s", tests.Failed, as.AssetType,
 			assetData.AssetType)
+	}
+
+	if as.AuthorizedTokenQty != assetData.AuthorizedTokenQty {
+		t.Fatalf("\t%s\tAsset token quantity incorrect : %d != %d", tests.Failed,
+			as.AuthorizedTokenQty, assetData.AuthorizedTokenQty)
 	}
 
 	t.Logf("\t%s\tVerified asset type : %s", tests.Success, as.AssetType)

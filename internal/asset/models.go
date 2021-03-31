@@ -21,7 +21,7 @@ type NewAsset struct {
 	AdministrationProposal      bool     `json:"AdministrationProposal,omitempty"`
 	HolderProposal              bool     `json:"HolderProposal,omitempty"`
 	AssetModificationGovernance uint32   `json:"AssetModificationGovernance,omitempty"`
-	TokenQty                    uint64   `json:"TokenQty,omitempty"`
+	AuthorizedTokenQty          uint64   `json:"AuthorizedTokenQty,omitempty"`
 	AssetPayload                []byte   `json:"AssetPayload,omitempty"`
 }
 
