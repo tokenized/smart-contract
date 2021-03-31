@@ -73,21 +73,10 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Verify entity contract
 	if len(msg.EntityContract) > 0 {
-		ra, err := bitcoin.DecodeRawAddress(msg.EntityContract)
-		if err != nil {
+		if _, err := bitcoin.DecodeRawAddress(msg.EntityContract); err != nil {
 			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 				fmt.Sprintf("Entity contract address invalid : %s", err))
 		}
-
-		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
-		if err != nil {
-			if errors.Cause(err) == contract.ErrNotFound {
-				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
-					"Entity contract not found")
-			}
-			return errors.Wrap(err, "fetch entity contract formation")
-		}
-		logger.Info(ctx, "Found Parent Entity Contract : %s", entityCF.ContractName)
 	}
 
 	// Verify operator entity contract
@@ -458,21 +447,10 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Verify entity contract
 	if len(cf.EntityContract) > 0 {
-		ra, err := bitcoin.DecodeRawAddress(cf.EntityContract)
-		if err != nil {
+		if _, err := bitcoin.DecodeRawAddress(cf.EntityContract); err != nil {
 			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 				fmt.Sprintf("Entity contract address invalid : %s", err))
 		}
-
-		entityCF, err := contract.FetchContractFormation(ctx, c.MasterDB, ra, c.Config.IsTest)
-		if err != nil {
-			if errors.Cause(err) == contract.ErrNotFound {
-				return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
-					"Entity contract not found")
-			}
-			return errors.Wrap(err, "fetch entity contract formation")
-		}
-		logger.Info(ctx, "Found Parent Entity Contract : %s", entityCF.ContractName)
 	}
 
 	// Verify operator entity contract

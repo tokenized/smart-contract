@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 
 	"github.com/tokenized/smart-contract/internal/platform/db"
+	"github.com/tokenized/smart-contract/internal/platform/node"
 
 	"github.com/pkg/errors"
 )
@@ -45,6 +46,8 @@ func GetNextMessageID(ctx context.Context, dbConn *db.DB) (*uint64, error) {
 }
 
 func SaveNextMessageID(ctx context.Context, dbConn *db.DB, nextMessageID uint64) error {
+	node.Log(ctx, "Saving Spynode next message ID : %d", nextMessageID)
+
 	var buf bytes.Buffer
 	if err := binary.Write(&buf, binary.LittleEndian, stateVersion); err != nil {
 		return errors.Wrap(err, "version")

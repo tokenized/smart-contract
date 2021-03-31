@@ -103,6 +103,8 @@ func (a Asset) TransfersPermitted() bool {
 		return as.TransfersPermitted
 	case *assets.CasinoChip:
 		return as.TransfersPermitted
+	case *assets.BondFixedRate:
+		return as.TransfersPermitted
 	}
 
 	return true

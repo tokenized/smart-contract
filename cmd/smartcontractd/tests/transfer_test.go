@@ -1517,7 +1517,7 @@ func bitcoinExchange(t *testing.T) {
 	transfer2Amount := uint64(1050)
 	assetTransfer2Data := actions.AssetTransferField{
 		ContractIndex: 0, // first output
-		AssetType:     "BSV",
+		AssetType:     protocol.BSVAssetID,
 	}
 
 	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
@@ -2628,7 +2628,7 @@ func oracleTransferBad(t *testing.T) {
 	bitcoinTransferAmount := uint64(50000)
 	bitcoinTransferData := actions.AssetTransferField{
 		ContractIndex: uint32(0x0000ffff),
-		AssetType:     "BSV",
+		AssetType:     protocol.BSVAssetID,
 	}
 
 	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders,
