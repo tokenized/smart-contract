@@ -25,6 +25,7 @@ type Config struct {
 		ShotgunCount   int    `default:"100" envconfig:"SHOTGUN_COUNT" json:"SHOTGUN_COUNT"`
 		MaxRetries     int    `default:"25" envconfig:"NODE_MAX_RETRIES" json:"NODE_MAX_RETRIES"`
 		RetryDelay     int    `default:"5000" envconfig:"NODE_RETRY_DELAY" json:"NODE_RETRY_DELAY"`
+		RequestMempool bool   `default:"true" envconfig:"REQUEST_MEMPOOL" json:"REQUEST_MEMPOOL"`
 	}
 	RpcNode struct {
 		Host       string `envconfig:"RPC_HOST" json:"RPC_HOST"`
