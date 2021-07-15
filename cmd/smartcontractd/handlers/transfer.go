@@ -559,7 +559,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 	for assetOffset, assetTransfer := range transfer.Assets {
 		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
-			node.LogVerbose(ctx, "Asset transfer for bitcoin")
+			node.Log(ctx, "Asset transfer for bitcoin")
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 
@@ -604,7 +604,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			return fmt.Errorf("Contract input not found: %s", assetID)
 		}
 
-		node.LogVerbose(ctx, "Adding settlement data for asset : %s", assetID)
+		node.Log(ctx, "Adding settlement data for asset : %s", assetID)
 		assetSettlement := actions.AssetSettlementField{
 			ContractIndex: contractInputIndex,
 			AssetType:     assetTransfer.AssetType,

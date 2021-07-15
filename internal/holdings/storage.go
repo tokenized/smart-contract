@@ -531,6 +531,7 @@ func deserializeHoldingStatus(r io.Reader, hs *state.HoldingStatus) error {
 		return err
 	}
 
+	hs.TxId = &bitcoin.Hash32{}
 	if err := hs.TxId.Deserialize(r); err != nil {
 		return err
 	}

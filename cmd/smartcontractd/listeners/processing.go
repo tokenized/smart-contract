@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/inspector"
@@ -53,8 +54,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 				isRelevant = true
 				if ptx.Itx.IsIncomingMessageType() {
-					node.Log(ctx, "Request for contract %s",
-						bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
+					logger.InfoWithFields(ctx, []logger.Field{
+						logger.Stringer("contract_address",
+							bitcoin.NewAddressFromRawAddress(address, server.Config.Net)),
+					}, "Request for contract")
 					if !server.IsInSync() {
 						node.Log(ctx, "Adding request to pending")
 						// Save pending request to ensure it has a response, and process it if not.
@@ -79,8 +82,10 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 				for _, address := range server.contractAddresses {
 					if address.Equal(input.Address) {
-						node.Log(ctx, "Response for contract %s",
-							bitcoin.NewAddressFromRawAddress(address, server.Config.Net))
+						logger.InfoWithFields(ctx, []logger.Field{
+							logger.Stringer("contract_address",
+								bitcoin.NewAddressFromRawAddress(address, server.Config.Net)),
+						}, "Response for contract")
 						isRelevant = true
 						responseAdded = true
 						if !server.IsInSync() {

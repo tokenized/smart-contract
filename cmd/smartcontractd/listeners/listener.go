@@ -133,7 +133,6 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 			node.LogWarn(ctx, "Failed to cancel tx : %s", err)
 		}
 	} else if state.MerkleProof != nil {
-		node.Log(ctx, "Tx confirm")
 		logger.InfoWithFields(ctx, []logger.Field{
 			logger.Stringer("block_hash", state.MerkleProof.BlockHeader.BlockHash()),
 		}, "Tx confirm")

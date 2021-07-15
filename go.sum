@@ -134,6 +134,8 @@ github.com/tokenized/pkg v0.2.0/go.mod h1:QJIVlpGu5AUytmnjmMGEZGJo59LUOG4xpi/PUN
 github.com/tokenized/pkg v0.2.3-0.20210219224445-ef80b9d38a72/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
 github.com/tokenized/pkg v0.3.0 h1:T8IyM1JYvXcuEPdOb0v6AtvKeD9u53mE0+oQ8+GNylk=
 github.com/tokenized/pkg v0.3.0/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
+github.com/tokenized/pkg v0.3.1-0.20210715005346-fa3c70a7671c h1:cAY/GoNko4nr8EIP0mGmlDKnJx7gqp7PKhbGxCwnUYc=
+github.com/tokenized/pkg v0.3.1-0.20210715005346-fa3c70a7671c/go.mod h1:DK5GYBxJ2ezz/AVlR/4VeHht52cqOl10gg/chw/hOAE=
 github.com/tokenized/specification v1.0.1-0.20210413221751-cb78086f9458 h1:QQAnwZhW8jPAjsTXsV33SbFcZ18jZNpwRsdCZUbD+To=
 github.com/tokenized/specification v1.0.1-0.20210413221751-cb78086f9458/go.mod h1:2aowtdNi5CpkeXjCMN+3cTg1qvrbqyfVQc7Fe3FiARk=
 github.com/tokenized/spynode v0.1.1 h1:3icI+alm14CjrhRb6E7H909NeLA5zm8uSa6yWKV85c8=
