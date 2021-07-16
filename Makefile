@@ -81,6 +81,21 @@ test-race: prepare
 test-win: prepare-win
 	go test -p 1 ./...
 
+# run the tests with coverage
+test-coverage: prepare
+	go clean -testcache
+	go test -p 1 -coverprofile=tmp/coverage.out ./...
+
+# Display the coverage in the browser
+#
+# See https://blog.golang.org/cover for more output options
+test-coverage-view-html:
+	go tool cover -html=tmp/coverage.out
+
+# Display test coverage in the terminal.
+test-coverage-view-text:
+	go tool cover -func=tmp/coverage.out
+
 bench: prepare
 	go test -bench . ./...
 
