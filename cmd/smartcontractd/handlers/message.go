@@ -240,7 +240,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		for _, utxo := range utxos {
-			if err := tx.AddInput(utxo.OutPoint, utxo.Output.PkScript,
+			if err := tx.AddInput(utxo.OutPoint, utxo.Output.LockingScript,
 				uint64(utxo.Output.Value)); err != nil {
 				return errors.Wrap(err, "Failed add input")
 			}
@@ -516,7 +516,7 @@ func (m *Message) processSigRequest(ctx context.Context, w *node.ResponseWriter,
 
 	// Find OP_RETURN
 	for _, output := range tx.TxOut {
-		action, err := protocol.Deserialize(output.PkScript, m.Config.IsTest)
+		action, err := protocol.Deserialize(output.LockingScript, m.Config.IsTest)
 		if err == nil {
 			switch msg := action.(type) {
 			case *actions.Settlement:
@@ -735,14 +735,14 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	settleOutputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.TxOut))
 	settleOpReturnFound := false
 	for i, output := range settleTx.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err == nil {
 			settleOutputAddresses = append(settleOutputAddresses, address)
 		} else {
 			settleOutputAddresses = append(settleOutputAddresses, bitcoin.RawAddress{})
 		}
 
-		action, err := protocol.Deserialize(output.PkScript, config.IsTest)
+		action, err := protocol.Deserialize(output.LockingScript, config.IsTest)
 		if err != nil {
 			continue
 		}
@@ -766,7 +766,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 	// Generate public key hashes for all the inputs
 	settleInputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.TxIn))
 	for _, input := range settleTx.TxIn {
-		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.RawAddressFromUnlockingScript(input.UnlockingScript)
 		if err != nil {
 			settleInputAddresses = append(settleInputAddresses, bitcoin.RawAddress{})
 		} else {

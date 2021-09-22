@@ -26,7 +26,7 @@ func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -71,7 +71,7 @@ func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 // Remove removes UTXOs in the tx from the set.
 func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -97,7 +97,7 @@ func (us *UTXOs) Get(amount uint64, address bitcoin.RawAddress) ([]*UTXO, error)
 	result := make([]*UTXO, 0, 5)
 	for _, existing := range us.list {
 		if bytes.Equal(existing.SpentBy[:], zeroTxId[:]) {
-			outputAddress, err := bitcoin.RawAddressFromLockingScript(existing.Output.PkScript)
+			outputAddress, err := bitcoin.RawAddressFromLockingScript(existing.Output.LockingScript)
 			if err != nil || !address.Equal(outputAddress) {
 				continue
 			}

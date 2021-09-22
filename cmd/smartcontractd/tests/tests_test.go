@@ -197,7 +197,7 @@ func getResponse() *wire.MsgTx {
 
 func responseType(tx *wire.MsgTx) string {
 	for _, output := range tx.TxOut {
-		msg, err := protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		msg, err := protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			return msg.Code()
 		}
@@ -224,7 +224,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	var responseMsg actions.Action
 	var err error
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -283,7 +283,7 @@ func checkResponses(t testing.TB, responseCode string) {
 
 	for i, response := range responsesToProcess {
 		for _, output := range response.TxOut {
-			responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+			responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 			if err == nil {
 				break
 			}

@@ -56,7 +56,9 @@ var cmdParse = &cobra.Command{
 			return nil
 		}
 
-		parseScript(c, data)
+		if parseScript(c, data) == nil {
+			return nil
+		}
 
 		return nil
 	},
@@ -95,7 +97,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 	fmt.Printf(tx.StringWithAddresses(network(c)))
 
 	for _, txOut := range tx.TxOut {
-		if parseScript(c, txOut.PkScript) == nil {
+		if parseScript(c, txOut.LockingScript) == nil {
 			return nil
 		}
 	}

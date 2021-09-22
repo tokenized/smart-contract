@@ -23,10 +23,10 @@ type Wallet struct {
 }
 
 type Output struct {
-	OutPoint    wire.OutPoint
-	PkScript    []byte
-	Value       uint64
-	SpentByTxId *bitcoin.Hash32
+	OutPoint      wire.OutPoint
+	LockingScript []byte
+	Value         uint64
+	SpentByTxId   *bitcoin.Hash32
 }
 
 func BitcoinsFromSatoshis(satoshis uint64) float32 {
@@ -98,10 +98,10 @@ func (wallet *Wallet) AddUTXO(txid *bitcoin.Hash32, index uint32, script []byte,
 	}
 
 	newOutput := Output{
-		OutPoint:    wire.OutPoint{Hash: *txid, Index: index},
-		PkScript:    script,
-		Value:       uint64(value),
-		SpentByTxId: &bitcoin.Hash32{},
+		OutPoint:      wire.OutPoint{Hash: *txid, Index: index},
+		LockingScript: script,
+		Value:         uint64(value),
+		SpentByTxId:   &bitcoin.Hash32{},
 	}
 	wallet.outputs = append(wallet.outputs, newOutput)
 	return true

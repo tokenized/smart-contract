@@ -181,7 +181,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			if !emptyHash.Equal(output.SpentByTxId) {
 				continue
 			}
-			err := tx.AddInput(output.OutPoint, output.PkScript, output.Value)
+			err := tx.AddInput(output.OutPoint, output.LockingScript, output.Value)
 			if err != nil {
 				fmt.Printf("Failed to add input : %s\n", err)
 				return nil

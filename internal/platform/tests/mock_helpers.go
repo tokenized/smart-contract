@@ -78,7 +78,7 @@ func (cache *mockRpcNode) GetOutputs(ctx context.Context,
 			Hash:          outpoint.Hash,
 			Index:         outpoint.Index,
 			Value:         tx.TxOut[outpoint.Index].Value,
-			LockingScript: tx.TxOut[outpoint.Index].PkScript,
+			LockingScript: tx.TxOut[outpoint.Index].LockingScript,
 		}
 	}
 	return results, nil

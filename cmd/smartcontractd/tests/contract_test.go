@@ -130,7 +130,7 @@ func createContract(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -162,7 +162,7 @@ func createContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
-	offerTx.TxOut[1].PkScript = script
+	offerTx.TxOut[1].LockingScript = script
 
 	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -300,7 +300,7 @@ func masterAddress(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -332,7 +332,7 @@ func masterAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
-	offerTx.TxOut[1].PkScript = script
+	offerTx.TxOut[1].LockingScript = script
 
 	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -563,7 +563,7 @@ func oracleContract(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -624,7 +624,7 @@ func oracleContract(t *testing.T) {
 	}
 
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}

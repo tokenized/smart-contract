@@ -87,7 +87,7 @@ var cmdDoubleSpend = &cobra.Command{
 		UTXOs := theClient.Wallet.UnspentOutputs()
 		balance := uint64(0)
 		for _, utxo := range UTXOs {
-			if err := tx.AddInput(utxo.OutPoint, utxo.PkScript, utxo.Value); err != nil {
+			if err := tx.AddInput(utxo.OutPoint, utxo.LockingScript, utxo.Value); err != nil {
 				logger.Warn(ctx, "Failed to add input to contract tx : %s", err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
@@ -132,7 +132,7 @@ var cmdDoubleSpend = &cobra.Command{
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
 			theClient.StopSpyNode(ctx)
@@ -177,7 +177,7 @@ var cmdDoubleSpend = &cobra.Command{
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
 			theClient.StopSpyNode(ctx)
@@ -226,7 +226,7 @@ var cmdDoubleSpend = &cobra.Command{
 			tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+				utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)

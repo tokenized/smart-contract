@@ -125,7 +125,7 @@ func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 
 	// Sign input based on current tx. Note: The client can only add signatures after this or they
 	// will invalidate this signature.
-	input.SignatureScript, err = txbuilder.P2PKHUnlockingScript(c.Key, tx, inputIndex,
+	input.UnlockingScript, err = txbuilder.P2PKHUnlockingScript(c.Key, tx, inputIndex,
 		utxo.LockingScript, utxo.Value, txbuilder.SigHashAll+txbuilder.SigHashForkID,
 		&txbuilder.SigHashCache{})
 	if err != nil {

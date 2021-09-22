@@ -72,12 +72,12 @@ func (utxo *UTXO) Write(buf *bytes.Buffer) error {
 		return err
 	}
 
-	scriptSize := uint32(len(utxo.Output.PkScript))
+	scriptSize := uint32(len(utxo.Output.LockingScript))
 	if err := binary.Write(buf, binary.LittleEndian, &scriptSize); err != nil {
 		return err
 	}
 
-	if _, err := buf.Write(utxo.Output.PkScript); err != nil {
+	if _, err := buf.Write(utxo.Output.LockingScript); err != nil {
 		return err
 	}
 
@@ -108,8 +108,8 @@ func (utxo *UTXO) Read(buf *bytes.Reader) error {
 		return err
 	}
 
-	utxo.Output.PkScript = make([]byte, int(scriptSize))
-	if _, err := buf.Read(utxo.Output.PkScript); err != nil {
+	utxo.Output.LockingScript = make([]byte, int(scriptSize))
+	if _, err := buf.Read(utxo.Output.LockingScript); err != nil {
 		return err
 	}
 

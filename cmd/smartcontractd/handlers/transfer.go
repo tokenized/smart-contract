@@ -549,7 +549,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	// Generate public key hashes for all the outputs
 	settleOutputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.MsgTx.TxOut))
 	for _, output := range settleTx.MsgTx.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			settleOutputAddresses = append(settleOutputAddresses, bitcoin.RawAddress{})
 			continue
@@ -823,7 +823,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	found := false
 	settlementOutputIndex := 0
 	for i, output := range settleTx.MsgTx.TxOut {
-		action, err := protocol.Deserialize(output.PkScript, config.IsTest)
+		action, err := protocol.Deserialize(output.LockingScript, config.IsTest)
 		if err != nil {
 			continue
 		}
@@ -838,7 +838,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		return fmt.Errorf("Settlement op return not found in settle tx")
 	}
 
-	settleTx.MsgTx.TxOut[settlementOutputIndex].PkScript = script
+	settleTx.MsgTx.TxOut[settlementOutputIndex].LockingScript = script
 	return nil
 }
 

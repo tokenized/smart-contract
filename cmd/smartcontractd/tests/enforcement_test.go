@@ -453,7 +453,7 @@ func reconcileOrder(t *testing.T) {
 	// Check for bitcoin dispersion to user
 	found := false
 	for _, output := range responses[0].TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}

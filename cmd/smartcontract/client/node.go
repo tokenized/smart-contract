@@ -317,7 +317,7 @@ func (client *Client) HandleInSync(ctx context.Context) {
 
 func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool) {
 	for _, input := range tx.TxIn {
-		address, err := bitcoin.RawAddressFromUnlockingScript(input.SignatureScript)
+		address, err := bitcoin.RawAddressFromUnlockingScript(input.UnlockingScript)
 		if err != nil {
 			continue
 		}
@@ -338,19 +338,19 @@ func (client *Client) applyTx(ctx context.Context, tx *wire.MsgTx, reverse bool)
 	}
 
 	for index, output := range tx.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
 
 		if client.Wallet.Address.Equal(address) {
 			if reverse {
-				if client.Wallet.RemoveUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+				if client.Wallet.RemoveUTXO(tx.TxHash(), uint32(index), output.LockingScript, uint64(output.Value)) {
 					logger.Info(ctx, "Reverted receipt of %.08f : %d of %s",
 						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
 				}
 			} else {
-				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.PkScript, uint64(output.Value)) {
+				if client.Wallet.AddUTXO(tx.TxHash(), uint32(index), output.LockingScript, uint64(output.Value)) {
 					logger.Info(ctx, "Received %.08f : %d of %s",
 						BitcoinsFromSatoshis(uint64(output.Value)), index, tx.TxHash())
 				}

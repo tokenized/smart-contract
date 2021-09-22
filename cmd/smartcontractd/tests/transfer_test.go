@@ -1002,7 +1002,7 @@ func sendTokens(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -1103,7 +1103,7 @@ func sendTokens(t *testing.T) {
 	response = checkResponse(t, "T2")
 
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -1611,7 +1611,7 @@ func bitcoinExchange(t *testing.T) {
 
 	found := false
 	for _, output := range response.TxOut {
-		ad, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		ad, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -2527,7 +2527,7 @@ func oracleTransfer(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -2729,7 +2729,7 @@ func oracleTransferBad(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -2751,7 +2751,7 @@ func oracleTransferBad(t *testing.T) {
 	// Find refund output
 	found := false
 	for _, output := range response.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
