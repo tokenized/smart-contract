@@ -167,10 +167,10 @@ func (o *HTTPClient) RegisterUser(ctx context.Context, entity actions.EntityFiel
 	if err := request.Entity.WriteDeterministic(s); err != nil {
 		return nil, errors.Wrap(err, "write entity")
 	}
-	hash := sha256.Sum256(s.Sum(nil))
+	hash := bitcoin.Hash32(sha256.Sum256(s.Sum(nil)))
 
 	var err error
-	request.Signature, err = o.ClientKey.Sign(hash[:])
+	request.Signature, err = o.ClientKey.Sign(hash)
 	if err != nil {
 		return nil, errors.Wrap(err, "sign")
 	}
@@ -224,10 +224,10 @@ func (o *HTTPClient) RegisterXPub(ctx context.Context, path string, xpubs bitcoi
 	if err := binary.Write(s, binary.LittleEndian, uint32(request.RequiredSigners)); err != nil {
 		return errors.Wrap(err, "hash signers")
 	}
-	hash := sha256.Sum256(s.Sum(nil))
+	hash := bitcoin.Hash32(sha256.Sum256(s.Sum(nil)))
 
 	var err error
-	request.Signature, err = o.ClientKey.Sign(hash[:])
+	request.Signature, err = o.ClientKey.Sign(hash)
 	if err != nil {
 		return errors.Wrap(err, "sign")
 	}
@@ -264,10 +264,10 @@ func (o *HTTPClient) UpdateIdentity(ctx context.Context, entity actions.EntityFi
 	if err := request.Entity.WriteDeterministic(s); err != nil {
 		return errors.Wrap(err, "write entity")
 	}
-	hash := sha256.Sum256(s.Sum(nil))
+	hash := bitcoin.Hash32(sha256.Sum256(s.Sum(nil)))
 
 	var err error
-	request.Signature, err = o.ClientKey.Sign(hash[:])
+	request.Signature, err = o.ClientKey.Sign(hash)
 	if err != nil {
 		return errors.Wrap(err, "sign")
 	}
@@ -384,7 +384,8 @@ func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 // ApproveReceive requests a signature from the identity oracle to approve receipt of a token.
 // quantity is simply placed in the result data structure and not used in the certificate.
 func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
-	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32,
+	requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
 
 	keys, err := xpubs.ChildKeys(index)
 	if err != nil {

@@ -45,7 +45,7 @@ func ValidateAdminIdentityCertificate(ctx context.Context,
 		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if signature.Verify(sigHash, oraclePublicKey) {
+	if signature.Verify(*sigHash, oraclePublicKey) {
 		return nil // valid approval signature
 	}
 
@@ -55,7 +55,7 @@ func ValidateAdminIdentityCertificate(ctx context.Context,
 		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if signature.Verify(sigHash, oraclePublicKey) {
+	if signature.Verify(*sigHash, oraclePublicKey) {
 		// Signature is valid, but it is confirming not approved.
 		return ErrNotApproved
 	}
@@ -83,7 +83,7 @@ func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHa
 		return errors.Wrap(err, "generate signature")
 	}
 
-	if !data.Signature.Verify(sigHash, o.PublicKey) {
+	if !data.Signature.Verify(*sigHash, o.PublicKey) {
 		return errors.Wrap(ErrInvalidSignature, "validate signature")
 	}
 
@@ -132,7 +132,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		return nil
 	}
 
@@ -143,7 +143,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}
@@ -188,7 +188,7 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		return nil
 	}
 
@@ -199,7 +199,7 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}

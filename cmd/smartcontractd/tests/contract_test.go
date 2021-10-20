@@ -456,7 +456,7 @@ func oracleContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	sig, err := oracleKey.Sign(sigHash)
+	sig, err := oracleKey.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -592,7 +592,7 @@ func oracleContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	sig, err = oracleKey.Sign(sigHash)
+	sig, err = oracleKey.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -1022,7 +1022,7 @@ func contractOracleAmendment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	signature, err := oracleKey.Key.Sign(sigHash)
+	signature, err := oracleKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -1619,7 +1619,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name strin
 	if err != nil {
 		t.Fatalf("Failed to create sig hash : %s", err)
 	}
-	sig, err := oracleKey.Key.Sign(sigHash)
+	sig, err := oracleKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("Failed to create signature : %s", err)
 	}

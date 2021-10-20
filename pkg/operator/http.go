@@ -121,9 +121,9 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
 			errors.Wrap(err, "hash contract address")
 	}
-	h := sha256.Sum256(s.Sum(nil))
+	h := bitcoin.Hash32(sha256.Sum256(s.Sum(nil)))
 
-	if !response.Signature.Verify(h[:], c.PublicKey) {
+	if !response.Signature.Verify(h, c.PublicKey) {
 		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{},
 			errors.New("Invalid operator signature")
 	}

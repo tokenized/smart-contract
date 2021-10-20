@@ -959,7 +959,7 @@ func validateContractAmendOracleSig(ctx context.Context, dbConn *db.DB,
 		return err
 	}
 
-	if oracleSig.Verify(sigHash, oracle) {
+	if oracleSig.Verify(*sigHash, oracle) {
 		return nil // Valid signature found
 	}
 

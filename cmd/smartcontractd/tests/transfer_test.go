@@ -456,7 +456,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 		}
-		oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+		oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 		}
@@ -2433,7 +2433,7 @@ func oracleTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -2609,7 +2609,7 @@ func oracleTransferBad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}

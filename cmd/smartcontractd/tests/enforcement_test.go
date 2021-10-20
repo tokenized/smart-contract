@@ -139,7 +139,7 @@ func freezeAuthorityOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed generate authority signature hash : %v", tests.Failed, err)
 	}
 
-	sig, err := authorityKey.Key.Sign(sigHash)
+	sig, err := authorityKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to sign authority sig hash : %v", tests.Failed, err)
 	}

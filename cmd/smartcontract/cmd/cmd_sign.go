@@ -100,15 +100,15 @@ func transferSign(c *cobra.Command, args []string) error {
 					fmt.Printf("Failed to generate sig hash : %s\n", err)
 					return nil
 				}
-				fmt.Printf("Hash : %x\n", hash)
+				fmt.Printf("Hash : %s\n", *hash)
 
-				signature, err := key.Sign(hash)
+				signature, err := key.Sign(*hash)
 				if err != nil {
 					fmt.Printf("Failed to sign sig hash : %s\n", err)
 					return nil
 				}
 
-				fmt.Printf("Signature : %x\n", signature.Bytes())
+				fmt.Printf("Signature : %s\n", signature)
 				return nil
 			}
 

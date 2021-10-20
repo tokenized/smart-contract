@@ -538,7 +538,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
 
-	if oracleSig.Verify(sigHash, oracle.PublicKey) {
+	if oracleSig.Verify(*sigHash, oracle.PublicKey) {
 		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}
@@ -631,7 +631,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		logFields = append(logFields, logger.Formatter("sig_hash", "%x", sigHash))
 
-		if !oracleSig.Verify(sigHash, publicKey) {
+		if !oracleSig.Verify(*sigHash, publicKey) {
 			logger.WarnWithFields(ctx, logFields, "Admin identity signature is invalid")
 			return fmt.Errorf("Signature invalid")
 		}

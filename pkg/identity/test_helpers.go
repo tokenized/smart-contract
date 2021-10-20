@@ -210,7 +210,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate sig hash")
 	}
 
-	sig, err := c.Key.Sign(sigHash)
+	sig, err := c.Key.Sign(*sigHash)
 	if err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "sign")
 	}
@@ -254,7 +254,7 @@ func (c *MockClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 		return nil, errors.Wrap(err, "generate sig hash")
 	}
 
-	sig, err := c.Key.Sign(sigHash)
+	sig, err := c.Key.Sign(*sigHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "sign")
 	}
@@ -310,7 +310,7 @@ func (c *MockClient) AdminIdentityCertificate(ctx context.Context, issuer action
 		return nil, errors.Wrap(err, "generate sig hash")
 	}
 
-	sig, err := c.Key.Sign(sigHash)
+	sig, err := c.Key.Sign(*sigHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "sign")
 	}

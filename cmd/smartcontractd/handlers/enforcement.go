@@ -94,7 +94,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.Wrap(err, "Failed to calculate authority sig hash")
 		}
 
-		if !authoritySig.Verify(sigHash, authorityPubKey) {
+		if !authoritySig.Verify(*sigHash, authorityPubKey) {
 			node.LogWarn(ctx, "Authority Sig Verify Failed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInvalidSignature)
 		}
