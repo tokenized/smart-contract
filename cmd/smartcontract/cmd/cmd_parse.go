@@ -35,7 +35,7 @@ var cmdParse = &cobra.Command{
 			fmt.Printf("Too many arguments\n")
 			return nil
 		} else {
-			fmt.Printf("Enter hex to decode: ")
+			fmt.Printf("Enter hex or ASM to decode: ")
 			reader := bufio.NewReader(os.Stdin)
 			input, err = reader.ReadString('\n') // Get input from stdin
 			if err != nil {
@@ -48,7 +48,18 @@ var cmdParse = &cobra.Command{
 
 		data, err := hex.DecodeString(input)
 		if err != nil {
-			fmt.Printf("Failed to decode hex : %s\n", err)
+			fmt.Printf("Failed to parse script hex : %s\n", err)
+
+			script, err := bitcoin.StringToScript(input)
+			if err == nil {
+				if parseScript(c, script) == nil {
+					return nil
+				}
+
+				return nil
+			}
+
+			fmt.Printf("Failed to parse script : %s\n", err)
 			return nil
 		}
 
@@ -97,9 +108,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 	fmt.Printf(tx.StringWithAddresses(network(c)))
 
 	for _, txOut := range tx.TxOut {
-		if parseScript(c, txOut.LockingScript) == nil {
-			return nil
-		}
+		parseScript(c, txOut.LockingScript)
 	}
 
 	return nil

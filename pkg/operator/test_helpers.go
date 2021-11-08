@@ -103,7 +103,7 @@ func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 
 	utxo := bitcoin.UTXO{
 		Index:         uint32(rand.Intn(10)),
-		Value:         546,
+		Value:         txbuilder.DustLimitForLockingScript(lockingScript, 0.25),
 		LockingScript: lockingScript,
 	}
 	rand.Read(utxo.Hash[:])
