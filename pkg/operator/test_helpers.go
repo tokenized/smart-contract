@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/tokenized/pkg/bitcoin"
+	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 
@@ -88,7 +89,9 @@ func (c *MockClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 }
 
 // SignContractOffer adds a signed input to a contract offer transaction.
-func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+func (c *MockClient) SignContractOffer(ctx context.Context,
+	tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+
 	tx = tx.Copy()
 
 	serviceAddress, err := c.Key.RawAddress()
@@ -131,6 +134,20 @@ func (c *MockClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "sign")
 	}
+
+	logger.InfoWithFields(ctx, []logger.Field{
+		logger.Stringer("hash", utxo.Hash),
+		logger.Stringer("unlocking_script", input.UnlockingScript),
+	}, "Added contract agent input")
+
+	logger.InfoWithFields(ctx, []logger.Field{
+		logger.Uint64("value", utxo.Value),
+		logger.Stringer("script", lockingScript),
+	}, "Adding contract agent output")
+
+	logger.InfoWithFields(ctx, []logger.Field{
+		logger.Stringer("public_key", c.Key.PublicKey()),
+	}, "Signing contract agent input with key")
 
 	return tx, &utxo, nil
 }
