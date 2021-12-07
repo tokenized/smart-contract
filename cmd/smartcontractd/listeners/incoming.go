@@ -136,7 +136,7 @@ func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32)
 
 	intx, exists := server.pendingTxs[txid]
 	if !exists {
-		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
+		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid)
 		return
 	}
 

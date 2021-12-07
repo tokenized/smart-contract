@@ -58,6 +58,16 @@ var cmdConvert = &cobra.Command{
 				return nil
 			}
 
+			ra, err := bitcoin.DecodeRawAddress(b)
+			if err == nil {
+				fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
+
+				script, err := ra.LockingScript()
+				if err == nil {
+					fmt.Printf("Locking Script : %s\n", script)
+				}
+			}
+
 			xkey, err := bitcoin.ExtendedKeyFromBytes(b)
 			if err == nil {
 				if xkey.IsPrivate() {
@@ -113,7 +123,12 @@ var cmdConvert = &cobra.Command{
 				return nil
 			}
 			ra, _ := publicKey.RawAddress()
-			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
+			fmt.Printf("Address for public key : %s\n",
+				bitcoin.NewAddressFromRawAddress(ra, network))
+
+			pkh, _ := bitcoin.NewHash20(bitcoin.Hash160(publicKey.Bytes()))
+			fmt.Printf("Public Key Hash : %s\n", pkh)
+			fmt.Printf("Reverse Hash : %x\n", (*pkh)[:])
 			return nil
 		}
 
@@ -137,6 +152,11 @@ var cmdConvert = &cobra.Command{
 
 			if pkh, err := ra.GetPublicKeyHash(); err == nil {
 				fmt.Printf("Public Key Hash : %s\n", pkh.String())
+			}
+
+			script, err := ra.LockingScript()
+			if err == nil {
+				fmt.Printf("Locking Script : %s\n", script)
 			}
 
 			return nil

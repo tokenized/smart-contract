@@ -53,7 +53,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	// Locate Contract
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
-		return errors.Wrap(err, "Failed to retrieve contract")
+		return errors.Wrap(err, "retrieve contract")
 	}
 
 	if !ct.MovedTo.IsEmpty() {
@@ -72,15 +72,15 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = permissions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
+	if _, err = permissions.PermissionsFromBytes(msg.AssetPermissions,
+		len(ct.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Verify administration is sender of tx.
 	if !itx.Inputs[0].Address.Equal(ct.AdminAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogWarn(ctx, "Only administration can create assets: %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotAdministration)
 	}
@@ -95,7 +95,7 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 			node.LogWarn(ctx, "Asset already exists : %s", assetCode.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetCodeExists)
 		} else {
-			return errors.Wrap(err, "Failed to retrieve asset")
+			return errors.Wrap(err, "retrieve asset")
 		}
 	}
 
