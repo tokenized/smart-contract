@@ -53,8 +53,21 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Reverse hash : %x\n", reverse32(b))
 				return nil
 			} else if len(b) == 20 {
+
+				ra, err := bitcoin.NewRawAddressPKH(b)
+				if err != nil {
+					fmt.Printf("Failed to create raw address : %s\n", err)
+				}
+				fmt.Printf("PKH Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
+
 				// Reverse hash
 				fmt.Printf("Reverse hash : %x\n", reverse20(b))
+
+				ra, err = bitcoin.NewRawAddressPKH(reverse20(b))
+				if err != nil {
+					fmt.Printf("Failed to create raw address : %s\n", err)
+				}
+				fmt.Printf("Reverse PKH Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
 				return nil
 			}
 

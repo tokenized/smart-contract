@@ -581,7 +581,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		// Check if block time is beyond expiration
 		// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-		expire := time.Now().Add(6 * time.Hour)
+		expire := time.Now().Add(6 * time.Hour).Unix()
 		header, err := headers.GetHeaders(ctx, int(cert.BlockHeight), 1)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve block header for height %d",
@@ -590,9 +590,9 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 		if len(header.Headers) == 0 {
 			return fmt.Errorf("Failed to retrieve block header for height %d", cert.BlockHeight)
 		}
-		if header.Headers[0].Timestamp.After(expire) {
+		if header.Headers[0].Timestamp > uint32(expire) {
 			return fmt.Errorf("Oracle sig block hash expired : %d < %d",
-				header.Headers[0].Timestamp.Unix(), expire.Unix())
+				header.Headers[0].Timestamp, expire)
 		}
 
 		hash := header.Headers[0].BlockHash()

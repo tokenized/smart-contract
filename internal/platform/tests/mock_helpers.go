@@ -150,7 +150,7 @@ func (h *mockHeaders) Populate(ctx context.Context, height, count int) error {
 	defer h.lock.Unlock()
 
 	h.height = height
-	timestamp := time.Now()
+	timestamp := uint32(time.Now().Unix())
 	h.headers = make([]*wire.BlockHeader, count)
 	prevHash := &bitcoin.Hash32{}
 	rand.Read(prevHash[:])
@@ -164,7 +164,7 @@ func (h *mockHeaders) Populate(ctx context.Context, height, count int) error {
 		}
 		rand.Read(newHeader.MerkleRoot[:])
 		h.headers[i] = newHeader
-		timestamp.Add(10 * time.Minute)
+		timestamp += 600
 		prevHash = newHeader.BlockHash()
 	}
 	return nil

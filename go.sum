@@ -126,6 +126,9 @@ github.com/stretchr/testify v1.5.1 h1:nOGnQDM7FYENwehXlg/kFVnos3rEvtKTjRvOWSzb6H
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/tokenized/config v0.0.3 h1:m955FFTEnSn/heLc37KlkNRaPaioAQuQwEJ1icVnug0=
 github.com/tokenized/config v0.0.3/go.mod h1:W+qFLOLLzsbOInW/36S+CkOS9bXqQ2/rkHGBJPu5wnk=
+github.com/tokenized/config v0.0.4-0.20220304163631-6373c9a80410/go.mod h1:+8nT8o80nFsxk7Qt5utgfAkEIFNHFtb26hD56hMlSZE=
+github.com/tokenized/config v0.1.0 h1:9jtUb1G6VaNGtlUol8wLZNVWHsR5+ZcfiNBSCpGFX38=
+github.com/tokenized/config v0.1.0/go.mod h1:+8nT8o80nFsxk7Qt5utgfAkEIFNHFtb26hD56hMlSZE=
 github.com/tokenized/envelope v0.3.1-0.20211108215110-702f07a88483 h1:YagQZzlODID5R1p4+dS4PuHlNn0rR8PIGL2fkf4thpE=
 github.com/tokenized/envelope v0.3.1-0.20211108215110-702f07a88483/go.mod h1:R4pKX0cqScyPtwVpGPkPnFm1DPVvIiyZcQtdn2fm8Xc=
 github.com/tokenized/metrics v0.0.3-0.20210219224743-dd17aa250996 h1:yjo3Gp1fWeqbhwayPt/kWekcl8lJl1kdI62q7266C70=
@@ -137,12 +140,17 @@ github.com/tokenized/pkg v0.3.1-0.20211105210832-4324054fdba9 h1:Ki7za2dqAWBQBWw
 github.com/tokenized/pkg v0.3.1-0.20211105210832-4324054fdba9/go.mod h1:oZmF8k3efqaE9e98cFta++FAzY+tyyfuEv4xkLuWIVk=
 github.com/tokenized/pkg v0.3.1-0.20211203160356-4ec05edc6163 h1:1qns/U1aeyS3gzeawHg6N8624EycP+PCddkn1DCkAlM=
 github.com/tokenized/pkg v0.3.1-0.20211203160356-4ec05edc6163/go.mod h1:oZmF8k3efqaE9e98cFta++FAzY+tyyfuEv4xkLuWIVk=
+github.com/tokenized/pkg v0.3.1-0.20220303155850-00c2611c98cf/go.mod h1:2EYCyA6XrDOqwCu8Xrh3SG2/grxARrrRBigxesjRt3E=
+github.com/tokenized/pkg v0.3.1-0.20220307222547-e27e313f7140 h1:ACesyiLr68HKqhdVDNwk6i9p2zx2m5umc5+ctgFDhGQ=
+github.com/tokenized/pkg v0.3.1-0.20220307222547-e27e313f7140/go.mod h1:prKrxFdsqeaXEoIQOyke4alF6bptYJP+663XDxlzw6k=
 github.com/tokenized/specification v1.0.1-0.20211108215215-33b9e61be654 h1:zXnYrjpjdFuk45lE6yON/c2pomFbNfRn97MGpegZcSI=
 github.com/tokenized/specification v1.0.1-0.20211108215215-33b9e61be654/go.mod h1:2trhRwXPrifUHo1XyQ3Z6D1iFfBGKUBp50kF/MpmVDg=
 github.com/tokenized/specification v1.0.1-0.20211207201533-cce8b814f008 h1:hWjVBySDgqB31TPWqqusBItUP1+kdzb6Ykdz7XtGL9k=
 github.com/tokenized/specification v1.0.1-0.20211207201533-cce8b814f008/go.mod h1:macg/VTbhXdxclQrvRUdxTvK6n4J43gYEs81u+WstyA=
 github.com/tokenized/spynode v0.1.2-0.20211108215417-c5a93c168392 h1:L4i0GhyLfZgflrEDNqH3X1+rmpPoCTtM3Di+bbRShwQ=
 github.com/tokenized/spynode v0.1.2-0.20211108215417-c5a93c168392/go.mod h1:0aTMhqAE9EQLZTKb0Jxq4dD3+0QSYFW6Jm2yekHXnX8=
+github.com/tokenized/spynode v0.1.2-0.20220304230833-900e4f49cab0 h1:7UAIN5Z32ZlmOjTped973Qd/iU699Cru2qp9cq5XHDg=
+github.com/tokenized/spynode v0.1.2-0.20220304230833-900e4f49cab0/go.mod h1:LSM/GN7HKvj0Vw3Gb0xzcUbApUr0DNmrVlQaUWHfjO0=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=

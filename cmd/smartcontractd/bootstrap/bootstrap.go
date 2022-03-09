@@ -36,14 +36,19 @@ func NewWallet() *wallet.Wallet {
 }
 
 func NewConfig(ctx context.Context) *smartContractConfig.Config {
-
 	cfg := &smartContractConfig.Config{}
-	// load config using sane fallbacks
 	if err := config.LoadConfig(ctx, cfg); err != nil {
 		logger.Fatal(ctx, "main : LoadConfig : %v", err)
 	}
 
-	config.DumpSafe(ctx, cfg)
+	maskedConfig, err := config.MarshalJSONMaskedRaw(cfg)
+	if err != nil {
+		logger.Fatal(ctx, "Failed to marshal config : %s", err)
+	}
+
+	logger.InfoWithFields(ctx, []logger.Field{
+		logger.JSON("config", maskedConfig),
+	}, "Config")
 
 	return cfg
 }
