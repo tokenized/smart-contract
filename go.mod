@@ -12,7 +12,7 @@ require (
 	github.com/tokenized/config v0.1.0
 	github.com/tokenized/pkg v0.3.1-0.20220307222547-e27e313f7140
 	github.com/tokenized/specification v1.0.1-0.20211207201533-cce8b814f008
-	github.com/tokenized/spynode v0.1.2-0.20220304230833-900e4f49cab0
+	github.com/tokenized/spynode v0.1.2-0.20220309163254-8ba9cee98ff0
 	go.opencensus.io v0.22.2
 )
 

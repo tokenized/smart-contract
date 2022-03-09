@@ -147,10 +147,8 @@ github.com/tokenized/specification v1.0.1-0.20211108215215-33b9e61be654 h1:zXnYr
 github.com/tokenized/specification v1.0.1-0.20211108215215-33b9e61be654/go.mod h1:2trhRwXPrifUHo1XyQ3Z6D1iFfBGKUBp50kF/MpmVDg=
 github.com/tokenized/specification v1.0.1-0.20211207201533-cce8b814f008 h1:hWjVBySDgqB31TPWqqusBItUP1+kdzb6Ykdz7XtGL9k=
 github.com/tokenized/specification v1.0.1-0.20211207201533-cce8b814f008/go.mod h1:macg/VTbhXdxclQrvRUdxTvK6n4J43gYEs81u+WstyA=
-github.com/tokenized/spynode v0.1.2-0.20211108215417-c5a93c168392 h1:L4i0GhyLfZgflrEDNqH3X1+rmpPoCTtM3Di+bbRShwQ=
-github.com/tokenized/spynode v0.1.2-0.20211108215417-c5a93c168392/go.mod h1:0aTMhqAE9EQLZTKb0Jxq4dD3+0QSYFW6Jm2yekHXnX8=
-github.com/tokenized/spynode v0.1.2-0.20220304230833-900e4f49cab0 h1:7UAIN5Z32ZlmOjTped973Qd/iU699Cru2qp9cq5XHDg=
-github.com/tokenized/spynode v0.1.2-0.20220304230833-900e4f49cab0/go.mod h1:LSM/GN7HKvj0Vw3Gb0xzcUbApUr0DNmrVlQaUWHfjO0=
+github.com/tokenized/spynode v0.1.2-0.20220309163254-8ba9cee98ff0 h1:aE0F+/0cIwiWIHSQzmBAv+wtkZQxnhz3LpJTcYbFkZ4=
+github.com/tokenized/spynode v0.1.2-0.20220309163254-8ba9cee98ff0/go.mod h1:LSM/GN7HKvj0Vw3Gb0xzcUbApUr0DNmrVlQaUWHfjO0=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564/go.mod h1:0/YuQQF676+d4CMNclTqGUam1EDwz0B8o03K9pQqA3c=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
