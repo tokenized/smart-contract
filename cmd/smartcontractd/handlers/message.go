@@ -11,9 +11,9 @@ import (
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -313,21 +313,21 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	// creating the initial settlement data and passing it to the next contract if there are more
 	// than one.
 	firstContractIndex := uint16(0)
-	for _, asset := range transfer.Assets {
-		if asset.ContractIndex != uint32(0x0000ffff) {
+	for _, instrument := range transfer.Instruments {
+		if instrument.ContractIndex != uint32(0x0000ffff) {
 			break
 		}
-		// Asset transfer doesn't have a contract (probably BSV transfer).
+		// Instrument transfer doesn't have a contract (probably BSV transfer).
 		firstContractIndex++
 	}
 
-	if int(transfer.Assets[firstContractIndex].ContractIndex) >= len(transferTx.Outputs) {
+	if int(transfer.Instruments[firstContractIndex].ContractIndex) >= len(transferTx.Outputs) {
 		node.LogWarn(ctx, "Transfer contract index out of range %d/%d",
-			transfer.Assets[firstContractIndex].ContractIndex, len(transferTx.Outputs))
+			transfer.Instruments[firstContractIndex].ContractIndex, len(transferTx.Outputs))
 		return errors.New("Transfer contract index out of range")
 	}
 
-	firstContractOutput := transferTx.Outputs[transfer.Assets[firstContractIndex].ContractIndex]
+	firstContractOutput := transferTx.Outputs[transfer.Instruments[firstContractIndex].ContractIndex]
 
 	// Is this contract the first contract
 	isFirstContract := firstContractOutput.Address.Equal(rk.Address)
@@ -389,9 +389,9 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 	}
 
 	// Add this contract's data to the settlement op return data
-	assetUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
+	instrumentUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
-		settlement, &assetUpdates, false)
+		settlement, &instrumentUpdates, false)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
 		if ok {
@@ -403,9 +403,9 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		}
 	}
 
-	for assetCode, hds := range assetUpdates {
+	for instrumentCode, hds := range instrumentUpdates {
 		for _, h := range *hds {
-			cacheItem, err := holdings.Save(ctx, m.MasterDB, rk.Address, &assetCode, h)
+			cacheItem, err := holdings.Save(ctx, m.MasterDB, rk.Address, &instrumentCode, h)
 			if err != nil {
 				return errors.Wrap(err, "Failed to save holding")
 			}
@@ -471,30 +471,30 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		settlementRequest, m.Tracer)
 }
 
-// settlementIsComplete returns true if the settlement accounts for all assets in the transfer.
+// settlementIsComplete returns true if the settlement accounts for all instruments in the transfer.
 func settlementIsComplete(ctx context.Context, transfer *actions.Transfer,
 	settlement *actions.Settlement) bool {
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.settlementIsComplete")
 	defer span.End()
 
-	for _, assetTransfer := range transfer.Assets {
+	for _, instrumentTransfer := range transfer.Instruments {
 		found := false
-		for _, assetSettle := range settlement.Assets {
-			if assetTransfer.AssetType == assetSettle.AssetType &&
-				bytes.Equal(assetTransfer.AssetCode, assetSettle.AssetCode) {
-				assetCode, err := bitcoin.NewHash20(assetTransfer.AssetCode)
+		for _, instrumentSettle := range settlement.Instruments {
+			if instrumentTransfer.InstrumentType == instrumentSettle.InstrumentType &&
+				bytes.Equal(instrumentTransfer.InstrumentCode, instrumentSettle.InstrumentCode) {
+				instrumentCode, err := bitcoin.NewHash20(instrumentTransfer.InstrumentCode)
 				if err != nil {
 					return false
 				}
-				assetID := protocol.AssetID(assetTransfer.AssetType, *assetCode)
-				node.LogVerbose(ctx, "Found settlement data for asset : %s", assetID)
+				instrumentID := protocol.InstrumentID(instrumentTransfer.InstrumentType, *instrumentCode)
+				node.LogVerbose(ctx, "Found settlement data for instrument : %s", instrumentID)
 				found = true
 				break
 			}
 		}
 
 		if !found {
-			return false // No settlement for this asset yet
+			return false // No settlement for this instrument yet
 		}
 	}
 
@@ -779,66 +779,66 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	for assetOffset, assetTransfer := range transfer.Assets {
-		assetCode, err := bitcoin.NewHash20(assetTransfer.AssetCode)
+	for instrumentOffset, instrumentTransfer := range transfer.Instruments {
+		instrumentCode, err := bitcoin.NewHash20(instrumentTransfer.InstrumentCode)
 		if err != nil {
-			return node.NewError(actions.RejectionsMsgMalformed, "invalid asset code")
+			return node.NewError(actions.RejectionsMsgMalformed, "invalid instrument code")
 		}
 
-		assetID := protocol.AssetID(assetTransfer.AssetType, *assetCode)
-		assetIsBitcoin := assetTransfer.AssetType == protocol.BSVAssetID && assetCode.IsZero()
+		instrumentID := protocol.InstrumentID(instrumentTransfer.InstrumentType, *instrumentCode)
+		instrumentIsBitcoin := instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && instrumentCode.IsZero()
 
-		var as *state.Asset
-		if !assetIsBitcoin {
-			if len(settleTx.TxOut) <= int(assetTransfer.ContractIndex) {
-				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
+		var as *state.Instrument
+		if !instrumentIsBitcoin {
+			if len(settleTx.TxOut) <= int(instrumentTransfer.ContractIndex) {
+				return fmt.Errorf("Contract index out of range for instrument %d", instrumentOffset)
 			}
 
-			contractOutputAddress := settleOutputAddresses[assetTransfer.ContractIndex]
+			contractOutputAddress := settleOutputAddresses[instrumentTransfer.ContractIndex]
 			if !contractOutputAddress.IsEmpty() && !contractOutputAddress.Equal(rk.Address) {
-				continue // This asset is not for this contract.
+				continue // This instrument is not for this contract.
 			}
 			if ct.FreezePeriod.Nano() > v.Now.Nano() {
 				return node.NewError(actions.RejectionsContractFrozen, "")
 			}
 
-			// Locate Asset
-			as, err = asset.Retrieve(ctx, masterDB, rk.Address, assetCode)
+			// Locate Instrument
+			as, err = instrument.Retrieve(ctx, masterDB, rk.Address, instrumentCode)
 			if err != nil {
-				return fmt.Errorf("Asset code not found : %s : %s", assetID, err)
+				return fmt.Errorf("Instrument code not found : %s : %s", instrumentID, err)
 			}
 			if as.FreezePeriod.Nano() > v.Now.Nano() {
-				return node.NewError(actions.RejectionsAssetFrozen, "")
+				return node.NewError(actions.RejectionsInstrumentFrozen, "")
 			}
 			if !as.TransfersPermitted() {
-				return node.NewError(actions.RejectionsAssetNotPermitted, "")
+				return node.NewError(actions.RejectionsInstrumentNotPermitted, "")
 			}
 		}
 
-		// Find settlement for asset.
-		var assetSettlement *actions.AssetSettlementField
-		for i, asset := range settlement.Assets {
-			if asset.AssetType == assetTransfer.AssetType &&
-				bytes.Equal(asset.AssetCode, assetTransfer.AssetCode) {
-				assetSettlement = settlement.Assets[i]
+		// Find settlement for instrument.
+		var instrumentSettlement *actions.InstrumentSettlementField
+		for i, instrument := range settlement.Instruments {
+			if instrument.InstrumentType == instrumentTransfer.InstrumentType &&
+				bytes.Equal(instrument.InstrumentCode, instrumentTransfer.InstrumentCode) {
+				instrumentSettlement = settlement.Instruments[i]
 				break
 			}
 		}
 
-		if assetSettlement == nil {
-			return fmt.Errorf("Asset settlement not found during verify")
+		if instrumentSettlement == nil {
+			return fmt.Errorf("Instrument settlement not found during verify")
 		}
 
 		sendBalance := uint64(0)
 		settlementQuantities := make([]*uint64, len(settleTx.TxOut))
 
 		// Process senders
-		// assetTransfer.AssetSenders []QuantityIndex {Index uint16, Quantity uint64}
-		for senderOffset, sender := range assetTransfer.AssetSenders {
+		// instrumentTransfer.InstrumentSenders []QuantityIndex {Index uint16, Quantity uint64}
+		for senderOffset, sender := range instrumentTransfer.InstrumentSenders {
 			// Get sender address from transfer inputs[sender.Index]
 			if int(sender.Index) >= len(transferTx.Inputs) {
-				return fmt.Errorf("Sender input index out of range for asset %d sender %d : %d/%d",
-					assetOffset, senderOffset, sender.Index, len(transferTx.Inputs))
+				return fmt.Errorf("Sender input index out of range for instrument %d sender %d : %d/%d",
+					instrumentOffset, senderOffset, sender.Index, len(transferTx.Inputs))
 			}
 
 			// Find output in settle tx
@@ -851,14 +851,14 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				return fmt.Errorf("Sender output not found in settle tx for asset %d sender %d : %d/%d",
-					assetOffset, senderOffset, sender.Index, len(transferTx.Outputs))
+				return fmt.Errorf("Sender output not found in settle tx for instrument %d sender %d : %d/%d",
+					instrumentOffset, senderOffset, sender.Index, len(transferTx.Outputs))
 			}
 
 			// Check send
 			var settlementQuantity uint64
-			if !assetIsBitcoin {
-				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
+			if !instrumentIsBitcoin {
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
 					transferTx.Inputs[sender.Index].Address, v.Now)
 				if err != nil {
 					return errors.Wrap(err, "Failed to get sender holding")
@@ -868,7 +868,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
 						config.Net)
-					node.LogWarn(ctx, "Send invalid : %s %s : %s", assetID, address, err)
+					node.LogWarn(ctx, "Send invalid : %s %s : %s", instrumentID, address, err)
 					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
 			}
@@ -880,11 +880,11 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 		}
 
 		// Process receivers
-		for receiverOffset, receiver := range assetTransfer.AssetReceivers {
+		for receiverOffset, receiver := range instrumentTransfer.InstrumentReceivers {
 			receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 			if err != nil {
-				return fmt.Errorf("Receiver address invalid for asset %d receiver %d : %s",
-					assetOffset, receiverOffset, err)
+				return fmt.Errorf("Receiver address invalid for instrument %d receiver %d : %s",
+					instrumentOffset, receiverOffset, err)
 			}
 
 			// Find output in settle tx
@@ -899,14 +899,14 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 			if settleOutputIndex == uint32(0x0000ffff) {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
 					config.Net)
-				return fmt.Errorf("Receiver output not found in settle tx for asset %d receiver %d : %s",
-					assetOffset, receiverOffset, address.String())
+				return fmt.Errorf("Receiver output not found in settle tx for instrument %d receiver %d : %s",
+					instrumentOffset, receiverOffset, address.String())
 			}
 
 			// Check receive
 			var settlementQuantity uint64
-			if !assetIsBitcoin {
-				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode, receiverAddress,
+			if !instrumentIsBitcoin {
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode, receiverAddress,
 					v.Now)
 				if err != nil {
 					return errors.Wrap(err, "Failed to get reciever holding")
@@ -917,7 +917,7 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				if err != nil {
 					address := bitcoin.NewAddressFromRawAddress(receiverAddress,
 						config.Net)
-					node.LogWarn(ctx, "Receive invalid : %s %s : %s", assetTransfer.AssetCode,
+					node.LogWarn(ctx, "Receive invalid : %s %s : %s", instrumentTransfer.InstrumentCode,
 						address, err)
 					return node.NewError(actions.RejectionsMsgMalformed, "")
 				}
@@ -925,28 +925,28 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 
 			settlementQuantities[settleOutputIndex] = &settlementQuantity
 
-			// Update asset balance
+			// Update instrument balance
 			if receiver.Quantity > sendBalance {
-				return fmt.Errorf("Receiving more tokens than sending for asset %d", assetOffset)
+				return fmt.Errorf("Receiving more tokens than sending for instrument %d", instrumentOffset)
 			}
 			sendBalance -= receiver.Quantity
 		}
 
 		if sendBalance != 0 {
-			return fmt.Errorf("Not sending all input tokens for asset %d : %d remaining",
-				assetOffset, sendBalance)
+			return fmt.Errorf("Not sending all input tokens for instrument %d : %d remaining",
+				instrumentOffset, sendBalance)
 		}
 
 		// Check ending balances
 		for index, quantity := range settlementQuantities {
 			if quantity != nil {
 				found := false
-				for _, settlementQuantity := range assetSettlement.Settlements {
+				for _, settlementQuantity := range instrumentSettlement.Settlements {
 					if index == int(settlementQuantity.Index) {
 						if *quantity != settlementQuantity.Quantity {
 							node.LogWarn(ctx, "Incorrect settlment quantity for output %d : %d != %d : %s",
-								index, *quantity, settlementQuantity.Quantity, assetID)
-							return fmt.Errorf("Asset settlement quantity wrong")
+								index, *quantity, settlementQuantity.Quantity, instrumentID)
+							return fmt.Errorf("Instrument settlement quantity wrong")
 						}
 						found = true
 						break
@@ -954,8 +954,8 @@ func verifySettlement(ctx context.Context, config *node.Config, masterDB *db.DB,
 				}
 
 				if !found {
-					node.LogWarn(ctx, "Missing settlment for output %d : %s", index, assetID)
-					return fmt.Errorf("Asset settlement missing")
+					node.LogWarn(ctx, "Missing settlment for output %d : %s", index, instrumentID)
+					return fmt.Errorf("Instrument settlement missing")
 				}
 			}
 		}
@@ -991,7 +991,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 	rk *wallet.Key, code uint32, text string) error {
 
 	// Determine if first contract
-	first := firstContractOutputIndex(transfer.Assets, transferTx)
+	first := firstContractOutputIndex(transfer.Instruments, transferTx)
 	if first == 0xffff {
 		return errors.New("First contract output index not found")
 	}
@@ -1046,10 +1046,10 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 
 	// Add refund amounts for all bitcoin senders
 	refundBalance := uint64(0)
-	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
+	for _, instrumentTransfer := range transfer.Instruments {
+		if instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && len(instrumentTransfer.InstrumentCode) == 0 {
 			// Process bitcoin senders refunds
-			for _, sender := range assetTransfer.AssetSenders {
+			for _, sender := range instrumentTransfer.InstrumentSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
 					continue
 				}
@@ -1059,7 +1059,7 @@ func (m *Message) respondTransferMessageReject(ctx context.Context, w *node.Resp
 			}
 		} else {
 			// Add all other senders to be notified
-			for _, sender := range assetTransfer.AssetSenders {
+			for _, sender := range instrumentTransfer.InstrumentSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
 					continue
 				}
@@ -1119,7 +1119,7 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 	}
 
 	// Find first contract index.
-	first := firstContractOutputIndex(transferMsg.Assets, transferTx)
+	first := firstContractOutputIndex(transferMsg.Instruments, transferTx)
 	if first == 0x0000ffff {
 		return errors.New("First contract output index not found")
 	}
@@ -1173,11 +1173,11 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 
 	// Add refund amounts for all bitcoin senders
 	refundBalance := uint64(0)
-	for assetOffset, assetTransfer := range transferMsg.Assets {
-		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
+	for instrumentOffset, instrumentTransfer := range transferMsg.Instruments {
+		if instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && len(instrumentTransfer.InstrumentCode) == 0 {
 			if refund {
 				// Process bitcoin senders refunds
-				for _, sender := range assetTransfer.AssetSenders {
+				for _, sender := range instrumentTransfer.InstrumentSenders {
 					if int(sender.Index) >= len(transferTx.Inputs) {
 						continue
 					}
@@ -1187,25 +1187,25 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 				}
 			}
 		} else {
-			if len(transferTx.Outputs) <= int(assetTransfer.ContractIndex) {
-				return fmt.Errorf("Contract index out of range for asset %d", assetOffset)
+			if len(transferTx.Outputs) <= int(instrumentTransfer.ContractIndex) {
+				return fmt.Errorf("Contract index out of range for instrument %d", instrumentOffset)
 			}
 
-			if !transferTx.Outputs[assetTransfer.ContractIndex].Address.Equal(rk.Address) {
-				continue // This asset is not ours. Skip it.
+			if !transferTx.Outputs[instrumentTransfer.ContractIndex].Address.Equal(rk.Address) {
+				continue // This instrument is not ours. Skip it.
 			}
 
-			assetCode, err := bitcoin.NewHash20(assetTransfer.AssetCode)
+			instrumentCode, err := bitcoin.NewHash20(instrumentTransfer.InstrumentCode)
 			if err != nil {
-				return errors.Wrap(err, "invalid asset code")
+				return errors.Wrap(err, "invalid instrument code")
 			}
 
 			updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
-			updates[*assetCode] = &updatedHoldings
+			updates[*instrumentCode] = &updatedHoldings
 
 			// Add all other senders to be notified
 			// Revert sender pending statuses
-			for _, sender := range assetTransfer.AssetSenders {
+			for _, sender := range instrumentTransfer.InstrumentSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
 					continue
 				}
@@ -1213,7 +1213,7 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, 0)
 
 				// Revert holding status
-				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
 					transferTx.Inputs[sender.Index].Address, v.Now)
 				if err != nil {
 					return errors.Wrap(err, "get holding")
@@ -1233,13 +1233,13 @@ func refundTransferFromReject(ctx context.Context, config *node.Config, masterDB
 			}
 
 			// Revert receiver pending statuses
-			for _, receiver := range assetTransfer.AssetReceivers {
+			for _, receiver := range instrumentTransfer.InstrumentReceivers {
 				receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 				if err != nil {
 					return err
 				}
 
-				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, assetCode,
+				h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
 					receiverAddress, v.Now)
 				if err != nil {
 					return errors.Wrap(err, "get holding")

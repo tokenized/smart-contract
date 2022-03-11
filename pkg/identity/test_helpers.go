@@ -146,9 +146,9 @@ func (c *MockClient) UpdateIdentity(ctx context.Context, entity actions.EntityFi
 }
 
 // ApproveReceive requests an approval signature for a receiver from an identity oracle.
-func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
+func (c *MockClient) ApproveReceive(ctx context.Context, contract, instrument string, oracleIndex int,
 	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32,
-	requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+	requiredSigners int) (*actions.InstrumentReceiverField, bitcoin.Hash32, error) {
 
 	for _, xpub := range xpubs {
 		if xpub.IsPrivate() {
@@ -181,9 +181,9 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 	}
 	contractRawAddress := bitcoin.NewRawAddressFromAddress(contractAddress)
 
-	_, assetCode, err := protocol.DecodeAssetID(asset)
+	_, instrumentCode, err := protocol.DecodeInstrumentID(instrument)
 	if err != nil {
-		return nil, bitcoin.Hash32{}, errors.Wrap(err, "decode asset id")
+		return nil, bitcoin.Hash32{}, errors.Wrap(err, "decode instrument id")
 	}
 
 	// Get random block hash
@@ -204,7 +204,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate address")
 	}
 
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, instrumentCode.Bytes(),
 		receiveAddress, *blockHash, 0, 1)
 	if err != nil {
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "generate sig hash")
@@ -215,7 +215,7 @@ func (c *MockClient) ApproveReceive(ctx context.Context, contract, asset string,
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "sign")
 	}
 
-	result := &actions.AssetReceiverField{
+	result := &actions.InstrumentReceiverField{
 		Address:               receiveAddress.Bytes(),
 		Quantity:              quantity,
 		OracleSigAlgorithm:    1,

@@ -233,7 +233,7 @@ func (a *Agreement) AmendmentRequest(ctx context.Context, w *node.ResponseWriter
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if vt.AssetCode != nil && !vt.AssetCode.IsZero() {
+		if vt.InstrumentCode != nil && !vt.InstrumentCode.IsZero() {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}

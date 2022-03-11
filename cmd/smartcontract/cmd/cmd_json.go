@@ -48,12 +48,12 @@ func buildT1(cmd *cobra.Command,
 	args []string) ([]byte, error) {
 
 	if (len(args) > 1 && args[1] == "help") || len(args) < 5 {
-		fmt.Printf("Usage:\n  smartcontract json messagetype asset_type asset_code recipient_address quantity\n\nExample:\n  smartcontract json T1 SHC 6259cbd4e0522d8c6539f0a291bfcf4cdad9a5275925571ba1ccbdbe5ac0188d 1GtQEoDE7us5udLWuNCmbngYuwjs12EnwP 90000")
+		fmt.Printf("Usage:\n  smartcontract json messagetype instrument_type instrument_code recipient_address quantity\n\nExample:\n  smartcontract json T1 SHC 6259cbd4e0522d8c6539f0a291bfcf4cdad9a5275925571ba1ccbdbe5ac0188d 1GtQEoDE7us5udLWuNCmbngYuwjs12EnwP 90000")
 		return nil, nil
 	}
 
-	assetType := args[1]
-	assetCode := args[2]
+	instrumentType := args[1]
+	instrumentCode := args[2]
 	recipient := args[3]
 
 	qty, err := strconv.ParseInt(args[4], 10, 64)
@@ -72,15 +72,15 @@ func buildT1(cmd *cobra.Command,
 		Quantity int64  `json:"quantity"`
 	}
 
-	type asset struct {
-		Type      string     `json:"asset_type"`
-		Code      string     `json:"asset_code"`
-		Senders   []sender   `json:"asset_senders"`
-		Receivers []receiver `json:"asset_receivers"`
+	type instrument struct {
+		Type      string     `json:"instrument_type"`
+		Code      string     `json:"instrument_code"`
+		Senders   []sender   `json:"instrument_senders"`
+		Receivers []receiver `json:"instrument_receivers"`
 	}
 
 	type wrapper struct {
-		Assets []asset `json:"assets"`
+		Instruments []instrument `json:"instruments"`
 	}
 
 	// Get the address. Later we will convert it to a hex encoded
@@ -90,9 +90,9 @@ func buildT1(cmd *cobra.Command,
 		return nil, err
 	}
 
-	a := asset{
-		Type: assetType,
-		Code: assetCode,
+	a := instrument{
+		Type: instrumentType,
+		Code: instrumentCode,
 		Senders: []sender{
 			{
 				Index:    0,
@@ -108,7 +108,7 @@ func buildT1(cmd *cobra.Command,
 	}
 
 	w := wrapper{
-		Assets: []asset{
+		Instruments: []instrument{
 			a,
 		},
 	}

@@ -23,8 +23,8 @@ var cmdConvert = &cobra.Command{
 					fmt.Printf("Invalid hash : %s\n", err)
 					return nil
 				}
-				assetID := protocol.AssetID(args[0], *hash)
-				fmt.Printf("Asset ID : %s\n", assetID)
+				instrumentID := protocol.InstrumentID(args[0], *hash)
+				fmt.Printf("Instrument ID : %s\n", instrumentID)
 				return nil
 			}
 
@@ -34,9 +34,9 @@ var cmdConvert = &cobra.Command{
 			return errors.New("Incorrect argument count")
 		}
 
-		assetType, assetCode, err := protocol.DecodeAssetID(args[0])
+		instrumentType, instrumentCode, err := protocol.DecodeInstrumentID(args[0])
 		if err == nil {
-			fmt.Printf("Asset %s : %x\n", assetType, assetCode.Bytes())
+			fmt.Printf("Instrument %s : %x\n", instrumentType, instrumentCode.Bytes())
 			return nil
 		}
 

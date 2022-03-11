@@ -42,8 +42,8 @@ type Client interface {
 	UpdateIdentity(ctx context.Context, entity actions.EntityField) error
 
 	// ApproveReceive requests an approval signature for a receiver from an identity oracle.
-	ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int, quantity uint64,
-		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error)
+	ApproveReceive(ctx context.Context, contract, instrument string, oracleIndex int, quantity uint64,
+		xpubs bitcoin.ExtendedKeys, index uint32, requiredSigners int) (*actions.InstrumentReceiverField, bitcoin.Hash32, error)
 
 	// ApproveEntityPublicKey requests a signature to verify that a public key belongs to the
 	// identity information in the entity.

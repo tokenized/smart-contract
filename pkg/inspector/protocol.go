@@ -13,7 +13,7 @@ type Balance struct {
 // GetProtocolTimestamp returns the timestamp of the action. It is only valid for "outgoing" actions.
 func GetProtocolTimestamp(itx *Transaction, m actions.Action) *uint64 {
 	switch msg := m.(type) {
-	case *actions.AssetCreation:
+	case *actions.InstrumentCreation:
 		return &msg.Timestamp
 
 	case *actions.ContractFormation:
@@ -56,9 +56,9 @@ func GetProtocolContractAddresses(itx *Transaction, m actions.Action) []bitcoin.
 	settlement, isSettlement := m.(*actions.Settlement)
 	if isSettlement {
 		result := []bitcoin.RawAddress{}
-		for _, asset := range settlement.Assets {
-			if int(asset.ContractIndex) < len(itx.Inputs) {
-				result = append(result, itx.Inputs[asset.ContractIndex].Address)
+		for _, instrument := range settlement.Instruments {
+			if int(instrument.ContractIndex) < len(itx.Inputs) {
+				result = append(result, itx.Inputs[instrument.ContractIndex].Address)
 			}
 		}
 		return result
@@ -166,8 +166,10 @@ func GetProtocolAddresses(itx *Transaction, m actions.Action, contractAddress bi
 	switch m.Code() {
 	case actions.CodeContractOffer,
 		actions.CodeContractAmendment,
-		actions.CodeAssetDefinition,
-		actions.CodeAssetModification,
+		actions.CodeInstrumentDefinition,
+		actions.CodeInstrumentModification,
+		actions.CodeAssetDefinition,   // Deprecated backwards compatibility
+		actions.CodeAssetModification, // Deprecated backwards compatibility
 		actions.CodeTransfer,
 		actions.CodeProposal,
 		actions.CodeBallotCast,

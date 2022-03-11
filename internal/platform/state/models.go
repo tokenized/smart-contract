@@ -3,7 +3,7 @@ package state
 import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -21,14 +21,19 @@ type Contract struct {
 	MasterAddress   bitcoin.RawAddress `json:"MasterAddress,omitempty"`
 	MovedTo         bitcoin.RawAddress `json:"MovedTo,omitempty"`
 
-	AdminMemberAsset bitcoin.Hash20 `json:"AdminMemberAsset,omitempty"`
-	OwnerMemberAsset bitcoin.Hash20 `json:"OwnerMemberAsset,omitempty"`
+	// Note: Leave JSON name as AdminMemberAsset for backwards compatibility
+	AdminMemberInstrument bitcoin.Hash20 `json:"AdminMemberAsset,omitempty"`
+
+	// Note: Leave JSON name as OwnerMemberAsset for backwards compatibility
+	OwnerMemberInstrument bitcoin.Hash20 `json:"OwnerMemberAsset,omitempty"`
 
 	ContractType uint32 `json:"ContractType,omitempty"`
 	ContractFee  uint64 `json:"ContractFee,omitempty"`
 
-	ContractExpiration  protocol.Timestamp `json:"ContractExpiration,omitempty"`
-	RestrictedQtyAssets uint64             `json:"RestrictedQtyAssets,omitempty"`
+	ContractExpiration protocol.Timestamp `json:"ContractExpiration,omitempty"`
+
+	// Note: Leave JSON name as RestrictedQtyAssets for backwards compatibility
+	RestrictedQtyInstruments uint64 `json:"RestrictedQtyAssets,omitempty"`
 
 	VotingSystems          []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
@@ -38,7 +43,8 @@ type Contract struct {
 
 	Oracles []*actions.OracleField `json:"Oracles,omitempty"`
 
-	AssetCodes []*bitcoin.Hash20 `json:"AssetCodes,omitempty"`
+	// Note: Leave JSON name as AssetCodes for backwards compatibility
+	InstrumentCodes []*bitcoin.Hash20 `json:"AssetCodes,omitempty"`
 
 	FullOracles []Oracle `json:"_,omitempty"`
 }
@@ -58,52 +64,52 @@ type Oracle struct {
 	PublicKey bitcoin.PublicKey  `json:"public_key,omitempty"`
 }
 
-type Asset struct {
+type Instrument struct {
 	Code      *bitcoin.Hash20    `json:"Code,omitempty"`
 	Revision  uint32             `json:"Revision,omitempty"`
 	CreatedAt protocol.Timestamp `json:"CreatedAt,omitempty"`
 	UpdatedAt protocol.Timestamp `json:"UpdatedAt,omitempty"`
 	Timestamp protocol.Timestamp `json:"Timestamp,omitempty"`
 
-	AssetType                   string             `json:"AssetType,omitempty"`
-	AssetIndex                  uint64             `json:"AssetIndex,omitempty"`
-	AssetPermissions            []byte             `json:"AssetPermissions,omitempty"`
-	TradeRestrictions           []string           `json:"TradeRestrictions,omitempty"`
-	EnforcementOrdersPermitted  bool               `json:"EnforcementOrdersPermitted,omitempty"`
-	VotingRights                bool               `json:"VotingRights,omitempty"`
-	VoteMultiplier              uint32             `json:"VoteMultiplier,omitempty"`
-	AdministrationProposal      bool               `json:"AdministrationProposal,omitempty"`
-	HolderProposal              bool               `json:"HolderProposal,omitempty"`
-	AssetModificationGovernance uint32             `json:"AssetModificationGovernance,omitempty"`
-	AuthorizedTokenQty          uint64             `json:"AuthorizedTokenQty,omitempty"`
-	AssetPayload                []byte             `json:"AssetPayload,omitempty"`
-	FreezePeriod                protocol.Timestamp `json:"FreezePeriod,omitempty"`
+	InstrumentType                   string             `json:"InstrumentType,omitempty"`
+	InstrumentIndex                  uint64             `json:"InstrumentIndex,omitempty"`
+	InstrumentPermissions            []byte             `json:"InstrumentPermissions,omitempty"`
+	TradeRestrictions                []string           `json:"TradeRestrictions,omitempty"`
+	EnforcementOrdersPermitted       bool               `json:"EnforcementOrdersPermitted,omitempty"`
+	VotingRights                     bool               `json:"VotingRights,omitempty"`
+	VoteMultiplier                   uint32             `json:"VoteMultiplier,omitempty"`
+	AdministrationProposal           bool               `json:"AdministrationProposal,omitempty"`
+	HolderProposal                   bool               `json:"HolderProposal,omitempty"`
+	InstrumentModificationGovernance uint32             `json:"InstrumentModificationGovernance,omitempty"`
+	AuthorizedTokenQty               uint64             `json:"AuthorizedTokenQty,omitempty"`
+	InstrumentPayload                []byte             `json:"InstrumentPayload,omitempty"`
+	FreezePeriod                     protocol.Timestamp `json:"FreezePeriod,omitempty"`
 }
 
-func (a Asset) TransfersPermitted() bool {
-	if a.AssetType == assets.CodeCurrency {
+func (a Instrument) TransfersPermitted() bool {
+	if a.InstrumentType == instruments.CodeCurrency {
 		return true
 	}
 
-	data, err := assets.Deserialize([]byte(a.AssetType), a.AssetPayload)
+	data, err := instruments.Deserialize([]byte(a.InstrumentType), a.InstrumentPayload)
 	if err != nil {
 		return false
 	}
 
 	switch as := data.(type) {
-	case *assets.Membership:
+	case *instruments.Membership:
 		return as.TransfersPermitted
-	case *assets.ShareCommon:
+	case *instruments.ShareCommon:
 		return as.TransfersPermitted
-	case *assets.Coupon:
+	case *instruments.Coupon:
 		return as.TransfersPermitted
-	case *assets.LoyaltyPoints:
+	case *instruments.LoyaltyPoints:
 		return as.TransfersPermitted
-	case *assets.TicketAdmission:
+	case *instruments.TicketAdmission:
 		return as.TransfersPermitted
-	case *assets.CasinoChip:
+	case *instruments.CasinoChip:
 		return as.TransfersPermitted
-	case *assets.BondFixedRate:
+	case *instruments.BondFixedRate:
 		return as.TransfersPermitted
 	}
 
@@ -137,11 +143,16 @@ type HoldingStatus struct {
 }
 
 type Vote struct {
-	Type               uint32                    `json:"Type,omitempty"`
-	VoteSystem         uint32                    `json:"VoteSystem,omitempty"`
-	ContractWideVote   bool                      `json:"ContractWideVote,omitempty"`
-	AssetType          string                    `json:"AssetType,omitempty"`
-	AssetCode          *bitcoin.Hash20           `json:"AssetCode,omitempty"`
+	Type             uint32 `json:"Type,omitempty"`
+	VoteSystem       uint32 `json:"VoteSystem,omitempty"`
+	ContractWideVote bool   `json:"ContractWideVote,omitempty"`
+
+	// Note: Leave JSON name as AssetType for backwards compatibility
+	InstrumentType string `json:"AssetType,omitempty"`
+
+	// Note: Leave JSON name as AssetCode for backwards compatibility
+	InstrumentCode *bitcoin.Hash20 `json:"AssetCode,omitempty"`
+
 	ProposedAmendments []*actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
 	VoteTxId     *bitcoin.Hash32    `json:"VoteTxId,omitempty"`

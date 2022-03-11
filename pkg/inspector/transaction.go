@@ -24,8 +24,10 @@ var (
 		actions.CodeContractAmendment:        true,
 		actions.CodeBodyOfAgreementOffer:     true,
 		actions.CodeBodyOfAgreementAmendment: true,
-		actions.CodeAssetDefinition:          true,
-		actions.CodeAssetModification:        true,
+		actions.CodeInstrumentDefinition:     true,
+		actions.CodeInstrumentModification:   true,
+		actions.CodeAssetDefinition:          true, // Deprecated backwards compatibility
+		actions.CodeAssetModification:        true, // Deprecated backwards compatibility
 		actions.CodeTransfer:                 true,
 		actions.CodeProposal:                 true,
 		actions.CodeBallotCast:               true,
@@ -37,6 +39,7 @@ var (
 	outgoingMessageTypes = map[string]bool{
 		actions.CodeContractFormation:        true,
 		actions.CodeBodyOfAgreementFormation: true,
+		actions.CodeInstrumentCreation:       true, // Deprecated backwards compatibility
 		actions.CodeAssetCreation:            true,
 		actions.CodeSettlement:               true,
 		actions.CodeVote:                     true,

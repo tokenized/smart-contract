@@ -347,7 +347,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if vt.AssetCode != nil && !vt.AssetCode.IsZero() {
+		if vt.InstrumentCode != nil && !vt.InstrumentCode.IsZero() {
 			node.LogWarn(ctx, "Vote was not for contract amendments")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
@@ -377,10 +377,10 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
-	// unlimited asset creation is permitted.
-	if cf.RestrictedQtyAssets > 0 && cf.RestrictedQtyAssets < uint64(len(ct.AssetCodes)) {
-		node.LogWarn(ctx, "Cannot reduce allowable assets below existing number")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractAssetQtyReduction)
+	// unlimited instrument creation is permitted.
+	if cf.RestrictedQtyInstruments > 0 && cf.RestrictedQtyInstruments < uint64(len(ct.InstrumentCodes)) {
+		node.LogWarn(ctx, "Cannot reduce allowable instruments below existing number")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractInstrumentQtyReduction)
 	}
 
 	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
@@ -680,10 +680,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			node.Log(ctx, "Updating contract expiration : %s", newExpiration.Format(time.UnixDate))
 		}
 
-		if ct.RestrictedQtyAssets != msg.RestrictedQtyAssets {
-			uc.RestrictedQtyAssets = &msg.RestrictedQtyAssets
-			node.Log(ctx, "Updating contract restricted quantity assets : %d",
-				*uc.RestrictedQtyAssets)
+		if ct.RestrictedQtyInstruments != msg.RestrictedQtyInstruments {
+			uc.RestrictedQtyInstruments = &msg.RestrictedQtyInstruments
+			node.Log(ctx, "Updating contract restricted quantity instruments : %d",
+				*uc.RestrictedQtyInstruments)
 		}
 
 		if ct.AdministrationProposal != msg.AdministrationProposal {

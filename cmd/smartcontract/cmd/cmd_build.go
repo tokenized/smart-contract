@@ -17,7 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -33,8 +33,8 @@ const (
 
 var cmdBuild = &cobra.Command{
 	Use:   "build <typeCode> <jsonFile>",
-	Short: "Build an action/asset/message payload from a json file.",
-	Long:  "Build and action/asset/message payload from a json file. Note: fixedbin (fixed size binary) in json is an array of 8 bit integers and bin (variable size binary) is hex encoded binary data.",
+	Short: "Build an action/instrument/message payload from a json file.",
+	Long:  "Build and action/instrument/message payload from a json file. Note: fixedbin (fixed size binary) in json is an array of 8 bit integers and bin (variable size binary) is hex encoded binary data.",
 	RunE: func(c *cobra.Command, args []string) error {
 		if len(args) != 2 {
 			return errors.New("Missing json file parameter")
@@ -44,11 +44,11 @@ var cmdBuild = &cobra.Command{
 		case 2:
 			return buildAction(c, args)
 		case 3:
-			return buildAssetPayload(c, args)
+			return buildInstrumentPayload(c, args)
 		case 4:
 			return buildMessage(c, args)
 		default:
-			return fmt.Errorf("Unknown type code length %d\n  Actions are 2 characters\n  Assets are 3 characters\n  Messages are 4 characters", len(args[0]))
+			return fmt.Errorf("Unknown type code length %d\n  Actions are 2 characters\n  Instruments are 3 characters\n  Messages are 4 characters", len(args[0]))
 		}
 	},
 }
@@ -98,7 +98,7 @@ func buildAction(c *cobra.Command, args []string) error {
 			fmt.Printf("Invalid permissions\n")
 		}
 
-	case *actions.AssetDefinition:
+	case *actions.InstrumentDefinition:
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("How many voting systems are in the contract: ")
 		votingSystemCountString, err := reader.ReadString('\n')
@@ -111,8 +111,8 @@ func buildAction(c *cobra.Command, args []string) error {
 			fmt.Printf("User input is not an integer : %s\n", err)
 			return nil
 		}
-		fmt.Printf("Checking Asset Definition\n")
-		_, err = permissions.PermissionsFromBytes(m.AssetPermissions, votingSystemCount)
+		fmt.Printf("Checking Instrument Definition\n")
+		_, err = permissions.PermissionsFromBytes(m.InstrumentPermissions, votingSystemCount)
 		if err != nil {
 			fmt.Printf("Invalid permissions\n")
 		}
@@ -238,80 +238,80 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	switch actionType {
 	case "A1":
-		assetDef, ok := action.(*actions.AssetDefinition)
+		instrumentDef, ok := action.(*actions.InstrumentDefinition)
 		if !ok {
-			fmt.Printf("Failed to convert to asset definition")
+			fmt.Printf("Failed to convert to instrument definition")
 			return nil
 		}
 
-		if err := assetDef.Validate(); err != nil {
-			fmt.Printf("Invalid asset definition : %s\n", err)
+		if err := instrumentDef.Validate(); err != nil {
+			fmt.Printf("Invalid instrument definition : %s\n", err)
 			return nil
 		}
 
-		asset, err := assets.Deserialize([]byte(assetDef.AssetType), assetDef.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(instrumentDef.InstrumentType), instrumentDef.InstrumentPayload)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetDef.AssetType))
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", instrumentDef.InstrumentType))
 		}
 
-		fmt.Printf("Payload : %s\n", assetDef.AssetType)
+		fmt.Printf("Payload : %s\n", instrumentDef.InstrumentType)
 		if hexFormat {
-			fmt.Printf("%x\n", assetDef.AssetPayload)
+			fmt.Printf("%x\n", instrumentDef.InstrumentPayload)
 		} else {
-			data, err = json.MarshalIndent(asset, "", "  ")
+			data, err = json.MarshalIndent(instrument, "", "  ")
 			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetDef.AssetType))
+				return errors.Wrap(err, fmt.Sprintf("Failed to marshal instrument payload %s", instrumentDef.InstrumentType))
 			}
 			fmt.Printf(string(data) + "\n")
 		}
 
 	case "A2":
-		assetCreation, ok := action.(*actions.AssetCreation)
+		instrumentCreation, ok := action.(*actions.InstrumentCreation)
 		if !ok {
-			fmt.Printf("Failed to convert to asset creation")
+			fmt.Printf("Failed to convert to instrument creation")
 			return nil
 		}
 
-		if err := assetCreation.Validate(); err != nil {
-			fmt.Printf("Invalid asset creation : %s\n", err)
+		if err := instrumentCreation.Validate(); err != nil {
+			fmt.Printf("Invalid instrument creation : %s\n", err)
 			return nil
 		}
 
-		payload := assets.NewAssetFromCode(assetCreation.AssetType)
+		payload := instruments.NewInstrumentFromCode(instrumentCreation.InstrumentType)
 		if payload == nil {
-			fmt.Printf("Invalid asset type : %s\n", assetCreation.AssetType)
+			fmt.Printf("Invalid instrument type : %s\n", instrumentCreation.InstrumentType)
 			return nil
 		}
 
-		assetCreation.AssetPayload, err = payload.Bytes()
+		instrumentCreation.InstrumentPayload, err = payload.Bytes()
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", assetCreation.AssetType))
+			return errors.Wrap(err, fmt.Sprintf("Failed to deserialize %s payload", instrumentCreation.InstrumentType))
 		}
 
-		fmt.Printf("Payload : %s\n", assetCreation.AssetType)
+		fmt.Printf("Payload : %s\n", instrumentCreation.InstrumentType)
 		if hexFormat {
 			fmt.Printf("%x\n", payload)
 		} else {
 			data, err = json.MarshalIndent(payload, "", "  ")
 			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to marshal asset payload %s", assetCreation.AssetType))
+				return errors.Wrap(err, fmt.Sprintf("Failed to marshal instrument payload %s", instrumentCreation.InstrumentType))
 			}
 			fmt.Printf(string(data) + "\n")
 		}
 
 	case "A3":
-		assetModification, ok := action.(*actions.AssetModification)
+		instrumentModification, ok := action.(*actions.InstrumentModification)
 		if !ok {
-			fmt.Printf("Failed to convert to asset modification")
+			fmt.Printf("Failed to convert to instrument modification")
 			return nil
 		}
 
-		if err := assetModification.Validate(); err != nil {
-			fmt.Printf("Invalid asset modification : %s\n", err)
+		if err := instrumentModification.Validate(); err != nil {
+			fmt.Printf("Invalid instrument modification : %s\n", err)
 			return nil
 		}
 
-		for i, mod := range assetModification.Amendments {
+		for i, mod := range instrumentModification.Amendments {
 			fip, err := permissions.FieldIndexPathFromBytes(mod.FieldIndexPath)
 			if err != nil {
 				fmt.Printf("Invalid field index path : %s\n", err)
@@ -334,13 +334,13 @@ func buildAction(c *cobra.Command, args []string) error {
 	return nil
 }
 
-func buildAssetPayload(c *cobra.Command, args []string) error {
-	assetType := strings.ToUpper(args[0])
+func buildInstrumentPayload(c *cobra.Command, args []string) error {
+	instrumentType := strings.ToUpper(args[0])
 
 	// Create struct
-	payload := assets.NewAssetFromCode(assetType)
+	payload := instruments.NewInstrumentFromCode(instrumentType)
 	if payload == nil {
-		return fmt.Errorf("Unsupported asset type : %s", assetType)
+		return fmt.Errorf("Unsupported instrument type : %s", instrumentType)
 	}
 
 	// Read json file
@@ -352,22 +352,22 @@ func buildAssetPayload(c *cobra.Command, args []string) error {
 
 	// Put json data into payload struct
 	if err := json.Unmarshal(jsonData, payload); err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to unmarshal %s json file", assetType))
+		return errors.Wrap(err, fmt.Sprintf("Failed to unmarshal %s json file", instrumentType))
 	}
 
 	data, err := payload.Bytes()
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s asset payload", assetType))
+		return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s instrument payload", instrumentType))
 	}
 
-	fmt.Printf("Asset : %s\n", assetType)
+	fmt.Printf("Instrument : %s\n", instrumentType)
 	hexFormat, _ := c.Flags().GetBool(FlagHexFormat)
 	if hexFormat {
 		fmt.Printf("%x\n", data)
 	} else {
 		jsonData, err = json.MarshalIndent(&payload, "", "  ")
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s", assetType))
+			return errors.Wrap(err, fmt.Sprintf("Failed to marshal %s", instrumentType))
 		}
 		fmt.Printf(string(jsonData) + "\n")
 	}

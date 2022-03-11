@@ -23,7 +23,8 @@ var (
 )
 
 // Retrieve gets the specified vote from the database.
-func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *bitcoin.Hash32) (*state.Vote, error) {
+func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	voteID *bitcoin.Hash32) (*state.Vote, error) {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Retrieve")
 	defer span.End()
 
@@ -37,8 +38,8 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 }
 
 // Create the vote
-func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, voteID *bitcoin.Hash32, nv *NewVote,
-	now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	voteID *bitcoin.Hash32, nv *NewVote, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.vote.Create")
 	defer span.End()
 
@@ -51,6 +52,8 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return err
 	}
 
+	v.InstrumentType = nv.InstrumentType
+	v.InstrumentCode = nv.InstrumentCode
 	v.Ballots = nv.Ballots // Doesn't come through json convert because it isn't a marshalable type
 	v.CreatedAt = now
 	v.UpdatedAt = now

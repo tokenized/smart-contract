@@ -1,4 +1,4 @@
-package asset
+package instrument
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -19,18 +19,18 @@ import (
 
 var (
 	// ErrNotFound abstracts the standard not found error.
-	ErrNotFound = errors.New("Asset not found")
+	ErrNotFound = errors.New("Instrument not found")
 )
 
-// Retrieve gets the specified asset from the database.
+// Retrieve gets the specified instrument from the database.
 func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20) (*state.Asset, error) {
+	instrumentCode *bitcoin.Hash20) (*state.Instrument, error) {
 
-	ctx, span := trace.StartSpan(ctx, "internal.asset.Retrieve")
+	ctx, span := trace.StartSpan(ctx, "internal.instrument.Retrieve")
 	defer span.End()
 
-	// Find asset in storage
-	a, err := Fetch(ctx, dbConn, contractAddress, assetCode)
+	// Find instrument in storage
+	a, err := Fetch(ctx, dbConn, contractAddress, instrumentCode)
 	if err != nil {
 		return nil, err
 	}
@@ -38,15 +38,15 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 	return a, nil
 }
 
-// Create the asset
+// Create the instrument
 func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20, nu *NewAsset, now protocol.Timestamp) error {
+	instrumentCode *bitcoin.Hash20, nu *NewInstrument, now protocol.Timestamp) error {
 
-	ctx, span := trace.StartSpan(ctx, "internal.asset.Create")
+	ctx, span := trace.StartSpan(ctx, "internal.instrument.Create")
 	defer span.End()
 
-	// Set up asset
-	var a state.Asset
+	// Set up instrument
+	var a state.Instrument
 
 	// Get current state
 	err := node.Convert(ctx, &nu, &a)
@@ -54,7 +54,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return err
 	}
 
-	a.Code = assetCode
+	a.Code = instrumentCode
 	a.Revision = 0
 	a.CreatedAt = now
 	a.UpdatedAt = now
@@ -68,21 +68,21 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	// 	UpdatedAt:        a.UpdatedAt,
 	// }
 
-	if a.AssetPayload == nil {
-		a.AssetPayload = []byte{}
+	if a.InstrumentPayload == nil {
+		a.InstrumentPayload = []byte{}
 	}
 
 	return Save(ctx, dbConn, contractAddress, &a)
 }
 
-// Update the asset
+// Update the instrument
 func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20, upd *UpdateAsset, now protocol.Timestamp) error {
-	ctx, span := trace.StartSpan(ctx, "internal.asset.Update")
+	instrumentCode *bitcoin.Hash20, upd *UpdateInstrument, now protocol.Timestamp) error {
+	ctx, span := trace.StartSpan(ctx, "internal.instrument.Update")
 	defer span.End()
 
-	// Find asset
-	a, err := Fetch(ctx, dbConn, contractAddress, assetCode)
+	// Find instrument
+	a, err := Fetch(ctx, dbConn, contractAddress, instrumentCode)
 	if err != nil {
 		return ErrNotFound
 	}
@@ -95,8 +95,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		a.Timestamp = *upd.Timestamp
 	}
 
-	if upd.AssetPermissions != nil {
-		a.AssetPermissions = *upd.AssetPermissions
+	if upd.InstrumentPermissions != nil {
+		a.InstrumentPermissions = *upd.InstrumentPermissions
 	}
 	if upd.TradeRestrictions != nil {
 		a.TradeRestrictions = *upd.TradeRestrictions
@@ -113,14 +113,14 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	if upd.HolderProposal != nil {
 		a.HolderProposal = *upd.HolderProposal
 	}
-	if upd.AssetModificationGovernance != nil {
-		a.AssetModificationGovernance = *upd.AssetModificationGovernance
+	if upd.InstrumentModificationGovernance != nil {
+		a.InstrumentModificationGovernance = *upd.InstrumentModificationGovernance
 	}
 	if upd.AuthorizedTokenQty != nil {
 		a.AuthorizedTokenQty = *upd.AuthorizedTokenQty
 	}
-	if upd.AssetPayload != nil {
-		a.AssetPayload = *upd.AssetPayload
+	if upd.InstrumentPayload != nil {
+		a.InstrumentPayload = *upd.InstrumentPayload
 	}
 	if upd.FreezePeriod != nil {
 		a.FreezePeriod = *upd.FreezePeriod
@@ -132,7 +132,7 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 }
 
 // ValidateVoting returns an error if voting is not allowed.
-func ValidateVoting(ctx context.Context, as *state.Asset, initiatorType uint32,
+func ValidateVoting(ctx context.Context, as *state.Instrument, initiatorType uint32,
 	votingSystem *actions.VotingSystemField) error {
 
 	switch initiatorType {
@@ -153,48 +153,48 @@ func timeString(t uint64) string {
 	return time.Unix(int64(t)/1000000000, 0).String()
 }
 
-// IsTransferable returns an error if the asset is non-transferable.
-func IsTransferable(ctx context.Context, as *state.Asset, now protocol.Timestamp) error {
+// IsTransferable returns an error if the instrument is non-transferable.
+func IsTransferable(ctx context.Context, as *state.Instrument, now protocol.Timestamp) error {
 	if as.FreezePeriod.Nano() > now.Nano() {
-		return node.NewError(actions.RejectionsAssetFrozen,
-			fmt.Sprintf("Asset frozen until %s", as.FreezePeriod.String()))
+		return node.NewError(actions.RejectionsInstrumentFrozen,
+			fmt.Sprintf("Instrument frozen until %s", as.FreezePeriod.String()))
 	}
 
-	assetData, err := assets.Deserialize([]byte(as.AssetType), as.AssetPayload)
+	instrumentData, err := instruments.Deserialize([]byte(as.InstrumentType), as.InstrumentPayload)
 	if err != nil {
 		return node.NewError(actions.RejectionsMsgMalformed, err.Error())
 	}
 
-	switch data := assetData.(type) {
-	case *assets.Membership:
+	switch data := instrumentData.(type) {
+	case *instruments.Membership:
 		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("Membership expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
-	case *assets.ShareCommon:
+	case *instruments.ShareCommon:
 
-	case *assets.CasinoChip:
+	case *instruments.CasinoChip:
 		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("CasinoChip expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
-	case *assets.Coupon:
+	case *instruments.Coupon:
 		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("Coupon expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
-	case *assets.LoyaltyPoints:
+	case *instruments.LoyaltyPoints:
 		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("LoyaltyPoints expired at %s", timeString(data.ExpirationTimestamp)))
 		}
 
-	case *assets.TicketAdmission:
+	case *instruments.TicketAdmission:
 		if data.EventEndTimestamp != 0 && data.EventEndTimestamp < now.Nano() {
-			return node.NewError(actions.RejectionsAssetNotPermitted,
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.EventEndTimestamp)))
 		}
 	}

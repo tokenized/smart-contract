@@ -6,12 +6,12 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/bootstrap"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/state"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
 	"github.com/pkg/errors"
@@ -61,34 +61,34 @@ func loadContract(ctx context.Context,
 		return err
 	}
 
-	for _, assetCode := range c.AssetCodes {
-		a, err := asset.Fetch(ctx, db, c.Address, assetCode)
+	for _, instrumentCode := range c.InstrumentCodes {
+		a, err := instrument.Fetch(ctx, db, c.Address, instrumentCode)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("## Asset %s\n\n", protocol.AssetID(a.AssetType, *assetCode))
+		fmt.Printf("## Instrument %s\n\n", protocol.InstrumentID(a.InstrumentType, *instrumentCode))
 
 		if err := dumpJSON(a); err != nil {
 			return err
 		}
 
-		asset, err := assets.Deserialize([]byte(a.AssetType), a.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(a.InstrumentType), a.InstrumentPayload)
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("### Payload\n\n")
 
-		if err := dumpJSON(asset); err != nil {
+		if err := dumpJSON(instrument); err != nil {
 			return err
 		}
 
 		fmt.Printf("### Holdings\n\n")
 
-		// get the PKH's inside the holders/asset_code directory
+		// get the PKH's inside the holders/instrument_code directory
 		holdings, err := holdings.FetchAll(ctx, db, bitcoin.NewRawAddressFromAddress(address),
-			assetCode)
+			instrumentCode)
 		if err != nil {
 			return nil
 		}

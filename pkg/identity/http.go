@@ -383,9 +383,9 @@ func (o *HTTPClient) ApproveEntityPublicKey(ctx context.Context, entity actions.
 
 // ApproveReceive requests a signature from the identity oracle to approve receipt of a token.
 // quantity is simply placed in the result data structure and not used in the certificate.
-func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string, oracleIndex int,
+func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, instrument string, oracleIndex int,
 	quantity uint64, xpubs bitcoin.ExtendedKeys, index uint32,
-	requiredSigners int) (*actions.AssetReceiverField, bitcoin.Hash32, error) {
+	requiredSigners int) (*actions.InstrumentReceiverField, bitcoin.Hash32, error) {
 
 	keys, err := xpubs.ChildKeys(index)
 	if err != nil {
@@ -398,15 +398,15 @@ func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string,
 	}
 
 	request := struct {
-		XPubs    bitcoin.ExtendedKeys `json:"xpubs"`
-		Index    uint32               `json:"index"`
-		Contract string               `json:"contract"`
-		AssetID  string               `json:"asset_id"`
+		XPubs        bitcoin.ExtendedKeys `json:"xpubs"`
+		Index        uint32               `json:"index"`
+		Contract     string               `json:"contract"`
+		InstrumentID string               `json:"instrument_id"`
 	}{
-		XPubs:    xpubs,
-		Index:    index,
-		Contract: contract,
-		AssetID:  asset,
+		XPubs:        xpubs,
+		Index:        index,
+		Contract:     contract,
+		InstrumentID: instrument,
 	}
 
 	var response struct {
@@ -425,7 +425,7 @@ func (o *HTTPClient) ApproveReceive(ctx context.Context, contract, asset string,
 		return nil, bitcoin.Hash32{}, errors.Wrap(err, "http post")
 	}
 
-	result := &actions.AssetReceiverField{
+	result := &actions.InstrumentReceiverField{
 		Address:               address.Bytes(),
 		Quantity:              quantity,
 		OracleSigAlgorithm:    response.Data.SigAlgorithm,

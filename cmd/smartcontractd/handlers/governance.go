@@ -8,9 +8,9 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
@@ -89,11 +89,11 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 		}
 	} else if msg.Type == 1 { // Holder Proposal
-		// Sender must hold balance of at least one asset
+		// Sender must hold balance of at least one instrument
 		if !contract.HasAnyBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address) {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				w.Config.Net)
-			node.LogWarn(ctx, "Sender holds no assets : %s", address.String())
+			node.LogWarn(ctx, "Sender holds no instruments : %s", address.String())
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 	} else if msg.Type == 2 { // Administrative Matter
@@ -122,32 +122,32 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if len(msg.AssetCode) > 0 {
-		assetCode, err := bitcoin.NewHash20(msg.AssetCode)
+	if len(msg.InstrumentCode) > 0 {
+		instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
 		if err != nil {
-			node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
+			node.LogVerbose(ctx, "Invalid instrument code : 0x%x", msg.InstrumentCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		as, err := instrument.Retrieve(ctx, g.MasterDB, rk.Address, instrumentCode)
 		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %s", assetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+			node.LogWarn(ctx, "Instrument not found : %s", instrumentCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 		}
 
 		if as.FreezePeriod.Nano() > v.Now.Nano() {
-			node.LogWarn(ctx, "Proposal failed. Asset frozen : %s", assetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetFrozen)
+			node.LogWarn(ctx, "Proposal failed. Instrument frozen : %s", instrumentCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentFrozen)
 		}
 
-		// Asset does not allow voting
-		if err := asset.ValidateVoting(ctx, as, msg.Type, ct.VotingSystems[msg.VoteSystem]); err != nil {
-			node.LogWarn(ctx, "Asset does not allow voting: %s : %s", assetCode, err)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetPermissions)
+		// Instrument does not allow voting
+		if err := instrument.ValidateVoting(ctx, as, msg.Type, ct.VotingSystems[msg.VoteSystem]); err != nil {
+			node.LogWarn(ctx, "Instrument does not allow voting: %s : %s", instrumentCode, err)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentPermissions)
 		}
 
 		// Check sender balance
-		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address, assetCode, itx.Inputs[0].Address,
+		h, err := holdings.GetHolding(ctx, g.MasterDB, rk.Address, instrumentCode, itx.Inputs[0].Address,
 			v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get requestor holding")
@@ -157,7 +157,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
 				w.Config.Net)
-			node.LogWarn(ctx, "Requestor is not a holder : %s %s", assetCode, address)
+			node.LogWarn(ctx, "Requestor is not a holder : %s %s", instrumentCode, address)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
 		}
 
@@ -168,20 +168,20 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Validate proposed amendments.
-			ac := actions.AssetCreation{}
+			ac := actions.InstrumentCreation{}
 
 			err = node.Convert(ctx, &as, &ac)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert state asset to asset creation")
+				return errors.Wrap(err, "Failed to convert state instrument to instrument creation")
 			}
 
-			ac.AssetRevision = as.Revision + 1
+			ac.InstrumentRevision = as.Revision + 1
 			ac.Timestamp = v.Now.Nano()
 
 			// Verify that included amendments are valid and have necessary permission.
-			if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments, true,
+			if err := applyInstrumentAmendments(&ac, ct.VotingSystems, msg.ProposedAmendments, true,
 				msg.Type, msg.VoteSystem); err != nil {
-				node.LogWarn(ctx, "Asset amendments failed : %s", err)
+				node.LogWarn(ctx, "Instrument amendments failed : %s", err)
 				code, ok := node.ErrorCode(err)
 				if ok {
 					return node.RespondReject(ctx, w, itx, rk, code)
@@ -224,7 +224,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 			}
 		}
 
-		// Sender does not have any balance of the asset
+		// Sender does not have any balance of the instrument
 		if msg.Type == 1 && contract.GetVotingBalance(ctx, g.MasterDB, ct, itx.Inputs[0].Address,
 			ct.VotingSystems[msg.VoteSystem].VoteMultiplierPermitted, v.Now) == 0 {
 			node.LogWarn(ctx, "Requestor is not a holder")
@@ -243,13 +243,13 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 				continue // Already applied or doesn't contain specific amendments
 			}
 
-			if len(msg.AssetCode) > 0 {
-				if vt.AssetCode.IsZero() || msg.AssetType != vt.AssetType ||
-					!bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
-					continue // Not an asset amendment
+			if len(msg.InstrumentCode) > 0 {
+				if vt.InstrumentCode.IsZero() || msg.InstrumentType != vt.InstrumentType ||
+					!bytes.Equal(msg.InstrumentCode, vt.InstrumentCode.Bytes()) {
+					continue // Not an instrument amendment
 				}
 			} else {
-				if !vt.AssetCode.IsZero() {
+				if !vt.InstrumentCode.IsZero() {
 					continue // Not a contract amendment
 				}
 			}
@@ -260,7 +260,8 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 					if bytes.Equal(field.FieldIndexPath, otherField.FieldIndexPath) {
 						// Reject because of conflicting field amendment on unapplied vote.
 						node.LogWarn(ctx, "Proposed amendment conflicts with unapplied vote")
-						return node.RespondReject(ctx, w, itx, rk, actions.RejectionsProposalConflicts)
+						return node.RespondReject(ctx, w, itx, rk,
+							actions.RejectionsProposalConflicts)
 					}
 				}
 			}
@@ -354,19 +355,22 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 	nv.Timestamp = protocol.NewTimestamp(msg.Timestamp)
 	nv.Ballots = make(map[bitcoin.Hash20]state.Ballot)
 
-	if len(proposal.AssetCode) > 0 {
-		assetCode, err := bitcoin.NewHash20(proposal.AssetCode)
+	if len(proposal.InstrumentCode) > 0 {
+		instrumentCode, err := bitcoin.NewHash20(proposal.InstrumentCode)
 		if err != nil {
-			node.LogWarn(ctx, "Invalid asset code : %s", assetCode)
+			node.LogWarn(ctx, "Invalid instrument code : %s", instrumentCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		// Instrument code doesn't convert properly with JSON from []byte to bitcoin.Hash20.
+		nv.InstrumentCode = instrumentCode
+
+		as, err := instrument.Retrieve(ctx, g.MasterDB, rk.Address, instrumentCode)
 		if err != nil {
-			return fmt.Errorf("Asset not found : %s", assetCode)
+			return fmt.Errorf("Instrument not found : %s", instrumentCode)
 		}
 
-		if as.AssetModificationGovernance == 1 { // Contract wide asset governance
+		if as.InstrumentModificationGovernance == 1 { // Contract wide instrument governance
 			nv.ContractWideVote = true
 			nv.TokenQty = contract.GetTokenQty(ctx, g.MasterDB, ct,
 				ct.VotingSystems[proposal.VoteSystem].VoteMultiplierPermitted)
@@ -382,15 +386,15 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 
 	// Populate nv.Ballots with current holdings that apply to the vote
 	if proposal.Type == 2 { // Administrative Token holders only
-		if ct.AdminMemberAsset.IsZero() {
-			node.LogWarn(ctx, "Admin Member Asset not defined")
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		if ct.AdminMemberInstrument.IsZero() {
+			node.LogWarn(ctx, "Admin Member Instrument not defined")
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 		}
 
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, &ct.AdminMemberAsset)
+		as, err := instrument.Retrieve(ctx, g.MasterDB, rk.Address, &ct.AdminMemberInstrument)
 		if err != nil {
-			node.LogWarn(ctx, "Admin Member Asset not found : %s", ct.AdminMemberAsset)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+			node.LogWarn(ctx, "Admin Member Instrument not found : %s", ct.AdminMemberInstrument)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 		}
 
 		err = holdings.AppendBallots(ctx, g.MasterDB, rk.Address, as, &nv.Ballots,
@@ -398,17 +402,17 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 		if err != nil {
 			return errors.Wrap(err, "append ballots")
 		}
-	} else if len(proposal.AssetCode) > 0 && !nv.ContractWideVote {
-		assetCode, err := bitcoin.NewHash20(proposal.AssetCode)
+	} else if len(proposal.InstrumentCode) > 0 && !nv.ContractWideVote {
+		instrumentCode, err := bitcoin.NewHash20(proposal.InstrumentCode)
 		if err != nil {
-			node.LogWarn(ctx, "Invalid asset code : %s", assetCode)
+			node.LogWarn(ctx, "Invalid instrument code : %s", instrumentCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		as, err := asset.Retrieve(ctx, g.MasterDB, rk.Address, assetCode)
+		as, err := instrument.Retrieve(ctx, g.MasterDB, rk.Address, instrumentCode)
 		if err != nil {
-			node.LogWarn(ctx, "Asset not found : %s", assetCode)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+			node.LogWarn(ctx, "Instrument not found : %s", instrumentCode)
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 		}
 
 		err = holdings.AppendBallots(ctx, g.MasterDB, rk.Address, as, &nv.Ballots,
@@ -417,11 +421,11 @@ func (g *Governance) VoteResponse(ctx context.Context, w *node.ResponseWriter, i
 			return errors.Wrap(err, "append ballots")
 		}
 	} else { // Contract Vote
-		for _, a := range ct.AssetCodes {
-			if a.Equal(&ct.AdminMemberAsset) {
+		for _, a := range ct.InstrumentCodes {
+			if a.Equal(&ct.AdminMemberInstrument) {
 				continue // Administrative tokens don't count for holder votes.
 			}
-			as, err := asset.Retrieve(ctx, g.MasterDB, ct.Address, a)
+			as, err := instrument.Retrieve(ctx, g.MasterDB, ct.Address, a)
 			if err != nil {
 				continue
 			}
@@ -782,7 +786,7 @@ func (g *Governance) ResultResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to update vote")
 	}
 
-	if len(msg.AssetCode) > 0 {
+	if len(msg.InstrumentCode) > 0 {
 		// Save result for amendment action
 		if err := transactions.AddTx(ctx, g.MasterDB, itx); err != nil {
 			return errors.Wrap(err, "Failed to save tx")

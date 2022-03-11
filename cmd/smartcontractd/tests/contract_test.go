@@ -53,8 +53,9 @@ func createContract(t *testing.T) {
 			Type:           "I",
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
 		},
-		VotingSystems:  []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-		HolderProposal: true,
+		VotingSystems:            []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+		HolderProposal:           true,
+		RestrictedQtyInstruments: 1,
 	}
 
 	// Define permissions for contract fields
@@ -217,6 +218,11 @@ func createContract(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified issuer proposal", tests.Success)
+
+	if ct.RestrictedQtyInstruments != offerData.RestrictedQtyInstruments {
+		t.Fatalf("\t%s\tContract restricted instrument quantity wrong : got %d, want %d",
+			tests.Failed, ct.RestrictedQtyInstruments, offerData.RestrictedQtyInstruments)
+	}
 }
 
 func masterAddress(t *testing.T) {
@@ -1129,11 +1135,11 @@ func contractProposalAmendment(t *testing.T) {
 
 	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
-	assetAmendment := actions.AmendmentField{
+	instrumentAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
 		Data:           []byte("New Name"),
 	}
-	if err := mockUpContractAmendmentVote(ctx, 0, 0, &assetAmendment); err != nil {
+	if err := mockUpContractAmendmentVote(ctx, 0, 0, &instrumentAmendment); err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
 
@@ -1148,7 +1154,7 @@ func contractProposalAmendment(t *testing.T) {
 		RefTxID:          testVoteResultTxId.Bytes(),
 	}
 
-	amendmentData.Amendments = append(amendmentData.Amendments, &assetAmendment)
+	amendmentData.Amendments = append(amendmentData.Amendments, &instrumentAmendment)
 
 	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(1)
@@ -1220,12 +1226,26 @@ func mockUpContract(t testing.TB, ctx context.Context, name string, issuerType s
 	cf := &actions.ContractFormation{
 		ContractName: name,
 		Issuer: &actions.EntityField{
-			Type:           issuerType,
-			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+			Type: issuerType,
+			Administration: []*actions.AdministratorField{
+				&actions.AdministratorField{
+					Type: issuerRole, Name: issuerName,
+				},
+			},
 		},
 		VotingSystems: []*actions.VotingSystemField{
-			&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
-			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000},
+			&actions.VotingSystemField{
+				Name:                "Relative 50",
+				VoteType:            "R",
+				ThresholdPercentage: 50,
+				HolderProposalFee:   50000,
+			},
+			&actions.VotingSystemField{
+				Name:                "Absolute 75",
+				VoteType:            "A",
+				ThresholdPercentage: 75,
+				HolderProposalFee:   25000,
+			},
 		},
 		AdministrationProposal: issuerProposal,
 		HolderProposal:         holderProposal,

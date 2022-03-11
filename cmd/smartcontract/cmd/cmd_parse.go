@@ -13,7 +13,7 @@ import (
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -169,69 +169,69 @@ func parseScript(c *cobra.Command, script []byte) error {
 	}
 
 	switch m := message.(type) {
-	case *actions.AssetDefinition:
-		if len(m.AssetPayload) == 0 {
-			fmt.Printf("Empty asset payload!\n")
+	case *actions.InstrumentDefinition:
+		if len(m.InstrumentPayload) == 0 {
+			fmt.Printf("Empty instrument payload!\n")
 			return nil
 		}
-		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(m.InstrumentType), m.InstrumentPayload)
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s", err)
 		} else {
-			if err := asset.Validate(); err != nil {
-				fmt.Printf("Asset is invalid : %s\n", err)
+			if err := instrument.Validate(); err != nil {
+				fmt.Printf("Instrument is invalid : %s\n", err)
 			} else {
-				fmt.Printf("Asset is valid\n")
+				fmt.Printf("Instrument is valid\n")
 			}
-			dumpJSON(asset)
+			dumpJSON(instrument)
 		}
-	case *actions.AssetCreation:
-		if len(m.AssetPayload) == 0 {
-			fmt.Printf("Empty asset payload!\n")
+	case *actions.InstrumentCreation:
+		if len(m.InstrumentPayload) == 0 {
+			fmt.Printf("Empty instrument payload!\n")
 			return nil
 		}
-		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(m.InstrumentType), m.InstrumentPayload)
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s\n", err)
 		} else {
-			if err := asset.Validate(); err != nil {
-				fmt.Printf("Asset is invalid : %s\n", err)
+			if err := instrument.Validate(); err != nil {
+				fmt.Printf("Instrument is invalid : %s\n", err)
 			}
-			dumpJSON(asset)
+			dumpJSON(instrument)
 		}
 
-		hash, err := bitcoin.NewHash20(m.AssetCode)
+		hash, err := bitcoin.NewHash20(m.InstrumentCode)
 		if err != nil {
 			fmt.Printf("Invalid hash : %s\n", err)
 			return nil
 		}
-		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType, *hash))
+		fmt.Printf("Instrument ID : %s\n", protocol.InstrumentID(m.InstrumentType, *hash))
 	case *actions.Transfer:
-		for i, a := range m.Assets {
-			if a.AssetType == protocol.BSVAssetID {
-				fmt.Printf("Asset ID %d : %s\n", i, protocol.BSVAssetID)
+		for i, a := range m.Instruments {
+			if a.InstrumentType == protocol.BSVInstrumentID {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.BSVInstrumentID)
 				continue
 			}
 
-			hash, err := bitcoin.NewHash20(a.AssetCode)
+			hash, err := bitcoin.NewHash20(a.InstrumentCode)
 			if err != nil {
-				fmt.Printf("Asset code %d is invalid : %s\n", i, err)
+				fmt.Printf("Instrument code %d is invalid : %s\n", i, err)
 			} else {
-				fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.InstrumentID(a.InstrumentType, *hash))
 			}
 		}
 	case *actions.Settlement:
-		for i, a := range m.Assets {
-			if a.AssetType == protocol.BSVAssetID {
-				fmt.Printf("Asset ID %d : %s\n", i, protocol.BSVAssetID)
+		for i, a := range m.Instruments {
+			if a.InstrumentType == protocol.BSVInstrumentID {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.BSVInstrumentID)
 				continue
 			}
 
-			hash, err := bitcoin.NewHash20(a.AssetCode)
+			hash, err := bitcoin.NewHash20(a.InstrumentCode)
 			if err != nil {
-				fmt.Printf("Asset code %d is invalid : %s\n", i, err)
+				fmt.Printf("Instrument code %d is invalid : %s\n", i, err)
 			} else {
-				fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.InstrumentID(a.InstrumentType, *hash))
 			}
 		}
 	case *actions.Message:

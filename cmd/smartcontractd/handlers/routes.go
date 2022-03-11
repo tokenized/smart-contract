@@ -51,13 +51,18 @@ func API(
 	app.Handle("SEE", actions.CodeBodyOfAgreementAmendment, agreement.AmendmentRequest)
 	app.Handle("SEE", actions.CodeBodyOfAgreementFormation, agreement.FormationResponse)
 
-	// Register asset based events.
-	a := Asset{
+	// Register instrument based events.
+	a := Instrument{
 		MasterDB:        masterDB,
 		Config:          config,
 		HoldingsChannel: holdingsChannel,
 	}
 
+	app.Handle("SEE", actions.CodeInstrumentDefinition, a.DefinitionRequest)
+	app.Handle("SEE", actions.CodeInstrumentModification, a.ModificationRequest)
+	app.Handle("SEE", actions.CodeInstrumentCreation, a.CreationResponse)
+
+	// Deprecated backwards compatibility
 	app.Handle("SEE", actions.CodeAssetDefinition, a.DefinitionRequest)
 	app.Handle("SEE", actions.CodeAssetModification, a.ModificationRequest)
 	app.Handle("SEE", actions.CodeAssetCreation, a.CreationResponse)
