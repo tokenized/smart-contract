@@ -11,7 +11,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/config v0.1.0
 	github.com/tokenized/pkg v0.4.0
-	github.com/tokenized/specification v1.1.0
+	github.com/tokenized/specification v1.1.1
 	github.com/tokenized/spynode v0.2.0
 	go.opencensus.io v0.22.2
 )
