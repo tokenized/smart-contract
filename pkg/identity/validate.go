@@ -45,7 +45,7 @@ func ValidateAdminIdentityCertificate(ctx context.Context,
 		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if signature.Verify(sigHash, oraclePublicKey) {
+	if signature.Verify(*sigHash, oraclePublicKey) {
 		return nil // valid approval signature
 	}
 
@@ -55,7 +55,7 @@ func ValidateAdminIdentityCertificate(ctx context.Context,
 		return errors.Wrap(err, "generate signature hash")
 	}
 
-	if signature.Verify(sigHash, oraclePublicKey) {
+	if signature.Verify(*sigHash, oraclePublicKey) {
 		// Signature is valid, but it is confirming not approved.
 		return ErrNotApproved
 	}
@@ -83,7 +83,7 @@ func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHa
 		return errors.Wrap(err, "generate signature")
 	}
 
-	if !data.Signature.Verify(sigHash, o.PublicKey) {
+	if !data.Signature.Verify(*sigHash, o.PublicKey) {
 		return errors.Wrap(ErrInvalidSignature, "validate signature")
 	}
 
@@ -92,7 +92,7 @@ func (o *HTTPClient) ValidateEntityPublicKey(ctx context.Context, blocks BlockHa
 
 // ValidateReceive checks the validity of an identity oracle signature for a receive.
 func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks BlockHashes,
-	contract, asset string, receiver *actions.AssetReceiverField) error {
+	contract, instrument string, receiver *actions.InstrumentReceiverField) error {
 
 	if receiver.OracleSigAlgorithm != 1 {
 		return errors.New("Unsupported signature algorithm")
@@ -104,9 +104,9 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 	}
 	contractRawAddress := bitcoin.NewRawAddressFromAddress(contractAddress)
 
-	_, assetCode, err := protocol.DecodeAssetID(asset)
+	_, instrumentCode, err := protocol.DecodeInstrumentID(instrument)
 	if err != nil {
-		return errors.Wrap(err, "decode asset id")
+		return errors.Wrap(err, "decode instrument id")
 	}
 
 	// Get block hash for tip - 4
@@ -126,24 +126,24 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 	}
 
 	// Check for approved signature
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, instrumentCode.Bytes(),
 		receiveAddress, *blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		return nil
 	}
 
 	// Check for not approved signature
-	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
+	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, instrumentCode.Bytes(),
 		receiveAddress, *blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}
@@ -154,7 +154,7 @@ func ValidateReceive(ctx context.Context, publicKey bitcoin.PublicKey, blocks Bl
 
 // ValidateReceiveHash checks the validity of an identity oracle signature for a receive.
 func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
-	blockHash bitcoin.Hash32, contract, asset string, receiver *actions.AssetReceiverField) error {
+	blockHash bitcoin.Hash32, contract, instrument string, receiver *actions.InstrumentReceiverField) error {
 
 	if receiver.OracleSigAlgorithm != 1 {
 		return errors.New("Unsupported signature algorithm")
@@ -166,9 +166,9 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 	}
 	contractRawAddress := bitcoin.NewRawAddressFromAddress(contractAddress)
 
-	_, assetCode, err := protocol.DecodeAssetID(asset)
+	_, instrumentCode, err := protocol.DecodeInstrumentID(instrument)
 	if err != nil {
-		return errors.Wrap(err, "decode asset id")
+		return errors.Wrap(err, "decode instrument id")
 	}
 
 	receiveAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
@@ -182,24 +182,24 @@ func ValidateReceiveHash(ctx context.Context, publicKey bitcoin.PublicKey,
 	}
 
 	// Check for approved signature
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractRawAddress, instrumentCode.Bytes(),
 		receiveAddress, blockHash, receiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		return nil
 	}
 
 	// Check for not approved signature
-	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, assetCode.Bytes(),
+	sigHash, err = protocol.TransferOracleSigHash(ctx, contractRawAddress, instrumentCode.Bytes(),
 		receiveAddress, blockHash, receiver.OracleSigExpiry, 0)
 	if err != nil {
 		return errors.Wrap(err, "signature hash")
 	}
 
-	if signature.Verify(sigHash, publicKey) {
+	if signature.Verify(*sigHash, publicKey) {
 		// Signature is valid, but it is confirming the receive was not approved.
 		return ErrNotApproved
 	}

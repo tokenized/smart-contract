@@ -41,7 +41,7 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *client.Tx) {
 
 	for _, output := range tx.Tx.TxOut {
 		// Check for C2 for identity oracle, authority oracle, or operator
-		action, err := protocol.Deserialize(output.PkScript, ch.isTest)
+		action, err := protocol.Deserialize(output.LockingScript, ch.isTest)
 		if err != nil {
 			continue // not a Tokenized action
 		}
@@ -50,7 +50,7 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *client.Tx) {
 			continue // not a contract formation
 		}
 
-		caOut, err := bitcoin.RawAddressFromLockingScript(tx.Tx.TxOut[0].PkScript)
+		caOut, err := bitcoin.RawAddressFromLockingScript(tx.Tx.TxOut[0].LockingScript)
 		if err != nil {
 			return // not a contract address
 		}
@@ -63,7 +63,7 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *client.Tx) {
 			return
 		}
 
-		caIn, err := bitcoin.RawAddressFromLockingScript(tx.Outputs[0].PkScript)
+		caIn, err := bitcoin.RawAddressFromLockingScript(tx.Outputs[0].LockingScript)
 		if err != nil {
 			logger.Error(ctx, "Contract formation with invalid input address : %s", err)
 			return
@@ -79,7 +79,7 @@ func (ch *ContractsHandler) HandleTx(ctx context.Context, tx *client.Tx) {
 		logger.Verbose(ctx, "Processing contract formation : %s",
 			bitcoin.NewAddressFromRawAddress(caIn, ch.net).String())
 
-		if err := ch.processor.SaveContractFormation(ctx, caIn, output.PkScript); err != nil {
+		if err := ch.processor.SaveContractFormation(ctx, caIn, output.LockingScript); err != nil {
 			logger.Error(ctx, "Failed to process contract formation : %s", err)
 			return
 		}

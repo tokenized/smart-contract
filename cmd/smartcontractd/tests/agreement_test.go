@@ -200,7 +200,7 @@ func wrongAgreementType(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -412,7 +412,7 @@ func agreementMissingDefinition(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -523,7 +523,7 @@ func agreementUnreferencedDefinition(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}

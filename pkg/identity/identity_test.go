@@ -7,7 +7,7 @@ import (
 	"github.com/tokenized/pkg/bitcoin"
 
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
 
@@ -96,15 +96,15 @@ func TestApproveReceive(t *testing.T) {
 
 		contractAddress, err := contractKey.RawAddress()
 		contract := bitcoin.NewAddressFromRawAddress(contractAddress, bitcoin.MainNet).String()
-		assetCode := protocol.AssetCodeFromContract(contractAddress, 0)
-		asset := protocol.AssetID(assets.CodeCurrency, assetCode)
+		instrumentCode := protocol.InstrumentCodeFromContract(contractAddress, 0)
+		instrument := protocol.InstrumentID(instruments.CodeCurrency, instrumentCode)
 
-		receiver, blockHash, err := or.ApproveReceive(ctx, contract, asset, 1, 3, xpubs, 0, 1)
+		receiver, blockHash, err := or.ApproveReceive(ctx, contract, instrument, 1, 3, xpubs, 0, 1)
 		if err != nil {
 			t.Fatalf("Failed to approve receive : %s", err)
 		}
 
-		if err := ValidateReceiveHash(ctx, or.GetPublicKey(), blockHash, contract, asset, receiver); err != nil {
+		if err := ValidateReceiveHash(ctx, or.GetPublicKey(), blockHash, contract, instrument, receiver); err != nil {
 			t.Fatalf("Failed to validate receive : %s", err)
 		}
 	}

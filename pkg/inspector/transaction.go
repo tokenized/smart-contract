@@ -24,8 +24,10 @@ var (
 		actions.CodeContractAmendment:        true,
 		actions.CodeBodyOfAgreementOffer:     true,
 		actions.CodeBodyOfAgreementAmendment: true,
-		actions.CodeAssetDefinition:          true,
-		actions.CodeAssetModification:        true,
+		actions.CodeInstrumentDefinition:     true,
+		actions.CodeInstrumentModification:   true,
+		actions.CodeAssetDefinition:          true, // Deprecated backwards compatibility
+		actions.CodeAssetModification:        true, // Deprecated backwards compatibility
 		actions.CodeTransfer:                 true,
 		actions.CodeProposal:                 true,
 		actions.CodeBallotCast:               true,
@@ -37,6 +39,7 @@ var (
 	outgoingMessageTypes = map[string]bool{
 		actions.CodeContractFormation:        true,
 		actions.CodeBodyOfAgreementFormation: true,
+		actions.CodeInstrumentCreation:       true, // Deprecated backwards compatibility
 		actions.CodeAssetCreation:            true,
 		actions.CodeSettlement:               true,
 		actions.CodeVote:                     true,
@@ -72,7 +75,7 @@ func (itx *Transaction) String(net bitcoin.Network) string {
 	for i, input := range itx.MsgTx.TxIn {
 		result += fmt.Sprintf("    Outpoint: %d - %s\n", input.PreviousOutPoint.Index,
 			input.PreviousOutPoint.Hash.String())
-		result += fmt.Sprintf("    Script: %x\n", input.SignatureScript)
+		result += fmt.Sprintf("    Script: %x\n", input.UnlockingScript)
 		result += fmt.Sprintf("    Sequence: %x\n", input.Sequence)
 
 		if !itx.Inputs[i].Address.IsEmpty() {
@@ -84,7 +87,7 @@ func (itx *Transaction) String(net bitcoin.Network) string {
 	result += "  Outputs:\n\n"
 	for i, output := range itx.MsgTx.TxOut {
 		result += fmt.Sprintf("    Value: %.08f\n", float32(output.Value)/100000000.0)
-		result += fmt.Sprintf("    Script: %x\n", output.PkScript)
+		result += fmt.Sprintf("    Script: %x\n", output.LockingScript)
 		if !itx.Outputs[i].Address.IsEmpty() {
 			result += fmt.Sprintf("    Address: %s\n",
 				bitcoin.NewAddressFromRawAddress(itx.Outputs[i].Address, net).String())
@@ -104,7 +107,7 @@ func (itx *Transaction) Setup(ctx context.Context, isTest bool) error {
 	// Find and deserialize protocol message
 	var err error
 	for i, txOut := range itx.MsgTx.TxOut {
-		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
+		itx.MsgProto, err = protocol.Deserialize(txOut.LockingScript, isTest)
 		if err == nil {
 			if err := itx.MsgProto.Validate(); err != nil {
 				itx.RejectCode = actions.RejectionsMsgMalformed
@@ -241,7 +244,7 @@ func (itx *Transaction) ParseOutputs(ctx context.Context, node NodeInterface) er
 func buildOutput(hash *bitcoin.Hash32, tx *wire.MsgTx, n int) (*Output, error) {
 	txout := tx.TxOut[n]
 
-	address, err := bitcoin.RawAddressFromLockingScript(txout.PkScript)
+	address, err := bitcoin.RawAddressFromLockingScript(txout.LockingScript)
 	if err != nil && err != bitcoin.ErrUnknownScriptTemplate {
 		return nil, err
 	}
@@ -355,7 +358,7 @@ func buildInput(utxo bitcoin.UTXO) (*Input, error) {
 
 // buildInputFromOutput builds an input from the output it spends.
 func buildInputFromOutput(input *wire.TxIn, output *wire.TxOut) (*Input, error) {
-	address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+	address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +370,7 @@ func buildInputFromOutput(input *wire.TxIn, output *wire.TxOut) (*Input, error) 
 			Hash:          input.PreviousOutPoint.Hash,
 			Index:         input.PreviousOutPoint.Index,
 			Value:         output.Value,
-			LockingScript: output.PkScript,
+			LockingScript: output.LockingScript,
 		},
 	}
 
@@ -379,7 +382,7 @@ func buildInputFromOutput(input *wire.TxIn, output *wire.TxOut) (*Input, error) 
 func (itx *Transaction) GetPublicKeyForInput(index int) (bitcoin.PublicKey, error) {
 	// P2PKH script contains public key in unlock script
 	if itx.Inputs[index].Address.Type() == bitcoin.ScriptTypePKH {
-		pk, err := bitcoin.PublicKeyFromUnlockingScript(itx.MsgTx.TxIn[index].SignatureScript)
+		pk, err := bitcoin.PublicKeyFromUnlockingScript(itx.MsgTx.TxIn[index].UnlockingScript)
 		if err != nil {
 			return bitcoin.PublicKey{}, errors.Wrap(err, "unlock script")
 		}
@@ -579,7 +582,7 @@ func (itx *Transaction) PKHs() ([]bitcoin.Hash20, error) {
 	result := make([]bitcoin.Hash20, 0)
 
 	for _, input := range itx.MsgTx.TxIn {
-		pubkeys, err := bitcoin.PubKeysFromSigScript(input.SignatureScript)
+		pubkeys, err := bitcoin.PubKeysFromSigScript(input.UnlockingScript)
 		if err != nil {
 			return nil, err
 		}
@@ -593,7 +596,7 @@ func (itx *Transaction) PKHs() ([]bitcoin.Hash20, error) {
 	}
 
 	for _, output := range itx.MsgTx.TxOut {
-		pkhs, err := bitcoin.PKHsFromLockingScript(output.PkScript)
+		pkhs, err := bitcoin.PKHsFromLockingScript(output.LockingScript)
 		if err != nil {
 			return nil, err
 		}
@@ -728,7 +731,7 @@ func (itx *Transaction) Read(r io.Reader, isTest bool) error {
 	// Protocol Message
 	var err error
 	for i, txOut := range itx.MsgTx.TxOut {
-		itx.MsgProto, err = protocol.Deserialize(txOut.PkScript, isTest)
+		itx.MsgProto, err = protocol.Deserialize(txOut.LockingScript, isTest)
 		if err == nil {
 			itx.MsgProtoIndex = uint32(i)
 			break // Tokenized output found

@@ -23,8 +23,8 @@ var cmdConvert = &cobra.Command{
 					fmt.Printf("Invalid hash : %s\n", err)
 					return nil
 				}
-				assetID := protocol.AssetID(args[0], *hash)
-				fmt.Printf("Asset ID : %s\n", assetID)
+				instrumentID := protocol.InstrumentID(args[0], *hash)
+				fmt.Printf("Instrument ID : %s\n", instrumentID)
 				return nil
 			}
 
@@ -34,9 +34,9 @@ var cmdConvert = &cobra.Command{
 			return errors.New("Incorrect argument count")
 		}
 
-		assetType, assetCode, err := protocol.DecodeAssetID(args[0])
+		instrumentType, instrumentCode, err := protocol.DecodeInstrumentID(args[0])
 		if err == nil {
-			fmt.Printf("Asset %s : %x\n", assetType, assetCode.Bytes())
+			fmt.Printf("Instrument %s : %x\n", instrumentType, instrumentCode.Bytes())
 			return nil
 		}
 
@@ -53,9 +53,32 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Reverse hash : %x\n", reverse32(b))
 				return nil
 			} else if len(b) == 20 {
+
+				ra, err := bitcoin.NewRawAddressPKH(b)
+				if err != nil {
+					fmt.Printf("Failed to create raw address : %s\n", err)
+				}
+				fmt.Printf("PKH Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
+
 				// Reverse hash
 				fmt.Printf("Reverse hash : %x\n", reverse20(b))
+
+				ra, err = bitcoin.NewRawAddressPKH(reverse20(b))
+				if err != nil {
+					fmt.Printf("Failed to create raw address : %s\n", err)
+				}
+				fmt.Printf("Reverse PKH Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
 				return nil
+			}
+
+			ra, err := bitcoin.DecodeRawAddress(b)
+			if err == nil {
+				fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network))
+
+				script, err := ra.LockingScript()
+				if err == nil {
+					fmt.Printf("Locking Script : %s\n", script)
+				}
 			}
 
 			xkey, err := bitcoin.ExtendedKeyFromBytes(b)
@@ -113,7 +136,12 @@ var cmdConvert = &cobra.Command{
 				return nil
 			}
 			ra, _ := publicKey.RawAddress()
-			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
+			fmt.Printf("Address for public key : %s\n",
+				bitcoin.NewAddressFromRawAddress(ra, network))
+
+			pkh, _ := bitcoin.NewHash20(bitcoin.Hash160(publicKey.Bytes()))
+			fmt.Printf("Public Key Hash : %s\n", pkh)
+			fmt.Printf("Reverse Hash : %x\n", (*pkh)[:])
 			return nil
 		}
 
@@ -137,6 +165,11 @@ var cmdConvert = &cobra.Command{
 
 			if pkh, err := ra.GetPublicKeyHash(); err == nil {
 				fmt.Printf("Public Key Hash : %s\n", pkh.String())
+			}
+
+			script, err := ra.LockingScript()
+			if err == nil {
+				fmt.Printf("Locking Script : %s\n", script)
 			}
 
 			return nil

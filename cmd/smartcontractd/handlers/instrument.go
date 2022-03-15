@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -17,7 +17,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -25,35 +25,35 @@ import (
 	"go.opencensus.io/trace"
 )
 
-type Asset struct {
+type Instrument struct {
 	MasterDB        *db.DB
 	Config          *node.Config
 	HoldingsChannel *holdings.CacheChannel
 }
 
-// DefinitionRequest handles an incoming Asset Definition and prepares a Creation response
-func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
+// DefinitionRequest handles an incoming Instrument Definition and prepares a Creation response
+func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
+	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Definition")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.AssetDefinition)
+	msg, ok := itx.MsgProto.(*actions.InstrumentDefinition)
 	if !ok {
-		return errors.New("Could not assert as *actions.AssetDefinition")
+		return errors.New("Could not assert as *actions.InstrumentDefinition")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Asset definition invalid : %d %s", itx.RejectCode, itx.RejectText)
+		node.LogWarn(ctx, "Instrument definition invalid : %d %s", itx.RejectCode, itx.RejectText)
 		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
 	// Locate Contract
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
-		return errors.Wrap(err, "Failed to retrieve contract")
+		return errors.Wrap(err, "retrieve contract")
 	}
 
 	if !ct.MovedTo.IsEmpty() {
@@ -72,76 +72,76 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if _, err = permissions.PermissionsFromBytes(msg.AssetPermissions, len(ct.VotingSystems)); err != nil {
-		node.LogWarn(ctx, "Invalid asset permissions : %s", err)
+	if _, err = permissions.PermissionsFromBytes(msg.InstrumentPermissions,
+		len(ct.VotingSystems)); err != nil {
+		node.LogWarn(ctx, "Invalid instrument permissions : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
 	// Verify administration is sender of tx.
 	if !itx.Inputs[0].Address.Equal(ct.AdminAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		node.LogWarn(ctx, "Only administration can create assets: %s", address)
+		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
+		node.LogWarn(ctx, "Only administration can create instruments: %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotAdministration)
 	}
 
-	// Generate Asset ID
-	assetCode := protocol.AssetCodeFromContract(rk.Address, uint64(len(ct.AssetCodes)))
+	// Generate Instrument ID
+	instrumentCode := protocol.InstrumentCodeFromContract(rk.Address, uint64(len(ct.InstrumentCodes)))
 
-	// Locate Asset
-	_, err = asset.Retrieve(ctx, a.MasterDB, rk.Address, &assetCode)
-	if err != asset.ErrNotFound {
+	// Locate Instrument
+	_, err = instrument.Retrieve(ctx, a.MasterDB, rk.Address, &instrumentCode)
+	if err != instrument.ErrNotFound {
 		if err == nil {
-			node.LogWarn(ctx, "Asset already exists : %s", assetCode.String())
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetCodeExists)
+			node.LogWarn(ctx, "Instrument already exists : %s", instrumentCode.String())
+			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentCodeExists)
 		} else {
-			return errors.Wrap(err, "Failed to retrieve asset")
+			return errors.Wrap(err, "retrieve instrument")
 		}
 	}
 
-	// Allowed to have more assets
-	if !contract.CanHaveMoreAssets(ctx, ct) {
+	// Allowed to have more instruments
+	if !contract.CanHaveMoreInstruments(ctx, ct) {
 		address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
-		node.LogWarn(ctx, "Number of assets exceeds contract Qty: %s %s", address.String(),
-			assetCode.String())
+		node.LogWarn(ctx, "Number of instruments exceeds contract Qty: %s %s", address.String(),
+			instrumentCode.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFixedQuantity)
 	}
 
 	// Validate payload
-	assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+	instrumentPayload, err := instruments.Deserialize([]byte(msg.InstrumentType), msg.InstrumentPayload)
 	if err != nil {
-		node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+		node.LogWarn(ctx, "Failed to parse instrument payload : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	if err := assetPayload.Validate(); err != nil {
-		node.LogWarn(ctx, "Asset %s payload is invalid : %s", msg.AssetType, err)
+	if err := instrumentPayload.Validate(); err != nil {
+		node.LogWarn(ctx, "Instrument %s payload is invalid : %s", msg.InstrumentType, err)
 		return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed, err.Error())
 	}
 
-	// Only one Owner/Administrator Membership asset allowed
-	if msg.AssetType == assets.CodeMembership &&
-		(!ct.AdminMemberAsset.IsZero() || !ct.OwnerMemberAsset.IsZero()) {
-		membership, ok := assetPayload.(*assets.Membership)
+	// Only one Owner/Administrator Membership instrument allowed
+	if msg.InstrumentType == instruments.CodeMembership &&
+		(!ct.AdminMemberInstrument.IsZero() || !ct.OwnerMemberInstrument.IsZero()) {
+		membership, ok := instrumentPayload.(*instruments.Membership)
 		if !ok {
 			node.LogWarn(ctx, "Membership payload is wrong type")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
-		if membership.MembershipClass == "Owner" && !ct.OwnerMemberAsset.IsZero() {
-			node.LogWarn(ctx, "Only one Owner Membership asset allowed")
+		if membership.MembershipClass == "Owner" && !ct.OwnerMemberInstrument.IsZero() {
+			node.LogWarn(ctx, "Only one Owner Membership instrument allowed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
 		}
-		if membership.MembershipClass == "Administrator" && !ct.AdminMemberAsset.IsZero() {
-			node.LogWarn(ctx, "Only one Administrator Membership asset allowed")
+		if membership.MembershipClass == "Administrator" && !ct.AdminMemberInstrument.IsZero() {
+			node.LogWarn(ctx, "Only one Administrator Membership instrument allowed")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractNotPermitted)
 		}
 	}
 
 	address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
-	node.Log(ctx, "Accepting asset creation request : %s %s", address.String(), assetCode.String())
+	node.Log(ctx, "Accepting instrument creation request : %s %s", address.String(), instrumentCode.String())
 
-	// Asset Creation <- Asset Definition
-	ac := actions.AssetCreation{}
+	// Instrument Creation <- Instrument Definition
+	ac := actions.InstrumentCreation{}
 
 	err = node.Convert(ctx, &msg, &ac)
 	if err != nil {
@@ -149,8 +149,8 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	ac.Timestamp = v.Now.Nano()
-	ac.AssetCode = assetCode.Bytes()
-	ac.AssetIndex = uint64(len(ct.AssetCodes))
+	ac.InstrumentCode = instrumentCode.Bytes()
+	ac.InstrumentIndex = uint64(len(ct.InstrumentCodes))
 
 	// Build outputs
 	// 1 - Contract Address
@@ -168,9 +168,9 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 		return err
 	}
 
-	// Add the asset code now rather than when the asset creation is processed in case another asset
+	// Add the instrument code now rather than when the instrument creation is processed in case another instrument
 	//   definition is received before then.
-	if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, &assetCode, a.Config.IsTest,
+	if err := contract.AddInstrumentCode(ctx, a.MasterDB, rk.Address, &instrumentCode, a.Config.IsTest,
 		v.Now); err != nil {
 		return err
 	}
@@ -178,26 +178,26 @@ func (a *Asset) DefinitionRequest(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-// ModificationRequest handles an incoming Asset Modification and prepares a Creation response
-func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
+// ModificationRequest handles an incoming Instrument Modification and prepares a Creation response
+func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
-	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Modification")
+	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Modification")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.AssetModification)
+	msg, ok := itx.MsgProto.(*actions.InstrumentModification)
 	if !ok {
-		return errors.New("Could not assert as *actions.AssetModification")
+		return errors.New("Could not assert as *actions.InstrumentModification")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Validate all fields have valid values.
 	if itx.RejectCode != 0 {
-		node.LogWarn(ctx, "Asset modification invalid : %d %s", itx.RejectCode, itx.RejectText)
+		node.LogWarn(ctx, "Instrument modification invalid : %d %s", itx.RejectCode, itx.RejectText)
 		return node.RespondRejectText(ctx, w, itx, rk, itx.RejectCode, itx.RejectText)
 	}
 
-	// Locate Asset
+	// Locate Instrument
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
@@ -215,26 +215,26 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
-	assetCode, err := bitcoin.NewHash20(msg.AssetCode)
+	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
 	if err != nil {
-		node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
+		node.LogVerbose(ctx, "Invalid instrument code : 0x%x", msg.InstrumentCode)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
-	as, err := asset.Retrieve(ctx, a.MasterDB, rk.Address, assetCode)
+	as, err := instrument.Retrieve(ctx, a.MasterDB, rk.Address, instrumentCode)
 	if err != nil {
-		return errors.Wrap(err, "Failed to retrieve asset")
+		return errors.Wrap(err, "Failed to retrieve instrument")
 	}
 
-	// Asset could not be found
+	// Instrument could not be found
 	if as == nil {
-		node.LogVerbose(ctx, "Asset ID not found: %s", assetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetNotFound)
+		node.LogVerbose(ctx, "Instrument ID not found: %s", instrumentCode)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 	}
 
 	// Revision mismatch
-	if as.Revision != msg.AssetRevision {
-		node.LogVerbose(ctx, "Asset Revision does not match current: %s", assetCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsAssetRevision)
+	if as.Revision != msg.InstrumentRevision {
+		node.LogVerbose(ctx, "Instrument Revision does not match current: %s", instrumentCode)
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentRevision)
 	}
 
 	// Check proposal if there was one
@@ -294,8 +294,8 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		if vt.AssetCode.IsZero() || !bytes.Equal(msg.AssetCode, vt.AssetCode.Bytes()) {
-			node.LogWarn(ctx, "Vote was not for this asset code")
+		if vt.InstrumentCode.IsZero() || !bytes.Equal(msg.InstrumentCode, vt.InstrumentCode.Bytes()) {
+			node.LogWarn(ctx, "Vote was not for this instrument code")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
@@ -317,23 +317,23 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 		votingSystem = vt.VoteSystem
 	}
 
-	// Asset Creation <- Asset Modification
-	ac := actions.AssetCreation{}
+	// Instrument Creation <- Instrument Modification
+	ac := actions.InstrumentCreation{}
 
 	err = node.Convert(ctx, as, &ac)
 	if err != nil {
-		return errors.Wrap(err, "Failed to convert state asset to asset creation")
+		return errors.Wrap(err, "Failed to convert state instrument to instrument creation")
 	}
 
-	ac.AssetRevision = as.Revision + 1
+	ac.InstrumentRevision = as.Revision + 1
 	ac.Timestamp = v.Now.Nano()
-	ac.AssetCode = msg.AssetCode // Asset code not in state data
+	ac.InstrumentCode = msg.InstrumentCode // Instrument code not in state data
 
-	node.Log(ctx, "Amending asset : %s", assetCode)
+	node.Log(ctx, "Amending instrument : %s", instrumentCode)
 
-	if err := applyAssetAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
+	if err := applyInstrumentAmendments(&ac, ct.VotingSystems, msg.Amendments, proposed,
 		proposalType, votingSystem); err != nil {
-		node.LogWarn(ctx, "Asset amendments failed : %s", err)
+		node.LogWarn(ctx, "Instrument amendments failed : %s", err)
 		code, ok := node.ErrorCode(err)
 		if ok {
 			return node.RespondReject(ctx, w, itx, rk, code)
@@ -348,7 +348,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 
 		// Check administration balance for token quantity reductions. Administration has to hold
 		//   any tokens being "burned".
-		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode, ct.AdminAddress, v.Now)
+		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, instrumentCode, ct.AdminAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
@@ -390,7 +390,7 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if updateHoldings {
-		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, instrumentCode, h)
 		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
@@ -400,24 +400,24 @@ func (a *Asset) ModificationRequest(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-// CreationResponse handles an outgoing Asset Creation and writes it to the state
-func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
+// CreationResponse handles an outgoing Instrument Creation and writes it to the state
+func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
 
-	ctx, span := trace.StartSpan(ctx, "handlers.Asset.Definition")
+	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Definition")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.AssetCreation)
+	msg, ok := itx.MsgProto.(*actions.InstrumentCreation)
 	if !ok {
-		return errors.New("Could not assert as *actions.AssetCreation")
+		return errors.New("Could not assert as *actions.InstrumentCreation")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	// Locate Asset
+	// Locate Instrument
 	if !itx.Inputs[0].Address.Equal(rk.Address) {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		return fmt.Errorf("Asset Creation not from contract : %s", address)
+		return fmt.Errorf("Instrument Creation not from contract : %s", address)
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
@@ -431,14 +431,14 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		return fmt.Errorf("Contract address changed : %s", address.String())
 	}
 
-	assetCode, err := bitcoin.NewHash20(msg.AssetCode)
+	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
 	if err != nil {
-		node.LogVerbose(ctx, "Invalid asset code : 0x%x", msg.AssetCode)
-		return errors.Wrap(err, "invalid asset code")
+		node.LogVerbose(ctx, "Invalid instrument code : 0x%x", msg.InstrumentCode)
+		return errors.Wrap(err, "invalid instrument code")
 	}
-	as, err := asset.Retrieve(ctx, a.MasterDB, rk.Address, assetCode)
-	if err != nil && err != asset.ErrNotFound {
-		return errors.Wrap(err, "Failed to retrieve asset")
+	as, err := instrument.Retrieve(ctx, a.MasterDB, rk.Address, instrumentCode)
+	if err != nil && err != instrument.ErrNotFound {
+		return errors.Wrap(err, "Failed to retrieve instrument")
 	}
 
 	// Get request tx
@@ -447,10 +447,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
 	var vt *state.Vote
-	var modification *actions.AssetModification
+	var modification *actions.InstrumentModification
 	if request != nil {
 		var ok bool
-		modification, ok = request.MsgProto.(*actions.AssetModification)
+		modification, ok = request.MsgProto.(*actions.InstrumentModification)
 
 		if ok && len(modification.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(modification.RefTxID)
@@ -484,10 +484,10 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	// Create or update Asset
+	// Create or update Instrument
 	if as == nil {
 		// Prepare creation object
-		na := asset.NewAsset{}
+		na := instrument.NewInstrument{}
 
 		if err = node.Convert(ctx, &msg, &na); err != nil {
 			return err
@@ -495,20 +495,20 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 		na.AdminAddress = ct.AdminAddress
 
-		// Add asset code if it hasn't been added yet. This will not add duplicates. This is
+		// Add instrument code if it hasn't been added yet. This will not add duplicates. This is
 		//   required to handle the recovery case when the request will not be reprocessed.
-		if err := contract.AddAssetCode(ctx, a.MasterDB, rk.Address, assetCode, a.Config.IsTest,
+		if err := contract.AddInstrumentCode(ctx, a.MasterDB, rk.Address, instrumentCode, a.Config.IsTest,
 			v.Now); err != nil {
 			return err
 		}
 
-		if err := asset.Create(ctx, a.MasterDB, rk.Address, assetCode, &na, v.Now); err != nil {
-			return errors.Wrap(err, "Failed to create asset")
+		if err := instrument.Create(ctx, a.MasterDB, rk.Address, instrumentCode, &na, v.Now); err != nil {
+			return errors.Wrap(err, "Failed to create instrument")
 		}
-		node.Log(ctx, "Created asset %d : %s", msg.AssetIndex, assetCode.String())
+		node.Log(ctx, "Created instrument %d : %s", msg.InstrumentIndex, instrumentCode.String())
 
 		// Update administration balance
-		h, err := holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
+		h, err := holdings.GetHolding(ctx, a.MasterDB, rk.Address, instrumentCode,
 			ct.AdminAddress, v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
@@ -517,28 +517,28 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			protocol.NewTimestamp(msg.Timestamp))
 		holdings.FinalizeTx(h, itx.Hash, msg.AuthorizedTokenQty,
 			protocol.NewTimestamp(msg.Timestamp))
-		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
+		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, instrumentCode, h)
 		if err != nil {
 			return errors.Wrap(err, "Failed to save holdings")
 		}
 		a.HoldingsChannel.Add(cacheItem)
 
-		// Update Owner/Administrator Membership asset in contract
-		if msg.AssetType == assets.CodeMembership {
-			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+		// Update Owner/Administrator Membership instrument in contract
+		if msg.InstrumentType == instruments.CodeMembership {
+			instrumentPayload, err := instruments.Deserialize([]byte(msg.InstrumentType), msg.InstrumentPayload)
 			if err != nil {
-				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				node.LogWarn(ctx, "Failed to parse instrument payload : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			membership, ok := assetPayload.(*assets.Membership)
+			membership, ok := instrumentPayload.(*instruments.Membership)
 			if !ok {
 				node.LogWarn(ctx, "Membership payload is wrong type")
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 			if membership.MembershipClass == "Owner" {
 				updateContract := &contract.UpdateContract{
-					OwnerMemberAsset: assetCode,
+					OwnerMemberInstrument: instrumentCode,
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -547,7 +547,7 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			}
 			if membership.MembershipClass == "Administrator" {
 				updateContract := &contract.UpdateContract{
-					AdminMemberAsset: assetCode,
+					AdminMemberInstrument: instrumentCode,
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -558,50 +558,50 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	} else {
 		// Prepare update object
 		ts := protocol.NewTimestamp(msg.Timestamp)
-		ua := asset.UpdateAsset{
-			Revision:  &msg.AssetRevision,
+		ua := instrument.UpdateInstrument{
+			Revision:  &msg.InstrumentRevision,
 			Timestamp: &ts,
 		}
 
-		if !bytes.Equal(as.AssetPermissions[:], msg.AssetPermissions[:]) {
-			ua.AssetPermissions = &msg.AssetPermissions
-			node.Log(ctx, "Updating asset permissions (%s) : %s", assetCode,
-				*ua.AssetPermissions)
+		if !bytes.Equal(as.InstrumentPermissions[:], msg.InstrumentPermissions[:]) {
+			ua.InstrumentPermissions = &msg.InstrumentPermissions
+			node.Log(ctx, "Updating instrument permissions (%s) : %s", instrumentCode,
+				*ua.InstrumentPermissions)
 		}
 		if as.EnforcementOrdersPermitted != msg.EnforcementOrdersPermitted {
 			ua.EnforcementOrdersPermitted = &msg.EnforcementOrdersPermitted
-			node.Log(ctx, "Updating asset enforcement orders permitted (%s) : %t", assetCode,
+			node.Log(ctx, "Updating instrument enforcement orders permitted (%s) : %t", instrumentCode,
 				*ua.EnforcementOrdersPermitted)
 		}
 		if as.VoteMultiplier != msg.VoteMultiplier {
 			ua.VoteMultiplier = &msg.VoteMultiplier
-			node.Log(ctx, "Updating asset vote multiplier (%s) : %02x", assetCode,
+			node.Log(ctx, "Updating instrument vote multiplier (%s) : %02x", instrumentCode,
 				*ua.VoteMultiplier)
 		}
 		if as.AdministrationProposal != msg.AdministrationProposal {
 			ua.AdministrationProposal = &msg.AdministrationProposal
-			node.Log(ctx, "Updating asset administration proposal (%s) : %t", assetCode,
+			node.Log(ctx, "Updating instrument administration proposal (%s) : %t", instrumentCode,
 				*ua.AdministrationProposal)
 		}
 		if as.HolderProposal != msg.HolderProposal {
 			ua.HolderProposal = &msg.HolderProposal
-			node.Log(ctx, "Updating asset holder proposal (%s) : %t", assetCode,
+			node.Log(ctx, "Updating instrument holder proposal (%s) : %t", instrumentCode,
 				*ua.HolderProposal)
 		}
-		if as.AssetModificationGovernance != msg.AssetModificationGovernance {
-			ua.AssetModificationGovernance = &msg.AssetModificationGovernance
-			node.Log(ctx, "Updating asset modification governance (%s) : %d", assetCode,
-				*ua.AssetModificationGovernance)
+		if as.InstrumentModificationGovernance != msg.InstrumentModificationGovernance {
+			ua.InstrumentModificationGovernance = &msg.InstrumentModificationGovernance
+			node.Log(ctx, "Updating instrument modification governance (%s) : %d", instrumentCode,
+				*ua.InstrumentModificationGovernance)
 		}
 
 		var h *state.Holding
 		updateHoldings := false
 		if as.AuthorizedTokenQty != msg.AuthorizedTokenQty {
 			ua.AuthorizedTokenQty = &msg.AuthorizedTokenQty
-			node.Log(ctx, "Updating asset token quantity %d : %s", *ua.AuthorizedTokenQty,
-				assetCode)
+			node.Log(ctx, "Updating instrument token quantity %d : %s", *ua.AuthorizedTokenQty,
+				instrumentCode)
 
-			h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, assetCode,
+			h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, instrumentCode,
 				ct.AdminAddress, v.Now)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get admin holding")
@@ -609,24 +609,24 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 
 			if msg.AuthorizedTokenQty > as.AuthorizedTokenQty {
 				node.Log(ctx, "Increasing token quantity by %d to %d : %s",
-					msg.AuthorizedTokenQty-as.AuthorizedTokenQty, *ua.AuthorizedTokenQty, assetCode)
+					msg.AuthorizedTokenQty-as.AuthorizedTokenQty, *ua.AuthorizedTokenQty, instrumentCode)
 				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance+(msg.AuthorizedTokenQty-as.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			} else {
 				node.Log(ctx, "Decreasing token quantity by %d to %d : %s",
-					as.AuthorizedTokenQty-msg.AuthorizedTokenQty, *ua.AuthorizedTokenQty, assetCode)
+					as.AuthorizedTokenQty-msg.AuthorizedTokenQty, *ua.AuthorizedTokenQty, instrumentCode)
 				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance-(as.AuthorizedTokenQty-msg.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			}
 			updateHoldings = true
 			if err != nil {
-				node.LogWarn(ctx, "Failed to update administration holding : %s", assetCode)
+				node.LogWarn(ctx, "Failed to update administration holding : %s", instrumentCode)
 				return err
 			}
 		}
-		if !bytes.Equal(as.AssetPayload, msg.AssetPayload) {
-			ua.AssetPayload = &msg.AssetPayload
-			node.Log(ctx, "Updating asset payload (%s) : %s", assetCode, *ua.AssetPayload)
+		if !bytes.Equal(as.InstrumentPayload, msg.InstrumentPayload) {
+			ua.InstrumentPayload = &msg.InstrumentPayload
+			node.Log(ctx, "Updating instrument payload (%s) : %s", instrumentCode, *ua.InstrumentPayload)
 		}
 
 		// Check if trade restrictions are different
@@ -645,17 +645,17 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		if updateHoldings {
-			cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, assetCode, h)
+			cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, instrumentCode, h)
 			if err != nil {
 				return errors.Wrap(err, "Failed to save holdings")
 			}
 			a.HoldingsChannel.Add(cacheItem)
 		}
-		if err := asset.Update(ctx, a.MasterDB, rk.Address, assetCode, &ua, v.Now); err != nil {
-			node.LogWarn(ctx, "Failed to update asset : %s", assetCode)
+		if err := instrument.Update(ctx, a.MasterDB, rk.Address, instrumentCode, &ua, v.Now); err != nil {
+			node.LogWarn(ctx, "Failed to update instrument : %s", instrumentCode)
 			return err
 		}
-		node.Log(ctx, "Updated asset %d : %s", msg.AssetIndex, assetCode)
+		node.Log(ctx, "Updated instrument %d : %s", msg.InstrumentIndex, instrumentCode)
 
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
@@ -666,33 +666,33 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		// Update Owner/Administrator Membership asset in contract
-		if msg.AssetType == assets.CodeMembership {
-			assetPayload, err := assets.Deserialize([]byte(msg.AssetType), msg.AssetPayload)
+		// Update Owner/Administrator Membership instrument in contract
+		if msg.InstrumentType == instruments.CodeMembership {
+			instrumentPayload, err := instruments.Deserialize([]byte(msg.InstrumentType), msg.InstrumentPayload)
 			if err != nil {
-				node.LogWarn(ctx, "Failed to parse asset payload : %s", err)
+				node.LogWarn(ctx, "Failed to parse instrument payload : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			membership, ok := assetPayload.(*assets.Membership)
+			membership, ok := instrumentPayload.(*instruments.Membership)
 			if !ok {
 				node.LogWarn(ctx, "Membership payload is wrong type")
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			if membership.MembershipClass == "Administrator" && !assetCode.Equal(&ct.AdminMemberAsset) {
-				// Set contract AdminMemberAsset
+			if membership.MembershipClass == "Administrator" && !instrumentCode.Equal(&ct.AdminMemberInstrument) {
+				// Set contract AdminMemberInstrument
 				updateContract := &contract.UpdateContract{
-					AdminMemberAsset: assetCode,
+					AdminMemberInstrument: instrumentCode,
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
-			} else if membership.MembershipClass != "Administrator" && assetCode.Equal(&ct.AdminMemberAsset) {
-				// Clear contract AdminMemberAsset
+			} else if membership.MembershipClass != "Administrator" && instrumentCode.Equal(&ct.AdminMemberInstrument) {
+				// Clear contract AdminMemberInstrument
 				updateContract := &contract.UpdateContract{
-					AdminMemberAsset: &bitcoin.Hash20{}, // zero asset code
+					AdminMemberInstrument: &bitcoin.Hash20{}, // zero instrument code
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -700,19 +700,19 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 				}
 			}
 
-			if membership.MembershipClass == "Owner" && !assetCode.Equal(&ct.OwnerMemberAsset) {
-				// Set contract OwnerMemberAsset
+			if membership.MembershipClass == "Owner" && !instrumentCode.Equal(&ct.OwnerMemberInstrument) {
+				// Set contract OwnerMemberInstrument
 				updateContract := &contract.UpdateContract{
-					OwnerMemberAsset: assetCode,
+					OwnerMemberInstrument: instrumentCode,
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
 					return errors.Wrap(err, "updating contract")
 				}
-			} else if membership.MembershipClass != "Owner" && assetCode.Equal(&ct.OwnerMemberAsset) {
-				// Clear contract OwnerMemberAsset
+			} else if membership.MembershipClass != "Owner" && instrumentCode.Equal(&ct.OwnerMemberInstrument) {
+				// Clear contract OwnerMemberInstrument
 				updateContract := &contract.UpdateContract{
-					OwnerMemberAsset: &bitcoin.Hash20{}, // zero asset code
+					OwnerMemberInstrument: &bitcoin.Hash20{}, // zero instrument code
 				}
 				if err := contract.Update(ctx, a.MasterDB, rk.Address, updateContract,
 					a.Config.IsTest, v.Now); err != nil {
@@ -725,15 +725,15 @@ func (a *Asset) CreationResponse(ctx context.Context, w *node.ResponseWriter,
 	return nil
 }
 
-func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.VotingSystemField,
+func applyInstrumentAmendments(ac *actions.InstrumentCreation, votingSystems []*actions.VotingSystemField,
 	amendments []*actions.AmendmentField, proposed bool, proposalType, votingSystem uint32) error {
 
-	perms, err := permissions.PermissionsFromBytes(ac.AssetPermissions, len(votingSystems))
+	perms, err := permissions.PermissionsFromBytes(ac.InstrumentPermissions, len(votingSystems))
 	if err != nil {
-		return fmt.Errorf("Invalid asset permissions : %s", err)
+		return fmt.Errorf("Invalid instrument permissions : %s", err)
 	}
 
-	var assetPayload assets.Asset
+	var instrumentPayload instruments.Instrument
 
 	for i, amendment := range amendments {
 		applied := false
@@ -747,34 +747,34 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 		}
 
 		switch fip[0] {
-		case actions.AssetFieldAssetType:
-			return node.NewError(actions.RejectionsAssetNotPermitted,
-				"Asset type amendments prohibited")
+		case actions.InstrumentFieldInstrumentType:
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
+				"Instrument type amendments prohibited")
 
-		case actions.AssetFieldAssetPermissions:
+		case actions.InstrumentFieldInstrumentPermissions:
 			if _, err := permissions.PermissionsFromBytes(amendment.Data,
 				len(votingSystems)); err != nil {
-				return fmt.Errorf("AssetPermissions amendment value is invalid : %s", err)
+				return fmt.Errorf("InstrumentPermissions amendment value is invalid : %s", err)
 			}
 
-		case actions.AssetFieldAssetPayload:
+		case actions.InstrumentFieldInstrumentPayload:
 			if len(fip) == 1 {
-				return node.NewError(actions.RejectionsAssetNotPermitted,
-					"Amendments on complex fields (AssetPayload) prohibited")
+				return node.NewError(actions.RejectionsInstrumentNotPermitted,
+					"Amendments on complex fields (InstrumentPayload) prohibited")
 			}
 
-			if assetPayload == nil {
+			if instrumentPayload == nil {
 				// Get payload object
-				assetPayload, err = assets.Deserialize([]byte(ac.AssetType), ac.AssetPayload)
+				instrumentPayload, err = instruments.Deserialize([]byte(ac.InstrumentType), ac.InstrumentPayload)
 				if err != nil {
-					return fmt.Errorf("Asset payload deserialize failed : %s %s", ac.AssetType, err)
+					return fmt.Errorf("Instrument payload deserialize failed : %s %s", ac.InstrumentType, err)
 				}
 			}
 
 			payloadPermissions, err := perms.SubPermissions(
-				permissions.FieldIndexPath{actions.AssetFieldAssetPayload}, 0, false)
+				permissions.FieldIndexPath{actions.InstrumentFieldInstrumentPayload}, 0, false)
 
-			fieldPermissions, err = assetPayload.ApplyAmendment(fip[1:], amendment.Operation,
+			fieldPermissions, err = instrumentPayload.ApplyAmendment(fip[1:], amendment.Operation,
 				amendment.Data, payloadPermissions)
 			if err != nil {
 				return errors.Wrapf(err, "apply amendment %d", i)
@@ -783,10 +783,10 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 				return errors.New("Invalid field permissions")
 			}
 
-			switch assetPayload.(type) {
-			case *assets.Membership:
-				if fip[1] == assets.MembershipFieldMembershipClass {
-					return node.NewError(actions.RejectionsAssetNotPermitted,
+			switch instrumentPayload.(type) {
+			case *instruments.Membership:
+				if fip[1] == instruments.MembershipFieldMembershipClass {
+					return node.NewError(actions.RejectionsInstrumentNotPermitted,
 						"Amendments on MembershipClass prohibited")
 				}
 			}
@@ -812,18 +812,18 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 			switch proposalType {
 			case 0: // Administration
 				if !permission.AdministrationProposal {
-					return node.NewError(actions.RejectionsAssetPermissions,
+					return node.NewError(actions.RejectionsInstrumentPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administration proposal",
 							fip))
 				}
 			case 1: // Holder
 				if !permission.HolderProposal {
-					return node.NewError(actions.RejectionsAssetPermissions,
+					return node.NewError(actions.RejectionsInstrumentPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by holder proposal", fip))
 				}
 			case 2: // Administrative Matter
 				if !permission.AdministrativeMatter {
-					return node.NewError(actions.RejectionsAssetPermissions,
+					return node.NewError(actions.RejectionsInstrumentPermissions,
 						fmt.Sprintf("Field %s amendment not permitted by administrative vote",
 							fip))
 				}
@@ -836,32 +836,32 @@ func applyAssetAmendments(ac *actions.AssetCreation, votingSystems []*actions.Vo
 					votingSystem)
 			}
 			if !permission.VotingSystemsAllowed[votingSystem] {
-				return node.NewError(actions.RejectionsAssetPermissions,
+				return node.NewError(actions.RejectionsInstrumentPermissions,
 					fmt.Sprintf("Field %s amendment not allowed using voting system %d", fip,
 						votingSystem))
 			}
 		} else if !permission.Permitted {
-			return node.NewError(actions.RejectionsAssetPermissions,
+			return node.NewError(actions.RejectionsInstrumentPermissions,
 				fmt.Sprintf("Field %s amendment not permitted without proposal", fip))
 		}
 	}
 
-	if assetPayload != nil {
-		if err = assetPayload.Validate(); err != nil {
+	if instrumentPayload != nil {
+		if err = instrumentPayload.Validate(); err != nil {
 			return err
 		}
 
-		newPayload, err := assetPayload.Bytes()
+		newPayload, err := instrumentPayload.Bytes()
 		if err != nil {
 			return err
 		}
 
-		ac.AssetPayload = newPayload
+		ac.InstrumentPayload = newPayload
 	}
 
-	// Check validity of updated asset data
+	// Check validity of updated instrument data
 	if err := ac.Validate(); err != nil {
-		return fmt.Errorf("Asset data invalid after amendments : %s", err)
+		return fmt.Errorf("Instrument data invalid after amendments : %s", err)
 	}
 
 	return nil

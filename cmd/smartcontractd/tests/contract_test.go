@@ -53,8 +53,9 @@ func createContract(t *testing.T) {
 			Type:           "I",
 			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: 1, Name: "John Smith"}},
 		},
-		VotingSystems:  []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
-		HolderProposal: true,
+		VotingSystems:            []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
+		HolderProposal:           true,
+		RestrictedQtyInstruments: 1,
 	}
 
 	// Define permissions for contract fields
@@ -130,7 +131,7 @@ func createContract(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -162,7 +163,7 @@ func createContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
-	offerTx.TxOut[1].PkScript = script
+	offerTx.TxOut[1].LockingScript = script
 
 	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -217,6 +218,11 @@ func createContract(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified issuer proposal", tests.Success)
+
+	if ct.RestrictedQtyInstruments != offerData.RestrictedQtyInstruments {
+		t.Fatalf("\t%s\tContract restricted instrument quantity wrong : got %d, want %d",
+			tests.Failed, ct.RestrictedQtyInstruments, offerData.RestrictedQtyInstruments)
+	}
 }
 
 func masterAddress(t *testing.T) {
@@ -300,7 +306,7 @@ func masterAddress(t *testing.T) {
 	response := responses[0].Copy()
 	responses = nil
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -332,7 +338,7 @@ func masterAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize offer : %v", tests.Failed, err)
 	}
-	offerTx.TxOut[1].PkScript = script
+	offerTx.TxOut[1].LockingScript = script
 
 	offerItx, err = inspector.NewTransactionFromWire(ctx, offerTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -456,7 +462,7 @@ func oracleContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	sig, err := oracleKey.Sign(sigHash)
+	sig, err := oracleKey.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -563,7 +569,7 @@ func oracleContract(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -592,7 +598,7 @@ func oracleContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	sig, err = oracleKey.Sign(sigHash)
+	sig, err = oracleKey.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -624,7 +630,7 @@ func oracleContract(t *testing.T) {
 	}
 
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -1022,7 +1028,7 @@ func contractOracleAmendment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature hash : %v", tests.Failed, err)
 	}
-	signature, err := oracleKey.Key.Sign(sigHash)
+	signature, err := oracleKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
@@ -1129,11 +1135,11 @@ func contractProposalAmendment(t *testing.T) {
 
 	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
 	fipBytes, _ := fip.Bytes()
-	assetAmendment := actions.AmendmentField{
+	instrumentAmendment := actions.AmendmentField{
 		FieldIndexPath: fipBytes,
 		Data:           []byte("New Name"),
 	}
-	if err := mockUpContractAmendmentVote(ctx, 0, 0, &assetAmendment); err != nil {
+	if err := mockUpContractAmendmentVote(ctx, 0, 0, &instrumentAmendment); err != nil {
 		t.Fatalf("\t%s\tFailed to mock up vote : %v", tests.Failed, err)
 	}
 
@@ -1148,7 +1154,7 @@ func contractProposalAmendment(t *testing.T) {
 		RefTxID:          testVoteResultTxId.Bytes(),
 	}
 
-	amendmentData.Amendments = append(amendmentData.Amendments, &assetAmendment)
+	amendmentData.Amendments = append(amendmentData.Amendments, &instrumentAmendment)
 
 	// Build amendment transaction
 	amendmentTx := wire.NewMsgTx(1)
@@ -1220,12 +1226,26 @@ func mockUpContract(t testing.TB, ctx context.Context, name string, issuerType s
 	cf := &actions.ContractFormation{
 		ContractName: name,
 		Issuer: &actions.EntityField{
-			Type:           issuerType,
-			Administration: []*actions.AdministratorField{&actions.AdministratorField{Type: issuerRole, Name: issuerName}},
+			Type: issuerType,
+			Administration: []*actions.AdministratorField{
+				&actions.AdministratorField{
+					Type: issuerRole, Name: issuerName,
+				},
+			},
 		},
 		VotingSystems: []*actions.VotingSystemField{
-			&actions.VotingSystemField{Name: "Relative 50", VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000},
-			&actions.VotingSystemField{Name: "Absolute 75", VoteType: "A", ThresholdPercentage: 75, HolderProposalFee: 25000},
+			&actions.VotingSystemField{
+				Name:                "Relative 50",
+				VoteType:            "R",
+				ThresholdPercentage: 50,
+				HolderProposalFee:   50000,
+			},
+			&actions.VotingSystemField{
+				Name:                "Absolute 75",
+				VoteType:            "A",
+				ThresholdPercentage: 75,
+				HolderProposalFee:   25000,
+			},
 		},
 		AdministrationProposal: issuerProposal,
 		HolderProposal:         holderProposal,
@@ -1619,7 +1639,7 @@ func mockUpContractWithAdminOracle(t testing.TB, ctx context.Context, name strin
 	if err != nil {
 		t.Fatalf("Failed to create sig hash : %s", err)
 	}
-	sig, err := oracleKey.Key.Sign(sigHash)
+	sig, err := oracleKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("Failed to create signature : %s", err)
 	}

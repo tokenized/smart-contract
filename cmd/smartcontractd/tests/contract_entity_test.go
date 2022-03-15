@@ -17,13 +17,13 @@ import (
 func TestContractEntities(t *testing.T) {
 	defer tests.Recover(t)
 
-	t.Run("createAssetContract", createAssetContract)
+	t.Run("createInstrumentContract", createInstrumentContract)
 	t.Run("createEntityContract", createEntityContract)
 	t.Run("identityContracts", identityContracts)
 	t.Run("operatorContracts", operatorContracts)
 }
 
-func createAssetContract(t *testing.T) {
+func createInstrumentContract(t *testing.T) {
 	ctx := test.Context
 
 	testSet := []struct {
@@ -33,9 +33,9 @@ func createAssetContract(t *testing.T) {
 		valid  bool
 	}{
 		{
-			name: "ValidAsset",
+			name: "ValidInstrument",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -57,20 +57,20 @@ func createAssetContract(t *testing.T) {
 			valid:  false, // ContractTypeEntity not allowed to include EntityContract field.
 		},
 		{
-			name: "AssetWithoutEntityContract",
+			name: "InstrumentWithoutEntityContract",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 			},
 			parent: nil,
-			valid:  false, // ContractTypeAsset requires EntityContract field.
+			valid:  false, // ContractTypeInstrument requires EntityContract field.
 		},
 		{
-			name: "AssetWithServices",
+			name: "InstrumentWithServices",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -82,12 +82,12 @@ func createAssetContract(t *testing.T) {
 				},
 			},
 			parent: nil,
-			valid:  false, // ContractTypeAsset not allowed Services field.
+			valid:  false, // ContractTypeInstrument not allowed Services field.
 		},
 		{
-			name: "AssetWithIssuer",
+			name: "InstrumentWithIssuer",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -97,7 +97,7 @@ func createAssetContract(t *testing.T) {
 				},
 			},
 			parent: &test.Contract2Key.Address,
-			valid:  false, // ContractTypeAsset not allowed Issuer field.
+			valid:  false, // ContractTypeInstrument not allowed Issuer field.
 		},
 		{
 			name: "EntityWithIssuer",
@@ -114,9 +114,9 @@ func createAssetContract(t *testing.T) {
 			valid:  true,
 		},
 		// { // This is currently allowed so an entity contract address can represent an off chain entity
-		// 	name: "AssetWithMissingEntity",
+		// 	name: "InstrumentWithMissingEntity",
 		// 	offer: &actions.ContractOffer{
-		// 		ContractType: actions.ContractTypeAsset,
+		// 		ContractType: actions.ContractTypeInstrument,
 		// 		ContractName: "Test Name",
 		// 		VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 		// 			VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -126,9 +126,9 @@ func createAssetContract(t *testing.T) {
 		// 	valid:  false, // Entity contract formation won't exist
 		// },
 		{
-			name: "AssetWithInvalidEntityAddress",
+			name: "InstrumentWithInvalidEntityAddress",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -419,9 +419,9 @@ func identityContracts(t *testing.T) {
 		valid         bool
 	}{
 		{
-			name: "AssetWithIdentity",
+			name: "InstrumentWithIdentity",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -437,9 +437,9 @@ func identityContracts(t *testing.T) {
 			valid:         true,
 		},
 		{
-			name: "AssetWithMissingIdentity",
+			name: "InstrumentWithMissingIdentity",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -455,9 +455,9 @@ func identityContracts(t *testing.T) {
 			valid:         false, // identity oracle contract won't exist
 		},
 		{
-			name: "AssetWithWrongIdentity",
+			name: "InstrumentWithWrongIdentity",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -596,9 +596,9 @@ func operatorContracts(t *testing.T) {
 		valid            bool
 	}{
 		{
-			name: "AssetWithOperator",
+			name: "InstrumentWithOperator",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -627,9 +627,9 @@ func operatorContracts(t *testing.T) {
 			valid:            true,
 		},
 		{
-			name: "AssetWithMissingOperator",
+			name: "InstrumentWithMissingOperator",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -656,9 +656,9 @@ func operatorContracts(t *testing.T) {
 			valid:         false, // operator contract won't exist
 		},
 		{
-			name: "AssetWithWrongIdentity",
+			name: "InstrumentWithWrongIdentity",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
@@ -702,9 +702,9 @@ func operatorContracts(t *testing.T) {
 			valid:            false, // wrong address
 		},
 		{
-			name: "AssetWithWrongIdentity",
+			name: "InstrumentWithWrongIdentity",
 			offer: &actions.ContractOffer{
-				ContractType: actions.ContractTypeAsset,
+				ContractType: actions.ContractTypeInstrument,
 				ContractName: "Test Name",
 				VotingSystems: []*actions.VotingSystemField{&actions.VotingSystemField{Name: "Relative 50",
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},

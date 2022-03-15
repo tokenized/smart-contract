@@ -34,15 +34,15 @@ func freezeOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address)
 
 	orderData := actions.Order{
 		ComplianceAction: actions.ComplianceActionFreeze,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCodes[0].Bytes(),
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
 		Message:          "Court order",
 	}
 
@@ -96,7 +96,7 @@ func freezeOrder(t *testing.T) {
 
 	// Check balance status
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0], userKey.Address, v.Now)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
@@ -114,15 +114,15 @@ func freezeAuthorityOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address)
 
 	orderData := actions.Order{
 		ComplianceAction:   actions.ComplianceActionFreeze,
-		AssetType:          testAssetType,
-		AssetCode:          testAssetCodes[0].Bytes(),
+		InstrumentType:     testInstrumentType,
+		InstrumentCode:     testInstrumentCodes[0].Bytes(),
 		Message:            "Court order",
 		AuthorityName:      "District Court #345",
 		AuthorityPublicKey: authorityKey.Key.PublicKey().Bytes(),
@@ -139,7 +139,7 @@ func freezeAuthorityOrder(t *testing.T) {
 		t.Fatalf("\t%s\tFailed generate authority signature hash : %v", tests.Failed, err)
 	}
 
-	sig, err := authorityKey.Key.Sign(sigHash)
+	sig, err := authorityKey.Key.Sign(*sigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to sign authority sig hash : %v", tests.Failed, err)
 	}
@@ -190,7 +190,7 @@ func freezeAuthorityOrder(t *testing.T) {
 	// Check balance status
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0],
 		userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
@@ -209,7 +209,7 @@ func thawOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	freezeTxId, err := mockUpFreeze(ctx, t, userKey.Address, 200)
@@ -223,8 +223,8 @@ func thawOrder(t *testing.T) {
 
 	orderData := actions.Order{
 		ComplianceAction: actions.ComplianceActionThaw,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCodes[0].Bytes(),
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
 		FreezeTxId:       freezeTxId.Bytes(),
 		Message:          "Court order lifted",
 	}
@@ -272,7 +272,7 @@ func thawOrder(t *testing.T) {
 	checkResponse(t, "E3")
 
 	// Check balance status
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0], userKey.Address, v.Now)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
@@ -291,15 +291,15 @@ func confiscateOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100007, issuerKey.Address)
 
 	orderData := actions.Order{
 		ComplianceAction: actions.ComplianceActionConfiscation,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCodes[0].Bytes(),
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
 		DepositAddress:   issuerKey.Address.Bytes(),
 		Message:          "Court order",
 	}
@@ -354,7 +354,7 @@ func confiscateOrder(t *testing.T) {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
@@ -365,7 +365,7 @@ func confiscateOrder(t *testing.T) {
 	t.Logf("\t%s\tIssuer token balance verified : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
 	}
@@ -388,15 +388,15 @@ func reconcileOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 150)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100008, issuerKey.Address)
 
 	orderData := actions.Order{
 		ComplianceAction: actions.ComplianceActionReconciliation,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCodes[0].Bytes(),
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
 		Message:          "Court order",
 	}
 
@@ -453,7 +453,7 @@ func reconcileOrder(t *testing.T) {
 	// Check for bitcoin dispersion to user
 	found := false
 	for _, output := range responses[0].TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -474,7 +474,7 @@ func reconcileOrder(t *testing.T) {
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
@@ -485,7 +485,7 @@ func reconcileOrder(t *testing.T) {
 	t.Logf("\t%s\tVerified issuer balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get issuer holding : %s", tests.Failed, err)
 	}
@@ -501,8 +501,8 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 
 	orderData := actions.Order{
 		ComplianceAction: actions.ComplianceActionFreeze,
-		AssetType:        testAssetType,
-		AssetCode:        testAssetCodes[0].Bytes(),
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
 		Message:          "Court order",
 	}
 
@@ -581,7 +581,7 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	// contractPKH := protocol.PublicKeyHashFromBytes(bitcoin.Hash160(test.ContractKey.Key.PublicKey().Bytes()))
 	// pubkeyhash := protocol.PublicKeyHashFromBytes(pkh)
 	// v := ctx.Value(node.KeyValues).(*node.Values)
-	// h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testAssetCodes[0], pubkeyhash, v.Now)
+	// h, err := holdings.GetHolding(ctx, test.MasterDB, contractPKH, &testInstrumentCodes[0], pubkeyhash, v.Now)
 	// if err != nil {
 	// 	t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	// }
@@ -590,5 +590,5 @@ func mockUpFreeze(ctx context.Context, t *testing.T, address bitcoin.RawAddress,
 	// err = holdings.AddFreeze(h, freezeTxId, quantity, protocol.CurrentTimestamp(),
 	// 	protocol.NewTimestamp(ts.Nano()+100000000000))
 	// holdings.FinalizeTx(h, freezeTxId, v.Now)
-	// return freezeTxId, holdings.Save(ctx, test.MasterDB, contractPKH, &testAssetCodes[0], h)
+	// return freezeTxId, holdings.Save(ctx, test.MasterDB, contractPKH, &testInstrumentCodes[0], h)
 }

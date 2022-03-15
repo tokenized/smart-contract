@@ -50,10 +50,10 @@ var cmdDoubleSpend = &cobra.Command{
 		// 	return nil
 		// }
 
-		assetCode = protocol.AssetCodeFromContract(theClient.ContractAddress, 0)
+		instrumentCode = protocol.InstrumentCodeFromContract(theClient.ContractAddress, 0)
 		fundingAmount := uint64(2000)
 		utxoAmount := uint64(fundingAmount + 500)
-		requiredBalance := utxoAmount * 2             // Create contract and asset
+		requiredBalance := utxoAmount * 2             // Create contract and instrument
 		requiredBalance += utxoAmount * uint64(count) // Transfers
 
 		// Start SpyNode ===========================================================================
@@ -87,7 +87,7 @@ var cmdDoubleSpend = &cobra.Command{
 		UTXOs := theClient.Wallet.UnspentOutputs()
 		balance := uint64(0)
 		for _, utxo := range UTXOs {
-			if err := tx.AddInput(utxo.OutPoint, utxo.PkScript, utxo.Value); err != nil {
+			if err := tx.AddInput(utxo.OutPoint, utxo.LockingScript, utxo.Value); err != nil {
 				logger.Warn(ctx, "Failed to add input to contract tx : %s", err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()
@@ -132,9 +132,9 @@ var cmdDoubleSpend = &cobra.Command{
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
-			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
+			logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
@@ -172,14 +172,14 @@ var cmdDoubleSpend = &cobra.Command{
 
 		contractTx := tx
 
-		// Create asset ============================================================================
+		// Create instrument ============================================================================
 		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
 		tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
-			logger.Warn(ctx, "Failed to add input to asset tx : %s", err)
+			logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
@@ -193,14 +193,14 @@ var cmdDoubleSpend = &cobra.Command{
 			return nil
 		}
 
-		asset, err := assetOpReturn()
+		instrument, err := instrumentOpReturn()
 		if err != nil {
-			logger.Warn(ctx, "Failed to create asset op return : %s", err)
+			logger.Warn(ctx, "Failed to create instrument op return : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		}
-		if err := tx.AddOutput(asset, 0, false, false); err != nil {
+		if err := tx.AddOutput(instrument, 0, false, false); err != nil {
 			logger.Warn(ctx, "Failed to add op return output : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -209,13 +209,13 @@ var cmdDoubleSpend = &cobra.Command{
 
 		// Sign tx
 		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
-			logger.Warn(ctx, "Failed to sign asset offer tx : %s", err)
+			logger.Warn(ctx, "Failed to sign instrument offer tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		}
 
-		assetTx := tx
+		instrumentTx := tx
 
 		// Create transfer txs =====================================================================
 		transferTxs := make([]*txbuilder.TxBuilder, 0, count)
@@ -226,7 +226,7 @@ var cmdDoubleSpend = &cobra.Command{
 			tx.SetChangeAddress(theClient.Wallet.Address, "")
 
 			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-				utxoTx.MsgTx.TxOut[utxoIndex].PkScript,
+				utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
 				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
 				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
@@ -320,8 +320,8 @@ var cmdDoubleSpend = &cobra.Command{
 			return nil
 		}
 
-		// Send asset tx ===========================================================================
-		incomingTx = sendRequest(ctx, theClient, assetTx.MsgTx, "asset")
+		// Send instrument tx ===========================================================================
+		incomingTx = sendRequest(ctx, theClient, instrumentTx.MsgTx, "instrument")
 		if incomingTx == nil {
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -330,23 +330,24 @@ var cmdDoubleSpend = &cobra.Command{
 
 		response, err = getResponse(incomingTx)
 		if err != nil {
-			logger.Warn(ctx, "Failed to parse asset response : %s", err)
+			logger.Warn(ctx, "Failed to parse instrument response : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		}
 
-		if response.Code() == actions.CodeAssetCreation {
-			assetCreation, _ := response.(*actions.AssetCreation)
-			logger.Info(ctx, "Asset created : %x", assetCreation.AssetCode)
+		if response.Code() == actions.CodeInstrumentCreation ||
+			response.Code() == actions.CodeAssetCreation {
+			instrumentCreation, _ := response.(*actions.InstrumentCreation)
+			logger.Info(ctx, "Instrument created : %x", instrumentCreation.InstrumentCode)
 		} else if response.Code() == actions.CodeRejection {
 			reject, _ := response.(*actions.Rejection)
-			logger.Warn(ctx, "Asset rejected : %s", reject.Message)
+			logger.Warn(ctx, "Instrument rejected : %s", reject.Message)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil
 		} else {
-			logger.Warn(ctx, "Unknown asset response type : %s", response.Code())
+			logger.Warn(ctx, "Unknown instrument response type : %s", response.Code())
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
 			return nil

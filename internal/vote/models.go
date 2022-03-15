@@ -12,8 +12,8 @@ type NewVote struct {
 	Type               uint32                   `json:"Type,omitempty"`
 	VoteSystem         uint32                   `json:"VoteSystem,omitempty"`
 	ContractWideVote   bool                     `json:"ContractWideVote,omitempty"`
-	AssetType          string                   `json:"AssetType,omitempty"`
-	AssetCode          bitcoin.Hash20           `json:"AssetCode,omitempty"`
+	InstrumentType     string                   `json:"InstrumentType,omitempty"`
+	InstrumentCode     *bitcoin.Hash20          `json:"InstrumentCode,omitempty"`
 	ProposedAmendments []actions.AmendmentField `json:"ProposedAmendments,omitempty"`
 
 	VoteTxId     bitcoin.Hash32     `json:"VoteTxId,omitempty"`

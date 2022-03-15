@@ -22,8 +22,8 @@ func TestGetQuantity(t *testing.T) {
 	// 	want    Balance
 	// }{
 	// 	// {
-	// 	// name: "AssetCreation (A2)",
-	// 	// message: &protocol.AssetCreation{
+	// 	// name: "InstrumentCreation (A2)",
+	// 	// message: &protocol.InstrumentCreation{
 	// 	// Qty: 42,
 	// 	// },
 	// 	// address: issuer,

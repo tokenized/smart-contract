@@ -66,7 +66,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	}
 	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(b, ctx, true, true, true, uint64(b.N), 0, &sampleInstrumentPayload, true, false, false)
 
 	requests := make([]*client.Tx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
@@ -77,19 +77,19 @@ func simpleTransfersBenchmark(b *testing.B) {
 		transferAmount := uint64(1)
 		transferData := actions.Transfer{}
 
-		assetTransferData := actions.AssetTransferField{
-			ContractIndex: 0, // first output
-			AssetType:     testAssetType,
-			AssetCode:     testAssetCodes[0].Bytes(),
+		instrumentTransferData := actions.InstrumentTransferField{
+			ContractIndex:  0, // first output
+			InstrumentType: testInstrumentType,
+			InstrumentCode: testInstrumentCodes[0].Bytes(),
 		}
 
-		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
-		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-			&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+		instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+			&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 				Quantity: transferAmount})
 
-		transferData.Assets = append(transferData.Assets, &assetTransferData)
+		transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(1)
@@ -209,7 +209,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	wg.Wait()
 
 	// Check balance
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -229,7 +229,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	}
 	mockUpContract(b, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(b, ctx, true, true, true, uint64(b.N), 0, &sampleInstrumentPayload, true, false, false)
 
 	requests := make([]*client.Tx, 0, b.N)
 	hashes := make([]*bitcoin.Hash32, 0, b.N)
@@ -255,19 +255,19 @@ func separateTransfersBenchmark(b *testing.B) {
 		// Create Transfer message
 		transferData := actions.Transfer{}
 
-		assetTransferData := actions.AssetTransferField{
-			ContractIndex: 0, // first output
-			AssetType:     testAssetType,
-			AssetCode:     testAssetCodes[0].Bytes(),
+		instrumentTransferData := actions.InstrumentTransferField{
+			ContractIndex:  0, // first output
+			InstrumentType: testInstrumentType,
+			InstrumentCode: testInstrumentCodes[0].Bytes(),
 		}
 
-		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
-		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-			&actions.AssetReceiverField{Address: receiverKey.Address.Bytes(),
+		instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+			&actions.InstrumentReceiverField{Address: receiverKey.Address.Bytes(),
 				Quantity: transferAmount})
 
-		transferData.Assets = append(transferData.Assets, &assetTransferData)
+		transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(1)
@@ -388,7 +388,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	// Check balance
 	for _, sender := range senders {
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0],
 			sender.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get sender holding : %s", tests.Failed, err)
@@ -400,7 +400,7 @@ func separateTransfersBenchmark(b *testing.B) {
 
 	for _, receiver := range receivers {
 		v := ctx.Value(node.KeyValues).(*node.Values)
-		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+		h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0],
 			receiver.Address, v.Now)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to get receiver holding : %s", tests.Failed, err)
@@ -418,7 +418,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		b.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
 	mockUpContractWithOracle(b, ctx, "Test Contract", "I", 1, "John Bitcoin")
-	mockUpAsset(b, ctx, true, true, true, uint64(b.N), 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(b, ctx, true, true, true, uint64(b.N), 0, &sampleInstrumentPayload, true, false, false)
 
 	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
@@ -436,13 +436,13 @@ func oracleTransfersBenchmark(b *testing.B) {
 		transferAmount := uint64(1)
 		transferData := actions.Transfer{}
 
-		assetTransferData := actions.AssetTransferField{
-			ContractIndex: 0, // first output
-			AssetType:     testAssetType,
-			AssetCode:     testAssetCodes[0].Bytes(),
+		instrumentTransferData := actions.InstrumentTransferField{
+			ContractIndex:  0, // first output
+			InstrumentType: testInstrumentType,
+			InstrumentCode: testInstrumentCodes[0].Bytes(),
 		}
 
-		assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+		instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 			&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
 		blockHeight := 50000 - 5
@@ -451,16 +451,16 @@ func oracleTransfersBenchmark(b *testing.B) {
 			b.Fatalf("\t%s\tFailed to retrieve header hash : %v", tests.Failed, err)
 		}
 		oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-			testAssetCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 1)
+			testInstrumentCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 1)
 		node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 		}
-		oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+		oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 		if err != nil {
 			b.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 		}
-		receiver := actions.AssetReceiverField{
+		receiver := actions.InstrumentReceiverField{
 			Address:               userKey.Address.Bytes(),
 			Quantity:              transferAmount,
 			OracleSigAlgorithm:    1,
@@ -468,9 +468,9 @@ func oracleTransfersBenchmark(b *testing.B) {
 			OracleSigBlockHeight:  uint32(blockHeight),
 			OracleSigExpiry:       expiry,
 		}
-		assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
+		instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers, &receiver)
 
-		transferData.Assets = append(transferData.Assets, &assetTransferData)
+		transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 		// Build transfer transaction
 		transferTx := wire.NewMsgTx(1)
@@ -589,7 +589,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 
 	// Check balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
-	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testAssetCodes[0],
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0],
 		issuerKey.Address, v.Now)
 	if err != nil {
 		b.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
@@ -627,26 +627,26 @@ func splitTransfer(b *testing.B, ctx context.Context, sender *wallet.Key,
 	mockUpHolding(b, ctx, receiver1.Address, transferAmount)
 	mockUpHolding(b, ctx, receiver2.Address, transferAmount)
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount * 2})
 
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		&actions.AssetReceiverField{
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{
 			Address:  receiver1.Address.Bytes(),
 			Quantity: transferAmount})
 
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		&actions.AssetReceiverField{
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{
 			Address:  receiver2.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -709,7 +709,7 @@ func splitTransferRecurse(b *testing.B, ctx context.Context, sender *wallet.Key,
 	return txs, receivers
 }
 
-// treeTransfersBenchmark creates an asset, then splits their balance in half until the number of
+// treeTransfersBenchmark creates an instrument, then splits their balance in half until the number of
 //   transfer txs is met.
 func treeTransfersBenchmark(b *testing.B) {
 	ctx := test.Context
@@ -728,7 +728,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	}
 	// fmt.Printf("Using %d tree levels for %d transfers\n", levels, nodes)
 
-	mockUpAsset(b, ctx, true, true, true, uint64(nodes)*2, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(b, ctx, true, true, true, uint64(nodes)*2, 0, &sampleInstrumentPayload, true, false, false)
 
 	requests, _ := splitTransferRecurse(b, ctx, issuerKey, uint64(nodes)*2, levels)
 	hashes := make([]*bitcoin.Hash32, 0, nodes)
@@ -843,7 +843,7 @@ func sendTokens(t *testing.T) {
 
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	// Let holdings cache update
 	time.Sleep(500 * time.Millisecond)
@@ -855,19 +855,19 @@ func sendTokens(t *testing.T) {
 	transferAmount := uint64(750)
 	transferData := actions.Transfer{}
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -900,7 +900,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx)
-	t.Logf("\tUnderfunded asset transfer : %s", transferTx.TxHash().String())
+	t.Logf("\tUnderfunded instrument transfer : %s", transferTx.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", transferItx)
 	if err == nil {
@@ -911,10 +911,10 @@ func sendTokens(t *testing.T) {
 	}
 
 	if len(responses) != 0 {
-		t.Fatalf("\t%s\tHandle asset transfer created reject response without sufficient funds", tests.Failed)
+		t.Fatalf("\t%s\tHandle instrument transfer created reject response without sufficient funds", tests.Failed)
 	}
 
-	t.Logf("\t%s\tUnderfunded asset transfer rejected with no response", tests.Success)
+	t.Logf("\t%s\tUnderfunded instrument transfer rejected with no response", tests.Success)
 
 	// Let holdings cache update
 	time.Sleep(500 * time.Millisecond)
@@ -922,7 +922,7 @@ func sendTokens(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -933,7 +933,7 @@ func sendTokens(t *testing.T) {
 
 	// Adjust amount to contract to be low, but enough for a reject
 	transferTx.TxOut[0].Value = 1000
-	t.Logf("\tLow funding asset transfer : %s", transferTx.TxHash().String())
+	t.Logf("\tLow funding instrument transfer : %s", transferTx.TxHash().String())
 
 	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -957,14 +957,14 @@ func sendTokens(t *testing.T) {
 
 	checkResponse(t, "M2")
 
-	t.Logf("\t%s\tUnderfunded asset transfer rejected with response", tests.Success)
+	t.Logf("\t%s\tUnderfunded instrument transfer rejected with response", tests.Success)
 
 	// Let holdings cache update
 	time.Sleep(500 * time.Millisecond)
 
 	// Check issuer and user balance
 	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -975,7 +975,7 @@ func sendTokens(t *testing.T) {
 
 	// Adjust amount to contract to be appropriate
 	transferTx.TxOut[0].Value = 2500
-	t.Logf("\tFunded asset transfer : %s", transferTx.TxHash().String())
+	t.Logf("\tFunded instrument transfer : %s", transferTx.TxHash().String())
 
 	transferItx, err = inspector.NewTransactionFromWire(ctx, transferTx, test.NodeConfig.IsTest)
 	if err != nil {
@@ -1002,7 +1002,7 @@ func sendTokens(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -1016,19 +1016,19 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tResponse isn't a settlement", tests.Failed)
 	}
 
-	if settlement.Assets[0].Settlements[0].Quantity != testTokenQty-transferAmount {
+	if settlement.Instruments[0].Settlements[0].Quantity != testTokenQty-transferAmount {
 		t.Fatalf("\t%s\tIssuer token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[0].Quantity, testTokenQty-transferAmount)
+			settlement.Instruments[0].Settlements[0].Quantity, testTokenQty-transferAmount)
 	}
 
-	if settlement.Assets[0].Settlements[1].Quantity != transferAmount {
+	if settlement.Instruments[0].Settlements[1].Quantity != transferAmount {
 		t.Fatalf("\t%s\tUser token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[1].Quantity, transferAmount)
+			settlement.Instruments[0].Settlements[1].Quantity, transferAmount)
 	}
 
 	// Check issuer and user balance
 	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1037,10 +1037,10 @@ func sendTokens(t *testing.T) {
 			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
+	t.Logf("\t%s\tIssuer instrument balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1049,7 +1049,7 @@ func sendTokens(t *testing.T) {
 			userHolding.FinalizedBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
+	t.Logf("\t%s\tUser instrument balance : %d", tests.Success, userHolding.FinalizedBalance)
 
 	// Let holdings cache update
 	time.Sleep(500 * time.Millisecond)
@@ -1071,8 +1071,8 @@ func sendTokens(t *testing.T) {
 	transferTx2.TxOut = append(transferTx2.TxOut, wire.NewTxOut(2500, script))
 
 	// Data output
-	transferData.Assets[0].AssetSenders[0].Quantity = 250
-	transferData.Assets[0].AssetReceivers[0].Quantity = 250
+	transferData.Instruments[0].InstrumentSenders[0].Quantity = 250
+	transferData.Instruments[0].InstrumentReceivers[0].Quantity = 250
 	script, err = protocol.Serialize(&transferData, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to serialize transfer : %v", tests.Failed, err)
@@ -1090,7 +1090,7 @@ func sendTokens(t *testing.T) {
 	}
 
 	test.RPCNode.SaveTX(ctx, transferTx2)
-	t.Logf("\tSecond asset transfer : %s", transferTx2.TxHash().String())
+	t.Logf("\tSecond instrument transfer : %s", transferTx2.TxHash().String())
 
 	err = a.Trigger(ctx, "SEE", transferItx2)
 	if err != nil {
@@ -1103,7 +1103,7 @@ func sendTokens(t *testing.T) {
 	response = checkResponse(t, "T2")
 
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -1117,19 +1117,19 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tResponse isn't a settlement", tests.Failed)
 	}
 
-	if settlement.Assets[0].Settlements[0].Quantity != 0 {
+	if settlement.Instruments[0].Settlements[0].Quantity != 0 {
 		t.Fatalf("\t%s\tIssuer token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[0].Quantity, 0)
+			settlement.Instruments[0].Settlements[0].Quantity, 0)
 	}
 
-	if settlement.Assets[0].Settlements[1].Quantity != 1000 {
+	if settlement.Instruments[0].Settlements[1].Quantity != 1000 {
 		t.Fatalf("\t%s\tUser token settlement balance incorrect : %d != %d", tests.Failed,
-			settlement.Assets[0].Settlements[1].Quantity, 1000)
+			settlement.Instruments[0].Settlements[1].Quantity, 1000)
 	}
 
 	// Check issuer and user balance
 	issuerHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1138,10 +1138,10 @@ func sendTokens(t *testing.T) {
 			issuerHolding.FinalizedBalance, 0)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
+	t.Logf("\t%s\tIssuer instrument balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1150,7 +1150,7 @@ func sendTokens(t *testing.T) {
 			userHolding.FinalizedBalance, 1000)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
+	t.Logf("\t%s\tUser instrument balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func multiExchange(t *testing.T) {
@@ -1171,14 +1171,14 @@ func multiExchange(t *testing.T) {
 
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	user1HoldingBalance := uint64(100)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
 
 	mockUpContract2(t, ctx, "Test Contract 2", "I",
 		1, "Karl Bitcoin", true, true, false, false, false)
-	mockUpAsset2(t, ctx, true, true, true, 1500, &sampleAssetPayload2, true, false, false)
+	mockUpInstrument2(t, ctx, true, true, true, 1500, &sampleInstrumentPayload2, true, false, false)
 
 	user2HoldingBalance := uint64(200)
 	mockUpHolding2(t, ctx, user2Key.Address, user2HoldingBalance)
@@ -1189,37 +1189,37 @@ func multiExchange(t *testing.T) {
 	// Create Transfer message
 	transferData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transfer1Amount := uint64(51)
-	assetTransfer1Data := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransfer1Data := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+	instrumentTransfer1Data.InstrumentSenders = append(instrumentTransfer1Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
-	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransfer1Data.InstrumentReceivers = append(instrumentTransfer1Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transfer1Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer1Data)
 
-	// Transfer asset 2 from user2 to user1
+	// Transfer instrument 2 from user2 to user1
 	transfer2Amount := uint64(150)
-	assetTransfer2Data := actions.AssetTransferField{
-		ContractIndex: 1, // first output
-		AssetType:     testAsset2Type,
-		AssetCode:     testAsset2Code.Bytes(),
+	instrumentTransfer2Data := actions.InstrumentTransferField{
+		ContractIndex:  1, // first output
+		InstrumentType: testInstrument2Type,
+		InstrumentCode: testInstrument2Code.Bytes(),
 	}
 
-	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+	instrumentTransfer2Data.InstrumentSenders = append(instrumentTransfer2Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
-	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransfer2Data.InstrumentReceivers = append(instrumentTransfer2Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transfer2Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer2Data)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -1369,7 +1369,7 @@ func multiExchange(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1381,7 +1381,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], user2Key.Address, v.Now)
+		&testInstrumentCodes[0], user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1393,7 +1393,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
 	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
-		&testAsset2Code, userKey.Address, v.Now)
+		&testInstrument2Code, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1406,7 +1406,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
-		&testAsset2Code, user2Key.Address, v.Now)
+		&testInstrument2Code, user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1425,7 +1425,7 @@ func multiExchange(t *testing.T) {
 
 	// Check issuer and user balance
 	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1437,7 +1437,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], user2Key.Address, v.Now)
+		&testInstrumentCodes[0], user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1449,7 +1449,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 2 token 1 balance : %d", tests.Success, user2Holding.FinalizedBalance)
 
 	user1Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
-		&testAsset2Code, userKey.Address, v.Now)
+		&testInstrument2Code, userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1462,7 +1462,7 @@ func multiExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 2 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err = holdings.GetHolding(ctx, test.MasterDB, test.Contract2Key.Address,
-		&testAsset2Code, user2Key.Address, v.Now)
+		&testInstrument2Code, user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1486,7 +1486,7 @@ func bitcoinExchange(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	user1HoldingBalance := uint64(100)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
@@ -1497,36 +1497,36 @@ func bitcoinExchange(t *testing.T) {
 	// Create Transfer message
 	transferData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transfer1Amount := uint64(50)
-	assetTransfer1Data := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransfer1Data := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+	instrumentTransfer1Data.InstrumentSenders = append(instrumentTransfer1Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
-	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransfer1Data.InstrumentReceivers = append(instrumentTransfer1Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transfer1Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer1Data)
 
-	// Transfer asset 2 from user2 to user1
+	// Transfer instrument 2 from user2 to user1
 	transfer2Amount := uint64(1050)
-	assetTransfer2Data := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     protocol.BSVAssetID,
+	instrumentTransfer2Data := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: protocol.BSVInstrumentID,
 	}
 
-	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+	instrumentTransfer2Data.InstrumentSenders = append(instrumentTransfer2Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
-	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransfer2Data.InstrumentReceivers = append(instrumentTransfer2Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transfer2Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer2Data)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -1579,7 +1579,7 @@ func bitcoinExchange(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	user1Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1591,7 +1591,7 @@ func bitcoinExchange(t *testing.T) {
 	t.Logf("\t%s\tUser 1 token 1 balance : %d", tests.Success, user1Holding.FinalizedBalance)
 
 	user2Holding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], user2Key.Address, v.Now)
+		&testInstrumentCodes[0], user2Key.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -1611,7 +1611,7 @@ func bitcoinExchange(t *testing.T) {
 
 	found := false
 	for _, output := range response.TxOut {
-		ad, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		ad, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -1646,7 +1646,7 @@ func multiExchangeLock(t *testing.T) {
 
 	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	user1HoldingBalance := uint64(150)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
@@ -1657,7 +1657,7 @@ func multiExchangeLock(t *testing.T) {
 	}
 	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
 		true, true, false, false, false)
-	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2, true,
+	mockUpOtherInstrument(t, ctx, otherContractKey, true, true, true, 1500, &sampleInstrumentPayload2, true,
 		false, false)
 
 	user2HoldingBalance := uint64(200)
@@ -1669,37 +1669,37 @@ func multiExchangeLock(t *testing.T) {
 	// Create Transfer message
 	transferData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transfer1Amount := uint64(50)
-	assetTransfer1Data := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransfer1Data := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+	instrumentTransfer1Data.InstrumentSenders = append(instrumentTransfer1Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
-	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransfer1Data.InstrumentReceivers = append(instrumentTransfer1Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transfer1Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer1Data)
 
-	// Transfer asset 2 from user2 to user1
+	// Transfer instrument 2 from user2 to user1
 	transfer2Amount := uint64(150)
-	assetTransfer2Data := actions.AssetTransferField{
-		ContractIndex: 1, // first output
-		AssetType:     testAsset2Type,
-		AssetCode:     testAsset2Code.Bytes(),
+	instrumentTransfer2Data := actions.InstrumentTransferField{
+		ContractIndex:  1, // first output
+		InstrumentType: testInstrument2Type,
+		InstrumentCode: testInstrument2Code.Bytes(),
 	}
 
-	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+	instrumentTransfer2Data.InstrumentSenders = append(instrumentTransfer2Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
-	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransfer2Data.InstrumentReceivers = append(instrumentTransfer2Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transfer2Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer2Data)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -1796,21 +1796,21 @@ func multiExchangeLock(t *testing.T) {
 	// Create Transfer message
 	transferOtherData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transferOtherAmount := uint64(75)
-	assetTransferOtherData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferOtherData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+	instrumentTransferOtherData.InstrumentSenders = append(instrumentTransferOtherData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
-	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransferOtherData.InstrumentReceivers = append(instrumentTransferOtherData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transferOtherAmount})
 
-	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+	transferOtherData.Instruments = append(transferOtherData.Instruments, &instrumentTransferOtherData)
 
 	// Build transfer transaction
 	transferOtherTx := wire.NewMsgTx(1)
@@ -1889,7 +1889,7 @@ func multiExchangeLock(t *testing.T) {
 	/***************************** Send cancel from other contract ********************************/
 	// Create reject message
 	rejectOtherData := actions.Rejection{
-		RejectionCode:  actions.RejectionsAssetNotPermitted,
+		RejectionCode:  actions.RejectionsInstrumentNotPermitted,
 		Timestamp:      uint64(time.Now().UnixNano()),
 		AddressIndexes: []uint32{0},
 	}
@@ -1961,7 +1961,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
 
-	if rejectMessage.RejectionCode != actions.RejectionsAssetNotPermitted {
+	if rejectMessage.RejectionCode != actions.RejectionsInstrumentNotPermitted {
 		t.Fatalf("\t%s\tReject code is not holdings locked : %d", tests.Failed,
 			rejectMessage.RejectionCode)
 	}
@@ -1974,21 +1974,21 @@ func multiExchangeLock(t *testing.T) {
 	// Create Transfer message
 	transferOtherData = actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transferOtherAmount = uint64(100)
-	assetTransferOtherData = actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferOtherData = actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+	instrumentTransferOtherData.InstrumentSenders = append(instrumentTransferOtherData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
-	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransferOtherData.InstrumentReceivers = append(instrumentTransferOtherData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transferOtherAmount})
 
-	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+	transferOtherData.Instruments = append(transferOtherData.Instruments, &instrumentTransferOtherData)
 
 	// Build transfer transaction
 	transferOtherTx = wire.NewMsgTx(1)
@@ -2045,7 +2045,7 @@ func multiExchangeTimeout(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	user1HoldingBalance := uint64(150)
 	mockUpHolding(t, ctx, userKey.Address, user1HoldingBalance)
@@ -2056,7 +2056,7 @@ func multiExchangeTimeout(t *testing.T) {
 	}
 	mockUpOtherContract(t, ctx, otherContractKey.Address, "Test Contract 2", "I", 1, "Karl Bitcoin",
 		true, true, false, false, false)
-	mockUpOtherAsset(t, ctx, otherContractKey, true, true, true, 1500, &sampleAssetPayload2,
+	mockUpOtherInstrument(t, ctx, otherContractKey, true, true, true, 1500, &sampleInstrumentPayload2,
 		true, false, false)
 
 	user2HoldingBalance := uint64(200)
@@ -2068,37 +2068,37 @@ func multiExchangeTimeout(t *testing.T) {
 	// Create Transfer message
 	transferData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transfer1Amount := uint64(50)
-	assetTransfer1Data := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransfer1Data := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransfer1Data.AssetSenders = append(assetTransfer1Data.AssetSenders,
+	instrumentTransfer1Data.InstrumentSenders = append(instrumentTransfer1Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transfer1Amount})
-	assetTransfer1Data.AssetReceivers = append(assetTransfer1Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransfer1Data.InstrumentReceivers = append(instrumentTransfer1Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transfer1Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer1Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer1Data)
 
-	// Transfer asset 2 from user2 to user1
+	// Transfer instrument 2 from user2 to user1
 	transfer2Amount := uint64(150)
-	assetTransfer2Data := actions.AssetTransferField{
-		ContractIndex: 1, // first output
-		AssetType:     testAsset2Type,
-		AssetCode:     testAsset2Code.Bytes(),
+	instrumentTransfer2Data := actions.InstrumentTransferField{
+		ContractIndex:  1, // first output
+		InstrumentType: testInstrument2Type,
+		InstrumentCode: testInstrument2Code.Bytes(),
 	}
 
-	assetTransfer2Data.AssetSenders = append(assetTransfer2Data.AssetSenders,
+	instrumentTransfer2Data.InstrumentSenders = append(instrumentTransfer2Data.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: transfer2Amount})
-	assetTransfer2Data.AssetReceivers = append(assetTransfer2Data.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransfer2Data.InstrumentReceivers = append(instrumentTransfer2Data.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transfer2Amount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransfer2Data)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransfer2Data)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -2191,21 +2191,21 @@ func multiExchangeTimeout(t *testing.T) {
 	// Create Transfer message
 	transferOtherData := actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transferOtherAmount := uint64(75)
-	assetTransferOtherData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferOtherData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+	instrumentTransferOtherData.InstrumentSenders = append(instrumentTransferOtherData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
-	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransferOtherData.InstrumentReceivers = append(instrumentTransferOtherData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transferOtherAmount})
 
-	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+	transferOtherData.Instruments = append(transferOtherData.Instruments, &instrumentTransferOtherData)
 
 	// Build transfer transaction
 	transferOtherTx := wire.NewMsgTx(1)
@@ -2328,21 +2328,21 @@ func multiExchangeTimeout(t *testing.T) {
 	// Create Transfer message
 	transferOtherData = actions.Transfer{}
 
-	// Transfer asset 1 from user1 to user2
+	// Transfer instrument 1 from user1 to user2
 	transferOtherAmount = uint64(100)
-	assetTransferOtherData = actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferOtherData = actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferOtherData.AssetSenders = append(assetTransferOtherData.AssetSenders,
+	instrumentTransferOtherData.InstrumentSenders = append(instrumentTransferOtherData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferOtherAmount})
-	assetTransferOtherData.AssetReceivers = append(assetTransferOtherData.AssetReceivers,
-		&actions.AssetReceiverField{Address: user2Key.Address.Bytes(),
+	instrumentTransferOtherData.InstrumentReceivers = append(instrumentTransferOtherData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: user2Key.Address.Bytes(),
 			Quantity: transferOtherAmount})
 
-	transferOtherData.Assets = append(transferOtherData.Assets, &assetTransferOtherData)
+	transferOtherData.Instruments = append(transferOtherData.Instruments, &instrumentTransferOtherData)
 
 	// Build transfer transaction
 	transferOtherTx = wire.NewMsgTx(1)
@@ -2399,7 +2399,7 @@ func oracleTransfer(t *testing.T) {
 	}
 	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
@@ -2412,13 +2412,13 @@ func oracleTransfer(t *testing.T) {
 	transferAmount := uint64(250)
 	transferData := actions.Transfer{}
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
 	blockHeight := 50000 - 5
@@ -2428,16 +2428,16 @@ func oracleTransfer(t *testing.T) {
 	}
 	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 1)
+		testInstrumentCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 1)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := actions.AssetReceiverField{
+	receiver := actions.InstrumentReceiverField{
 		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
@@ -2445,9 +2445,9 @@ func oracleTransfer(t *testing.T) {
 		OracleSigBlockHeight:  uint32(blockHeight),
 		OracleSigExpiry:       expiry,
 	}
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers, &receiver)
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -2527,7 +2527,7 @@ func oracleTransfer(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -2542,7 +2542,7 @@ func oracleTransfer(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -2551,10 +2551,10 @@ func oracleTransfer(t *testing.T) {
 			issuerHolding.PendingBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.PendingBalance)
+	t.Logf("\t%s\tIssuer instrument balance : %d", tests.Success, issuerHolding.PendingBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -2563,7 +2563,7 @@ func oracleTransfer(t *testing.T) {
 			userHolding.PendingBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.PendingBalance)
+	t.Logf("\t%s\tUser instrument balance : %d", tests.Success, userHolding.PendingBalance)
 }
 
 func oracleTransferBad(t *testing.T) {
@@ -2574,7 +2574,7 @@ func oracleTransferBad(t *testing.T) {
 	}
 	mockUpContractWithOracle(t, ctx, "Test Contract",
 		"I", 1, "John Bitcoin")
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	err := test.Headers.Populate(ctx, 50000, 12)
 	if err != nil {
@@ -2588,13 +2588,13 @@ func oracleTransferBad(t *testing.T) {
 	transferAmount := uint64(250)
 	transferData := actions.Transfer{}
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
 
 	blockHeight := 50000 - 4
@@ -2604,16 +2604,16 @@ func oracleTransferBad(t *testing.T) {
 	}
 	expiry := uint64(time.Now().Add(1 * time.Hour).UnixNano())
 	oracleSigHash, err := protocol.TransferOracleSigHash(ctx, test.ContractKey.Address,
-		testAssetCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 0)
+		testInstrumentCodes[0].Bytes(), userKey.Address, *blockHash, expiry, 0)
 	node.LogVerbose(ctx, "Created oracle sig hash from block : %s", blockHash.String())
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle sig hash : %v", tests.Failed, err)
 	}
-	oracleSig, err := oracleKey.Key.Sign(oracleSigHash)
+	oracleSig, err := oracleKey.Key.Sign(*oracleSigHash)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to create oracle signature : %v", tests.Failed, err)
 	}
-	receiver := actions.AssetReceiverField{
+	receiver := actions.InstrumentReceiverField{
 		Address:               userKey.Address.Bytes(),
 		Quantity:              transferAmount,
 		OracleSigAlgorithm:    1,
@@ -2621,26 +2621,26 @@ func oracleTransferBad(t *testing.T) {
 		OracleSigBlockHeight:  uint32(blockHeight),
 		OracleSigExpiry:       expiry,
 	}
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers, &receiver)
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers, &receiver)
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	bitcoinTransferAmount := uint64(50000)
-	bitcoinTransferData := actions.AssetTransferField{
-		ContractIndex: uint32(0x0000ffff),
-		AssetType:     protocol.BSVAssetID,
+	bitcoinTransferData := actions.InstrumentTransferField{
+		ContractIndex:  uint32(0x0000ffff),
+		InstrumentType: protocol.BSVInstrumentID,
 	}
 
-	bitcoinTransferData.AssetSenders = append(bitcoinTransferData.AssetSenders,
+	bitcoinTransferData.InstrumentSenders = append(bitcoinTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: bitcoinTransferAmount})
 
-	bitcoinTransferData.AssetReceivers = append(bitcoinTransferData.AssetReceivers,
-		&actions.AssetReceiverField{
+	bitcoinTransferData.InstrumentReceivers = append(bitcoinTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{
 			Address:  issuerKey.Address.Bytes(),
 			Quantity: bitcoinTransferAmount,
 		})
 
-	transferData.Assets = append(transferData.Assets, &bitcoinTransferData)
+	transferData.Instruments = append(transferData.Instruments, &bitcoinTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -2729,7 +2729,7 @@ func oracleTransferBad(t *testing.T) {
 
 	var responseMsg actions.Action
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -2751,7 +2751,7 @@ func oracleTransferBad(t *testing.T) {
 	// Find refund output
 	found := false
 	for _, output := range response.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.PkScript)
+		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
 		if err != nil {
 			continue
 		}
@@ -2776,7 +2776,7 @@ func permitted(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, false, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100012, issuerKey.Address)
 
@@ -2784,19 +2784,19 @@ func permitted(t *testing.T) {
 	transferAmount := uint64(250)
 	transferData := actions.Transfer{}
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount})
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -2843,7 +2843,7 @@ func permitted(t *testing.T) {
 	// Check issuer and user balance
 	v := ctx.Value(node.KeyValues).(*node.Values)
 	issuerHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], issuerKey.Address, v.Now)
+		&testInstrumentCodes[0], issuerKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -2852,10 +2852,10 @@ func permitted(t *testing.T) {
 			issuerHolding.FinalizedBalance, testTokenQty-transferAmount)
 	}
 
-	t.Logf("\t%s\tIssuer asset balance : %d", tests.Success, issuerHolding.FinalizedBalance)
+	t.Logf("\t%s\tIssuer instrument balance : %d", tests.Success, issuerHolding.FinalizedBalance)
 
 	userHolding, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address,
-		&testAssetCodes[0], userKey.Address, v.Now)
+		&testInstrumentCodes[0], userKey.Address, v.Now)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to get holding : %s", tests.Failed, err)
 	}
@@ -2864,7 +2864,7 @@ func permitted(t *testing.T) {
 			userHolding.FinalizedBalance, transferAmount)
 	}
 
-	t.Logf("\t%s\tUser asset balance : %d", tests.Success, userHolding.FinalizedBalance)
+	t.Logf("\t%s\tUser instrument balance : %d", tests.Success, userHolding.FinalizedBalance)
 }
 
 func permittedBad(t *testing.T) {
@@ -2875,7 +2875,7 @@ func permittedBad(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, false, true, true, 1000, 0, &sampleAssetPayloadNotPermitted, true, false,
+	mockUpInstrument(t, ctx, false, true, true, 1000, 0, &sampleInstrumentPayloadNotPermitted, true, false,
 		false)
 
 	user2Holding := uint64(100)
@@ -2888,21 +2888,21 @@ func permittedBad(t *testing.T) {
 	transferAmount := uint64(250)
 	transferData := actions.Transfer{}
 
-	assetTransferData := actions.AssetTransferField{
-		ContractIndex: 0, // first output
-		AssetType:     testAssetType,
-		AssetCode:     testAssetCodes[0].Bytes(),
+	instrumentTransferData := actions.InstrumentTransferField{
+		ContractIndex:  0, // first output
+		InstrumentType: testInstrumentType,
+		InstrumentCode: testInstrumentCodes[0].Bytes(),
 	}
 
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 0, Quantity: transferAmount})
-	assetTransferData.AssetSenders = append(assetTransferData.AssetSenders,
+	instrumentTransferData.InstrumentSenders = append(instrumentTransferData.InstrumentSenders,
 		&actions.QuantityIndexField{Index: 1, Quantity: user2Holding})
-	assetTransferData.AssetReceivers = append(assetTransferData.AssetReceivers,
-		&actions.AssetReceiverField{Address: userKey.Address.Bytes(),
+	instrumentTransferData.InstrumentReceivers = append(instrumentTransferData.InstrumentReceivers,
+		&actions.InstrumentReceiverField{Address: userKey.Address.Bytes(),
 			Quantity: transferAmount + user2Holding})
 
-	transferData.Assets = append(transferData.Assets, &assetTransferData)
+	transferData.Instruments = append(transferData.Instruments, &instrumentTransferData)
 
 	// Build transfer transaction
 	transferTx := wire.NewMsgTx(1)
@@ -2968,7 +2968,7 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to convert reject data", tests.Failed)
 	}
 
-	if reject.RejectionCode != actions.RejectionsAssetNotPermitted {
+	if reject.RejectionCode != actions.RejectionsInstrumentNotPermitted {
 		t.Fatalf("\t%s\tRejection code incorrect : %d", tests.Failed, reject.RejectionCode)
 	}
 

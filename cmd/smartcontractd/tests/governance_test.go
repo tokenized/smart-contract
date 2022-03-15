@@ -7,9 +7,9 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
@@ -43,7 +43,7 @@ func holderProposal(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 150)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
@@ -140,6 +140,134 @@ func holderProposal(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified cut-off : %s", tests.Success, vt.Expires.String())
+
+	if vt.InstrumentType != "" {
+		t.Errorf("\t%s\tInstrument type not empty : %s", tests.Failed, vt.InstrumentType)
+	}
+
+	if vt.InstrumentCode != nil {
+		t.Errorf("\t%s\tInstrument code not nill : %s", tests.Failed, vt.InstrumentCode)
+	}
+}
+
+func Test_proposalInstrument(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	mockUpContract(t, ctx, "Test Contract", "I", 1, "John Bitcoin", true, true, false, true, true)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, true, true)
+	instrumentCode := protocol.InstrumentCodeFromContract(test.ContractKey.Address, 0)
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, issuerKey.Address)
+
+	v := ctx.Value(node.KeyValues).(*node.Values)
+
+	proposalData := actions.Proposal{
+		Type:                0,
+		VoteSystem:          0,
+		VoteOptions:         "AB",
+		VoteMax:             1,
+		ProposalDescription: "Change contract name",
+		VoteCutOffTimestamp: v.Now.Nano() + 10000000000,
+		InstrumentType:      sampleInstrumentPayload.Code(),
+		InstrumentCode:      instrumentCode[:],
+	}
+
+	fip := permissions.FieldIndexPath{actions.InstrumentFieldEnforcementOrdersPermitted}
+	fipBytes, _ := fip.Bytes()
+	proposalData.ProposedAmendments = append(proposalData.ProposedAmendments,
+		&actions.AmendmentField{
+			FieldIndexPath: fipBytes,
+			Data:           []byte{1},
+		})
+
+	// Build proposal transaction
+	proposalTx := wire.NewMsgTx(1)
+
+	proposalInputHash := fundingTx.TxHash()
+
+	// From user
+	proposalTx.TxIn = append(proposalTx.TxIn, wire.NewTxIn(wire.NewOutPoint(proposalInputHash, 0),
+		make([]byte, 130)))
+
+	// To contract (for vote response)
+	script, _ := test.ContractKey.Address.LockingScript()
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(52000, script))
+
+	// To contract (second output to fund result)
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(2000, script))
+
+	// Data output
+	var err error
+	script, err = protocol.Serialize(&proposalData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize proposal : %v", tests.Failed, err)
+	}
+	proposalTx.TxOut = append(proposalTx.TxOut, wire.NewTxOut(0, script))
+
+	proposalItx, err := inspector.NewTransactionFromWire(ctx, proposalTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create proposal itx : %v", tests.Failed, err)
+	}
+
+	err = proposalItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote proposal itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, proposalTx)
+	t.Logf("Proposal Tx : %s", proposalTx.TxHash().String())
+
+	err = a.Trigger(ctx, "SEE", proposalItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept proposal : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tProposal accepted", tests.Success)
+
+	if len(responses) > 0 {
+		hash := responses[0].TxHash()
+		testVoteTxId = *hash
+	}
+
+	// Check the response
+	checkResponse(t, "G2")
+
+	// Verify vote
+	vt, err := vote.Fetch(ctx, test.MasterDB, test.ContractKey.Address, &testVoteTxId)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to retrieve vote : %v", tests.Failed, err)
+	}
+
+	if vt.Type != proposalData.Type {
+		t.Errorf("\t%s\tType incorrect : %d != %d", tests.Failed, vt.Type, proposalData.Type)
+	}
+
+	t.Logf("\t%s\tVerified initiator : %d", tests.Success, vt.Type)
+
+	if vt.VoteSystem != proposalData.VoteSystem {
+		t.Errorf("\t%s\tVote system incorrect : %d != %d", tests.Failed, vt.VoteSystem, proposalData.VoteSystem)
+	}
+
+	t.Logf("\t%s\tVerified vote system : %d", tests.Success, vt.VoteSystem)
+
+	if vt.Expires.Nano() != proposalData.VoteCutOffTimestamp {
+		t.Errorf("\t%s\tCut-off incorrect : %d != %d", tests.Failed, vt.Expires, proposalData.VoteCutOffTimestamp)
+	}
+
+	t.Logf("\t%s\tVerified cut-off : %s", tests.Success, vt.Expires.String())
+
+	if vt.InstrumentType != sampleInstrumentPayload.Code() {
+		t.Errorf("\t%s\tInstrument type incorrect : %s != %s", tests.Failed, vt.InstrumentType,
+			sampleInstrumentPayload.Code())
+	}
+
+	if !vt.InstrumentCode.Equal(&instrumentCode) {
+		t.Errorf("\t%s\tInstrument code incorrect : %s != %s", tests.Failed, vt.InstrumentCode,
+			instrumentCode)
+	}
 }
 
 // sendBallot sends a ballot tx to the contract
@@ -151,7 +279,7 @@ func sendBallot(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, false, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, false, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	err := mockUpProposal(ctx)
@@ -237,12 +365,12 @@ func adminBallot(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, true)
-	mockUpAsset(t, ctx, true, true, true, 10, 0, &sampleAdminAssetPayload, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 1, &sampleAssetPayload, true, false, false)
-	mockUpAssetHolding(t, ctx, userKey.Address, testAssetCodes[0], 1)
-	mockUpAssetHolding(t, ctx, user2Key.Address, testAssetCodes[1], 250)
+	mockUpInstrument(t, ctx, true, true, true, 10, 0, &sampleAdminInstrumentPayload, false, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 1, &sampleInstrumentPayload, true, false, false)
+	mockUpInstrumentHolding(t, ctx, userKey.Address, testInstrumentCodes[0], 1)
+	mockUpInstrumentHolding(t, ctx, user2Key.Address, testInstrumentCodes[1], 250)
 
-	err := mockUpProposalType(ctx, 2, &testAssetCodes[0]) // Administrative
+	err := mockUpProposalType(ctx, 2, &testInstrumentCodes[0]) // Administrative
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to mock up proposal : %v", tests.Failed, err)
 	}
@@ -315,7 +443,7 @@ func adminBallot(t *testing.T) {
 	}
 	t.Logf("\t%s\tVerified ballot quantity : %d", tests.Success, ballot.Quantity)
 
-	/*********************************** Vote from someone without admin asset ********************/
+	/*********************************** Vote from someone without admin instrument ********************/
 	fundingTx = tests.MockFundingTx(ctx, test.RPCNode, 100010, user2Key.Address)
 
 	// Build transaction
@@ -371,7 +499,7 @@ func voteResult(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	err := mockUpVote(ctx, 0)
@@ -432,7 +560,7 @@ func voteResultRelative(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	err := mockUpVote(ctx, 0)
@@ -498,7 +626,7 @@ func voteResultAbsolute(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I",
 		1, "John Bitcoin", true, true, false, false, false)
-	mockUpAsset(t, ctx, true, true, true, 1000, 0, &sampleAssetPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 250)
 
 	err := mockUpVote(ctx, 1)
@@ -673,7 +801,7 @@ func mockUpProposal(ctx context.Context) error {
 	return mockUpProposalType(ctx, 1, nil) // Administrator
 }
 
-func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bitcoin.Hash20) error {
+func mockUpProposalType(ctx context.Context, proposalType uint32, instrumentCode *bitcoin.Hash20) error {
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100009, userKey.Address)
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
@@ -687,8 +815,8 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bit
 		VoteCutOffTimestamp: v.Now.Nano() + 500000000,
 	}
 
-	if assetCode != nil {
-		proposalData.AssetCode = assetCode.Bytes()
+	if instrumentCode != nil {
+		proposalData.InstrumentCode = instrumentCode.Bytes()
 	}
 
 	fip := permissions.FieldIndexPath{actions.ContractFieldContractName}
@@ -757,9 +885,9 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bit
 	}
 
 	if proposalType == 2 {
-		as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &ct.AdminMemberAsset)
+		as, err := instrument.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, &ct.AdminMemberInstrument)
 		if err != nil {
-			return errors.Wrap(err, "retrieve asset")
+			return errors.Wrap(err, "retrieve instrument")
 		}
 
 		err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
@@ -768,14 +896,14 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bit
 			return errors.Wrap(err, "append ballots")
 		}
 	} else {
-		for _, a := range ct.AssetCodes {
-			if a.Equal(&ct.AdminMemberAsset) {
+		for _, a := range ct.InstrumentCodes {
+			if a.Equal(&ct.AdminMemberInstrument) {
 				continue // Administrative tokens don't count for holder votes.
 			}
 
-			as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, a)
+			as, err := instrument.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, a)
 			if err != nil {
-				return errors.Wrap(err, "retrieve asset")
+				return errors.Wrap(err, "retrieve instrument")
 			}
 
 			err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
@@ -789,13 +917,13 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, assetCode *bit
 	return vote.Save(ctx, test.MasterDB, test.ContractKey.Address, &voteData)
 }
 
-func mockUpAssetAmendmentVote(ctx context.Context, voteType, system uint32, amendment *actions.AmendmentField) error {
+func mockUpInstrumentAmendmentVote(ctx context.Context, voteType, system uint32, amendment *actions.AmendmentField) error {
 	now := protocol.CurrentTimestamp()
 	var voteData = state.Vote{
-		Type:       voteType,
-		VoteSystem: system,
-		AssetType:  testAssetType,
-		AssetCode:  &testAssetCodes[0],
+		Type:           voteType,
+		VoteSystem:     system,
+		InstrumentType: testInstrumentType,
+		InstrumentCode: &testInstrumentCodes[0],
 
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
@@ -806,9 +934,9 @@ func mockUpAssetAmendmentVote(ctx context.Context, voteType, system uint32, amen
 		Ballots: make(map[bitcoin.Hash20]state.Ballot),
 	}
 
-	as, err := asset.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, voteData.AssetCode)
+	as, err := instrument.Retrieve(ctx, test.MasterDB, test.ContractKey.Address, voteData.InstrumentCode)
 	if err != nil {
-		return errors.Wrap(err, "fetch asset")
+		return errors.Wrap(err, "fetch instrument")
 	}
 
 	err = holdings.AppendBallots(ctx, test.MasterDB, test.ContractKey.Address, as, &voteData.Ballots,
@@ -874,7 +1002,7 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	// Data output
 	ts := protocol.CurrentTimestamp()
 	resultData := actions.Result{
-		AssetType:          vt.AssetType,
+		InstrumentType:     vt.InstrumentType,
 		ProposedAmendments: vt.ProposedAmendments,
 		VoteTxId:           testVoteTxId.Bytes(),
 		OptionTally:        []uint64{1000, 0},
@@ -882,8 +1010,8 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		Timestamp:          ts.Nano(),
 	}
 
-	if vt.AssetCode != nil {
-		resultData.AssetCode = vt.AssetCode.Bytes()
+	if vt.InstrumentCode != nil {
+		resultData.InstrumentCode = vt.InstrumentCode.Bytes()
 	}
 
 	script, err = protocol.Serialize(&resultData, test.NodeConfig.IsTest)

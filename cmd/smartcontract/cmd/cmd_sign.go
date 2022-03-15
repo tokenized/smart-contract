@@ -84,8 +84,8 @@ func transferSign(c *cobra.Command, args []string) error {
 	}
 
 	index := 0
-	for _, asset := range transfer.Assets {
-		for _, receiver := range asset.AssetReceivers {
+	for _, instrument := range transfer.Instruments {
+		for _, receiver := range instrument.InstrumentReceivers {
 			if index == receiverIndex {
 				receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 				if err != nil {
@@ -95,20 +95,20 @@ func transferSign(c *cobra.Command, args []string) error {
 				fmt.Printf("Signing for address quantity %d : %x\n", receiver.Quantity,
 					receiverAddress.Bytes())
 				hash, err := protocol.TransferOracleSigHash(context.Background(), contractRawAddress,
-					asset.AssetCode, receiverAddress, *blockHash, receiver.OracleSigExpiry, 1)
+					instrument.InstrumentCode, receiverAddress, *blockHash, receiver.OracleSigExpiry, 1)
 				if err != nil {
 					fmt.Printf("Failed to generate sig hash : %s\n", err)
 					return nil
 				}
-				fmt.Printf("Hash : %x\n", hash)
+				fmt.Printf("Hash : %s\n", *hash)
 
-				signature, err := key.Sign(hash)
+				signature, err := key.Sign(*hash)
 				if err != nil {
 					fmt.Printf("Failed to sign sig hash : %s\n", err)
 					return nil
 				}
 
-				fmt.Printf("Signature : %x\n", signature.Bytes())
+				fmt.Printf("Signature : %s\n", signature)
 				return nil
 			}
 

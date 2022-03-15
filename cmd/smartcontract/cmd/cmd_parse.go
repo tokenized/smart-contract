@@ -13,7 +13,7 @@ import (
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/assets"
+	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
 
@@ -35,7 +35,7 @@ var cmdParse = &cobra.Command{
 			fmt.Printf("Too many arguments\n")
 			return nil
 		} else {
-			fmt.Printf("Enter hex to decode: ")
+			fmt.Printf("Enter hex or ASM to decode: ")
 			reader := bufio.NewReader(os.Stdin)
 			input, err = reader.ReadString('\n') // Get input from stdin
 			if err != nil {
@@ -48,7 +48,18 @@ var cmdParse = &cobra.Command{
 
 		data, err := hex.DecodeString(input)
 		if err != nil {
-			fmt.Printf("Failed to decode hex : %s\n", err)
+			fmt.Printf("Failed to parse script hex : %s\n", err)
+
+			script, err := bitcoin.StringToScript(input)
+			if err == nil {
+				if parseScript(c, script) == nil {
+					return nil
+				}
+
+				return nil
+			}
+
+			fmt.Printf("Failed to parse script : %s\n", err)
 			return nil
 		}
 
@@ -56,7 +67,9 @@ var cmdParse = &cobra.Command{
 			return nil
 		}
 
-		parseScript(c, data)
+		if parseScript(c, data) == nil {
+			return nil
+		}
 
 		return nil
 	},
@@ -95,9 +108,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 	fmt.Printf(tx.StringWithAddresses(network(c)))
 
 	for _, txOut := range tx.TxOut {
-		if parseScript(c, txOut.PkScript) == nil {
-			return nil
-		}
+		parseScript(c, txOut.LockingScript)
 	}
 
 	return nil
@@ -158,60 +169,70 @@ func parseScript(c *cobra.Command, script []byte) error {
 	}
 
 	switch m := message.(type) {
-	case *actions.AssetDefinition:
-		if len(m.AssetPayload) == 0 {
-			fmt.Printf("Empty asset payload!\n")
+	case *actions.InstrumentDefinition:
+		if len(m.InstrumentPayload) == 0 {
+			fmt.Printf("Empty instrument payload!\n")
 			return nil
 		}
-		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(m.InstrumentType), m.InstrumentPayload)
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s", err)
 		} else {
-			if err := asset.Validate(); err != nil {
-				fmt.Printf("Asset is invalid : %s\n", err)
+			if err := instrument.Validate(); err != nil {
+				fmt.Printf("Instrument is invalid : %s\n", err)
 			} else {
-				fmt.Printf("Asset is valid\n")
+				fmt.Printf("Instrument is valid\n")
 			}
-			dumpJSON(asset)
+			dumpJSON(instrument)
 		}
-	case *actions.AssetCreation:
-		if len(m.AssetPayload) == 0 {
-			fmt.Printf("Empty asset payload!\n")
+	case *actions.InstrumentCreation:
+		if len(m.InstrumentPayload) == 0 {
+			fmt.Printf("Empty instrument payload!\n")
 			return nil
 		}
-		asset, err := assets.Deserialize([]byte(m.AssetType), m.AssetPayload)
+		instrument, err := instruments.Deserialize([]byte(m.InstrumentType), m.InstrumentPayload)
 		if err != nil {
 			fmt.Printf("Failed to deserialize payload : %s\n", err)
 		} else {
-			if err := asset.Validate(); err != nil {
-				fmt.Printf("Asset is invalid : %s\n", err)
+			if err := instrument.Validate(); err != nil {
+				fmt.Printf("Instrument is invalid : %s\n", err)
 			}
-			dumpJSON(asset)
+			dumpJSON(instrument)
 		}
 
-		hash, err := bitcoin.NewHash20(m.AssetCode)
+		hash, err := bitcoin.NewHash20(m.InstrumentCode)
 		if err != nil {
 			fmt.Printf("Invalid hash : %s\n", err)
 			return nil
 		}
-		fmt.Printf("Asset ID : %s\n", protocol.AssetID(m.AssetType, *hash))
+		fmt.Printf("Instrument ID : %s\n", protocol.InstrumentID(m.InstrumentType, *hash))
 	case *actions.Transfer:
-		for i, a := range m.Assets {
-			hash, err := bitcoin.NewHash20(a.AssetCode)
-			if err != nil {
-				fmt.Printf("Invalid hash : %s\n", err)
-				return nil
+		for i, a := range m.Instruments {
+			if a.InstrumentType == protocol.BSVInstrumentID {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.BSVInstrumentID)
+				continue
 			}
-			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
+
+			hash, err := bitcoin.NewHash20(a.InstrumentCode)
+			if err != nil {
+				fmt.Printf("Instrument code %d is invalid : %s\n", i, err)
+			} else {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.InstrumentID(a.InstrumentType, *hash))
+			}
 		}
 	case *actions.Settlement:
-		for i, a := range m.Assets {
-			hash, err := bitcoin.NewHash20(a.AssetCode)
-			if err != nil {
-				fmt.Printf("Invalid hash : %s\n", err)
-				return nil
+		for i, a := range m.Instruments {
+			if a.InstrumentType == protocol.BSVInstrumentID {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.BSVInstrumentID)
+				continue
 			}
-			fmt.Printf("Asset ID %d : %s\n", i, protocol.AssetID(a.AssetType, *hash))
+
+			hash, err := bitcoin.NewHash20(a.InstrumentCode)
+			if err != nil {
+				fmt.Printf("Instrument code %d is invalid : %s\n", i, err)
+			} else {
+				fmt.Printf("Instrument ID %d : %s\n", i, protocol.InstrumentID(a.InstrumentType, *hash))
+			}
 		}
 	case *actions.Message:
 		if len(m.MessagePayload) == 0 {

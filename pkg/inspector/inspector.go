@@ -112,7 +112,7 @@ func NewTransactionFromHashWire(ctx context.Context, hash *bitcoin.Hash32, tx *w
 	var msgProtoIndex uint32
 	var err error
 	for i, txOut := range tx.TxOut {
-		msg, err = protocol.Deserialize(txOut.PkScript, isTest)
+		msg, err = protocol.Deserialize(txOut.LockingScript, isTest)
 		if err == nil {
 			msgProtoIndex = uint32(i)
 			break // Tokenized output found
@@ -151,7 +151,7 @@ func NewUTXOFromWire(tx *wire.MsgTx, index uint32) bitcoin.UTXO {
 	return bitcoin.UTXO{
 		Hash:          *tx.TxHash(),
 		Index:         index,
-		LockingScript: tx.TxOut[index].PkScript,
+		LockingScript: tx.TxOut[index].LockingScript,
 		Value:         tx.TxOut[index].Value,
 	}
 }
@@ -161,7 +161,7 @@ func NewUTXOFromHashWire(hash *bitcoin.Hash32, tx *wire.MsgTx, index uint32) bit
 	return bitcoin.UTXO{
 		Hash:          *hash,
 		Index:         index,
-		LockingScript: tx.TxOut[index].PkScript,
+		LockingScript: tx.TxOut[index].LockingScript,
 		Value:         tx.TxOut[index].Value,
 	}
 }
@@ -214,7 +214,7 @@ func NewTransactionFromOutputs(ctx context.Context, hash *bitcoin.Hash32, tx *wi
 			Hash:          input.PreviousOutPoint.Hash,
 			Index:         input.PreviousOutPoint.Index,
 			Value:         outputs[i].Value,
-			LockingScript: outputs[i].PkScript,
+			LockingScript: outputs[i].LockingScript,
 		})
 	}
 

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
@@ -55,6 +55,12 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
+	// Since this is a json conversion and state.Contract must have json name 'RestrictedQtyAssets'
+	// to be backwards compatible with previous saved contracts, but 'NewContract' must have json
+	// name 'RestrictedQtyInstruments' to be compatible with json conversion from the Tokenized
+	// action.
+	contract.RestrictedQtyInstruments = nu.RestrictedQtyInstruments
+
 	contract.Address = contractAddress
 	contract.Revision = 0
 	contract.CreatedAt = now
@@ -98,11 +104,11 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.OperatorAddress = *upd.OperatorAddress
 	}
 
-	if upd.AdminMemberAsset != nil {
-		c.AdminMemberAsset = *upd.AdminMemberAsset
+	if upd.AdminMemberInstrument != nil {
+		c.AdminMemberInstrument = *upd.AdminMemberInstrument
 	}
-	if upd.OwnerMemberAsset != nil {
-		c.OwnerMemberAsset = *upd.OwnerMemberAsset
+	if upd.OwnerMemberInstrument != nil {
+		c.OwnerMemberInstrument = *upd.OwnerMemberInstrument
 	}
 
 	if upd.ContractType != nil {
@@ -116,8 +122,8 @@ func Update(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 		c.ContractExpiration = *upd.ContractExpiration
 	}
 
-	if upd.RestrictedQtyAssets != nil {
-		c.RestrictedQtyAssets = *upd.RestrictedQtyAssets
+	if upd.RestrictedQtyInstruments != nil {
+		c.RestrictedQtyInstruments = *upd.RestrictedQtyInstruments
 	}
 
 	if upd.VotingSystems != nil {
@@ -172,14 +178,14 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 		return ErrNotFound
 	}
 
-	// Get assets
-	assets := make([]*state.Asset, 0, len(c.AssetCodes))
-	for _, assetCode := range c.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, contractAddress, assetCode)
+	// Get instruments
+	instruments := make([]*state.Instrument, 0, len(c.InstrumentCodes))
+	for _, instrumentCode := range c.InstrumentCodes {
+		as, err := instrument.Retrieve(ctx, dbConn, contractAddress, instrumentCode)
 		if err != nil {
 			return err
 		}
-		assets = append(assets, as)
+		instruments = append(instruments, as)
 	}
 
 	// Get votes
@@ -200,9 +206,9 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 		return err
 	}
 
-	// Copy assets
-	for _, as := range assets {
-		err = asset.Save(ctx, dbConn, newContractAddress, as)
+	// Copy instruments
+	for _, as := range instruments {
+		err = instrument.Save(ctx, dbConn, newContractAddress, as)
 		if err != nil {
 			return err
 		}
@@ -219,10 +225,10 @@ func Move(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress
 	return nil
 }
 
-// AddAssetCode adds an asset code to a contract. If the asset code is already there, then it will
+// AddInstrumentCode adds an instrument code to a contract. If the instrument code is already there, then it will
 //   not add it again.
-func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20, isTest bool, now protocol.Timestamp) error {
+func AddInstrumentCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	instrumentCode *bitcoin.Hash20, isTest bool, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Update")
 	defer span.End()
 
@@ -232,44 +238,44 @@ func AddAssetCode(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.Ra
 		return ErrNotFound
 	}
 
-	for _, ac := range ct.AssetCodes {
-		if ac.Equal(assetCode) {
+	for _, ac := range ct.InstrumentCodes {
+		if ac.Equal(instrumentCode) {
 			return nil
 		}
 	}
 
-	ct.AssetCodes = append(ct.AssetCodes, assetCode)
+	ct.InstrumentCodes = append(ct.InstrumentCodes, instrumentCode)
 	ct.UpdatedAt = now
 
 	if err := Save(ctx, dbConn, ct, isTest); err != nil {
-		return errors.Wrap(err, "Failed to add asset to contract")
+		return errors.Wrap(err, "Failed to add instrument to contract")
 	}
 
 	return nil
 }
 
-// CanHaveMoreAssets returns true if an Asset can be added to the Contract,
+// CanHaveMoreInstruments returns true if an Instrument can be added to the Contract,
 // false otherwise.
 //
-// A "dynamic" contract is permitted to have unlimited assets if the
+// A "dynamic" contract is permitted to have unlimited instruments if the
 // contract.Qty == 0.
-func CanHaveMoreAssets(ctx context.Context, ct *state.Contract) bool {
-	if ct.RestrictedQtyAssets == 0 {
+func CanHaveMoreInstruments(ctx context.Context, ct *state.Contract) bool {
+	if ct.RestrictedQtyInstruments == 0 {
 		return true
 	}
 
-	// number of current assets
-	total := uint64(len(ct.AssetCodes))
+	// number of current instruments
+	total := uint64(len(ct.InstrumentCodes))
 
-	// more assets can be added if the current total is less than the limit
+	// more instruments can be added if the current total is less than the limit
 	// imposed by the contract.
-	return total < ct.RestrictedQtyAssets
+	return total < ct.RestrictedQtyInstruments
 }
 
 // HasAnyBalance checks if the user has any balance of any token across the contract.
 func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 	userAddress bitcoin.RawAddress) bool {
-	for _, a := range ct.AssetCodes {
+	for _, a := range ct.InstrumentCodes {
 		h, err := holdings.Fetch(ctx, dbConn, ct.Address, a, userAddress)
 		if err != nil {
 			continue
@@ -283,12 +289,12 @@ func HasAnyBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 	return false
 }
 
-// GetTokenQty returns the token quantities for all assets.
+// GetTokenQty returns the token quantities for all instruments.
 func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 	applyMultiplier bool) uint64 {
 	result := uint64(0)
-	for _, a := range ct.AssetCodes {
-		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
+	for _, a := range ct.InstrumentCodes {
+		as, err := instrument.Retrieve(ctx, dbConn, ct.Address, a)
 		if err != nil {
 			continue
 		}
@@ -307,16 +313,16 @@ func GetTokenQty(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 	return result
 }
 
-// GetVotingBalance returns the tokens held across all of the contract's assets.
+// GetVotingBalance returns the tokens held across all of the contract's instruments.
 func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 	userAddress bitcoin.RawAddress, applyMultiplier bool, now protocol.Timestamp) uint64 {
 
 	result := uint64(0)
-	for _, a := range ct.AssetCodes {
-		if a.Equal(&ct.AdminMemberAsset) {
+	for _, a := range ct.InstrumentCodes {
+		if a.Equal(&ct.AdminMemberInstrument) {
 			continue // Administrative tokens don't count for holder votes.
 		}
-		as, err := asset.Retrieve(ctx, dbConn, ct.Address, a)
+		as, err := instrument.Retrieve(ctx, dbConn, ct.Address, a)
 		if err != nil {
 			continue
 		}

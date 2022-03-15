@@ -1,4 +1,4 @@
-package asset
+package instrument
 
 import (
 	"bytes"
@@ -16,39 +16,39 @@ import (
 )
 
 const storageKey = "contracts"
-const storageSubKey = "assets"
+const storageSubKey = "assets" // Leave assets for backwards compatibility.
 
-var cache map[bitcoin.Hash20]*state.Asset
+var cache map[bitcoin.Hash20]*state.Instrument
 
-// Put a single asset in storage
+// Put a single instrument in storage
 func Save(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	asset *state.Asset) error {
+	instrument *state.Instrument) error {
 
-	data, err := serializeAsset(asset)
+	data, err := serializeInstrument(instrument)
 	if err != nil {
-		return errors.Wrap(err, "Failed to serialize asset")
+		return errors.Wrap(err, "Failed to serialize instrument")
 	}
 
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
 		return err
 	}
-	if err := dbConn.Put(ctx, buildStoragePath(contractHash, asset.Code), data); err != nil {
+	if err := dbConn.Put(ctx, buildStoragePath(contractHash, instrument.Code), data); err != nil {
 		return err
 	}
 
 	if cache == nil {
-		cache = make(map[bitcoin.Hash20]*state.Asset)
+		cache = make(map[bitcoin.Hash20]*state.Instrument)
 	}
-	cache[*asset.Code] = asset
+	cache[*instrument.Code] = instrument
 	return nil
 }
 
-// Fetch a single asset from storage
+// Fetch a single instrument from storage
 func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20) (*state.Asset, error) {
+	instrumentCode *bitcoin.Hash20) (*state.Instrument, error) {
 	if cache != nil {
-		result, exists := cache[*assetCode]
+		result, exists := cache[*instrumentCode]
 		if exists {
 			return result, nil
 		}
@@ -58,7 +58,7 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 	if err != nil {
 		return nil, err
 	}
-	key := buildStoragePath(contractHash, assetCode)
+	key := buildStoragePath(contractHash, instrumentCode)
 
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {
@@ -66,16 +66,16 @@ func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddres
 			return nil, ErrNotFound
 		}
 
-		return nil, errors.Wrap(err, "Failed to fetch asset")
+		return nil, errors.Wrap(err, "Failed to fetch instrument")
 	}
 
-	// Prepare the asset object
-	asset := state.Asset{}
-	if err := deserializeAsset(bytes.NewReader(b), &asset); err != nil {
-		return nil, errors.Wrap(err, "Failed to deserialize asset")
+	// Prepare the instrument object
+	instrument := state.Instrument{}
+	if err := deserializeInstrument(bytes.NewReader(b), &instrument); err != nil {
+		return nil, errors.Wrap(err, "Failed to deserialize instrument")
 	}
 
-	return &asset, nil
+	return &instrument, nil
 }
 
 func Reset(ctx context.Context) {
@@ -83,11 +83,11 @@ func Reset(ctx context.Context) {
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(contractHash *bitcoin.Hash20, asset *bitcoin.Hash20) string {
-	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash, storageSubKey, asset)
+func buildStoragePath(contractHash *bitcoin.Hash20, instrument *bitcoin.Hash20) string {
+	return fmt.Sprintf("%s/%s/%s/%s", storageKey, contractHash, storageSubKey, instrument)
 }
 
-func serializeAsset(as *state.Asset) ([]byte, error) {
+func serializeInstrument(as *state.Instrument) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Version
@@ -115,13 +115,13 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 		return nil, err
 	}
 
-	if err := serializeString(&buf, []byte(as.AssetType)); err != nil {
+	if err := serializeString(&buf, []byte(as.InstrumentType)); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&buf, binary.LittleEndian, as.AssetIndex); err != nil {
+	if err := binary.Write(&buf, binary.LittleEndian, as.InstrumentIndex); err != nil {
 		return nil, err
 	}
-	if err := serializeString(&buf, as.AssetPermissions); err != nil {
+	if err := serializeString(&buf, as.InstrumentPermissions); err != nil {
 		return nil, err
 	}
 
@@ -151,7 +151,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, as.HolderProposal); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(&buf, binary.LittleEndian, as.AssetModificationGovernance); err != nil {
+	if err := binary.Write(&buf, binary.LittleEndian, as.InstrumentModificationGovernance); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(&buf, binary.LittleEndian, as.AuthorizedTokenQty); err != nil {
@@ -163,7 +163,7 @@ func serializeAsset(as *state.Asset) ([]byte, error) {
 	if err := binary.Write(&buf, binary.LittleEndian, as.AdministrationProposal); err != nil {
 		return nil, err
 	}
-	if err := serializeString(&buf, as.AssetPayload); err != nil {
+	if err := serializeString(&buf, as.InstrumentPayload); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func serializeString(w io.Writer, v []byte) error {
 	return nil
 }
 
-func deserializeAsset(r io.Reader, as *state.Asset) error {
+func deserializeInstrument(r io.Reader, as *state.Instrument) error {
 	// Version
 	var version uint8
 	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
@@ -219,11 +219,11 @@ func deserializeAsset(r io.Reader, as *state.Asset) error {
 	if err != nil {
 		return err
 	}
-	as.AssetType = string(data)
-	if err := binary.Read(r, binary.LittleEndian, &as.AssetIndex); err != nil {
+	as.InstrumentType = string(data)
+	if err := binary.Read(r, binary.LittleEndian, &as.InstrumentIndex); err != nil {
 		return err
 	}
-	as.AssetPermissions, err = deserializeString(r)
+	as.InstrumentPermissions, err = deserializeString(r)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func deserializeAsset(r io.Reader, as *state.Asset) error {
 	if err := binary.Read(r, binary.LittleEndian, &as.HolderProposal); err != nil {
 		return err
 	}
-	if err := binary.Read(r, binary.LittleEndian, &as.AssetModificationGovernance); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &as.InstrumentModificationGovernance); err != nil {
 		return err
 	}
 	if err := binary.Read(r, binary.LittleEndian, &as.AuthorizedTokenQty); err != nil {
@@ -267,7 +267,7 @@ func deserializeAsset(r io.Reader, as *state.Asset) error {
 	if err := binary.Read(r, binary.LittleEndian, &as.AdministrationProposal); err != nil {
 		return err
 	}
-	as.AssetPayload, err = deserializeString(r)
+	as.InstrumentPayload, err = deserializeString(r)
 	if err != nil {
 		return err
 	}

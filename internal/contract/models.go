@@ -17,8 +17,8 @@ type NewContract struct {
 	ContractType uint32 `json:"ContractType,omitempty"`
 	ContractFee  uint64 `json:"ContractFee,omitempty"`
 
-	ContractExpiration  protocol.Timestamp `json:"ContractExpiration,omitempty"`
-	RestrictedQtyAssets uint64             `json:"RestrictedQtyAssets,omitempty"`
+	ContractExpiration       protocol.Timestamp `json:"ContractExpiration,omitempty"`
+	RestrictedQtyInstruments uint64             `json:"RestrictedQtyInstruments,omitempty"`
 
 	VotingSystems          []*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	AdministrationProposal bool                         `json:"AdministrationProposal,omitempty"`
@@ -42,16 +42,16 @@ type UpdateContract struct {
 	AdminAddress    *bitcoin.RawAddress `json:"AdminAddress,omitempty"`
 	OperatorAddress *bitcoin.RawAddress `json:"OperatorAddress,omitempty"`
 
-	AdminMemberAsset *bitcoin.Hash20 `json:"AdminMemberAsset,omitempty"`
-	OwnerMemberAsset *bitcoin.Hash20 `json:"OwnerMemberAsset,omitempty"`
+	AdminMemberInstrument *bitcoin.Hash20 `json:"AdminMemberInstrument,omitempty"`
+	OwnerMemberInstrument *bitcoin.Hash20 `json:"OwnerMemberInstrument,omitempty"`
 
 	FreezePeriod *protocol.Timestamp `json:"FreezePeriod,omitempty"`
 
 	ContractType *uint32 `json:"ContractType,omitempty"`
 	ContractFee  *uint64 `json:"ContractFee,omitempty"`
 
-	ContractExpiration  *protocol.Timestamp `json:"ContractExpiration,omitempty"`
-	RestrictedQtyAssets *uint64             `json:"RestrictedQtyAssets,omitempty"`
+	ContractExpiration       *protocol.Timestamp `json:"ContractExpiration,omitempty"`
+	RestrictedQtyInstruments *uint64             `json:"RestrictedQtyInstruments,omitempty"`
 
 	VotingSystems          *[]*actions.VotingSystemField `json:"VotingSystems,omitempty"`
 	AdministrationProposal *bool                         `json:"AdministrationProposal,omitempty"`

@@ -39,9 +39,9 @@ const (
 
 // GetHolding returns the holding data for a PKH.
 func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	assetCode *bitcoin.Hash20, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
+	instrumentCode *bitcoin.Hash20, address bitcoin.RawAddress, now protocol.Timestamp) (*state.Holding, error) {
 
-	result, err := Fetch(ctx, dbConn, contractAddress, assetCode, address)
+	result, err := Fetch(ctx, dbConn, contractAddress, instrumentCode, address)
 	if err == nil {
 		return result, nil
 	}
@@ -59,7 +59,7 @@ func GetHolding(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawA
 }
 
 // VotingBalance returns the balance for a PKH holder
-func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
+func VotingBalance(as *state.Instrument, h *state.Holding, applyMultiplier bool,
 	now protocol.Timestamp) uint64 {
 
 	if !as.VotingRights {
@@ -74,7 +74,7 @@ func VotingBalance(as *state.Asset, h *state.Holding, applyMultiplier bool,
 
 // AppendBallots adds ballot quantities to the ballot map.
 func AppendBallots(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
-	as *state.Asset, ballots *map[bitcoin.Hash20]state.Ballot, applyMultiplier bool,
+	as *state.Instrument, ballots *map[bitcoin.Hash20]state.Ballot, applyMultiplier bool,
 	now protocol.Timestamp) error {
 
 	if !as.VotingRights {

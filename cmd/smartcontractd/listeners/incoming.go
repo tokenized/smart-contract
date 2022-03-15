@@ -136,7 +136,7 @@ func (server *Server) markPreprocessed(ctx context.Context, txid bitcoin.Hash32)
 
 	intx, exists := server.pendingTxs[txid]
 	if !exists {
-		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid.String())
+		node.LogWarn(ctx, "Pending tx doesn't exist for preprocessed : %s", txid)
 		return
 	}
 
@@ -428,17 +428,17 @@ func (c *IncomingTxChannel) Close() error {
 func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transaction,
 	transfer *actions.Transfer, headers node.BitcoinHeaders, isTest bool) error {
 
-	for _, assetTransfer := range transfer.Assets {
-		if assetTransfer.AssetType == protocol.BSVAssetID && len(assetTransfer.AssetCode) == 0 {
+	for _, instrumentTransfer := range transfer.Instruments {
+		if instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && len(instrumentTransfer.InstrumentCode) == 0 {
 			continue // Skip bitcoin transfers since they should be handled already
 		}
 
-		if len(itx.Outputs) <= int(assetTransfer.ContractIndex) {
+		if len(itx.Outputs) <= int(instrumentTransfer.ContractIndex) {
 			continue
 		}
 
 		ct, err := contract.Retrieve(ctx, masterDB,
-			itx.Outputs[assetTransfer.ContractIndex].Address, isTest)
+			itx.Outputs[instrumentTransfer.ContractIndex].Address, isTest)
 		if err == contract.ErrNotFound {
 			continue // Not associated with one of our contracts
 		}
@@ -447,10 +447,10 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 		}
 
 		// Process receivers
-		for _, receiver := range assetTransfer.AssetReceivers {
+		for _, receiver := range instrumentTransfer.InstrumentReceivers {
 			// Check Oracle Signature
-			if err := validateOracle(ctx, itx.Outputs[assetTransfer.ContractIndex].Address,
-				ct, assetTransfer.AssetCode, receiver, headers); err != nil {
+			if err := validateOracle(ctx, itx.Outputs[instrumentTransfer.ContractIndex].Address,
+				ct, instrumentTransfer.InstrumentCode, receiver, headers); err != nil {
 				return err
 			}
 		}
@@ -460,9 +460,9 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 }
 
 func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct *state.Contract,
-	assetCode []byte, assetReceiver *actions.AssetReceiverField, headers node.BitcoinHeaders) error {
+	instrumentCode []byte, instrumentReceiver *actions.InstrumentReceiverField, headers node.BitcoinHeaders) error {
 
-	if assetReceiver.OracleSigAlgorithm == 0 {
+	if instrumentReceiver.OracleSigAlgorithm == 0 {
 		identityFound := false
 		for _, oracle := range ct.Oracles {
 			if len(oracle.OracleTypes) == 0 {
@@ -485,15 +485,15 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 		return nil // No signature required
 	}
 
-	if int(assetReceiver.OracleIndex) >= len(ct.FullOracles) {
-		return fmt.Errorf("Oracle index out of range : %d / %d", assetReceiver.OracleIndex,
+	if int(instrumentReceiver.OracleIndex) >= len(ct.FullOracles) {
+		return fmt.Errorf("Oracle index out of range : %d / %d", instrumentReceiver.OracleIndex,
 			len(ct.FullOracles))
 	}
 
 	// No oracle types specified is assumed to be identity oracle for backwards compatibility
-	if len(ct.Oracles[assetReceiver.OracleIndex].OracleTypes) != 0 {
+	if len(ct.Oracles[instrumentReceiver.OracleIndex].OracleTypes) != 0 {
 		identityFound := false
-		for _, t := range ct.Oracles[assetReceiver.OracleIndex].OracleTypes {
+		for _, t := range ct.Oracles[instrumentReceiver.OracleIndex].OracleTypes {
 			if t == actions.ServiceTypeIdentityOracle {
 				identityFound = true
 				break
@@ -505,40 +505,40 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	// Parse signature
-	oracleSig, err := bitcoin.SignatureFromBytes(assetReceiver.OracleConfirmationSig)
+	oracleSig, err := bitcoin.SignatureFromBytes(instrumentReceiver.OracleConfirmationSig)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse oracle signature")
 	}
 
-	oracle := ct.FullOracles[assetReceiver.OracleIndex]
-	hash, err := headers.BlockHash(ctx, int(assetReceiver.OracleSigBlockHeight))
+	oracle := ct.FullOracles[instrumentReceiver.OracleIndex]
+	hash, err := headers.BlockHash(ctx, int(instrumentReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
-			assetReceiver.OracleSigBlockHeight))
+			instrumentReceiver.OracleSigBlockHeight))
 	}
 
-	if assetReceiver.OracleSigExpiry != 0 {
+	if instrumentReceiver.OracleSigExpiry != 0 {
 		now := uint64(time.Now().UnixNano())
-		if now > assetReceiver.OracleSigExpiry {
+		if now > instrumentReceiver.OracleSigExpiry {
 			return fmt.Errorf("Oracle signature expired : %d > %d", now,
-				assetReceiver.OracleSigExpiry)
+				instrumentReceiver.OracleSigExpiry)
 		}
 	}
 
-	receiverAddress, err := bitcoin.DecodeRawAddress(assetReceiver.Address)
+	receiverAddress, err := bitcoin.DecodeRawAddress(instrumentReceiver.Address)
 	if err != nil {
 		return errors.Wrap(err, "Failed to read receiver address")
 	}
 
 	node.LogVerbose(ctx, "Checking sig against oracle %d with block hash %d : %s",
-		assetReceiver.OracleIndex, assetReceiver.OracleSigBlockHeight, hash.String())
-	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, assetCode,
-		receiverAddress, *hash, assetReceiver.OracleSigExpiry, 1)
+		instrumentReceiver.OracleIndex, instrumentReceiver.OracleSigBlockHeight, hash.String())
+	sigHash, err := protocol.TransferOracleSigHash(ctx, contractAddress, instrumentCode,
+		receiverAddress, *hash, instrumentReceiver.OracleSigExpiry, 1)
 	if err != nil {
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
 
-	if oracleSig.Verify(sigHash, oracle.PublicKey) {
+	if oracleSig.Verify(*sigHash, oracle.PublicKey) {
 		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}
@@ -581,7 +581,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		// Check if block time is beyond expiration
 		// TODO Figure out how to get tx time to here. node.KeyValues is not set in context.
-		expire := time.Now().Add(6 * time.Hour)
+		expire := time.Now().Add(6 * time.Hour).Unix()
 		header, err := headers.GetHeaders(ctx, int(cert.BlockHeight), 1)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Failed to retrieve block header for height %d",
@@ -590,9 +590,9 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 		if len(header.Headers) == 0 {
 			return fmt.Errorf("Failed to retrieve block header for height %d", cert.BlockHeight)
 		}
-		if header.Headers[0].Timestamp.After(expire) {
+		if header.Headers[0].Timestamp > uint32(expire) {
 			return fmt.Errorf("Oracle sig block hash expired : %d < %d",
-				header.Headers[0].Timestamp.Unix(), expire.Unix())
+				header.Headers[0].Timestamp, expire)
 		}
 
 		hash := header.Headers[0].BlockHash()
@@ -631,7 +631,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		logFields = append(logFields, logger.Formatter("sig_hash", "%x", sigHash))
 
-		if !oracleSig.Verify(sigHash, publicKey) {
+		if !oracleSig.Verify(*sigHash, publicKey) {
 			logger.WarnWithFields(ctx, logFields, "Admin identity signature is invalid")
 			return fmt.Errorf("Signature invalid")
 		}

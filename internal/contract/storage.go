@@ -46,7 +46,9 @@ func Save(ctx context.Context, dbConn *db.DB, contract *state.Contract, isTest b
 }
 
 // Fetch a single contract from storage
-func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, isTest bool) (*state.Contract, error) {
+func Fetch(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	isTest bool) (*state.Contract, error) {
+
 	contractHash, err := contractAddress.Hash()
 	if err != nil {
 		return nil, err

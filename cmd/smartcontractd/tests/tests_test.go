@@ -11,9 +11,9 @@ import (
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
-	"github.com/tokenized/smart-contract/internal/asset"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
+	"github.com/tokenized/smart-contract/internal/instrument"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/vote"
@@ -41,17 +41,18 @@ var operatorKey *wallet.Key
 
 var testTokenQty uint64
 var testToken2Qty uint64
-var testAssetType string
-var testAsset2Type string
-var testAssetCodes []bitcoin.Hash20
-var testAsset2Code bitcoin.Hash20
+var testInstrumentType string
+var testInstrument2Type string
+var testInstrumentCodes []bitcoin.Hash20
+var testInstrument2Code bitcoin.Hash20
 var testVoteTxId bitcoin.Hash32
 var testVoteResultTxId bitcoin.Hash32
 
 var tracer *filters.Tracer
 
 var outgoingMessageTypes = map[string]bool{
-	actions.CodeAssetCreation:            true,
+	actions.CodeInstrumentCreation:       true,
+	actions.CodeAssetCreation:            true, // Deprecated backwards compatibility
 	actions.CodeContractFormation:        true,
 	actions.CodeBodyOfAgreementFormation: true,
 	actions.CodeSettlement:               true,
@@ -197,7 +198,7 @@ func getResponse() *wire.MsgTx {
 
 func responseType(tx *wire.MsgTx) string {
 	for _, output := range tx.TxOut {
-		msg, err := protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		msg, err := protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			return msg.Code()
 		}
@@ -224,7 +225,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 	var responseMsg actions.Action
 	var err error
 	for _, output := range response.TxOut {
-		responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+		responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 		if err == nil {
 			break
 		}
@@ -283,7 +284,7 @@ func checkResponses(t testing.TB, responseCode string) {
 
 	for i, response := range responsesToProcess {
 		for _, output := range response.TxOut {
-			responseMsg, err = protocol.Deserialize(output.PkScript, test.NodeConfig.IsTest)
+			responseMsg, err = protocol.Deserialize(output.LockingScript, test.NodeConfig.IsTest)
 			if err == nil {
 				break
 			}
@@ -303,7 +304,7 @@ func resetTest(ctx context.Context) error {
 	responseLock.Lock()
 	responses = nil
 	responseLock.Unlock()
-	asset.Reset(ctx)
+	instrument.Reset(ctx)
 	contract.Reset(ctx)
 	holdings.Reset(ctx)
 	vote.Reset(ctx)
