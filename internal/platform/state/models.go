@@ -1,6 +1,8 @@
 package state
 
 import (
+	"sync"
+
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/instruments"
@@ -46,7 +48,7 @@ type Contract struct {
 	// Note: Leave JSON name as AssetCodes for backwards compatibility
 	InstrumentCodes []*bitcoin.Hash20 `json:"AssetCodes,omitempty"`
 
-	FullOracles []Oracle `json:"_,omitempty"`
+	FullOracles []*Oracle `json:"_,omitempty"`
 }
 
 type Agreement struct {
@@ -59,9 +61,29 @@ type Agreement struct {
 }
 
 type Oracle struct {
-	Address   bitcoin.RawAddress `json:"address,omitempty"`
-	URL       string             `json:"url,omitempty"`
-	PublicKey bitcoin.PublicKey  `json:"public_key,omitempty"`
+	Address  bitcoin.RawAddress `json:"address,omitempty"`
+	Services []*Service         `json:"services,omitempty"`
+
+	sync.RWMutex
+}
+
+type Service struct {
+	ServiceType uint32            `json:"service_type,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	PublicKey   bitcoin.PublicKey `json:"public_key,omitempty"`
+}
+
+func (o *Oracle) GetService(serviceType uint32) *Service {
+	o.RLock()
+	defer o.RUnlock()
+
+	for _, service := range o.Services {
+		if service.ServiceType == serviceType {
+			return service
+		}
+	}
+
+	return nil
 }
 
 type Instrument struct {

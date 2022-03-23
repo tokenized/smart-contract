@@ -1505,6 +1505,9 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name string, is
 	mockIdentityContract(t, ctx, oracleContractKey, oracleKey.Key.PublicKey(),
 		actions.EntitiesPublicCompany, actions.RolesCEO, "John Bitcoin")
 
+	mockAuthorityContract(t, ctx, authorityKey.Key, authorityKey.Key.PublicKey(),
+		actions.EntitiesPublicCompany, actions.RolesCEO, "John Bitcoin")
+
 	contractData := &state.Contract{
 		Address:   test.ContractKey.Address,
 		CreatedAt: protocol.CurrentTimestamp(),
@@ -1529,6 +1532,10 @@ func mockUpContractWithOracle(t testing.TB, ctx context.Context, name string, is
 			&actions.OracleField{
 				OracleTypes:    []uint32{actions.ServiceTypeIdentityOracle},
 				EntityContract: oracleAddress.Bytes(),
+			},
+			&actions.OracleField{
+				OracleTypes:    []uint32{actions.ServiceTypeAuthorityOracle},
+				EntityContract: authorityKey.Address.Bytes(),
 			},
 		},
 
@@ -1817,5 +1824,40 @@ func mockOperatorContract(t testing.TB, ctx context.Context, key bitcoin.Key,
 
 	if err := contract.SaveContractFormation(ctx, test.MasterDB, ra, cf, test.NodeConfig.IsTest); err != nil {
 		t.Fatalf("Failed to save operator contract address : %s", err)
+	}
+}
+
+func mockAuthorityContract(t testing.TB, ctx context.Context, key bitcoin.Key,
+	publicKey bitcoin.PublicKey, issuerType string, issuerRole uint32, issuerName string) {
+
+	cf := &actions.ContractFormation{
+		ContractType: actions.ContractTypeEntity,
+		ContractName: "Test Authority Oracle",
+		Issuer: &actions.EntityField{
+			Type: issuerType,
+			Administration: []*actions.AdministratorField{
+				&actions.AdministratorField{
+					Type: issuerRole,
+					Name: issuerName,
+				},
+			},
+		},
+		ContractFee: 1000,
+		Services: []*actions.ServiceField{
+			&actions.ServiceField{
+				Type:      actions.ServiceTypeAuthorityOracle,
+				URL:       "tokenized.com/authority",
+				PublicKey: publicKey.Bytes(),
+			},
+		},
+	}
+
+	ra, err := key.RawAddress()
+	if err != nil {
+		t.Fatalf("Failed to create identity contract address : %s", err)
+	}
+
+	if err := contract.SaveContractFormation(ctx, test.MasterDB, ra, cf, test.NodeConfig.IsTest); err != nil {
+		t.Fatalf("Failed to save identity contract address : %s", err)
 	}
 }

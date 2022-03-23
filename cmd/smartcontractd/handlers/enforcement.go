@@ -64,9 +64,17 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
+	isAuthorized := contract.IsOperator(ctx, ct, itx.Inputs[0].Address)
+
+	if !isAuthorized {
+		// Check if the sender is an authority oracle.
+		isAuthorized = contract.IsAuthority(ctx, ct, itx.Inputs[0].Address)
+	}
+
+	if !isAuthorized {
 		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogWarn(ctx, "Requestor PKH is not administration or operator : %s", address.String())
+		node.LogWarn(ctx, "Requestor is not administration, operator, or authority oracle : %s",
+			address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -82,6 +90,15 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 			node.LogWarn(ctx, "Failed to parse authority pub key : %s", err)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
+
+		// We want any public key allowed as it could be some jurisdiction that is requiring an
+		// enforcement action and not all jurisdiction authorities will be registered authority
+		// oracles.
+		// if !contract.IsAuthorityPublicKey(ctx, ct, authorityPubKey) {
+		// 	node.LogWarn(ctx, "Authority public key is not registered authority : %s",
+		// 		authorityPubKey)
+		// 	return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+		// }
 
 		authoritySig, err := bitcoin.SignatureFromBytes(msg.OrderSignature)
 		if err != nil {
@@ -132,12 +149,6 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
-	}
-
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	// Freeze <- Order
@@ -263,13 +274,6 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		return errors.Wrap(err, "Failed to retrieve contract")
 	}
 
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
-	}
-
 	// Get Freeze Tx
 	hash, err := bitcoin.NewHash32(msg.FreezeTxId)
 	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, e.Config.IsTest)
@@ -382,12 +386,6 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
-	}
-
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
@@ -561,12 +559,6 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve contract")
-	}
-
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address.String())
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
 	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)

@@ -20,7 +20,8 @@ func TestEnforcement(t *testing.T) {
 	defer tests.Recover(t)
 
 	t.Run("freeze", freezeOrder)
-	t.Run("authority", freezeAuthorityOrder)
+	t.Run("freezeFromAuthority", freezeFromAuthorityOrder)
+	t.Run("freezeWithAuthority", freezeWithAuthorityOrder)
 	t.Run("thaw", thawOrder)
 	t.Run("confiscate", confiscateOrder)
 	t.Run("reconcile", reconcileOrder)
@@ -34,7 +35,8 @@ func freezeOrder(t *testing.T) {
 	}
 	mockUpContract(t, ctx, "Test Contract", "I", 1,
 		"John Bitcoin", true, true, false, false, false)
-	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false,
+		false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
 
 	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, issuerKey.Address)
@@ -57,7 +59,8 @@ func freezeOrder(t *testing.T) {
 	orderInputHash := fundingTx.TxHash()
 
 	// From issuer
-	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0), make([]byte, 130)))
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -106,14 +109,93 @@ func freezeOrder(t *testing.T) {
 	}
 }
 
-func freezeAuthorityOrder(t *testing.T) {
+func freezeFromAuthorityOrder(t *testing.T) {
 	ctx := test.Context
 
 	if err := resetTest(ctx); err != nil {
 		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
 	}
-	mockUpContract(t, ctx, "Test Contract", "I", 1,
-		"John Bitcoin", true, true, false, false, false)
+	mockUpContractWithOracle(t, ctx, "Test Contract", "I", 1, "John Bitcoin")
+	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
+	mockUpHolding(t, ctx, userKey.Address, 300)
+
+	fundingTx := tests.MockFundingTx(ctx, test.RPCNode, 100005, authorityKey.Address)
+
+	orderData := actions.Order{
+		ComplianceAction: actions.ComplianceActionFreeze,
+		InstrumentType:   testInstrumentType,
+		InstrumentCode:   testInstrumentCodes[0].Bytes(),
+		Message:          "Court order",
+	}
+
+	orderData.TargetAddresses = append(orderData.TargetAddresses, &actions.TargetAddressField{
+		Address:  userKey.Address.Bytes(),
+		Quantity: 200,
+	})
+
+	// Build order transaction
+	orderTx := wire.NewMsgTx(1)
+
+	orderInputHash := fundingTx.TxHash()
+
+	// From authority
+	orderTx.TxIn = append(orderTx.TxIn, wire.NewTxIn(wire.NewOutPoint(orderInputHash, 0),
+		make([]byte, 130)))
+
+	// To contract
+	script, _ := test.ContractKey.Address.LockingScript()
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(2500, script))
+
+	// Data output
+	var err error
+	script, err = protocol.Serialize(&orderData, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to serialize order : %v", tests.Failed, err)
+	}
+	orderTx.TxOut = append(orderTx.TxOut, wire.NewTxOut(0, script))
+
+	orderItx, err := inspector.NewTransactionFromWire(ctx, orderTx, test.NodeConfig.IsTest)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to create order itx : %v", tests.Failed, err)
+	}
+
+	err = orderItx.Promote(ctx, test.RPCNode)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to promote order itx : %v", tests.Failed, err)
+	}
+
+	test.RPCNode.SaveTX(ctx, orderTx)
+
+	t.Logf("Freeze Order : %s", orderItx.Hash)
+	err = a.Trigger(ctx, "SEE", orderItx)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to accept order : %v", tests.Failed, err)
+	}
+
+	t.Logf("\t%s\tFreeze order accepted", tests.Success)
+
+	// Check the response
+	checkResponse(t, "E2")
+
+	// Check balance status
+	v := ctx.Value(node.KeyValues).(*node.Values)
+	h, err := holdings.GetHolding(ctx, test.MasterDB, test.ContractKey.Address, &testInstrumentCodes[0], userKey.Address, v.Now)
+	if err != nil {
+		t.Fatalf("\t%s\tFailed to get user holding : %s", tests.Failed, err)
+	}
+	balance := holdings.UnfrozenBalance(h, v.Now)
+	if balance != 100 {
+		t.Fatalf("\t%s\tUser unfrozen balance incorrect : %d != %d", tests.Failed, balance, 100)
+	}
+}
+
+func freezeWithAuthorityOrder(t *testing.T) {
+	ctx := test.Context
+
+	if err := resetTest(ctx); err != nil {
+		t.Fatalf("\t%s\tFailed to reset test : %v", tests.Failed, err)
+	}
+	mockUpContractWithOracle(t, ctx, "Test Contract", "I", 1, "John Bitcoin")
 	mockUpInstrument(t, ctx, true, true, true, 1000, 0, &sampleInstrumentPayload, true, false, false)
 	mockUpHolding(t, ctx, userKey.Address, 300)
 

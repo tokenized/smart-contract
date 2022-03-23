@@ -352,6 +352,30 @@ func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddr
 	return false
 }
 
+// IsAuthority checks if the raw address matches the public key specified for an authority oracle on
+// this contract.
+func IsAuthority(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
+	for _, oracle := range ct.FullOracles {
+		service := oracle.GetService(actions.ServiceTypeAuthorityOracle)
+		if service == nil {
+			continue
+		}
+
+		pkh := bitcoin.Hash160(service.PublicKey.Bytes())
+		p2pkh, err := bitcoin.NewRawAddressPKH(pkh)
+		if err == nil && p2pkh.Equal(address) {
+			return true
+		}
+
+		p2pk, err := bitcoin.NewRawAddressPublicKey(service.PublicKey)
+		if err == nil && p2pk.Equal(address) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ValidateVoting returns an error if voting is not allowed.
 func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint32) error {
 	if len(ct.VotingSystems) == 0 {
@@ -370,4 +394,23 @@ func ValidateVoting(ctx context.Context, ct *state.Contract, initiatorType uint3
 	}
 
 	return nil
+}
+
+// IsAuthorityPublicKey checks if the public key matches the public key specified for an authority
+// oracle on this contract.
+func IsAuthorityPublicKey(ctx context.Context, ct *state.Contract,
+	publicKey bitcoin.PublicKey) bool {
+
+	for _, oracle := range ct.FullOracles {
+		service := oracle.GetService(actions.ServiceTypeAuthorityOracle)
+		if service == nil {
+			continue
+		}
+
+		if service.PublicKey.Equal(publicKey) {
+			return true
+		}
+	}
+
+	return false
 }

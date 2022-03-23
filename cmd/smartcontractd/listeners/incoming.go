@@ -490,18 +490,9 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 			len(ct.FullOracles))
 	}
 
-	// No oracle types specified is assumed to be identity oracle for backwards compatibility
-	if len(ct.Oracles[instrumentReceiver.OracleIndex].OracleTypes) != 0 {
-		identityFound := false
-		for _, t := range ct.Oracles[instrumentReceiver.OracleIndex].OracleTypes {
-			if t == actions.ServiceTypeIdentityOracle {
-				identityFound = true
-				break
-			}
-		}
-		if !identityFound {
-			return errors.New("Oracle is not an identity oracle")
-		}
+	if !contract.ContainsUint32(ct.Oracles[instrumentReceiver.OracleIndex].OracleTypes,
+		actions.ServiceTypeIdentityOracle) {
+		return errors.New("Oracle index is not an identity oracle")
 	}
 
 	// Parse signature
@@ -511,6 +502,15 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 	}
 
 	oracle := ct.FullOracles[instrumentReceiver.OracleIndex]
+	if oracle == nil {
+		return errors.New("Oracle not defined")
+	}
+
+	service := oracle.GetService(actions.ServiceTypeIdentityOracle)
+	if service == nil {
+		return errors.New("Oracle service does not contain identity oracle")
+	}
+
 	hash, err := headers.BlockHash(ctx, int(instrumentReceiver.OracleSigBlockHeight))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("Failed to retrieve hash for block height %d",
@@ -538,7 +538,7 @@ func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct 
 		return errors.Wrap(err, "Failed to calculate oracle sig hash")
 	}
 
-	if oracleSig.Verify(*sigHash, oracle.PublicKey) {
+	if oracleSig.Verify(*sigHash, service.PublicKey) {
 		node.Log(ctx, "Receiver oracle signature is valid")
 		return nil // Valid signature found
 	}

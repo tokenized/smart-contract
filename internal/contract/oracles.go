@@ -18,18 +18,10 @@ func ExpandOracles(ctx context.Context, dbConn *db.DB, c *state.Contract, isTest
 	logger.Info(ctx, "Expanding %d oracle public keys", len(c.Oracles))
 
 	// Expand oracle public keys
-	c.FullOracles = make([]state.Oracle, 0, len(c.Oracles))
-	for _, oracle := range c.Oracles {
-		isIdentity := false
-		for _, t := range oracle.OracleTypes {
-			if t == actions.ServiceTypeIdentityOracle {
-				isIdentity = true
-				break
-			}
-		}
-
-		if !isIdentity {
-			c.FullOracles = append(c.FullOracles, state.Oracle{})
+	c.FullOracles = make([]*state.Oracle, len(c.Oracles))
+	for i, oracle := range c.Oracles {
+		if len(oracle.OracleTypes) == 0 || len(oracle.EntityContract) == 0 {
+			continue
 		}
 
 		ra, err := bitcoin.DecodeRawAddress(oracle.EntityContract)
@@ -42,66 +34,68 @@ func ExpandOracles(ctx context.Context, dbConn *db.DB, c *state.Contract, isTest
 			return errors.Wrap(err, "fetch entity")
 		}
 
-		found := false
-		var url string
-		var publicKey bitcoin.PublicKey
-		for _, service := range cf.Services {
-			if service.Type == actions.ServiceTypeIdentityOracle {
-				found = true
-				url = service.URL
-				publicKey, err = bitcoin.PublicKeyFromBytes(service.PublicKey)
-				if err != nil {
-					return errors.Wrap(err, "identity key")
-				}
-				break
-			}
+		fullOracle, err := buildFullOracle(ctx, ra, cf)
+		if err != nil {
+			return errors.Wrap(err, "build full oracle")
 		}
 
-		if found {
-			c.FullOracles = append(c.FullOracles, state.Oracle{
-				Address:   ra,
-				URL:       url,
-				PublicKey: publicKey,
-			})
-		} else {
-			c.FullOracles = append(c.FullOracles, state.Oracle{})
-		}
+		c.FullOracles[i] = fullOracle
 	}
+
 	return nil
 }
 
-// updateExpandedOracles updates expanded oracles that are in the cache.
-func updateExpandedOracles(ctx context.Context, ra bitcoin.RawAddress, cf *actions.ContractFormation) error {
-	isIdentity := false
-	serviceIndex := 0
-	for i, service := range cf.Services {
-		if service.Type == actions.ServiceTypeIdentityOracle {
-			isIdentity = true
-			serviceIndex = i
-			break
-		}
+func buildFullOracle(ctx context.Context, ra bitcoin.RawAddress,
+	cf *actions.ContractFormation) (*state.Oracle, error) {
+
+	fullOracle := &state.Oracle{
+		Address: ra,
 	}
 
-	if !isIdentity {
-		return nil // Only identity oracles are used in expanded form.
+	for _, service := range cf.Services {
+		publicKey, err := bitcoin.PublicKeyFromBytes(service.PublicKey)
+		if err != nil {
+			return nil, errors.Wrap(err, "public key")
+		}
+
+		fullOracle.Services = append(fullOracle.Services, &state.Service{
+			ServiceType: service.Type,
+			URL:         service.URL,
+			PublicKey:   publicKey,
+		})
+	}
+
+	return fullOracle, nil
+}
+
+// updateExpandedOracles updates expanded oracles that are in the cache.
+func updateExpandedOracles(ctx context.Context, ra bitcoin.RawAddress,
+	cf *actions.ContractFormation) error {
+
+	fullOracle, err := buildFullOracle(ctx, ra, cf)
+	if err != nil {
+		return errors.Wrap(err, "build full oracle")
 	}
 
 	cacheLock.Lock()
 	defer cacheLock.Unlock()
 	for _, c := range cache {
 		for i, oracle := range c.FullOracles {
-			if !ra.Equal(oracle.Address) {
-				continue
+			if ra.Equal(oracle.Address) {
+				c.FullOracles[i] = fullOracle
 			}
-
-			publicKey, err := bitcoin.PublicKeyFromBytes(cf.Services[serviceIndex].PublicKey)
-			if err != nil {
-				return errors.Wrap(err, "parse public key")
-			}
-			c.FullOracles[i].PublicKey = publicKey
-			c.FullOracles[i].URL = cf.Services[serviceIndex].URL
 		}
 	}
 
 	return nil
+}
+
+func ContainsUint32(values []uint32, value uint32) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+
+	return false
 }
