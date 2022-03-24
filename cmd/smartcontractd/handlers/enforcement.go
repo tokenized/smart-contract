@@ -165,9 +165,18 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	if len(msg.TargetAddresses) == 0 {
 		node.LogWarn(ctx, "No freeze target addresses specified")
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-	} else if len(msg.TargetAddresses) == 1 && bytes.Equal(msg.TargetAddresses[0].Address, rk.Address.Bytes()) {
+	} else if len(msg.TargetAddresses) == 1 && bytes.Equal(msg.TargetAddresses[0].Address,
+		rk.Address.Bytes()) {
 		full = true
-		freeze.Quantities = append(freeze.Quantities, &actions.QuantityIndexField{Index: 0, Quantity: 0})
+		freeze.Quantities = append(freeze.Quantities, &actions.QuantityIndexField{
+			Index: 0,
+			Quantity: 0,
+		})
+	}
+
+	if full { // Contract-Wide action
+		// Add contract output
+		w.AddOutput(ctx, rk.Address, 0)
 	}
 
 	// Outputs
@@ -241,9 +250,6 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		}
 	}
 
-	// Add contract output
-	w.AddOutput(ctx, rk.Address, 0)
-
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
 
@@ -300,6 +306,11 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	} else if len(freeze.Quantities) == 1 &&
 		freezeTx.Outputs[freeze.Quantities[0].Index].Address.Equal(rk.Address) {
 		full = true
+	}
+
+	if full { // Contract-Wide action
+		// Add contract output
+		w.AddOutput(ctx, rk.Address, 0)
 	}
 
 	// Outputs
@@ -359,9 +370,6 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 			}
 		}
 	}
-
-	// Add contract output
-	w.AddOutput(ctx, rk.Address, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
@@ -519,9 +527,6 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	// Notify deposit address
 	w.AddOutput(ctx, depositAddress, 0)
 
-	// Add contract output
-	w.AddOutput(ctx, rk.Address, 0)
-
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
 
@@ -667,9 +672,6 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	for _, output := range outputs {
 		w.AddOutput(ctx, output.Address, output.Value)
 	}
-
-	// Add contract output
-	w.AddOutput(ctx, rk.Address, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
