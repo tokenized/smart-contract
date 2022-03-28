@@ -169,7 +169,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 		rk.Address.Bytes()) {
 		full = true
 		freeze.Quantities = append(freeze.Quantities, &actions.QuantityIndexField{
-			Index: 0,
+			Index:    0,
 			Quantity: 0,
 		})
 	}
