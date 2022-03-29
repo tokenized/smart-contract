@@ -65,7 +65,7 @@ func createInstrumentContract(t *testing.T) {
 					VoteType: "R", ThresholdPercentage: 50, HolderProposalFee: 50000}},
 			},
 			parent: nil,
-			valid:  false, // ContractTypeInstrument requires EntityContract field.
+			valid:  true, // ContractTypeInstrument EntityContract field is optional.
 		},
 		{
 			name: "InstrumentWithServices",
