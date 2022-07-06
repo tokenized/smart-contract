@@ -1126,7 +1126,8 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	// Determine UTXOs to fund the reject response.
 	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
 	if err != nil {
-		return errors.Wrap(err, "Transfer UTXOs not found")
+		node.LogWarn(ctx, "Transfer UTXOs not found")
+		return nil
 	}
 
 	// Remove boomerang from funding UTXOs since it was already spent.
@@ -1144,7 +1145,8 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 			}
 
 			if !found {
-				return errors.New("Boomerang output not found")
+				node.LogWarn(ctx, "Boomerang output not found")
+				return nil
 			}
 		}
 	}
@@ -1161,12 +1163,14 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	// Add refund amounts for all bitcoin senders (if "first" contract, first contract receives bitcoin funds to be distributed)
 	first := firstContractOutputIndex(transfer.Instruments, transferTx)
 	if first == 0xffff {
-		return errors.New("First contract output index not found")
+		node.LogWarn(ctx, "First contract output index not found")
+		return nil
 	}
 
 	// Determine if this contract is the first contract and needs to send a refund.
 	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
-		return errors.New("This is not the first contract")
+		node.LogWarn(ctx, "This is not the first contract")
+		return nil
 	}
 
 	refundBalance := uint64(0)
@@ -1196,7 +1200,8 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 
 			if started { // Revert holding statuses
 				if len(transferTx.Outputs) <= int(instrumentTransfer.ContractIndex) {
-					return fmt.Errorf("Contract index out of range for instrument %d", instrumentOffset)
+					node.LogWarn(ctx, "Contract index out of range for instrument %d", instrumentOffset)
+					return nil
 				}
 
 				if !transferTx.Outputs[instrumentTransfer.ContractIndex].Address.Equal(rk.Address) {
@@ -1205,7 +1210,8 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 
 				instrumentCode, err := bitcoin.NewHash20(instrumentTransfer.InstrumentCode)
 				if err != nil {
-					return errors.Wrap(err, "invalid instrument code")
+					node.LogWarn(ctx, "Invalid instrument code %d", instrumentOffset)
+					return nil
 				}
 				updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
 				updates[*instrumentCode] = &updatedHoldings
@@ -1236,7 +1242,8 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 				for _, receiver := range instrumentTransfer.InstrumentReceivers {
 					receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 					if err != nil {
-						return err
+						node.LogWarn(ctx, "Invalid receiver address : %s", err)
+						return nil
 					}
 
 					h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
