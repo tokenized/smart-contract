@@ -182,7 +182,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	// Check if settlement data is complete. No other contracts involved
 	if isSingleContract {
 		node.Log(ctx, "Single contract settlement complete")
-		if err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
+		if _, err := settleTx.Sign([]bitcoin.Key{rk.Key}); err != nil {
 			if errors.Cause(err) == txbuilder.ErrInsufficientValue {
 				node.LogWarn(ctx, "Insufficient settlement tx funding : %s", err)
 				return respondTransferReject(ctx, t.MasterDB, t.HoldingsChannel, t.Config, w, itx,

@@ -128,7 +128,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign utxo tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -174,7 +174,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign contract offer tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -219,7 +219,7 @@ var cmdBench = &cobra.Command{
 		}
 
 		// Sign tx
-		if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			logger.Warn(ctx, "Failed to sign instrument offer tx : %s", err)
 			theClient.StopSpyNode(ctx)
 			wg.Wait()
@@ -267,7 +267,7 @@ var cmdBench = &cobra.Command{
 			}
 
 			// Sign tx
-			if err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+			if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 				logger.Warn(ctx, "Failed to sign transfer %d tx : %s", i, err)
 				theClient.StopSpyNode(ctx)
 				wg.Wait()

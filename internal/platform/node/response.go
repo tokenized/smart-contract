@@ -157,8 +157,7 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	rejectTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = rejectTx.Sign([]bitcoin.Key{wk.Key})
-	if err != nil {
+	if _, err := rejectTx.Sign([]bitcoin.Key{wk.Key}); err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
 	}
@@ -224,8 +223,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	respondTx.AddOutput(payload, 0, false, false)
 
 	// Sign the tx
-	err = respondTx.Sign([]bitcoin.Key{wk.Key})
-	if err != nil {
+	if _, err := respondTx.Sign([]bitcoin.Key{wk.Key}); err != nil {
 		if errors.Cause(err) == txbuilder.ErrInsufficientValue {
 			LogWarn(ctx, "Sending reject. Failed to sign tx : %s\n%s", err,
 				respondTx.String(w.Config.Net))

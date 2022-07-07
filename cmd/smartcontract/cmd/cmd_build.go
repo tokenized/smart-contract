@@ -195,15 +195,13 @@ func buildAction(c *cobra.Command, args []string) error {
 			return nil
 		}
 
-		err = tx.Sign([]bitcoin.Key{theClient.Wallet.Key})
-		if err != nil {
+		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
 			fmt.Printf("Failed to sign tx : %s\n", err)
 			return nil
 		}
 
 		// Check with inspector
-		var itx *inspector.Transaction
-		itx, err = inspector.NewTransactionFromWire(ctx, tx.MsgTx, theClient.Config.IsTest)
+		itx, err := inspector.NewTransactionFromWire(ctx, tx.MsgTx, theClient.Config.IsTest)
 		if err != nil {
 			logger.Warn(ctx, "Failed to convert tx to inspector")
 		}
@@ -215,8 +213,7 @@ func buildAction(c *cobra.Command, args []string) error {
 		if hexFormat {
 			fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
 			var buf bytes.Buffer
-			err := tx.MsgTx.Serialize(&buf)
-			if err != nil {
+			if err := tx.MsgTx.Serialize(&buf); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s tx", actionType))
 			}
 			fmt.Printf("%x\n", buf.Bytes())

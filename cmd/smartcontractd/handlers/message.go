@@ -246,7 +246,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 			}
 		}
 
-		err = tx.Sign([]bitcoin.Key{rk.Key})
+		_, err = tx.Sign([]bitcoin.Key{rk.Key})
 		if err == nil {
 			break
 		}

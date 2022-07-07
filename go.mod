@@ -9,8 +9,8 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
-	github.com/tokenized/config v0.2.0
-	github.com/tokenized/pkg v0.4.1-0.20220324155003-c206bff273f9
+	github.com/tokenized/config v0.2.1
+	github.com/tokenized/pkg v0.4.1-0.20220707190600-552221d16368
 	github.com/tokenized/specification v1.1.2-0.20220328230946-c916fa79db4d
 	github.com/tokenized/spynode v0.2.2-0.20220323145028-0be198b784c9
 	go.opencensus.io v0.22.2

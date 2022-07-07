@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -114,7 +113,7 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 	return nil
 }
 
-func parseScript(c *cobra.Command, script []byte) error {
+func parseScript(c *cobra.Command, script bitcoin.Script) error {
 
 	isTest := false
 	message, err := protocol.Deserialize(script, isTest)
@@ -125,21 +124,7 @@ func parseScript(c *cobra.Command, script []byte) error {
 			message, err = protocol.Deserialize(script, isTest)
 			if err != nil {
 				if err == protocol.ErrNotTokenized {
-					r := bytes.NewReader(script)
-					for i := 0; i < 100; i++ {
-						_, pushdata, err := bitcoin.ParsePushDataScript(r)
-						if err == nil {
-							fmt.Printf("OP %02d %x\n", i, pushdata)
-							continue
-						}
-
-						if err == io.EOF { // finished parsing script
-							return nil
-						}
-						if err != bitcoin.ErrNotPushOp { // ignore non push op codes
-							return errors.Wrap(err, "decode bitcoin script")
-						}
-					}
+					fmt.Printf("Script : %s\n", script)
 				}
 				return errors.Wrap(err, "decode op return")
 			}

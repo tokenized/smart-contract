@@ -50,6 +50,11 @@ var cmdDerive = &cobra.Command{
 					return nil
 				}
 
+				if child.IsPrivate() {
+					key := child.Key(network)
+					fmt.Printf("Key (+%d) : %s\n", i, key.String())
+				}
+
 				ra, err := child.RawAddress()
 				if err != nil {
 					fmt.Printf("Failed to create address : %s\n", err)
@@ -57,6 +62,7 @@ var cmdDerive = &cobra.Command{
 				}
 				fmt.Printf("Address (+%d) : %s\n", i,
 					bitcoin.NewAddressFromRawAddress(ra, network).String())
+
 				path[len(path)-1] += 1
 			}
 
