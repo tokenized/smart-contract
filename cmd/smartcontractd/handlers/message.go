@@ -390,7 +390,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 
 	// Add this contract's data to the settlement op return data
 	instrumentUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
-	err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
+	_, _, err = addSettlementData(ctx, m.MasterDB, m.Config, rk, transferTx, transfer, settleTx,
 		settlement, &instrumentUpdates, false)
 	if err != nil {
 		rejectCode, ok := node.ErrorCode(err)
