@@ -204,10 +204,10 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 			logger.MillisecondsFromNano("elapsed_ms", time.Since(start).Nanoseconds()),
 		}, "Single contract settlement complete")
 
-		if err := node.Respond(ctx, w, responseItx); err == nil {
-			if err = saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, instrumentUpdates,
-				rk.Address); err != nil {
-				return errors.Wrap(err, "save holdings")
+		if err = node.Respond(ctx, w, responseItx); err == nil {
+			if serr := saveHoldings(ctx, t.MasterDB, t.HoldingsChannel, instrumentUpdates,
+				rk.Address); serr != nil {
+				return errors.Wrap(serr, "save holdings")
 			}
 		}
 
