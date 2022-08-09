@@ -513,7 +513,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	node.Log(ctx, "Accepting contract amendment")
 
 	// Respond with a formation
-	if err := node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
+	if err = node.RespondSuccess(ctx, w, itx, rk, cf); err == nil {
 		return contract.SaveContractFormation(ctx, c.MasterDB, rk.Address, cf, c.Config.IsTest)
 	}
 	return err
