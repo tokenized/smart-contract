@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -46,6 +47,11 @@ func main() {
 
 	logger.Info(ctx, "Started : Application Initializing")
 	defer logger.Info(ctx, "Completed")
+	defer func() {
+		if err := recover(); err != nil {
+			logger.Error(ctx, "Panic : %s : %s", err, string(debug.Stack()))
+		}
+	}()
 
 	logger.Info(ctx, "Build %v (%v on %v)", buildVersion, buildUser, buildDate)
 

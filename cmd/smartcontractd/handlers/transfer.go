@@ -572,8 +572,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		if int(instrumentTransfer.ContractIndex) >= len(transferTx.Outputs) {
-			return 0, 0, fmt.Errorf("Contract index %d out of range : %d >= %d", instrumentOffset,
-				instrumentTransfer.ContractIndex, len(transferTx.Outputs))
+			return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Contract index %d out of range : %d >= %d", instrumentOffset,
+					instrumentTransfer.ContractIndex, len(transferTx.Outputs)))
 		}
 
 		contractOutputAddress := transferOutputAddresses[instrumentTransfer.ContractIndex]
@@ -583,14 +584,16 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 		instrumentCode, err := bitcoin.NewHash20(instrumentTransfer.InstrumentCode)
 		if err != nil {
-			return 0, 0, errors.Wrap(err, "invalid instrument code")
+			return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+				errors.Wrap(err, "invalid instrument code").Error())
 		}
 		instrumentID := protocol.InstrumentID(instrumentTransfer.InstrumentType, *instrumentCode)
 
 		// Locate Instrument
 		as, err := instrument.Retrieve(ctx, masterDB, rk.Address, instrumentCode)
 		if err != nil {
-			return 0, 0, fmt.Errorf("Instrument ID not found : %s : %s", instrumentID, err)
+			return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Instrument ID not found : %s : %s", instrumentID, err))
 		}
 
 		if err := instrument.IsTransferable(ctx, as, v.Now); err != nil {
@@ -609,7 +612,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		if contractInputIndex == uint32(0x0000ffff) {
-			return 0, 0, fmt.Errorf("Contract input not found: %s", instrumentID)
+			return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Contract input not found: %s", instrumentID))
 		}
 
 		node.Log(ctx, "Adding settlement data for instrument : %s", instrumentID)
@@ -634,8 +638,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		for senderOffset, sender := range instrumentTransfer.InstrumentSenders {
 			// Get sender address from transfer inputs[sender.Index]
 			if int(sender.Index) >= len(transferTx.Inputs) {
-				return 0, 0, fmt.Errorf("Sender input index out of range for instrument %d sender %d : %d/%d",
-					instrumentOffset, senderOffset, sender.Index, len(transferTx.Inputs))
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					fmt.Sprintf("Sender input index out of range for instrument %d sender %d : %d/%d",
+						instrumentOffset, senderOffset, sender.Index, len(transferTx.Inputs)))
 			}
 
 			if transferTx.Inputs[sender.Index].Address.Equal(ct.AdminAddress) {
@@ -655,8 +660,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 
 			if settleOutputIndex == uint16(0xffff) {
-				return 0, 0, fmt.Errorf("Sender output not found in settle tx for instrument %d sender %d : %d/%d",
-					instrumentOffset, senderOffset, sender.Index, len(transferTx.Outputs))
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					fmt.Sprintf("Sender output not found in settle tx for instrument %d sender %d : %d/%d",
+						instrumentOffset, senderOffset, sender.Index, len(transferTx.Outputs)))
 			}
 
 			// Check sender's available unfrozen balance
@@ -675,7 +681,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			hds[settleOutputIndex] = h
 			hash, err := transferTx.Inputs[sender.Index].Address.Hash()
 			if err != nil {
-				return 0, 0, errors.Wrap(err, "Invalid sender address")
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					errors.Wrap(err, "Invalid sender address").Error())
 			}
 			updatedHoldings[*hash] = h
 
@@ -710,7 +717,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		for receiverOffset, receiver := range instrumentTransfer.InstrumentReceivers {
 			receiverAddress, err := bitcoin.DecodeRawAddress(receiver.Address)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					errors.Wrap(err, "receiver address").Error())
 			}
 
 			// Find output in settle tx
@@ -725,8 +733,9 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			if settleOutputIndex == uint32(0x0000ffff) {
 				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
 					config.Net)
-				return 0, 0, fmt.Errorf("Receiver output not found in settle tx for instrument %d receiver %d : %s",
-					instrumentOffset, receiverOffset, address)
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					fmt.Sprintf("Receiver output not found in settle tx for instrument %d receiver %d : %s",
+						instrumentOffset, receiverOffset, address))
 			}
 
 			if receiverAddress.Equal(ct.AdminAddress) {
@@ -745,12 +754,14 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode, receiverAddress,
 				v.Now)
 			if err != nil {
-				return 0, 0, errors.Wrap(err, "Failed to get holding")
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					errors.Wrap(err, "Failed to get holding").Error())
 			}
 			hds[settleOutputIndex] = h
 			hash, err := receiverAddress.Hash()
 			if err != nil {
-				return 0, 0, errors.Wrap(err, "Invalid receiver address")
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					errors.Wrap(err, "Invalid receiver address").Error())
 			}
 			updatedHoldings[*hash] = h
 
@@ -761,7 +772,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					node.LogWarn(ctx, "Locked funds: instrument=%s party=%s", instrumentID, address)
 					return 0, 0, node.NewError(actions.RejectionsHoldingsLocked, "")
 				}
-				node.LogWarn(ctx, "Send failed : %s : instrument=%s party=%s", err, instrumentID, address)
+				node.LogWarn(ctx, "Send failed : %s : instrument=%s party=%s", err, instrumentID,
+					address)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed, "")
 			} else {
 				logger.Info(ctx, "Deposit %d %s to %s", receiver.Quantity, instrumentID, address)
@@ -769,14 +781,17 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			// Update instrument balance
 			if receiver.Quantity > sendBalance {
-				return 0, 0, fmt.Errorf("Receiving more tokens than sending for instrument %d", instrumentOffset)
+				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+					fmt.Sprintf("Receiving more tokens than sending for instrument %d",
+						instrumentOffset))
 			}
 			sendBalance -= receiver.Quantity
 		}
 
 		if sendBalance != 0 {
-			return 0, 0, fmt.Errorf("Not sending all input tokens for instrument %d : %d remaining",
-				instrumentOffset, sendBalance)
+			return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+				fmt.Sprintf("Not sending all input tokens for instrument %d : %d remaining",
+					instrumentOffset, sendBalance))
 		}
 
 		if !transfersPermitted {
@@ -820,7 +835,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	if !dataAdded {
-		return 0, 0, errors.New("No data added to settlement")
+		return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+			errors.New("No data added to settlement").Error())
 	}
 
 	// Serialize settlement data back into OP_RETURN output.
@@ -845,7 +861,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	if !found {
-		return 0, 0, fmt.Errorf("Settlement op return not found in settle tx")
+		return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
+			"Settlement op return not found in settle tx")
 	}
 
 	settleTx.MsgTx.TxOut[settlementOutputIndex].LockingScript = script
