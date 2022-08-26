@@ -128,8 +128,9 @@ github.com/tokenized/pkg v0.4.1-0.20220520003654-d682cbe31551/go.mod h1:/ZeiNBa1
 github.com/tokenized/pkg v0.4.1-0.20220727224041-01b647f7beaf/go.mod h1:/ZeiNBa1Kd1eq1KqFtzcu2cbq1RB6CzysRBIZ4uSHkg=
 github.com/tokenized/pkg v0.4.1-0.20220809141349-ce8dde7d3da0 h1:1IEd+PPRpWdOHaUEQYbTcwbATZhxBGG2cXCN1QMnvFQ=
 github.com/tokenized/pkg v0.4.1-0.20220809141349-ce8dde7d3da0/go.mod h1:/ZeiNBa1Kd1eq1KqFtzcu2cbq1RB6CzysRBIZ4uSHkg=
-github.com/tokenized/specification v1.1.2-0.20220729003018-5c2f30a2134c h1:sJ+h/RbTBLVcRjBfJQJGLEJvLdXsBOLmBF91swHhWpo=
 github.com/tokenized/specification v1.1.2-0.20220729003018-5c2f30a2134c/go.mod h1:dEhcVHlQDNzGmm8UnogE8Oof21tGfmVBY/C7azeaw+U=
+github.com/tokenized/specification v1.1.2-0.20220826015300-8a77ac76380b h1:r38uqpbMgzJvCyu86dtPDT0RfZBW6X3u+tS8HrYOKFo=
+github.com/tokenized/specification v1.1.2-0.20220826015300-8a77ac76380b/go.mod h1:dEhcVHlQDNzGmm8UnogE8Oof21tGfmVBY/C7azeaw+U=
 github.com/tokenized/spynode v0.2.2-0.20220809142636-f87c0f951f02 h1:JtthDY0S1vBtNab6ccvGWfnH8aq1EZCBECGlhW5OUfg=
 github.com/tokenized/spynode v0.2.2-0.20220809142636-f87c0f951f02/go.mod h1:UPgKl+I5HQeCG34UKUNVR5QZSWrUopGQOBSsGqB8iR0=
 github.com/tyler-smith/go-bip32 v0.0.0-20170922074101-2c9cfd177564 h1:NXXyQVeRVLK8Xu27/hkkjwVOZLk5v4ZBEvvMtqMqznM=

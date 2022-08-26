@@ -11,7 +11,7 @@ type Config struct {
 		RequestTimeout    uint64  `default:"60000000000" envconfig:"REQUEST_TIMEOUT" json:"REQUEST_TIMEOUT"` // Default 1 minute
 		PreprocessThreads int     `default:"4" envconfig:"PREPROCESS_THREADS" json:"PREPROCESS_THREADS"`
 		IsTest            bool    `default:"true" envconfig:"IS_TEST" json:"IS_TEST"`
-		MinFeeRate        float32 `default:"0.5" envconfig:"MIN_FEE_RATE" json:"MIN_FEE_RATE"`
+		MinFeeRate        float32 `default:"0.05" envconfig:"MIN_FEE_RATE" json:"MIN_FEE_RATE"`
 	}
 	Bitcoin struct {
 		Network string `default:"mainnet" envconfig:"BITCOIN_CHAIN" json:"BITCOIN_CHAIN"`

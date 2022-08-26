@@ -572,22 +572,23 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	}
 
-	as, err := instrument.Retrieve(ctx, e.MasterDB, rk.Address, instrumentCode)
-	if err != nil {
+	if _, err := instrument.Retrieve(ctx, e.MasterDB, rk.Address, instrumentCode); err != nil {
 		node.LogWarn(ctx, "Instrument not found: %s", instrumentCode)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
 	}
 
-	if !as.EnforcementOrdersPermitted {
-		node.LogWarn(ctx, "Enforcement orders not permitted on instrument : %s", instrumentCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotPermitted)
-	}
+	// A reconciliation is not actually an enforcement action and is the result of a double spent
+	// request and is just to post the correct settlement on chain even though the original
+	// settlement was removed from the block chain.
+	// if !as.EnforcementOrdersPermitted {
+	// 	node.LogWarn(ctx, "Enforcement orders not permitted on instrument : %s", instrumentCode)
+	// 	return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotPermitted)
+	// }
 
 	// Reconciliation <- Order
 	reconciliation := actions.Reconciliation{}
 
-	err = node.Convert(ctx, msg, &reconciliation)
-	if err != nil {
+	if err := node.Convert(ctx, msg, &reconciliation); err != nil {
 		return errors.Wrap(err, "Failed to convert reconciliation order to reconciliation")
 	}
 
@@ -677,8 +678,7 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Respond with a reconciliation action
-	err = node.RespondSuccess(ctx, w, itx, rk, &reconciliation)
-	if err != nil {
+	if err := node.RespondSuccess(ctx, w, itx, rk, &reconciliation); err != nil {
 		return err
 	}
 
