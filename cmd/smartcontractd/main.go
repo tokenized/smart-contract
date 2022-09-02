@@ -8,8 +8,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/storage"
@@ -18,6 +18,7 @@ import (
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/handlers"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
 	spynodeBootstrap "github.com/tokenized/spynode/cmd/spynoded/bootstrap"
+	"github.com/tokenized/threads"
 )
 
 var (
@@ -174,34 +175,16 @@ func main() {
 
 	// Make a channel to listen for errors coming from the listener. Use a
 	// buffered channel so the goroutine can exit if we don't collect this error.
-	serverErrors := make(chan error, 1)
-
-	wg := sync.WaitGroup{}
+	wait := sync.WaitGroup{}
 
 	// Start the service listening for requests.
-	wg.Add(1)
-	go func() {
-		logger.Info(ctx, "Node Running")
-		serverErrors <- node.Run(ctx)
-		logger.Info(ctx, "Node Finished")
-		wg.Done()
-	}()
+	nodeThread, nodeComplete := threads.NewInterruptableThreadComplete("Node", node.Run, &wait)
 
 	// -------------------------------------------------------------------------
 	// Start Spynode
 
-	// Make a channel to listen for errors coming from the listener. Use a
-	// buffered channel so the goroutine can exit if we don't collect this error.
-	spynodeErrors := make(chan error, 1)
-
-	// Start the service listening for requests.
-	wg.Add(1)
-	go func() {
-		logger.Info(ctx, "SpyNode Running")
-		spynodeErrors <- spyNode.Run(ctx)
-		logger.Info(ctx, "SpyNode Finished")
-		wg.Done()
-	}()
+	spyNodeThread, spyNodeComplete := threads.NewUninterruptableThreadComplete("SpyNode",
+		spyNode.Run, &wait)
 
 	// -------------------------------------------------------------------------
 	// Shutdown
@@ -211,12 +194,15 @@ func main() {
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
 
+	nodeThread.Start(ctx)
+	spyNodeThread.Start(ctx)
+
 	// -------------------------------------------------------------------------
 	// Stop API Service
 
 	// Blocking main and waiting for shutdown.
 	select {
-	case err := <-serverErrors:
+	case err := <-nodeComplete:
 		if err != nil {
 			logger.Error(ctx, "Error starting server: %s", err)
 		}
@@ -225,13 +211,9 @@ func main() {
 			logger.Error(ctx, "Could not stop spynode: %s", err)
 		}
 
-	case err := <-spynodeErrors:
+	case err := <-spyNodeComplete:
 		if err != nil {
 			logger.Error(ctx, "Error starting server: %s", err)
-		}
-
-		if err := node.Stop(ctx); err != nil {
-			logger.Error(ctx, "Could not stop server: %s", err)
 		}
 
 	case <-osSignals:
@@ -240,14 +222,11 @@ func main() {
 		if err := spyNode.Stop(ctx); err != nil {
 			logger.Error(ctx, "Could not stop spynode: %s", err)
 		}
-
-		if err := node.Stop(ctx); err != nil {
-			logger.Error(ctx, "Could not stop server: %s", err)
-		}
 	}
 
 	// Block until goroutines finish as a result of Stop()
-	wg.Wait()
+	nodeThread.Stop(ctx)
+	wait.Wait()
 
 	if err := utxos.Save(ctx, masterDB); err != nil {
 		logger.Error(ctx, "Save UTXOs : %s", err)

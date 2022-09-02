@@ -3,8 +3,8 @@ package contracts
 import (
 	"context"
 
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/spynode/pkg/client"

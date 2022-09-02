@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/json"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/specification/dist/golang/actions"
 
 	"github.com/google/uuid"

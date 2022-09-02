@@ -145,10 +145,11 @@ func simpleTransfersBenchmark(b *testing.B) {
 	responses = make([]*wire.MsgTx, 0, b.N)
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			b.Logf("Server failed : %s", err)
 		}
 	}()
@@ -205,7 +206,7 @@ func simpleTransfersBenchmark(b *testing.B) {
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
-	server.Stop(ctx)
+	close(interrupt)
 	wg.Wait()
 
 	// Check balance
@@ -323,10 +324,11 @@ func separateTransfersBenchmark(b *testing.B) {
 	responses = make([]*wire.MsgTx, 0, b.N)
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			b.Logf("Server failed : %s", err)
 		}
 	}()
@@ -382,7 +384,7 @@ func separateTransfersBenchmark(b *testing.B) {
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
-	server.Stop(ctx)
+	close(interrupt)
 	wg.Wait()
 
 	// Check balance
@@ -526,10 +528,11 @@ func oracleTransfersBenchmark(b *testing.B) {
 	responses = make([]*wire.MsgTx, 0, b.N)
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			b.Logf("Server failed : %s", err)
 		}
 	}()
@@ -598,7 +601,7 @@ func oracleTransfersBenchmark(b *testing.B) {
 		b.Fatalf("\t%s\tBalance not zeroized : %d", tests.Failed, h.FinalizedBalance)
 	}
 
-	server.Stop(ctx)
+	close(interrupt)
 	wg.Wait()
 }
 
@@ -759,10 +762,11 @@ func treeTransfersBenchmark(b *testing.B) {
 	responses = make([]*wire.MsgTx, 0, b.N)
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			b.Logf("Server failed : %s", err)
 		}
 	}()
@@ -821,7 +825,7 @@ func treeTransfersBenchmark(b *testing.B) {
 	pprof.StopCPUProfile()
 	b.StopTimer()
 
-	server.Stop(ctx)
+	close(interrupt)
 	wg.Wait()
 }
 
@@ -2490,10 +2494,11 @@ func oracleTransfer(t *testing.T) {
 	server.SetInSync()
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			t.Logf("Server failed : %s", err)
 		}
 	}()
@@ -2564,6 +2569,9 @@ func oracleTransfer(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tUser instrument balance : %d", tests.Success, userHolding.PendingBalance)
+
+	close(interrupt)
+	wg.Wait()
 }
 
 func oracleTransferBad(t *testing.T) {
@@ -2690,10 +2698,11 @@ func oracleTransferBad(t *testing.T) {
 	server.SetInSync()
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			t.Logf("Server failed : %s", err)
 		}
 	}()
@@ -2766,6 +2775,9 @@ func oracleTransferBad(t *testing.T) {
 	}
 
 	t.Logf("\t%s\tVerified refund to user", tests.Success)
+
+	close(interrupt)
+	wg.Wait()
 }
 
 func permitted(t *testing.T) {

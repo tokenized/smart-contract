@@ -10,7 +10,6 @@ import (
 
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
-	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -83,27 +82,12 @@ func parseTx(c *cobra.Command, rawtx []byte) error {
 		return errors.Wrap(err, "decode tx")
 	}
 
-	send, _ := c.Flags().GetBool(FlagSend)
-	if send {
-		fmt.Printf("Sending to network\n")
-		ctx := client.Context()
-		if ctx == nil {
-			fmt.Printf("Failed to create client context\n")
-			return nil
-		}
-
-		theClient, err := client.NewClient(ctx, network(c))
-		if err != nil {
-			fmt.Printf("Failed to create client : %s\n", err)
-			return nil
-		}
-
-		if err := theClient.BroadcastTx(ctx, &tx); err != nil {
-			fmt.Printf("Failed to send tx : %s\n", err)
-		}
-	}
-
 	fmt.Printf("\nTx (%d bytes) : %s\n", tx.SerializeSize(), tx.TxHash().String())
+
+	// hexBuf := &bytes.Buffer{}
+	// tx.Serialize(hexBuf)
+	// fmt.Printf("Hex : %x\n", hexBuf.Bytes())
+
 	fmt.Printf(tx.StringWithAddresses(network(c)))
 
 	for _, txOut := range tx.TxOut {
@@ -265,5 +249,4 @@ func parseScript(c *cobra.Command, script bitcoin.Script) error {
 }
 
 func init() {
-	cmdParse.Flags().Bool(FlagSend, false, "send to network")
 }

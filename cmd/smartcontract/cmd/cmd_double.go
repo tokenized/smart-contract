@@ -1,21 +1,6 @@
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"strconv"
-	"sync"
-	"time"
-
-	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/logger"
-	"github.com/tokenized/pkg/txbuilder"
-	"github.com/tokenized/pkg/wire"
-	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-	"github.com/tokenized/specification/dist/golang/actions"
-	"github.com/tokenized/specification/dist/golang/protocol"
-
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -23,412 +8,412 @@ var cmdDoubleSpend = &cobra.Command{
 	Use:   "double <N> <receiver addr>",
 	Short: "Sends N consecutive transfer requests with double spend tests.",
 	RunE: func(c *cobra.Command, args []string) error {
-		if len(args) != 2 {
-			return errors.New("Incorrect argument count")
-		}
+		// if len(args) != 2 {
+		// 	return errors.New("Incorrect argument count")
+		// }
 
-		ctx := client.Context()
-		if ctx == nil {
-			return nil
-		}
-
-		count, err := strconv.Atoi(args[0])
-		if err != nil {
-			logger.Warn(ctx, "Invalid count : %s", err)
-			return nil
-		}
-
-		theClient, err := client.NewClient(ctx, network(c))
-		if err != nil {
-			logger.Warn(ctx, "Failed to create client : %s", err)
-			return nil
-		}
-
-		// receiverAddress, err := bitcoin.DecodeAddress(args[1])
-		// if err != nil {
-		// 	logger.Warn(ctx, "Invalid address : %s", err)
+		// ctx := client.Context()
+		// if ctx == nil {
 		// 	return nil
 		// }
 
-		instrumentCode = protocol.InstrumentCodeFromContract(theClient.ContractAddress, 0)
-		fundingAmount := uint64(2000)
-		utxoAmount := uint64(fundingAmount + 500)
-		requiredBalance := utxoAmount * 2             // Create contract and instrument
-		requiredBalance += utxoAmount * uint64(count) // Transfers
+		// count, err := strconv.Atoi(args[0])
+		// if err != nil {
+		// 	logger.Warn(ctx, "Invalid count : %s", err)
+		// 	return nil
+		// }
 
-		// Start SpyNode ===========================================================================
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := theClient.RunSpyNode(ctx, false); err != nil {
-				logger.Warn(ctx, "Spynode failed : %s", err)
-			}
-		}()
+		// theClient, err := client.NewClient(ctx, network(c))
+		// if err != nil {
+		// 	logger.Warn(ctx, "Failed to create client : %s", err)
+		// 	return nil
+		// }
 
-		// Wait for sync
-		for i := 0; ; i++ {
-			if theClient.IsInSync() {
-				break
-			}
-			if i > 60 {
-				logger.Warn(ctx, "Timed out waiting for sync")
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-			time.Sleep(time.Second)
-		}
+		// // receiverAddress, err := bitcoin.DecodeAddress(args[1])
+		// // if err != nil {
+		// // 	logger.Warn(ctx, "Invalid address : %s", err)
+		// // 	return nil
+		// // }
 
-		// Create UTXOs ============================================================================
-		tx := txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-		tx.SetChangeAddress(theClient.Wallet.Address, "")
+		// instrumentCode = protocol.InstrumentCodeFromContract(theClient.ContractAddress, 0)
+		// fundingAmount := uint64(2000)
+		// utxoAmount := uint64(fundingAmount + 500)
+		// requiredBalance := utxoAmount * 2             // Create contract and instrument
+		// requiredBalance += utxoAmount * uint64(count) // Transfers
 
-		UTXOs := theClient.Wallet.UnspentOutputs()
-		balance := uint64(0)
-		for _, utxo := range UTXOs {
-			if err := tx.AddInput(utxo.OutPoint, utxo.LockingScript, utxo.Value); err != nil {
-				logger.Warn(ctx, "Failed to add input to contract tx : %s", err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-			balance += utxo.Value
-			if balance > requiredBalance {
-				break
-			}
-		}
+		// // Start SpyNode ===========================================================================
+		// wg := sync.WaitGroup{}
+		// wg.Add(1)
+		// go func() {
+		// 	defer wg.Done()
+		// 	if err := theClient.RunSpyNode(ctx, false); err != nil {
+		// 		logger.Warn(ctx, "Spynode failed : %s", err)
+		// 	}
+		// }()
 
-		if balance < requiredBalance {
-			logger.Warn(ctx, "Not enough funds in wallet : %d < %d", balance, requiredBalance)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Wait for sync
+		// for i := 0; ; i++ {
+		// 	if theClient.IsInSync() {
+		// 		break
+		// 	}
+		// 	if i > 60 {
+		// 		logger.Warn(ctx, "Timed out waiting for sync")
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// 	time.Sleep(time.Second)
+		// }
 
-		utxoCount := count + 2
-		for i := 0; i < utxoCount; i++ {
-			if err := tx.AddPaymentOutput(theClient.Wallet.Address, utxoAmount, false); err != nil {
-				logger.Warn(ctx, "Failed to add utxo output : %s", err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-		}
+		// // Create UTXOs ============================================================================
+		// tx := txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
+		// tx.SetChangeAddress(theClient.Wallet.Address, "")
 
-		// Sign tx
-		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
-			logger.Warn(ctx, "Failed to sign utxo tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// UTXOs := theClient.Wallet.UnspentOutputs()
+		// balance := uint64(0)
+		// for _, utxo := range UTXOs {
+		// 	if err := tx.AddInput(utxo.OutPoint, utxo.LockingScript, utxo.Value); err != nil {
+		// 		logger.Warn(ctx, "Failed to add input to contract tx : %s", err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// 	balance += utxo.Value
+		// 	if balance > requiredBalance {
+		// 		break
+		// 	}
+		// }
 
-		utxoTx := tx
-		utxoIndex := uint32(0)
+		// if balance < requiredBalance {
+		// 	logger.Warn(ctx, "Not enough funds in wallet : %d < %d", balance, requiredBalance)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		// Create contract =========================================================================
-		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-		tx.SetChangeAddress(theClient.Wallet.Address, "")
+		// utxoCount := count + 2
+		// for i := 0; i < utxoCount; i++ {
+		// 	if err := tx.AddPaymentOutput(theClient.Wallet.Address, utxoAmount, false); err != nil {
+		// 		logger.Warn(ctx, "Failed to add utxo output : %s", err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// }
 
-		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
-			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
-			logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
-		utxoIndex++
+		// // Sign tx
+		// if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		// 	logger.Warn(ctx, "Failed to sign utxo tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
-			logger.Warn(ctx, "Failed to add contract output : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// utxoTx := tx
+		// utxoIndex := uint32(0)
 
-		contract, err := contractOpReturn()
-		if err != nil {
-			logger.Warn(ctx, "Failed to create contract op return : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
-		if err := tx.AddOutput(contract, 0, false, false); err != nil {
-			logger.Warn(ctx, "Failed to add op return output : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Create contract =========================================================================
+		// tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
+		// tx.SetChangeAddress(theClient.Wallet.Address, "")
 
-		// Sign tx
-		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
-			logger.Warn(ctx, "Failed to sign contract offer tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		// 	utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
+		// 	uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
+		// 	logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
+		// utxoIndex++
 
-		contractTx := tx
+		// if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
+		// 	logger.Warn(ctx, "Failed to add contract output : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		// Create instrument ============================================================================
-		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-		tx.SetChangeAddress(theClient.Wallet.Address, "")
+		// contract, err := contractOpReturn()
+		// if err != nil {
+		// 	logger.Warn(ctx, "Failed to create contract op return : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
+		// if err := tx.AddOutput(contract, 0, false, false); err != nil {
+		// 	logger.Warn(ctx, "Failed to add op return output : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-			utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
-			uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
-			logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
-		utxoIndex++
+		// // Sign tx
+		// if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		// 	logger.Warn(ctx, "Failed to sign contract offer tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
-			logger.Warn(ctx, "Failed to add contract output : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// contractTx := tx
 
-		instrument, err := instrumentOpReturn()
-		if err != nil {
-			logger.Warn(ctx, "Failed to create instrument op return : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
-		if err := tx.AddOutput(instrument, 0, false, false); err != nil {
-			logger.Warn(ctx, "Failed to add op return output : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Create instrument ============================================================================
+		// tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
+		// tx.SetChangeAddress(theClient.Wallet.Address, "")
 
-		// Sign tx
-		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
-			logger.Warn(ctx, "Failed to sign instrument offer tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		// 	utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
+		// 	uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
+		// 	logger.Warn(ctx, "Failed to add input to instrument tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
+		// utxoIndex++
 
-		instrumentTx := tx
+		// if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
+		// 	logger.Warn(ctx, "Failed to add contract output : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		// Create transfer txs =====================================================================
-		transferTxs := make([]*txbuilder.TxBuilder, 0, count)
-		doubleTxs := make([]*txbuilder.TxBuilder, 0, count)
+		// instrument, err := instrumentOpReturn()
+		// if err != nil {
+		// 	logger.Warn(ctx, "Failed to create instrument op return : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
+		// if err := tx.AddOutput(instrument, 0, false, false); err != nil {
+		// 	logger.Warn(ctx, "Failed to add op return output : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		for i := 0; i < count; i++ {
-			tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-			tx.SetChangeAddress(theClient.Wallet.Address, "")
+		// // Sign tx
+		// if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		// 	logger.Warn(ctx, "Failed to sign instrument offer tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-			if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
-				utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
-				uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
-				logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-			utxoIndex++
+		// instrumentTx := tx
 
-			if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
-				logger.Warn(ctx, "Failed to add contract output to transfer %d tx : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
+		// // Create transfer txs =====================================================================
+		// transferTxs := make([]*txbuilder.TxBuilder, 0, count)
+		// doubleTxs := make([]*txbuilder.TxBuilder, 0, count)
 
-			transfer, err := transferOpReturn()
-			if err != nil {
-				logger.Warn(ctx, "Failed to create transfer op return to transfer %d tx : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-			if err := tx.AddOutput(transfer, 0, false, false); err != nil {
-				logger.Warn(ctx, "Failed to add op return output to transfer %d tx : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
+		// for i := 0; i < count; i++ {
+		// 	tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
+		// 	tx.SetChangeAddress(theClient.Wallet.Address, "")
 
-			// Sign tx
-			if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
-				logger.Warn(ctx, "Failed to sign transfer %d tx : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
+		// 	if err := tx.AddInput(wire.OutPoint{Hash: *utxoTx.MsgTx.TxHash(), Index: utxoIndex},
+		// 		utxoTx.MsgTx.TxOut[utxoIndex].LockingScript,
+		// 		uint64(utxoTx.MsgTx.TxOut[utxoIndex].Value)); err != nil {
+		// 		logger.Warn(ctx, "Failed to add input to transfer %d tx : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// 	utxoIndex++
 
-			transferTxs = append(transferTxs, tx)
+		// 	if err := tx.AddPaymentOutput(theClient.ContractAddress, fundingAmount, false); err != nil {
+		// 		logger.Warn(ctx, "Failed to add contract output to transfer %d tx : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
 
-			// TODO Build double spend tx
-			tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-			tx.SetChangeAddress(theClient.Wallet.Address, "")
+		// 	transfer, err := transferOpReturn()
+		// 	if err != nil {
+		// 		logger.Warn(ctx, "Failed to create transfer op return to transfer %d tx : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// 	if err := tx.AddOutput(transfer, 0, false, false); err != nil {
+		// 		logger.Warn(ctx, "Failed to add op return output to transfer %d tx : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
 
-			doubleTxs = append(doubleTxs, tx)
-		}
+		// 	// Sign tx
+		// 	if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		// 		logger.Warn(ctx, "Failed to sign transfer %d tx : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
 
-		var incomingTx *wire.MsgTx
+		// 	transferTxs = append(transferTxs, tx)
 
-		// Clear any previous incoming txs
-		for len(theClient.IncomingTx.Channel) > 0 {
-			_ = <-theClient.IncomingTx.Channel
-		}
+		// 	// TODO Build double spend tx
+		// 	tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
+		// 	tx.SetChangeAddress(theClient.Wallet.Address, "")
 
-		// Send UTXO tx ============================================================================
-		logger.Info(ctx, "Sending utxo tx")
-		if err := theClient.BroadcastTx(ctx, utxoTx.MsgTx); err != nil {
-			logger.Warn(ctx, "Failed to broadcast UTXO tx : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// 	doubleTxs = append(doubleTxs, tx)
+		// }
 
-		// Send contract tx ========================================================================
-		incomingTx = sendRequest(ctx, theClient, contractTx.MsgTx, "contract")
-		if incomingTx == nil {
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// var incomingTx *wire.MsgTx
 
-		response, err := getResponse(incomingTx)
-		if err != nil {
-			logger.Warn(ctx, "Failed to parse contract response : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Clear any previous incoming txs
+		// for len(theClient.IncomingTx.Channel) > 0 {
+		// 	_ = <-theClient.IncomingTx.Channel
+		// }
 
-		if response.Code() == actions.CodeContractFormation {
-			logger.Info(ctx, "Contract formed")
-		} else if response.Code() == actions.CodeRejection {
-			reject, _ := response.(*actions.Rejection)
-			logger.Warn(ctx, "Contract rejected : %s", reject.Message)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		} else {
-			logger.Warn(ctx, "Unknown contract response type : %s", response.Code())
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Send UTXO tx ============================================================================
+		// logger.Info(ctx, "Sending utxo tx")
+		// if err := theClient.BroadcastTx(ctx, utxoTx.MsgTx); err != nil {
+		// 	logger.Warn(ctx, "Failed to broadcast UTXO tx : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		// Send instrument tx ===========================================================================
-		incomingTx = sendRequest(ctx, theClient, instrumentTx.MsgTx, "instrument")
-		if incomingTx == nil {
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// // Send contract tx ========================================================================
+		// incomingTx = sendRequest(ctx, theClient, contractTx.MsgTx, "contract")
+		// if incomingTx == nil {
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		response, err = getResponse(incomingTx)
-		if err != nil {
-			logger.Warn(ctx, "Failed to parse instrument response : %s", err)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// response, err := getResponse(incomingTx)
+		// if err != nil {
+		// 	logger.Warn(ctx, "Failed to parse contract response : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		if response.Code() == actions.CodeInstrumentCreation ||
-			response.Code() == actions.CodeAssetCreation {
-			instrumentCreation, _ := response.(*actions.InstrumentCreation)
-			logger.Info(ctx, "Instrument created : %x", instrumentCreation.InstrumentCode)
-		} else if response.Code() == actions.CodeRejection {
-			reject, _ := response.(*actions.Rejection)
-			logger.Warn(ctx, "Instrument rejected : %s", reject.Message)
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		} else {
-			logger.Warn(ctx, "Unknown instrument response type : %s", response.Code())
-			theClient.StopSpyNode(ctx)
-			wg.Wait()
-			return nil
-		}
+		// if response.Code() == actions.CodeContractFormation {
+		// 	logger.Info(ctx, "Contract formed")
+		// } else if response.Code() == actions.CodeRejection {
+		// 	reject, _ := response.(*actions.Rejection)
+		// 	logger.Warn(ctx, "Contract rejected : %s", reject.Message)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// } else {
+		// 	logger.Warn(ctx, "Unknown contract response type : %s", response.Code())
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-		// Send transfer Txs =======================================================================
-		times := make([]uint64, 0, count)
-		for i, transferTx := range transferTxs {
-			start := time.Now()
-			incomingTx = sendDoubleRequests(ctx, theClient, transferTx.MsgTx, doubleTxs[i].MsgTx, fmt.Sprintf("transfer %d", i))
-			if incomingTx == nil {
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-			end := time.Now()
+		// // Send instrument tx ===========================================================================
+		// incomingTx = sendRequest(ctx, theClient, instrumentTx.MsgTx, "instrument")
+		// if incomingTx == nil {
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-			// TODO Determine if the tx was accepted
+		// response, err = getResponse(incomingTx)
+		// if err != nil {
+		// 	logger.Warn(ctx, "Failed to parse instrument response : %s", err)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-			response, err := getResponse(incomingTx)
-			if err != nil {
-				logger.Warn(ctx, "Failed to parse transfer %d response : %s", i, err)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
+		// if response.Code() == actions.CodeInstrumentCreation ||
+		// 	response.Code() == actions.CodeAssetCreation {
+		// 	instrumentCreation, _ := response.(*actions.InstrumentCreation)
+		// 	logger.Info(ctx, "Instrument created : %x", instrumentCreation.InstrumentCode)
+		// } else if response.Code() == actions.CodeRejection {
+		// 	reject, _ := response.(*actions.Rejection)
+		// 	logger.Warn(ctx, "Instrument rejected : %s", reject.Message)
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// } else {
+		// 	logger.Warn(ctx, "Unknown instrument response type : %s", response.Code())
+		// 	theClient.StopSpyNode(ctx)
+		// 	wg.Wait()
+		// 	return nil
+		// }
 
-			times = append(times, uint64(end.UnixNano()-start.UnixNano()))
+		// // Send transfer Txs =======================================================================
+		// times := make([]uint64, 0, count)
+		// for i, transferTx := range transferTxs {
+		// 	start := time.Now()
+		// 	incomingTx = sendDoubleRequests(ctx, theClient, transferTx.MsgTx, doubleTxs[i].MsgTx, fmt.Sprintf("transfer %d", i))
+		// 	if incomingTx == nil {
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// 	end := time.Now()
 
-			if response.Code() == actions.CodeSettlement {
-				logger.Info(ctx, "Transfer %d accepted in %d ns", i, end.UnixNano()-start.UnixNano())
-			} else if response.Code() == actions.CodeRejection {
-				reject, _ := response.(*actions.Rejection)
-				logger.Warn(ctx, "Transfer %d rejected : %s", i, reject.Message)
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			} else {
-				logger.Warn(ctx, "Unknown transfer %d response type : %s", i, response.Code())
-				theClient.StopSpyNode(ctx)
-				wg.Wait()
-				return nil
-			}
-		}
+		// 	// TODO Determine if the tx was accepted
 
-		// TODO Wait for confirms and determine which double spends were successful and if any were
-		//   accepted by the smart-contract.
+		// 	response, err := getResponse(incomingTx)
+		// 	if err != nil {
+		// 		logger.Warn(ctx, "Failed to parse transfer %d response : %s", i, err)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
 
-		total := uint64(0)
-		for _, round := range times {
-			total += round
-		}
-		logger.Info(ctx, "Average round trip (for %d) : %d ns", count, total/uint64(count))
+		// 	times = append(times, uint64(end.UnixNano()-start.UnixNano()))
 
-		theClient.StopSpyNode(ctx)
-		wg.Wait()
+		// 	if response.Code() == actions.CodeSettlement {
+		// 		logger.Info(ctx, "Transfer %d accepted in %d ns", i, end.UnixNano()-start.UnixNano())
+		// 	} else if response.Code() == actions.CodeRejection {
+		// 		reject, _ := response.(*actions.Rejection)
+		// 		logger.Warn(ctx, "Transfer %d rejected : %s", i, reject.Message)
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	} else {
+		// 		logger.Warn(ctx, "Unknown transfer %d response type : %s", i, response.Code())
+		// 		theClient.StopSpyNode(ctx)
+		// 		wg.Wait()
+		// 		return nil
+		// 	}
+		// }
+
+		// // TODO Wait for confirms and determine which double spends were successful and if any were
+		// //   accepted by the smart-contract.
+
+		// total := uint64(0)
+		// for _, round := range times {
+		// 	total += round
+		// }
+		// logger.Info(ctx, "Average round trip (for %d) : %d ns", count, total/uint64(count))
+
+		// theClient.StopSpyNode(ctx)
+		// wg.Wait()
 		return nil
 	},
 }
 
-func sendDoubleRequests(ctx context.Context, client *client.Client, tx *wire.MsgTx, tx2 *wire.MsgTx, name string) *wire.MsgTx {
-	logger.Info(ctx, "Sending %s tx", name)
-	if err := client.BroadcastTx(ctx, tx); err != nil {
-		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
-		return nil
-	}
+// func sendDoubleRequests(ctx context.Context, client *client.Client, tx *wire.MsgTx, tx2 *wire.MsgTx, name string) *wire.MsgTx {
+// 	logger.Info(ctx, "Sending %s tx", name)
+// 	if err := client.BroadcastTx(ctx, tx); err != nil {
+// 		logger.Warn(ctx, "Failed to broadcast %s tx : %s", name, err)
+// 		return nil
+// 	}
 
-	// Wait for response on tx channel
-	// TODO Add delay in case request was not accepted
-	hash := tx.TxHash()
-	for incomingTx := range client.IncomingTx.Channel {
-		for _, input := range incomingTx.TxIn {
-			if input.PreviousOutPoint.Hash.Equal(hash) {
-				return incomingTx
-			}
-		}
-	}
+// 	// Wait for response on tx channel
+// 	// TODO Add delay in case request was not accepted
+// 	hash := tx.TxHash()
+// 	for incomingTx := range client.IncomingTx.Channel {
+// 		for _, input := range incomingTx.TxIn {
+// 			if input.PreviousOutPoint.Hash.Equal(hash) {
+// 				return incomingTx
+// 			}
+// 		}
+// 	}
 
-	logger.Warn(ctx, "Channel closed")
-	return nil
-}
+// 	logger.Warn(ctx, "Channel closed")
+// 	return nil
+// }
 
 func init() {
 }

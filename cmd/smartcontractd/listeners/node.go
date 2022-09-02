@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"reflect"
 	"sync"
 
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/wire"
@@ -20,6 +22,7 @@ import (
 	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/spynode/pkg/client"
+	"github.com/tokenized/threads"
 
 	"github.com/pkg/errors"
 )
@@ -137,76 +140,92 @@ func (server *Server) Load(ctx context.Context) error {
 	return nil
 }
 
-func (server *Server) Start(ctx context.Context, wg *sync.WaitGroup) error {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := server.Scheduler.Run(ctx); err != nil {
-			node.LogError(ctx, "Scheduler failed : %s", err)
-			server.incomingTxs.Close()
-			server.processingTxs.Close()
-			server.holdingsChannel.Close()
-		}
-		node.LogVerbose(ctx, "Scheduler finished")
-	}()
+func (server *Server) Run(ctx context.Context, interrupt <-chan interface{}) error {
+	var wait sync.WaitGroup
+	var selects []reflect.SelectCase
 
+	schedulerThread, schedulerComplete := threads.NewUninterruptableThreadComplete("Scheduler",
+		server.Scheduler.Run, &wait)
+	schedulerSelectIndex := len(selects)
+	selects = append(selects, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(schedulerComplete),
+	})
+
+	var processThreads threads.Threads
 	for i := 0; i < server.Config.PreprocessThreads; i++ {
-		node.Log(ctx, "Starting pre-process thread %d", i)
-		// Start preprocess thread
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := server.ProcessIncomingTxs(ctx); err != nil {
-				node.LogError(ctx, "Pre-process failed : %s", err)
-				server.Scheduler.Stop(ctx)
-				server.incomingTxs.Close()
-				server.processingTxs.Close()
-				server.holdingsChannel.Close()
+		thread, complete := threads.NewUninterruptableThreadComplete(fmt.Sprintf("Preprocess %d", i),
+			server.ProcessIncomingTxs, &wait)
+		processThreads = append(processThreads, thread)
+		selects = append(selects, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(complete),
+		})
+	}
+
+	processThread, processComplete := threads.NewUninterruptableThreadComplete("Process",
+		server.ProcessTxs, &wait)
+	processSelectIndex := len(selects)
+	selects = append(selects, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(processComplete),
+	})
+
+	cacheThread, cacheComplete := threads.NewUninterruptableThreadComplete("Cache",
+		func(ctx context.Context) error {
+			return holdings.ProcessCacheItems(ctx, server.MasterDB, server.holdingsChannel)
+		}, &wait)
+	cacheSelectIndex := len(selects)
+	selects = append(selects, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(cacheComplete),
+	})
+
+	interruptIndex := len(selects)
+	selects = append(selects, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(interrupt),
+	})
+
+	schedulerThread.Start(ctx)
+	processThreads.Start(ctx)
+	processThread.Start(ctx)
+	cacheThread.Start(ctx)
+
+	selectIndex, selectValue, valueReceived := reflect.Select(selects)
+	var selectErr error
+	if valueReceived {
+		selectInterface := selectValue.Interface()
+		if selectInterface != nil {
+			err, ok := selectInterface.(error)
+			if ok {
+				selectErr = err
 			}
-			node.LogVerbose(ctx, "Pre-process thread finished")
-		}()
+		}
 	}
 
-	// Start process thread
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := server.ProcessTxs(ctx); err != nil {
-			node.LogError(ctx, "Process failed : %s", err)
-			server.Scheduler.Stop(ctx)
-			server.incomingTxs.Close()
-			server.processingTxs.Close()
-			server.holdingsChannel.Close()
-		}
-		node.LogVerbose(ctx, "Process thread finished")
-	}()
-
-	// Start holdings cache writer thread
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := holdings.ProcessCacheItems(ctx, server.MasterDB,
-			server.holdingsChannel); err != nil {
-			node.LogError(ctx, "Process holdings cache failed : %s", err)
-			server.Scheduler.Stop(ctx)
-			server.incomingTxs.Close()
-			server.processingTxs.Close()
-		}
-		node.LogVerbose(ctx, "Process holdings cache thread finished")
-	}()
-
-	return nil
-}
-
-func (server *Server) Run(ctx context.Context) error {
-	wg := sync.WaitGroup{}
-
-	if err := server.Start(ctx, &wg); err != nil {
-		return errors.Wrap(err, "start")
+	schedulerStopped := false
+	if selectIndex == schedulerSelectIndex {
+		logger.Error(ctx, "Scheduler completed : %s", selectErr)
+		schedulerStopped = true
+	} else if selectIndex == processSelectIndex {
+		logger.Error(ctx, "Process Txs completed : %s", selectErr)
+	} else if selectIndex == cacheSelectIndex {
+		logger.Error(ctx, "Cache completed : %s", selectErr)
+	} else if selectIndex < interruptIndex {
+		logger.Error(ctx, "Preprocess %d completed : %s", selectIndex-1, selectErr)
 	}
 
-	// Block until goroutines finish as a result of Stop()
-	wg.Wait()
+	if !schedulerStopped {
+		if err := server.Scheduler.Stop(ctx); err != nil {
+			logger.Error(ctx, "Failed to stop scheduler : %s", err)
+		}
+	}
+	server.incomingTxs.Close()
+	server.processingTxs.Close()
+	server.holdingsChannel.Close()
+
+	wait.Wait()
 
 	return server.Save(ctx)
 }
@@ -237,18 +256,6 @@ func (server *Server) Save(ctx context.Context) error {
 		}
 	}
 
-	return nil
-}
-
-func (server *Server) Stop(ctx context.Context) error {
-	schedulerErr := server.Scheduler.Stop(ctx)
-	server.incomingTxs.Close()
-	server.processingTxs.Close()
-	server.holdingsChannel.Close()
-
-	if schedulerErr != nil {
-		return errors.Wrap(schedulerErr, "Scheduler failed to stop")
-	}
 	return nil
 }
 

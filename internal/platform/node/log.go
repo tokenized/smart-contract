@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/tokenized/pkg/logger"
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/txbuilder"

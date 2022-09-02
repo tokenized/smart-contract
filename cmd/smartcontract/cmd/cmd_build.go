@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,12 +11,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tokenized/config"
+	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/json"
-	"github.com/tokenized/pkg/logger"
 	"github.com/tokenized/pkg/txbuilder"
-	"github.com/tokenized/smart-contract/cmd/smartcontract/client"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/instruments"
 	"github.com/tokenized/specification/dist/golang/permissions"
@@ -25,6 +25,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type BuildConfig struct {
+	Net         bitcoin.Network `default:"mainnet" envconfig:"NETWORK"`
+	IsTest      bool            `default:"true" envconfig:"IS_TEST"`
+	FeeRate     float32         `default:"0.05" envconfig:"CLIENT_FEE_RATE"`
+	DustFeeRate float32         `default:"0.0" envconfig:"CLIENT_DUST_FEE_RATE"`
+	ContractFee uint64          `default:"1000" envconfig:"CLIENT_CONTRACT_FEE"`
+}
+
 const (
 	FlagTx        = "tx"
 	FlagHexFormat = "hex"
@@ -32,15 +40,15 @@ const (
 )
 
 var cmdBuild = &cobra.Command{
-	Use:   "build <typeCode> <jsonFile>",
+	Use:   "build <contractAddress> <typeCode> <jsonFile> <fundingKey> <fundingOutpoint> <fundingValue>",
 	Short: "Build an action/instrument/message payload from a json file.",
 	Long:  "Build and action/instrument/message payload from a json file. Note: fixedbin (fixed size binary) in json is an array of 8 bit integers and bin (variable size binary) is hex encoded binary data.",
 	RunE: func(c *cobra.Command, args []string) error {
-		if len(args) != 2 {
+		if len(args) != 6 {
 			return errors.New("Missing json file parameter")
 		}
 
-		switch len(args[0]) {
+		switch len(args[1]) {
 		case 2:
 			return buildAction(c, args)
 		case 3:
@@ -54,12 +62,71 @@ var cmdBuild = &cobra.Command{
 }
 
 func buildAction(c *cobra.Command, args []string) error {
-	ctx := client.Context()
+	ctx := context.Background()
 	if ctx == nil {
 		return nil
 	}
 
-	actionType := strings.ToUpper(args[0])
+	cfg := &BuildConfig{}
+	if err := config.LoadConfig(ctx, cfg); err != nil {
+		logger.Fatal(ctx, "Failed to load config : %s", err)
+	}
+
+	maskedConfig, err := config.MarshalJSONMaskedRaw(cfg)
+	if err != nil {
+		logger.Fatal(ctx, "Failed to marshal masked config : %s", err)
+	}
+
+	logger.InfoWithFields(ctx, []logger.Field{
+		logger.JSON("config", maskedConfig),
+	}, "Config")
+
+	if len(args) != 6 {
+		logger.Fatal(ctx, "Wrong arguments : build <contractAddress> <typeCode> <jsonFile> <fundingKey> <fundingOutpoint> <fundingValue>")
+	}
+
+	contractAddress, err := bitcoin.DecodeAddress(args[0])
+	if err != nil {
+		logger.Fatal(ctx, "Invalid address : %s", err)
+	}
+
+	contractLockingScript, err := bitcoin.NewRawAddressFromAddress(contractAddress).LockingScript()
+	if err != nil {
+		logger.Fatal(ctx, "Failed to create locking script : %s", err)
+	}
+
+	actionType := strings.ToUpper(args[1])
+	filePath := filepath.FromSlash(args[2])
+
+	key, err := bitcoin.KeyFromStr(args[3])
+	if err != nil {
+		logger.Fatal(ctx, "Invalid key : %s", err)
+	}
+
+	fundingLockingScript, err := key.LockingScript()
+	if err != nil {
+		logger.Fatal(ctx, "Failed to create locking script : %s", err)
+	}
+
+	parts := strings.Split(args[4], ":")
+	if len(parts) != 2 {
+		logger.Fatal(ctx, "Invalid funding outpoint : %d parts", len(parts))
+	}
+
+	fundingHash, err := bitcoin.NewHash32FromStr(parts[0])
+	if err != nil {
+		logger.Fatal(ctx, "Invalid funding outpoint hash : %s", err)
+	}
+
+	fundingIndex, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		logger.Fatal(ctx, "Invalid funding outpoint index : %s", err)
+	}
+
+	fundingValue, err := strconv.ParseUint(args[5], 10, 64)
+	if err != nil {
+		logger.Fatal(ctx, "Invalid funding value : %s", err)
+	}
 
 	// Create struct
 	action := actions.NewActionFromCode(actionType)
@@ -69,8 +136,7 @@ func buildAction(c *cobra.Command, args []string) error {
 	}
 
 	// Read json file
-	path := filepath.FromSlash(args[1])
-	data, err := ioutil.ReadFile(path)
+	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("Failed to read json file : %s\n", err)
 		return nil
@@ -119,13 +185,7 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	}
 
-	theClient, err := client.NewClient(ctx, network(c))
-	if err != nil {
-		fmt.Printf("Failed to create client : %s\n", err)
-		return nil
-	}
-
-	script, err := protocol.Serialize(action, theClient.Config.IsTest)
+	actionScript, err := protocol.Serialize(action, cfg.IsTest)
 	if err != nil {
 		fmt.Printf("Failed to serialize %s op return : %s\n", actionType, err)
 		return nil
@@ -135,83 +195,57 @@ func buildAction(c *cobra.Command, args []string) error {
 	buildTx, _ := c.Flags().GetBool(FlagTx)
 	var tx *txbuilder.TxBuilder
 	if buildTx {
-
-		tx = txbuilder.NewTxBuilder(theClient.Config.FeeRate, theClient.Config.DustFeeRate)
-		tx.SetChangeAddress(theClient.Wallet.Address, "")
+		tx = txbuilder.NewTxBuilder(cfg.FeeRate, cfg.DustFeeRate)
+		tx.SetChangeLockingScript(fundingLockingScript, "")
 
 		// Add output to contract
 		contractOutputIndex := uint32(0)
-		err = tx.AddDustOutput(theClient.ContractAddress, false)
+		err = tx.AddOutput(contractLockingScript, 1025, false, false)
 		if err != nil {
 			fmt.Printf("Failed to add contract output : %s\n", err)
 			return nil
 		}
 
 		// Add op return
-		err = tx.AddOutput(script, 0, false, false)
+		err = tx.AddOutput(actionScript, 0, false, false)
 		if err != nil {
 			fmt.Printf("Failed to add op return output : %s\n", err)
 			return nil
 		}
 
 		// Determine funding required for contract to be able to post response tx.
-		dustLimit := txbuilder.DustLimit(txbuilder.P2PKHOutputSize, theClient.Config.DustFeeRate)
+		dustLimit := txbuilder.DustLimit(txbuilder.P2PKHOutputSize, cfg.DustFeeRate)
 		estimatedSize, funding, err := protocol.EstimatedResponse(tx.MsgTx, 0,
-			dustLimit, theClient.Config.ContractFee, theClient.Config.IsTest)
+			dustLimit, cfg.ContractFee, cfg.IsTest)
 		if err != nil {
 			fmt.Printf("Failed to estimate funding : %s\n", err)
 			return nil
 		}
 		fmt.Printf("Response estimated : %d bytes, %d funding\n", estimatedSize, funding)
-		funding += uint64(float32(estimatedSize)*theClient.Config.FeeRate*1.1) + 2500 // Add response tx fee
+		funding += uint64(float32(estimatedSize) * cfg.FeeRate * 1.1) // Add response tx fee
 		err = tx.AddValueToOutput(contractOutputIndex, funding)
 		if err != nil {
 			fmt.Printf("Failed to add estimated funding to contract output of tx : %s\n", err)
 			return nil
 		}
 
-		// Add inputs
-		var emptyHash bitcoin.Hash32
-		fee := tx.EstimatedFee()
-		inputValue := uint64(0)
-		for _, output := range theClient.Wallet.UnspentOutputs() {
-			if fee+tx.OutputValue(false)+funding < inputValue {
-				break
-			}
-			if !emptyHash.Equal(output.SpentByTxId) {
-				continue
-			}
-			err := tx.AddInput(output.OutPoint, output.LockingScript, output.Value)
-			if err != nil {
-				fmt.Printf("Failed to add input : %s\n", err)
-				return nil
-			}
-			inputValue += output.Value
-			fee = tx.EstimatedFee()
-		}
-		if fee > inputValue {
-			fmt.Printf("Insufficient balance for tx fee %.08f : balance %.08f\n",
-				client.BitcoinsFromSatoshis(fee), client.BitcoinsFromSatoshis(inputValue))
+		if err := tx.AddInputUTXO(bitcoin.UTXO{
+			Hash:          *fundingHash,
+			Index:         uint32(fundingIndex),
+			Value:         fundingValue,
+			LockingScript: fundingLockingScript,
+		}); err != nil {
+			fmt.Printf("Failed to add input : %s\n", err)
 			return nil
 		}
 
-		if _, err := tx.Sign([]bitcoin.Key{theClient.Wallet.Key}); err != nil {
+		if _, err := tx.Sign([]bitcoin.Key{key}); err != nil {
 			fmt.Printf("Failed to sign tx : %s\n", err)
 			return nil
 		}
 
-		// Check with inspector
-		itx, err := inspector.NewTransactionFromWire(ctx, tx.MsgTx, theClient.Config.IsTest)
-		if err != nil {
-			logger.Warn(ctx, "Failed to convert tx to inspector")
-		}
-
-		if !itx.IsTokenized() {
-			logger.Warn(ctx, "Tx is not inspector tokenized")
-		}
-
 		if hexFormat {
-			fmt.Printf("Tx Id (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
+			fmt.Printf("TxID (%d bytes) : %s\n", tx.MsgTx.SerializeSize(), tx.MsgTx.TxHash())
 			var buf bytes.Buffer
 			if err := tx.MsgTx.Serialize(&buf); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("Failed to serialize %s tx", actionType))
@@ -224,7 +258,7 @@ func buildAction(c *cobra.Command, args []string) error {
 
 	fmt.Printf("Action : %s\n", actionType)
 	if hexFormat {
-		fmt.Printf("%x\n", script)
+		fmt.Printf("%x\n", actionScript)
 	} else {
 		data, err = json.MarshalIndent(action, "", "  ")
 		if err != nil {
@@ -318,16 +352,6 @@ func buildAction(c *cobra.Command, args []string) error {
 		}
 	}
 
-	if buildTx {
-		send, _ := c.Flags().GetBool(FlagSend)
-		if send {
-			fmt.Printf("Sending to network\n")
-			if err := theClient.BroadcastTx(ctx, tx.MsgTx); err != nil {
-				fmt.Printf("Failed to send tx : %s\n", err)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -379,5 +403,4 @@ func buildMessage(c *cobra.Command, args []string) error {
 func init() {
 	cmdBuild.Flags().Bool(FlagTx, false, "build a tx, if false only op return is built")
 	cmdBuild.Flags().Bool(FlagHexFormat, false, "hex format")
-	cmdBuild.Flags().Bool(FlagSend, false, "send to network")
 }

@@ -529,10 +529,11 @@ func oracleContract(t *testing.T) {
 	server.SetInSync()
 
 	wg := sync.WaitGroup{}
+	interrupt := make(chan interface{})
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.Run(ctx); err != nil {
+		if err := server.Run(ctx, interrupt); err != nil {
 			t.Logf("Server failed : %s", err)
 		}
 	}()
@@ -649,7 +650,7 @@ func oracleContract(t *testing.T) {
 
 	t.Logf("\t%s\tContract offer with valid signature accepted", tests.Success)
 
-	server.Stop(ctx)
+	close(interrupt)
 	wg.Wait()
 }
 
