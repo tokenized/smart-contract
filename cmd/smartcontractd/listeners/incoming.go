@@ -80,7 +80,6 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 
 // ProcessIncomingTxs performs preprocessing on transactions coming into the smart contract.
 func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
-
 	for intx := range server.incomingTxs.Channel {
 		txCtx := node.ContextWithLogTrace(ctx, intx.Itx.Hash.String())
 		node.Log(txCtx, "Processing incoming tx")
@@ -381,6 +380,12 @@ func NewIncomingTxData(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32,
 	if err != nil {
 		return nil, err
 	}
+
+	if result.Itx.IsOutgoingMessageType() {
+		node.Log(ctx, "Response tx marked as ready immediately")
+		result.IsReady = true
+	}
+
 	return &result, nil
 }
 
