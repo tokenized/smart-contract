@@ -143,14 +143,6 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	if len(msg.MasterAddress) > 0 {
-		if _, err := bitcoin.DecodeRawAddress(msg.MasterAddress); err != nil {
-			node.LogWarn(ctx, "Invalid master address : %s", err)
-			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
-				"invalid master address")
-		}
-	}
-
 	if _, err := permissions.PermissionsFromBytes(msg.ContractPermissions,
 		len(msg.VotingSystems)); err != nil {
 		node.LogWarn(ctx, "Invalid contract permissions : %s", err)
@@ -376,13 +368,6 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.Wrap(err, "fetch contract formation")
 	}
 
-	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
-	// unlimited instrument creation is permitted.
-	if cf.RestrictedQtyInstruments > 0 && cf.RestrictedQtyInstruments < uint64(len(ct.InstrumentCodes)) {
-		node.LogWarn(ctx, "Cannot reduce allowable instruments below existing number")
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractInstrumentQtyReduction)
-	}
-
 	if msg.ChangeAdministrationAddress || msg.ChangeOperatorAddress {
 		if !ct.OperatorAddress.IsEmpty() {
 			if len(itx.Inputs) < 2 {
@@ -443,6 +428,13 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		votingSystem); err != nil {
 		node.LogWarn(ctx, "Failed to apply amendments : %s", err)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
+	}
+
+	// Ensure reduction in qty is OK, keeping in mind that zero (0) means
+	// unlimited instrument creation is permitted.
+	if cf.RestrictedQtyInstruments > 0 && cf.RestrictedQtyInstruments < uint64(len(ct.InstrumentCodes)) {
+		node.LogWarn(ctx, "Cannot reduce allowable instruments below existing number")
+		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractInstrumentQtyReduction)
 	}
 
 	// Verify entity contract

@@ -10,10 +10,10 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/config v0.2.2-0.20220902160347-43a4340c357e
 	github.com/tokenized/logger v0.1.1
-	github.com/tokenized/pkg v0.4.1-0.20220906215914-999453d439df
-	github.com/tokenized/specification v1.1.2-0.20220909144939-3aa7ec366bbb
-	github.com/tokenized/spynode v0.2.2-0.20220906224702-89137f93b0e3
-	github.com/tokenized/threads v0.1.1-0.20220908162622-5e406dccfad8
+	github.com/tokenized/pkg v0.4.1-0.20221111193511-06a224463802
+	github.com/tokenized/specification v1.1.2-0.20221117193649-106cc89fa40a
+	github.com/tokenized/spynode v0.2.2-0.20221111175824-493266baed6f
+	github.com/tokenized/threads v0.1.1-0.20221115220050-91bea32c8aa2
 	go.opencensus.io v0.22.2
 )
 

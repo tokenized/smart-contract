@@ -35,6 +35,8 @@ type HTTPClient struct {
 	URL             string
 	PublicKey       bitcoin.PublicKey
 
+	clientKey bitcoin.Key
+
 	// Client information
 	ClientID  uuid.UUID   // User ID of client
 	ClientKey bitcoin.Key // Key used to authorize/encrypt with oracle
@@ -51,11 +53,11 @@ func NewHTTPFactory() *HTTPFactory {
 
 // NewClient creates a new http client.
 func (f *HTTPFactory) NewClient(contractAddress bitcoin.RawAddress, url string,
-	publicKey bitcoin.PublicKey) (Client, error) {
+	publicKey bitcoin.PublicKey, clientKey bitcoin.Key) (Client, error) {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "https://" + url
 	}
-	return NewHTTPClient(contractAddress, url, publicKey)
+	return NewHTTPClient(contractAddress, url, publicKey, clientKey)
 }
 
 // GetHTTPClient fetches an HTTP oracle client's data from the URL.
@@ -82,11 +84,14 @@ func GetHTTPClient(ctx context.Context, baseURL string) (*HTTPClient, error) {
 }
 
 // NewHTTPClient creates an HTTP oracle client from specified data.
-func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (*HTTPClient, error) {
+func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey,
+	clientKey bitcoin.Key) (*HTTPClient, error) {
+
 	return &HTTPClient{
 		ContractAddress: contractAddress,
 		URL:             url,
 		PublicKey:       publicKey,
+		clientKey:       clientKey,
 	}, nil
 }
 
@@ -96,6 +101,33 @@ func NewHTTPClient(contractAddress bitcoin.RawAddress, url string, publicKey bit
 func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddress, uint64,
 	bitcoin.RawAddress, error) {
 
+	timestamp := uint64(time.Now().UnixNano())
+	publicKey := c.clientKey.PublicKey()
+
+	request := struct {
+		Timestamp *uint64            `json:"timestamp"`
+		PublicKey *bitcoin.PublicKey `json:"public_key"`
+		Signature *bitcoin.Signature `json:"signature"`
+	}{
+		Timestamp: &timestamp,
+		PublicKey: &publicKey,
+	}
+
+	// Hash request
+	buf := &bytes.Buffer{}
+	if err := binary.Write(buf, binary.LittleEndian, *request.Timestamp); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "write timestamp")
+	}
+
+	sigHash := bitcoin.Hash32(sha256.Sum256(buf.Bytes()))
+
+	sig, err := c.clientKey.Sign(sigHash)
+	if err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "sign request")
+	}
+
+	request.Signature = &sig
+
 	var response struct {
 		EntityContract bitcoin.RawAddress `json:"entity_contract,omitempty"`
 		Address        bitcoin.RawAddress `json:"address,omitempty"`
@@ -104,8 +136,8 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 		Signature      bitcoin.Signature  `json:"signature,omitempty"`
 	}
 
-	if err := get(ctx, c.URL+"/new_contract", &response); err != nil {
-		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http get")
+	if err := post(ctx, c.URL+"/new_contract", request, &response); err != nil {
+		return bitcoin.RawAddress{}, 0, bitcoin.RawAddress{}, errors.Wrap(err, "http post")
 	}
 
 	// Validate signature
@@ -134,11 +166,38 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 // SignContractOffer adds a signed input to a contract offer transaction.
 func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
 
+	timestamp := uint64(time.Now().UnixNano())
+	publicKey := c.clientKey.PublicKey()
+
 	request := struct {
-		Tx *wire.MsgTx `json:"tx"`
+		Timestamp *uint64            `json:"timestamp"`
+		PublicKey *bitcoin.PublicKey `json:"public_key"`
+		Signature *bitcoin.Signature `json:"signature"`
+		Tx        *wire.MsgTx        `json:"tx"`
 	}{
-		Tx: tx,
+		Timestamp: &timestamp,
+		PublicKey: &publicKey,
+		Tx:        tx,
 	}
+
+	// Hash request
+	buf := &bytes.Buffer{}
+	if err := binary.Write(buf, binary.LittleEndian, *request.Timestamp); err != nil {
+		return nil, nil, errors.Wrap(err, "write timestamp")
+	}
+
+	if err := tx.Serialize(buf); err != nil {
+		return nil, nil, errors.Wrap(err, "write tx")
+	}
+
+	sigHash := bitcoin.Hash32(sha256.Sum256(buf.Bytes()))
+
+	sig, err := c.clientKey.Sign(sigHash)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "sign request")
+	}
+
+	request.Signature = &sig
 
 	var response struct {
 		Tx   *wire.MsgTx   `json:"tx"`
@@ -146,7 +205,7 @@ func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wi
 	}
 
 	if err := post(ctx, c.URL+"/sign_contract", request, &response); err != nil {
-		return nil, nil, errors.Wrap(err, "http get")
+		return nil, nil, errors.Wrap(err, "http post")
 	}
 
 	// TODO Validate signature of second input of response.Tx and that it is signed by the service

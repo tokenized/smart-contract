@@ -12,7 +12,8 @@ import (
 // Factory is the interface for creating new identity clients.
 type Factory interface {
 	// NewClient creates a new client.
-	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey) (Client, error)
+	NewClient(contractAddress bitcoin.RawAddress, url string, publicKey bitcoin.PublicKey,
+		clientKey bitcoin.Key) (Client, error)
 }
 
 // Client is the interface for interacting with an contract operator service.
@@ -28,7 +29,7 @@ type Client interface {
 	// These have to be accounted for in the tx fee before calling this function because, since
 	// the input will be signed, no other changes can be made to the tx other than signing inputs
 	// without invalidating the operator input's signature.
-	SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error)
+	SignContractOffer(context.Context, *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error)
 
 	// GetContractAddress returns the oracle's contract address.
 	GetContractAddress() bitcoin.RawAddress

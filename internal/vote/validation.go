@@ -3,9 +3,10 @@ package vote
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+
+	"github.com/pkg/errors"
 )
 
 // ValidateProposal returns true if the Proposal is valid.

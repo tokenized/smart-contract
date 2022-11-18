@@ -22,10 +22,11 @@ func NewMockFactory() *MockFactory {
 }
 
 func (f *MockFactory) NewClient(contractAddress bitcoin.RawAddress, url string,
-	publicKey bitcoin.PublicKey) (Client, error) {
+	publicKey bitcoin.PublicKey, clientKey bitcoin.Key) (Client, error) {
 	// Find setup mock oracle
 	for _, client := range f.clients {
 		if client.ContractAddress.Equal(contractAddress) {
+			client.ClientKey = clientKey
 			return client, nil
 		}
 	}

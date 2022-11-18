@@ -50,6 +50,7 @@ var cmdParse = &cobra.Command{
 
 			script, err := bitcoin.StringToScript(input)
 			if err == nil {
+				fmt.Printf("Is Script : %x\n", []byte(script))
 				if parseScript(c, script) == nil {
 					return nil
 				}

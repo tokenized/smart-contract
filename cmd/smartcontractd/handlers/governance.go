@@ -41,7 +41,7 @@ func (g *Governance) ProposalRequest(ctx context.Context, w *node.ResponseWriter
 
 	msg, ok := itx.MsgProto.(*actions.Proposal)
 	if !ok {
-		return errors.New("Could not assert as *actions.Initiative")
+		return errors.New("Could not assert as *actions.Proposal")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)

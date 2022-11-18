@@ -6,7 +6,7 @@ type Config struct {
 		PrivateKey  string  `envconfig:"PRIV_KEY" json:"PRIV_KEY" masked:"true"`
 		FeeAddress  string  `envconfig:"FEE_ADDRESS" json:"FEE_ADDRESS"`
 		FeeRate     float32 `default:"0.05" envconfig:"FEE_RATE" json:"FEE_RATE"`
-		DustFeeRate float32 `default:"0.05" envconfig:"DUST_FEE_RATE" json:"DUST_FEE_RATE"`
+		DustFeeRate float32 `default:"0.00" envconfig:"DUST_FEE_RATE" json:"DUST_FEE_RATE"`
 
 		RequestTimeout    uint64  `default:"60000000000" envconfig:"REQUEST_TIMEOUT" json:"REQUEST_TIMEOUT"` // Default 1 minute
 		PreprocessThreads int     `default:"4" envconfig:"PREPROCESS_THREADS" json:"PREPROCESS_THREADS"`
