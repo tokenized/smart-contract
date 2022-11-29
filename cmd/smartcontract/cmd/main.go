@@ -34,6 +34,7 @@ func Execute() {
 	scCmd.AddCommand(cmdState)
 	scCmd.AddCommand(cmdJSON)
 	scCmd.AddCommand(cmdFIP)
+	scCmd.AddCommand(cmdOperatorAddress)
 	scCmd.Execute()
 }
 
