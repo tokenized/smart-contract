@@ -100,7 +100,12 @@ func NewNodeConfig(ctx context.Context, cfg *smartContractConfig.Config) *node.C
 	if !bitcoin.DecodeNetMatches(feeAddress.Network(), appConfig.Net) {
 		logger.Fatal(ctx, "Wrong fee address encoding network")
 	}
-	appConfig.FeeAddress = bitcoin.NewRawAddressFromAddress(feeAddress)
+
+	feeLockingScript, err := bitcoin.NewRawAddressFromAddress(feeAddress).LockingScript()
+	if err != nil {
+		logger.Fatal(ctx, "Invalid fee address : %s", err)
+	}
+	appConfig.FeeLockingScript = feeLockingScript
 
 	return appConfig
 }
@@ -111,7 +116,7 @@ func NewNodeConfigFromValues(
 	feeRate, dustFeeRate, minFeeRate float32,
 	requestTimeout uint64,
 	preprocessThreads int,
-	feeAddress bitcoin.RawAddress) *node.Config {
+	feeLockingScript bitcoin.Script) *node.Config {
 
 	return &node.Config{
 		Net:               net,
@@ -121,7 +126,7 @@ func NewNodeConfigFromValues(
 		MinFeeRate:        minFeeRate,
 		RequestTimeout:    requestTimeout,
 		PreprocessThreads: preprocessThreads,
-		FeeAddress:        feeAddress,
+		FeeLockingScript:  feeLockingScript,
 	}
 }
 

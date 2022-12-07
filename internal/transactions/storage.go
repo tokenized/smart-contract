@@ -6,10 +6,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/spynode/pkg/client"
 )
 
@@ -33,7 +33,7 @@ func AddTx(ctx context.Context, masterDb *db.DB, itx *inspector.Transaction) err
 	return masterDb.Put(ctx, buildStoragePath(itx.Hash), buf.Bytes())
 }
 
-func GetTx(ctx context.Context, masterDb *db.DB, txid *bitcoin.Hash32, isTest bool) (*inspector.Transaction, error) {
+func GetTx(ctx context.Context, masterDb *db.DB, txid bitcoin.Hash32, isTest bool) (*inspector.Transaction, error) {
 	data, err := masterDb.Fetch(ctx, buildStoragePath(txid))
 	if err != nil {
 		if err == db.ErrNotFound {
@@ -53,11 +53,11 @@ func GetTx(ctx context.Context, masterDb *db.DB, txid *bitcoin.Hash32, isTest bo
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStoragePath(txid *bitcoin.Hash32) string {
+func buildStoragePath(txid bitcoin.Hash32) string {
 	return fmt.Sprintf("%s/%s", storageKey, txid.String())
 }
 
-func AddTxState(ctx context.Context, masterDb *db.DB, txid *bitcoin.Hash32,
+func AddTxState(ctx context.Context, masterDb *db.DB, txid bitcoin.Hash32,
 	state *client.TxState) error {
 
 	var buf bytes.Buffer
@@ -70,7 +70,7 @@ func AddTxState(ctx context.Context, masterDb *db.DB, txid *bitcoin.Hash32,
 }
 
 func GetTxState(ctx context.Context, masterDb *db.DB,
-	txid *bitcoin.Hash32) (*client.TxState, error) {
+	txid bitcoin.Hash32) (*client.TxState, error) {
 
 	data, err := masterDb.Fetch(ctx, buildStateStoragePath(txid))
 	if err != nil {
@@ -91,6 +91,6 @@ func GetTxState(ctx context.Context, masterDb *db.DB,
 }
 
 // Returns the storage path prefix for a given identifier.
-func buildStateStoragePath(txid *bitcoin.Hash32) string {
+func buildStateStoragePath(txid bitcoin.Hash32) string {
 	return fmt.Sprintf("%s/%s", storageStateKey, txid)
 }

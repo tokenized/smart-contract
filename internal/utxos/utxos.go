@@ -21,18 +21,13 @@ type UTXO struct {
 }
 
 // Add adds/spends UTXOs based on the tx.
-func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
+func (us *UTXOs) Add(tx *wire.MsgTx, lockingScripts []bitcoin.Script) {
 	txHash := tx.TxHash()
 
 	// Check for payments to pkh
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
-		if err != nil {
-			continue
-		}
-
-		for _, address := range addresses {
-			if address.Equal(outputAddress) {
+		for _, ls := range lockingScripts {
+			if ls.Equal(output.LockingScript) {
 				found := false
 
 				// Ensure not to duplicate
@@ -69,15 +64,10 @@ func (us *UTXOs) Add(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 }
 
 // Remove removes UTXOs in the tx from the set.
-func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
+func (us *UTXOs) Remove(tx *wire.MsgTx, lockingScripts []bitcoin.Script) {
 	for index, output := range tx.TxOut {
-		outputAddress, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
-		if err != nil {
-			continue
-		}
-
-		for _, address := range addresses {
-			if address.Equal(outputAddress) {
+		for _, ls := range lockingScripts {
+			if ls.Equal(output.LockingScript) {
 				txHash := tx.TxHash()
 				// Ensure not to duplicate
 				for i, existing := range us.list {
@@ -92,13 +82,12 @@ func (us *UTXOs) Remove(tx *wire.MsgTx, addresses []bitcoin.RawAddress) {
 }
 
 // Get returns UTXOs (FIFO) totaling at least the specified amount.
-func (us *UTXOs) Get(amount uint64, address bitcoin.RawAddress) ([]*UTXO, error) {
+func (us *UTXOs) Get(amount uint64, lockingScript bitcoin.Script) ([]*UTXO, error) {
 	resultAmount := uint64(0)
 	result := make([]*UTXO, 0, 5)
 	for _, existing := range us.list {
 		if bytes.Equal(existing.SpentBy[:], zeroTxId[:]) {
-			outputAddress, err := bitcoin.RawAddressFromLockingScript(existing.Output.LockingScript)
-			if err != nil || !address.Equal(outputAddress) {
+			if !lockingScript.Equal(existing.Output.LockingScript) {
 				continue
 			}
 			result = append(result, existing)

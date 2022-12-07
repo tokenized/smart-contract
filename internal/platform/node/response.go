@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/internal/transactions"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -76,7 +76,7 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	}
 
 	// Contract address
-	contractAddress := wk.Address
+	contractLockingScript := wk.LockingScript
 
 	// Find spendable UTXOs
 	var utxos []bitcoin.UTXO
@@ -84,7 +84,7 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	if len(w.RejectInputs) > 0 {
 		utxos = w.RejectInputs // Custom UTXOs. Just refund anything available to them.
 	} else {
-		utxos, err = itx.UTXOs().ForAddress(contractAddress)
+		utxos, err = itx.UTXOs().ForLockingScript(contractLockingScript)
 		if err != nil {
 			Error(ctx, w, err)
 			return ErrNoResponse
@@ -99,19 +99,19 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	// Create reject tx. Change goes back to requestor.
 	rejectTx := txbuilder.NewTxBuilder(w.Config.FeeRate, w.Config.DustFeeRate)
 	if len(w.RejectOutputs) > 0 {
-		var changeAddress bitcoin.RawAddress
+		var changeLockingScript bitcoin.Script
 		for _, output := range w.RejectOutputs {
 			if output.Change {
-				changeAddress = output.Address
+				changeLockingScript = output.LockingScript
 				break
 			}
 		}
-		if changeAddress.IsEmpty() {
-			changeAddress = w.RejectOutputs[0].Address
+		if len(changeLockingScript) == 0 {
+			changeLockingScript = w.RejectOutputs[0].LockingScript
 		}
-		rejectTx.SetChangeAddress(changeAddress, "")
+		rejectTx.SetChangeLockingScript(changeLockingScript, "")
 	} else {
-		rejectTx.SetChangeAddress(itx.Inputs[0].Address, "")
+		rejectTx.SetChangeLockingScript(itx.Inputs[0].LockingScript, "")
 	}
 
 	for _, utxo := range utxos {
@@ -122,28 +122,26 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 	if len(w.RejectOutputs) > 0 {
 		rejectAddressFound := false
 		for i, output := range w.RejectOutputs {
-			dustLimit, err := txbuilder.DustLimitForAddress(output.Address, w.Config.DustFeeRate)
-			if err != nil {
-				dustLimit = txbuilder.DustLimit(txbuilder.P2PKHOutputSize, w.Config.DustFeeRate)
-			}
+			dustLimit := txbuilder.DustLimitForLockingScript(output.LockingScript,
+				w.Config.DustFeeRate)
 			if output.Value < dustLimit {
 				output.Value = dustLimit
 			}
-			rejectTx.AddPaymentOutput(output.Address, output.Value, output.Change)
+			rejectTx.AddOutput(output.LockingScript, output.Value, output.Change, false)
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(i))
-			if !w.RejectAddress.IsEmpty() && output.Address.Equal(w.RejectAddress) {
+			if len(w.RejectLockingScript) > 0 && output.LockingScript.Equal(w.RejectLockingScript) {
 				rejectAddressFound = true
 				rejection.RejectAddressIndex = uint32(i)
 			}
 		}
-		if !rejectAddressFound && !w.RejectAddress.IsEmpty() {
+		if !rejectAddressFound && len(w.RejectLockingScript) > 0 {
 			rejection.AddressIndexes = append(rejection.AddressIndexes, uint32(len(rejectTx.Outputs)))
-			rejectTx.AddDustOutput(w.RejectAddress, false)
+			rejectTx.AddOutput(w.RejectLockingScript, 0, false, true)
 		}
 	} else {
 		// Give it all back to the first input. This is the common scenario when the first input is
 		//   the only requestor involved.
-		rejectTx.AddDustOutput(itx.Inputs[0].Address, true)
+		rejectTx.AddOutput(itx.Inputs[0].LockingScript, 0, true, true)
 		rejection.AddressIndexes = append(rejection.AddressIndexes, 0)
 		rejection.RejectAddressIndex = 0
 	}
@@ -184,7 +182,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	// Create respond tx. Use contract address as backup change
 	// address if an output wasn't specified
 	respondTx := txbuilder.NewTxBuilder(w.Config.FeeRate, w.Config.DustFeeRate)
-	respondTx.SetChangeAddress(w.Config.FeeAddress, "")
+	respondTx.SetChangeLockingScript(w.Config.FeeLockingScript, "")
 
 	// Get the specified UTXOs, otherwise look up the spendable
 	// UTXO's received for the contract address
@@ -193,7 +191,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 	if len(w.Inputs) > 0 {
 		utxos = w.Inputs
 	} else {
-		utxos, err = itx.UTXOs().ForAddress(wk.Address)
+		utxos, err = itx.UTXOs().ForLockingScript(wk.LockingScript)
 		if err != nil {
 			Error(ctx, w, err)
 			return ErrNoResponse
@@ -207,7 +205,7 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 
 	// Add specified outputs
 	for _, out := range w.Outputs {
-		err := respondTx.AddPaymentOutput(out.Address, out.Value, out.Change)
+		err := respondTx.AddOutput(out.LockingScript, out.Value, out.Change, false)
 		if err != nil {
 			Error(ctx, w, err)
 			return ErrNoResponse

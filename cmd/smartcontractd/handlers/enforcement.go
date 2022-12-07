@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -13,7 +14,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -35,7 +35,8 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Order")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Order)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Order)
 	if !ok {
 		return errors.New("Could not assert as *actions.Order")
 	}
@@ -64,17 +65,16 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
-	isAuthorized := contract.IsOperator(ctx, ct, itx.Inputs[0].Address)
+	isAuthorized := contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript)
 
 	if !isAuthorized {
 		// Check if the sender is an authority oracle.
-		isAuthorized = contract.IsAuthority(ctx, ct, itx.Inputs[0].Address)
+		isAuthorized = contract.IsAuthority(ctx, ct, itx.Inputs[0].LockingScript)
 	}
 
 	if !isAuthorized {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
 		node.LogWarn(ctx, "Requestor is not administration, operator, or authority oracle : %s",
-			address)
+			itx.Inputs[0].LockingScript)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -125,7 +125,7 @@ func (e *Enforcement) OrderRequest(ctx context.Context, w *node.ResponseWriter,
 		return e.OrderThawRequest(ctx, w, itx, rk)
 	case actions.ComplianceActionConfiscation:
 		return e.OrderConfiscateRequest(ctx, w, itx, rk)
-	case actions.ComplianceActionReconciliation:
+	case actions.ComplianceActionDeprecatedReconciliation:
 		return e.OrderReconciliationRequest(ctx, w, itx, rk)
 	default:
 		return fmt.Errorf("Unknown compliance action : %s", string(msg.ComplianceAction))
@@ -139,7 +139,8 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderFreezeRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Order)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Order)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Order")
 	}
@@ -176,7 +177,7 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 	if full { // Contract-Wide action
 		// Add contract output
-		w.AddOutput(ctx, rk.Address, 0)
+		w.AddOutput(ctx, rk.LockingScript, 0)
 	}
 
 	// Outputs
@@ -240,8 +241,10 @@ func (e *Enforcement) OrderFreezeRequest(ctx context.Context, w *node.ResponseWr
 
 				used[*hash] = true
 
+				targetLockingScript, _ := targetAddress.LockingScript()
+
 				// Notify target address
-				w.AddOutput(ctx, targetAddress, 0)
+				w.AddOutput(ctx, targetLockingScript, 0)
 
 				freeze.Quantities = append(freeze.Quantities,
 					&actions.QuantityIndexField{Index: outputIndex, Quantity: target.Quantity})
@@ -268,7 +271,8 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderThawRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Order)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Order)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Order")
 	}
@@ -282,13 +286,14 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 
 	// Get Freeze Tx
 	hash, err := bitcoin.NewHash32(msg.FreezeTxId)
-	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, e.Config.IsTest)
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, *hash, e.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId, err)
 	}
 
 	// Get Freeze Op Return
-	freeze, ok := freezeTx.MsgProto.(*actions.Freeze)
+	freezeAction := getAction(freezeTx)
+	freeze, ok := freezeAction.(*actions.Freeze)
 	if !ok {
 		return fmt.Errorf("Failed to assert freeze tx op return : %s", msg.FreezeTxId)
 	}
@@ -304,13 +309,13 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 		node.LogWarn(ctx, "No freeze target addresses specified")
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 	} else if len(freeze.Quantities) == 1 &&
-		freezeTx.Outputs[freeze.Quantities[0].Index].Address.Equal(rk.Address) {
+		freezeTx.MsgTx.TxOut[freeze.Quantities[0].Index].LockingScript.Equal(rk.LockingScript) {
 		full = true
 	}
 
 	if full { // Contract-Wide action
 		// Add contract output
-		w.AddOutput(ctx, rk.Address, 0)
+		w.AddOutput(ctx, rk.LockingScript, 0)
 	}
 
 	// Outputs
@@ -349,10 +354,10 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 			}
 
 			for _, quantity := range freeze.Quantities {
-				address := bitcoin.NewAddressFromRawAddress(freezeTx.Outputs[quantity.Index].Address,
-					w.Config.Net)
-				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address,
-					instrumentCode, freezeTx.Outputs[quantity.Index].Address, v.Now)
+				freezeAddress, _ := bitcoin.RawAddressFromLockingScript(freezeTx.MsgTx.TxOut[quantity.Index].LockingScript)
+				address := bitcoin.NewAddressFromRawAddress(freezeAddress, w.Config.Net)
+				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
+					freezeAddress, v.Now)
 				if err != nil {
 					return errors.Wrap(err, "Failed to get holding")
 				}
@@ -366,7 +371,7 @@ func (e *Enforcement) OrderThawRequest(ctx context.Context, w *node.ResponseWrit
 				node.Log(ctx, "Thaw order request : %s %s", instrumentCode, address)
 
 				// Notify target address
-				w.AddOutput(ctx, freezeTx.Outputs[quantity.Index].Address, 0)
+				w.AddOutput(ctx, freezeTx.MsgTx.TxOut[quantity.Index].LockingScript, 0)
 			}
 		}
 	}
@@ -384,7 +389,8 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderConfiscateRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Order)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Order)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Order")
 	}
@@ -472,7 +478,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.AddDebit(h, itx.Hash, target.Quantity, true, v.Now)
+		err = holdings.AddDebit(h, &itx.Hash, target.Quantity, true, v.Now)
 		if err != nil {
 			node.LogWarn(ctx, "Failed confiscation for holding : %s %s : %s", instrumentCode,
 				address.String(), err)
@@ -491,8 +497,10 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 
 		node.Log(ctx, "Confiscation order request : %s %s", instrumentCode, address)
 
+		targetLockingScript, _ := targetAddress.LockingScript()
+
 		// Notify target address
-		w.AddOutput(ctx, targetAddress, 0)
+		w.AddOutput(ctx, targetLockingScript, 0)
 		outputIndex++
 	}
 
@@ -514,7 +522,7 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	if err != nil {
 		return errors.Wrap(err, "Failed to get holding")
 	}
-	err = holdings.AddDeposit(depositHolding, itx.Hash, depositAmount, true, v.Now)
+	err = holdings.AddDeposit(depositHolding, &itx.Hash, depositAmount, true, v.Now)
 	if err != nil {
 		address := bitcoin.NewAddressFromRawAddress(depositAddress,
 			w.Config.Net)
@@ -524,8 +532,10 @@ func (e *Enforcement) OrderConfiscateRequest(ctx context.Context, w *node.Respon
 	hds[*hash] = depositHolding
 	confiscation.DepositQty = depositHolding.PendingBalance
 
+	depositLockingScript, _ := depositAddress.LockingScript()
+
 	// Notify deposit address
-	w.AddOutput(ctx, depositAddress, 0)
+	w.AddOutput(ctx, depositLockingScript, 0)
 
 	// Add fee output
 	w.AddContractFee(ctx, ct.ContractFee)
@@ -554,142 +564,12 @@ func (e *Enforcement) OrderReconciliationRequest(ctx context.Context, w *node.Re
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.OrderReconciliationRequest")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Order)
-	if !ok {
+	action := getAction(itx)
+	if _, ok := action.(*actions.Order); !ok {
 		return errors.New("Could not assert as *actions.Order")
 	}
 
-	v := ctx.Value(node.KeyValues).(*node.Values)
-
-	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
-	if err != nil {
-		return errors.Wrap(err, "Failed to retrieve contract")
-	}
-
-	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
-	if err != nil {
-		node.LogVerbose(ctx, "Invalid instrument code : 0x%x", msg.InstrumentCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-	}
-
-	if _, err := instrument.Retrieve(ctx, e.MasterDB, rk.Address, instrumentCode); err != nil {
-		node.LogWarn(ctx, "Instrument not found: %s", instrumentCode)
-		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotFound)
-	}
-
-	// A reconciliation is not actually an enforcement action and is the result of a double spent
-	// request and is just to post the correct settlement on chain even though the original
-	// settlement was removed from the block chain.
-	// if !as.EnforcementOrdersPermitted {
-	// 	node.LogWarn(ctx, "Enforcement orders not permitted on instrument : %s", instrumentCode)
-	// 	return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentNotPermitted)
-	// }
-
-	// Reconciliation <- Order
-	reconciliation := actions.Reconciliation{}
-
-	if err := node.Convert(ctx, msg, &reconciliation); err != nil {
-		return errors.Wrap(err, "Failed to convert reconciliation order to reconciliation")
-	}
-
-	reconciliation.Timestamp = v.Now.Nano()
-	reconciliation.Quantities = make([]*actions.QuantityIndexField, 0, len(msg.TargetAddresses))
-	hds := make(map[bitcoin.Hash20]*state.Holding)
-
-	// Build outputs
-	// 1..n - Target Addresses
-	// n+1  - Contract Address
-	// n+2  - Contract Fee (change)
-
-	// Validate target addresses
-	outputIndex := uint32(0)
-	addressOutputIndex := make([]uint32, 0, len(msg.TargetAddresses))
-	outputs := make([]node.Output, 0, len(msg.TargetAddresses))
-	for _, target := range msg.TargetAddresses {
-		targetAddress, err := bitcoin.DecodeRawAddress(target.Address)
-		if err != nil {
-			return errors.Wrap(err, "Failed to read target address")
-		}
-		address := bitcoin.NewAddressFromRawAddress(targetAddress, w.Config.Net)
-
-		if target.Quantity == 0 {
-			node.LogWarn(ctx, "Zero quantity reconciliation order is invalid : %s %s",
-				instrumentCode, address)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-		}
-
-		hash, err := targetAddress.Hash()
-		if err != nil {
-			node.LogWarn(ctx, "Invalid reconcile address : %s %s", instrumentCode, address)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-		}
-		_, exists := hds[*hash]
-		if exists {
-			node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode, address)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-		}
-
-		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, targetAddress, v.Now)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get holding")
-		}
-
-		err = holdings.AddDebit(h, itx.Hash, target.Quantity, true, v.Now)
-		if err != nil {
-			node.LogWarn(ctx, "Failed reconciliation for holding : %s %s : %s", instrumentCode,
-				address, err)
-			if err == holdings.ErrInsufficientHoldings {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInsufficientQuantity)
-			} else {
-				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-			}
-		}
-
-		hds[*hash] = h
-
-		reconciliation.Quantities = append(reconciliation.Quantities,
-			&actions.QuantityIndexField{Index: outputIndex, Quantity: h.PendingBalance})
-
-		node.Log(ctx, "Reconciliation order request : %s %s", instrumentCode, address)
-
-		// Notify target address
-		outputs = append(outputs, node.Output{Address: targetAddress, Value: 0})
-		addressOutputIndex = append(addressOutputIndex, outputIndex)
-		outputIndex++
-	}
-
-	// Update outputs with bitcoin dispersions
-	for _, quantity := range msg.BitcoinDispersions {
-		if int(quantity.Index) >= len(msg.TargetAddresses) {
-			node.LogWarn(ctx, "Invalid bitcoin dispersion index : %s %d", instrumentCode,
-				quantity.Index)
-			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
-		}
-
-		outputs[addressOutputIndex[quantity.Index]].Value += quantity.Quantity
-	}
-
-	// Add outputs to response writer
-	for _, output := range outputs {
-		w.AddOutput(ctx, output.Address, output.Value)
-	}
-
-	// Add fee output
-	w.AddContractFee(ctx, ct.ContractFee)
-
-	// Respond with a reconciliation action
-	if err := node.RespondSuccess(ctx, w, itx, rk, &reconciliation); err != nil {
-		return err
-	}
-
-	for _, h := range hds {
-		cacheItem, err := holdings.Save(ctx, e.MasterDB, rk.Address, instrumentCode, h)
-		if err != nil {
-			return errors.Wrap(err, "Failed to save holding")
-		}
-		e.HoldingsChannel.Add(cacheItem)
-	}
-	return nil
+	return node.RespondReject(ctx, w, itx, rk, actions.RejectionsDeprecated)
 }
 
 // FreezeResponse handles an outgoing Freeze action and writes it to the state
@@ -699,15 +579,14 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Freeze")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Freeze)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Freeze)
 	if !ok {
 		return errors.New("Could not assert as *actions.Freeze")
 	}
 
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		return fmt.Errorf("Freeze not from contract : %s", address.String())
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Freeze not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
@@ -725,7 +604,7 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 	if len(msg.Quantities) == 0 {
 		return fmt.Errorf("No freeze addresses specified")
 	} else if len(msg.Quantities) == 1 &&
-		itx.Outputs[msg.Quantities[0].Index].Address.Equal(rk.Address) {
+		itx.MsgTx.TxOut[msg.Quantities[0].Index].LockingScript.Equal(rk.LockingScript) {
 		full = true
 	}
 
@@ -767,32 +646,32 @@ func (e *Enforcement) FreezeResponse(ctx context.Context, w *node.ResponseWriter
 						len(itx.Outputs))
 				}
 
-				hash, err := itx.Outputs[quantity.Index].Address.Hash()
+				ra, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[quantity.Index].LockingScript)
+
+				hash, err := ra.Hash()
 				if err != nil {
 					return errors.Wrap(err, "Invalid freeze address")
 				}
 				_, exists := hds[*hash]
 				if exists {
-					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						w.Config.Net)
-					node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode, address)
-					return fmt.Errorf("Address used more than once : %s %s", instrumentCode, address)
+					node.LogWarn(ctx, "Locking script used more than once : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
+					return fmt.Errorf("Locking script used more than once : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
 				}
 
-				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
-					itx.Outputs[quantity.Index].Address, timestamp)
+				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, ra,
+					timestamp)
 				if err != nil {
 					return errors.Wrap(err, "Failed to get holding")
 				}
 
-				err = holdings.AddFreeze(h, itx.Hash, quantity.Quantity, freezePeriod, timestamp)
+				err = holdings.AddFreeze(h, &itx.Hash, quantity.Quantity, freezePeriod, timestamp)
 				if err != nil {
-					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						w.Config.Net)
 					node.LogWarn(ctx, "Failed to add freeze to holding : %s %s : %s", instrumentCode,
-						address, err)
+						itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 					return fmt.Errorf("Failed to add freeze to holding : %s %s : %s", instrumentCode,
-						address, err)
+						itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 				}
 
 				hds[*hash] = h
@@ -824,15 +703,14 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Thaw")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Thaw)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Thaw)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Thaw")
 	}
 
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		return fmt.Errorf("Thaw not from contract : %s", address.String())
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Thaw not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
@@ -841,20 +719,20 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	if !ct.MovedTo.IsEmpty() {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			w.Config.Net)
-		return fmt.Errorf("Contract address changed : %s", address.String())
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address)
 	}
 
 	// Get Freeze Tx
 	hash, _ := bitcoin.NewHash32(msg.FreezeTxId)
-	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, hash, e.Config.IsTest)
+	freezeTx, err := transactions.GetTx(ctx, e.MasterDB, *hash, e.Config.IsTest)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve freeze tx for thaw : %s : %s", msg.FreezeTxId, err)
 	}
 
 	// Get Freeze Op Return
-	freeze, ok := freezeTx.MsgProto.(*actions.Freeze)
+	freezeAction := getAction(freezeTx)
+	freeze, ok := freezeAction.(*actions.Freeze)
 	if !ok {
 		return fmt.Errorf("Failed to assert freeze tx op return : %s", msg.FreezeTxId)
 	}
@@ -863,7 +741,7 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 	if len(freeze.Quantities) == 0 {
 		return fmt.Errorf("No freeze addresses specified")
 	} else if len(freeze.Quantities) == 1 &&
-		freezeTx.Outputs[freeze.Quantities[0].Index].Address.Equal(rk.Address) {
+		freezeTx.MsgTx.TxOut[freeze.Quantities[0].Index].LockingScript.Equal(rk.LockingScript) {
 		full = true
 	}
 
@@ -904,35 +782,34 @@ func (e *Enforcement) ThawResponse(ctx context.Context, w *node.ResponseWriter,
 						len(freezeTx.Outputs))
 				}
 
-				hash, err := itx.Outputs[quantity.Index].Address.Hash()
+				ra, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[quantity.Index].LockingScript)
+
+				hash, err := ra.Hash()
 				if err != nil {
-					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						w.Config.Net)
-					node.LogWarn(ctx, "Invalid freeze address : %s %s", instrumentCode, address)
-					return fmt.Errorf("Invalid freeze address : %s %s", instrumentCode, address)
+					node.LogWarn(ctx, "Invalid freeze locking script : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
+					return fmt.Errorf("Invalid freeze locking script : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
 				}
 				_, exists := hds[*hash]
 				if exists {
-					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						w.Config.Net)
-					node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode, address)
-					return fmt.Errorf("Address used more than once : %s %s", instrumentCode, address)
+					node.LogWarn(ctx, "Locking script used more than once : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
+					return fmt.Errorf("Locking script used more than once : %s %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript)
 				}
 
-				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
-					itx.Outputs[quantity.Index].Address, timestamp)
+				h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, ra,
+					timestamp)
 				if err != nil {
 					return errors.Wrap(err, "Failed to get holding")
 				}
 
-				err = holdings.RevertStatus(h, freezeTx.Hash)
-				if err != nil {
-					address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-						w.Config.Net)
-					node.LogWarn(ctx, "Failed thaw for holding : %s %s : %s", instrumentCode, address,
-						err)
-					return fmt.Errorf("Failed thaw for holding : %s %s : %s", instrumentCode, address,
-						err)
+				if err := holdings.RevertStatus(h, &freezeTx.Hash); err != nil {
+					node.LogWarn(ctx, "Failed thaw for holding : %s %s : %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
+					return fmt.Errorf("Failed thaw for holding : %s %s : %s", instrumentCode,
+						itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 				}
 
 				hds[*hash] = h
@@ -959,16 +836,15 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Confiscation")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Confiscation)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Confiscation)
 	if !ok {
 		return errors.New("Could not assert as *protocol.Confiscation")
 	}
 
 	// Locate Instrument
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		return fmt.Errorf("Confiscation not from contract : %s", address.String())
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Confiscation not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
@@ -977,9 +853,8 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	}
 
 	if !ct.MovedTo.IsEmpty() {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			w.Config.Net)
-		return fmt.Errorf("Contract address changed : %s", address.String())
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address)
 	}
 
 	// Apply confiscations
@@ -993,35 +868,34 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 
 	highestIndex := uint32(0)
 	for _, quantity := range msg.Quantities {
-		hash, err := itx.Outputs[quantity.Index].Address.Hash()
+		ra, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[quantity.Index].LockingScript)
+		hash, err := ra.Hash()
 		if err != nil {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
-			node.LogWarn(ctx, "Invalid confiscation address : %s %s", instrumentCode, address)
-			return fmt.Errorf("Invalid confiscation address : %s %s", instrumentCode, address)
+			node.LogWarn(ctx, "Invalid confiscation address : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
+			return fmt.Errorf("Invalid confiscation address : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
 		}
 		_, exists := hds[*hash]
 		if exists {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
-			node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode, address)
-			return fmt.Errorf("Address used more than once : %s %s", instrumentCode, address)
+			node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
+			return fmt.Errorf("Address used more than once : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
 		}
 
-		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
-			itx.Outputs[quantity.Index].Address, timestamp)
+		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, ra, timestamp)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(h, &itx.Inputs[0].UTXO.Hash, quantity.Quantity, timestamp)
+		err = holdings.FinalizeTx(h, &itx.MsgTx.TxIn[0].PreviousOutPoint.Hash, quantity.Quantity,
+			timestamp)
 		if err != nil {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
 			node.LogWarn(ctx, "Failed confiscation finalize for holding : %s %s : %s",
-				instrumentCode, address, err)
+				instrumentCode, itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 			return fmt.Errorf("Failed confiscation finalize for holding : %s %s : %s",
-				instrumentCode, address, err)
+				instrumentCode, itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 		}
 
 		hds[*hash] = h
@@ -1032,28 +906,26 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 	}
 
 	// Update deposit balance
-	h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
-		itx.Outputs[highestIndex+1].Address, timestamp)
+	depositAddress, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[highestIndex+1].LockingScript)
+	h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, depositAddress,
+		timestamp)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get deposit holding")
 	}
 
-	err = holdings.FinalizeTx(h, &itx.Inputs[0].UTXO.Hash, msg.DepositQty, timestamp)
+	err = holdings.FinalizeTx(h, &itx.MsgTx.TxIn[0].PreviousOutPoint.Hash, msg.DepositQty,
+		timestamp)
 	if err != nil {
-		address := bitcoin.NewAddressFromRawAddress(itx.Outputs[highestIndex+1].Address,
-			w.Config.Net)
 		node.LogWarn(ctx, "Failed confiscation finalize for holding : %s %s : %s",
-			instrumentCode, address, err)
+			instrumentCode, itx.MsgTx.TxOut[highestIndex+1].LockingScript, err)
 		return fmt.Errorf("Failed confiscation finalize for holding : %s %s : %s",
-			instrumentCode, address, err)
+			instrumentCode, itx.MsgTx.TxOut[highestIndex+1].LockingScript, err)
 	}
 
-	hash, err := itx.Outputs[highestIndex+1].Address.Hash()
+	hash, err := depositAddress.Hash()
 	if err != nil {
-		address := bitcoin.NewAddressFromRawAddress(itx.Outputs[highestIndex+1].Address,
-			w.Config.Net)
-		node.LogWarn(ctx, "Invalid deposit address : %s %s", instrumentCode, address)
-		return fmt.Errorf("Invalid deposit address : %s %s", instrumentCode, address)
+		node.LogWarn(ctx, "Invalid deposit address : %s %s", instrumentCode, itx.MsgTx.TxOut[highestIndex+1].LockingScript)
+		return fmt.Errorf("Invalid deposit address : %s %s", instrumentCode, itx.MsgTx.TxOut[highestIndex+1].LockingScript)
 	}
 	hds[*hash] = h
 
@@ -1073,20 +945,19 @@ func (e *Enforcement) ConfiscationResponse(ctx context.Context, w *node.Response
 func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
 
-	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.Reconciliation")
+	ctx, span := trace.StartSpan(ctx, "handlers.Enforcement.DeprecatedReconciliation")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Reconciliation)
+	action := getAction(itx)
+	msg, ok := action.(*actions.DeprecatedReconciliation)
 	if !ok {
-		return errors.New("Could not assert as *protocol.Reconciliation")
+		return errors.New("Could not assert as *protocol.DeprecatedReconciliation")
 	}
 
 	hds := make(map[bitcoin.Hash20]*state.Holding)
 
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address,
-			w.Config.Net)
-		return fmt.Errorf("Reconciliation not from contract : %s", address.String())
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Reconciliation not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	ct, err := contract.Retrieve(ctx, e.MasterDB, rk.Address, e.Config.IsTest)
@@ -1095,9 +966,8 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 	}
 
 	if !ct.MovedTo.IsEmpty() {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			w.Config.Net)
-		return fmt.Errorf("Contract address changed : %s", address.String())
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address)
 	}
 
 	// Apply reconciliations
@@ -1110,35 +980,34 @@ func (e *Enforcement) ReconciliationResponse(ctx context.Context, w *node.Respon
 
 	timestamp := protocol.NewTimestamp(msg.Timestamp)
 	for _, quantity := range msg.Quantities {
-		hash, err := itx.Outputs[quantity.Index].Address.Hash()
+		ra, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[quantity.Index].LockingScript)
+		hash, err := ra.Hash()
 		if err != nil {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
-			node.LogWarn(ctx, "Invalid reconciliation address : %s %s", instrumentCode, address)
-			return fmt.Errorf("Invalid reconciliation address : %s %s", instrumentCode, address)
+			node.LogWarn(ctx, "Invalid reconciliation address : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
+			return fmt.Errorf("Invalid reconciliation address : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
 		}
 		_, exists := hds[*hash]
 		if exists {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
-			node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode, address)
-			return fmt.Errorf("Address used more than once : %s %s", instrumentCode, address)
+			node.LogWarn(ctx, "Address used more than once : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
+			return fmt.Errorf("Address used more than once : %s %s", instrumentCode,
+				itx.MsgTx.TxOut[quantity.Index].LockingScript)
 		}
 
-		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode,
-			itx.Outputs[quantity.Index].Address, timestamp)
+		h, err := holdings.GetHolding(ctx, e.MasterDB, rk.Address, instrumentCode, ra, timestamp)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get holding")
 		}
 
-		err = holdings.FinalizeTx(h, &itx.Inputs[0].UTXO.Hash, quantity.Quantity, timestamp)
+		err = holdings.FinalizeTx(h, &itx.MsgTx.TxIn[0].PreviousOutPoint.Hash, quantity.Quantity,
+			timestamp)
 		if err != nil {
-			address := bitcoin.NewAddressFromRawAddress(itx.Outputs[quantity.Index].Address,
-				w.Config.Net)
 			node.LogWarn(ctx, "Failed reconciliation finalize for holding : %s %s : %s",
-				instrumentCode, address, err)
+				instrumentCode, itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 			return fmt.Errorf("Failed reconciliation finalize for holding : %s %s : %s",
-				instrumentCode, address, err)
+				instrumentCode, itx.MsgTx.TxOut[quantity.Index].LockingScript, err)
 		}
 
 		hds[*hash] = h

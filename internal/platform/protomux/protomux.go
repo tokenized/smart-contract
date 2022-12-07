@@ -5,8 +5,9 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/wire"
-	"github.com/tokenized/smart-contract/pkg/inspector"
+	"github.com/tokenized/specification/dist/golang/actions"
 )
 
 const (
@@ -90,10 +91,21 @@ func (p *ProtoMux) Handle(verb, event string, handler HandlerFunc) {
 	}
 }
 
+func getAction(itx *inspector.Transaction) actions.Action {
+	for _, output := range itx.Outputs {
+		if output.Action != nil {
+			return output.Action
+		}
+	}
+
+	return nil
+}
+
 // Trigger fires a handler
 func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Transaction) error {
 
-	if itx.MsgProto == nil {
+	action := getAction(itx)
+	if action == nil {
 		return errors.New("Not a protocol tx")
 	}
 
@@ -113,7 +125,7 @@ func (p *ProtoMux) Trigger(ctx context.Context, verb string, itx *inspector.Tran
 	}
 
 	// Locate the handlers from the group
-	event := itx.MsgProto.Code()
+	event := action.Code()
 	handlers, exists := group[event]
 
 	if !exists {

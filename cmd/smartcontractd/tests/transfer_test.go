@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/wire"
@@ -17,7 +18,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/transactions"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -898,7 +898,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -944,7 +944,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -986,7 +986,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1088,7 +1088,7 @@ func sendTokens(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx2.Promote(ctx, test.RPCNode)
+	err = transferItx2.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1259,7 +1259,7 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1293,16 +1293,17 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != "M1" {
+	action := getAction(responseItx)
+	if action.Code() != "M1" {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	settlementRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
+	settlementRequestMessage, ok := action.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -1337,16 +1338,17 @@ func multiExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != "M1" {
+	action = getAction(responseItx)
+	if action.Code() != "M1" {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	signatureRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
+	signatureRequestMessage, ok := action.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -1561,7 +1563,7 @@ func bitcoinExchange(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1737,7 +1739,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1771,16 +1773,17 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeMessage {
+	action := getAction(responseItx)
+	if action.Code() != actions.CodeMessage {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	settlementRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
+	settlementRequestMessage, ok := action.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -1839,7 +1842,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	err = transferOtherItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1869,16 +1872,17 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeRejection {
+	action = getAction(responseItx)
+	if action.Code() != actions.CodeRejection {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	rejectMessage, ok := responseItx.MsgProto.(*actions.Rejection)
+	rejectMessage, ok := action.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -1921,7 +1925,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = rejectOtherItx.Promote(ctx, test.RPCNode)
+	err = rejectOtherItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -1951,16 +1955,17 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeRejection {
+	action = getAction(responseItx)
+	if action.Code() != actions.CodeRejection {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	rejectMessage, ok = responseItx.MsgProto.(*actions.Rejection)
+	rejectMessage, ok = action.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -2018,7 +2023,7 @@ func multiExchangeLock(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	err = transferOtherItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2138,7 +2143,7 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2166,16 +2171,17 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeMessage {
+	action := getAction(responseItx)
+	if action.Code() != actions.CodeMessage {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	settlementRequestMessage, ok := responseItx.MsgProto.(*actions.Message)
+	settlementRequestMessage, ok := action.(*actions.Message)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -2234,7 +2240,7 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	err = transferOtherItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2264,16 +2270,17 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeRejection {
+	action = getAction(responseItx)
+	if action.Code() != actions.CodeRejection {
 		t.Fatalf("\t%s\tResponse itx is not M1 : %v", tests.Failed, err)
 	}
 
-	rejectMessage, ok := responseItx.MsgProto.(*actions.Rejection)
+	rejectMessage, ok := action.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -2305,16 +2312,17 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
 
-	if responseItx.MsgProto.Code() != actions.CodeRejection {
+	action = getAction(responseItx)
+	if action.Code() != actions.CodeRejection {
 		t.Fatalf("\t%s\tResponse itx is not M2 : %v", tests.Failed, err)
 	}
 
-	timeoutMessage, ok := responseItx.MsgProto.(*actions.Rejection)
+	timeoutMessage, ok := action.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tResponse itx is not Message", tests.Failed)
 	}
@@ -2372,7 +2380,7 @@ func multiExchangeTimeout(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferOtherItx.Promote(ctx, test.RPCNode)
+	err = transferOtherItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2835,7 +2843,7 @@ func permitted(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2943,7 +2951,7 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create transfer itx : %v", tests.Failed, err)
 	}
 
-	err = transferItx.Promote(ctx, test.RPCNode)
+	err = transferItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote transfer itx : %v", tests.Failed, err)
 	}
@@ -2970,12 +2978,13 @@ func permittedBad(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create reject itx : %v", tests.Failed, err)
 	}
 
-	err = rejectItx.Promote(ctx, test.RPCNode)
+	err = rejectItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote reject itx : %v", tests.Failed, err)
 	}
 
-	reject, ok := rejectItx.MsgProto.(*actions.Rejection)
+	action := getAction(rejectItx)
+	reject, ok := action.(*actions.Rejection)
 	if !ok {
 		t.Fatalf("\t%s\tFailed to convert reject data", tests.Failed)
 	}

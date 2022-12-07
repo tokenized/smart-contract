@@ -41,8 +41,8 @@ func Retrieve(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAdd
 }
 
 // Create the contract
-func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress, nu *NewContract,
-	isTest bool, now protocol.Timestamp) error {
+func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddress,
+	nu *NewContract, isTest bool, now protocol.Timestamp) error {
 	ctx, span := trace.StartSpan(ctx, "internal.contract.Create")
 	defer span.End()
 
@@ -50,8 +50,7 @@ func Create(ctx context.Context, dbConn *db.DB, contractAddress bitcoin.RawAddre
 	var contract state.Contract
 
 	// Get current state
-	err := node.Convert(ctx, &nu, &contract)
-	if err != nil {
+	if err := node.Convert(ctx, &nu, &contract); err != nil {
 		return errors.Wrap(err, "Failed to convert new contract to contract")
 	}
 
@@ -339,14 +338,15 @@ func GetVotingBalance(ctx context.Context, dbConn *db.DB, ct *state.Contract,
 }
 
 // IsOperator will check if the supplied pkh has operator permission (Administration or operator)
-func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
-	if address.IsEmpty() {
+func IsOperator(ctx context.Context, ct *state.Contract, lockingScript bitcoin.Script) bool {
+	ra, err := bitcoin.RawAddressFromLockingScript(lockingScript)
+	if err != nil {
 		return false
 	}
-	if !ct.AdminAddress.IsEmpty() && ct.AdminAddress.Equal(address) {
+	if !ct.AdminAddress.IsEmpty() && ct.AdminAddress.Equal(ra) {
 		return true
 	}
-	if !ct.OperatorAddress.IsEmpty() && ct.OperatorAddress.Equal(address) {
+	if !ct.OperatorAddress.IsEmpty() && ct.OperatorAddress.Equal(ra) {
 		return true
 	}
 	return false
@@ -354,7 +354,12 @@ func IsOperator(ctx context.Context, ct *state.Contract, address bitcoin.RawAddr
 
 // IsAuthority checks if the raw address matches the public key specified for an authority oracle on
 // this contract.
-func IsAuthority(ctx context.Context, ct *state.Contract, address bitcoin.RawAddress) bool {
+func IsAuthority(ctx context.Context, ct *state.Contract, lockingScript bitcoin.Script) bool {
+	ra, err := bitcoin.RawAddressFromLockingScript(lockingScript)
+	if err != nil {
+		return false
+	}
+
 	for _, oracle := range ct.FullOracles {
 		service := oracle.GetService(actions.ServiceTypeAuthorityOracle)
 		if service == nil {
@@ -363,12 +368,12 @@ func IsAuthority(ctx context.Context, ct *state.Contract, address bitcoin.RawAdd
 
 		pkh := bitcoin.Hash160(service.PublicKey.Bytes())
 		p2pkh, err := bitcoin.NewRawAddressPKH(pkh)
-		if err == nil && p2pkh.Equal(address) {
+		if err == nil && p2pkh.Equal(ra) {
 			return true
 		}
 
 		p2pk, err := bitcoin.NewRawAddressPublicKey(service.PublicKey)
-		if err == nil && p2pk.Equal(address) {
+		if err == nil && p2pk.Equal(ra) {
 			return true
 		}
 	}

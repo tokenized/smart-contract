@@ -57,7 +57,9 @@ func SaveContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAdd
 	return nil
 }
 
-func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAddress, isTest bool) (*actions.ContractFormation, error) {
+func FetchContractFormation(ctx context.Context, dbConn *db.DB, ra bitcoin.RawAddress,
+	isTest bool) (*actions.ContractFormation, error) {
+
 	key := buildCFStoragePath(ra)
 	b, err := dbConn.Fetch(ctx, key)
 	if err != nil {

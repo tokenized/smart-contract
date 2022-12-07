@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -13,7 +14,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/instruments"
@@ -113,7 +113,7 @@ func createInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx.Promote(ctx, test.RPCNode)
+	err = instrumentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx : %v", tests.Failed, err)
 	}
@@ -242,7 +242,7 @@ func adminMemberInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx.Promote(ctx, test.RPCNode)
+	err = instrumentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx : %v", tests.Failed, err)
 	}
@@ -312,7 +312,7 @@ func adminMemberInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx : %v", tests.Failed, err)
 	}
 
-	err = instrument2Itx.Promote(ctx, test.RPCNode)
+	err = instrument2Itx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx : %v", tests.Failed, err)
 	}
@@ -409,7 +409,7 @@ func instrumentIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx.Promote(ctx, test.RPCNode)
+	err = instrumentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx : %v", tests.Failed, err)
 	}
@@ -467,7 +467,7 @@ func instrumentIndex(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx 2 : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx.Promote(ctx, test.RPCNode)
+	err = instrumentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx 2 : %v", tests.Failed, err)
 	}
@@ -553,7 +553,7 @@ func instrumentAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
@@ -659,7 +659,7 @@ func instrumentProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
@@ -778,7 +778,7 @@ func duplicateInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx.Promote(ctx, test.RPCNode)
+	err = instrumentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx : %v", tests.Failed, err)
 	}
@@ -848,7 +848,7 @@ func duplicateInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create instrument itx 2 : %v", tests.Failed, err)
 	}
 
-	err = instrumentItx2.Promote(ctx, test.RPCNode)
+	err = instrumentItx2.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote instrument itx 2 : %v", tests.Failed, err)
 	}

@@ -164,7 +164,8 @@ func (c *HTTPClient) FetchContractAddress(ctx context.Context) (bitcoin.RawAddre
 }
 
 // SignContractOffer adds a signed input to a contract offer transaction.
-func (c *HTTPClient) SignContractOffer(ctx context.Context, tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
+func (c *HTTPClient) SignContractOffer(ctx context.Context,
+	tx *wire.MsgTx) (*wire.MsgTx, *bitcoin.UTXO, error) {
 
 	timestamp := uint64(time.Now().UnixNano())
 	publicKey := c.clientKey.PublicKey()

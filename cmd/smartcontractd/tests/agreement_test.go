@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/agreement"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -78,7 +78,7 @@ func createAgreement(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -170,7 +170,7 @@ func wrongAgreementType(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -281,7 +281,7 @@ func agreementWithDefinitions(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -382,7 +382,7 @@ func agreementMissingDefinition(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -493,7 +493,7 @@ func agreementUnreferencedDefinition(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -631,7 +631,7 @@ func agreementAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	if err := amendmentItx.Promote(ctx, test.RPCNode); err != nil {
+	if err := amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest); err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
 

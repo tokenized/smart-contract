@@ -4,11 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
-	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/transactions"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 
 	"github.com/pkg/errors"
 )
@@ -28,7 +27,7 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		if !ptx.Itx.IsTokenized() {
 			node.Log(ctx, "Not tokenized")
-			server.utxos.Add(ptx.Itx.MsgTx, server.contractAddresses)
+			server.utxos.Add(ptx.Itx.MsgTx, server.contractLockingScripts)
 			server.walletLock.RUnlock()
 			continue
 		}
@@ -42,21 +41,16 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 		isRelevant := false
 
 		// Save tx to cache so it can be used to process the response
-		for index, output := range ptx.Itx.Outputs {
-			if output.Address.IsEmpty() {
-				continue
-			}
-
-			for _, address := range server.contractAddresses {
-				if !address.Equal(output.Address) {
+		for index, txout := range ptx.Itx.MsgTx.TxOut {
+			for _, ls := range server.contractLockingScripts {
+				if !ls.Equal(txout.LockingScript) {
 					continue
 				}
 
 				isRelevant = true
-				if ptx.Itx.IsIncomingMessageType() {
+				if ptx.Itx.IsRequest() {
 					logger.InfoWithFields(ctx, []logger.Field{
-						logger.Stringer("contract_address",
-							bitcoin.NewAddressFromRawAddress(address, server.Config.Net)),
+						logger.Stringer("contract_address", ls),
 					}, "Request for contract")
 					if !server.IsInSync() {
 						node.Log(ctx, "Adding request to pending")
@@ -73,18 +67,13 @@ func (server *Server) ProcessTxs(ctx context.Context) error {
 
 		// Save pending responses so they can be processed in proper order, which may not be on
 		//   chain order.
-		if ptx.Itx.IsOutgoingMessageType() {
+		if ptx.Itx.IsResponse() {
 			responseAdded := false
 			for _, input := range ptx.Itx.Inputs {
-				if input.Address.IsEmpty() {
-					continue
-				}
-
-				for _, address := range server.contractAddresses {
-					if address.Equal(input.Address) {
+				for _, ls := range server.contractLockingScripts {
+					if ls.Equal(input.LockingScript) {
 						logger.InfoWithFields(ctx, []logger.Field{
-							logger.Stringer("contract_address",
-								bitcoin.NewAddressFromRawAddress(address, server.Config.Net)),
+							logger.Stringer("contract_address", ls),
 						}, "Response for contract")
 						isRelevant = true
 						responseAdded = true

@@ -8,8 +8,9 @@ import (
 )
 
 type Key struct {
-	Address bitcoin.RawAddress
-	Key     bitcoin.Key
+	Address       bitcoin.RawAddress
+	Key           bitcoin.Key
+	LockingScript bitcoin.Script
 }
 
 func NewKey(key bitcoin.Key) *Key {
@@ -18,6 +19,7 @@ func NewKey(key bitcoin.Key) *Key {
 	}
 
 	result.Address, _ = key.RawAddress()
+	result.LockingScript, _ = key.LockingScript()
 	return &result
 }
 
@@ -39,6 +41,7 @@ func (rk *Key) Read(buf *bytes.Reader, net bitcoin.Network) error {
 	}
 
 	rk.Address, _ = rk.Key.RawAddress()
+	rk.LockingScript, _ = rk.Key.LockingScript()
 	return err
 }
 

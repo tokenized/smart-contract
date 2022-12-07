@@ -122,7 +122,7 @@ func (tracer *Tracer) AddTx(ctx context.Context, tx *wire.MsgTx) bool {
 }
 
 // RevertTx reverts any outputs from any traced paths.
-func (tracer *Tracer) RevertTx(ctx context.Context, txid *bitcoin.Hash32) {
+func (tracer *Tracer) RevertTx(ctx context.Context, txid bitcoin.Hash32) {
 	for _, trace := range tracer.traces {
 		trace.revertTx(txid)
 	}
@@ -187,7 +187,7 @@ func (node *traceNode) addTx(tx *wire.MsgTx) bool {
 	return result
 }
 
-func (node *traceNode) revertTx(txid *bitcoin.Hash32) {
+func (node *traceNode) revertTx(txid bitcoin.Hash32) {
 	for _, child := range node.children {
 		if bytes.Equal(txid[:], child.outpoint.Hash[:]) {
 			node.children = nil

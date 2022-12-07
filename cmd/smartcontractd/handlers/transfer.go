@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
@@ -21,7 +22,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transfer"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
@@ -51,7 +51,8 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	msg, ok := itx.MsgProto.(*actions.Transfer)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Transfer)
 	if !ok {
 		return errors.New("Could not assert as *actions.Transfer")
 	}
@@ -72,9 +73,9 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 		return errors.New("Transfer first contract not found")
 	}
 
-	if !itx.Outputs[first].Address.Equal(rk.Address) {
+	if !itx.MsgTx.TxOut[first].LockingScript.Equal(rk.LockingScript) {
 		node.Log(ctx, "Not contract for first transfer. Waiting for Message SettlementRequest : %s",
-			bitcoin.NewAddressFromRawAddress(itx.Outputs[first].Address, w.Config.Net))
+			itx.MsgTx.TxOut[first].LockingScript)
 		return nil // Wait for M1 - 1001 requesting data to complete Settlement tx.
 	}
 
@@ -91,7 +92,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Bitcoin balance of first (this) contract. Funding for bitcoin transfers.
-	contractBalance := itx.Outputs[first].UTXO.Value
+	contractBalance := itx.MsgTx.TxOut[first].Value
 
 	settlementRequest := messages.SettlementRequest{
 		Timestamp:    v.Now.Nano(),
@@ -223,7 +224,7 @@ func (t *Transfer) TransferRequest(ctx context.Context, w *node.ResponseWriter,
 	// Save pending transfer
 	timeout := protocol.NewTimestamp(v.Now.Nano() + t.Config.RequestTimeout)
 	pendingTransfer := state.PendingTransfer{
-		TransferTxId: itx.Hash,
+		TransferTxId: &itx.Hash,
 		Timeout:      timeout,
 	}
 	if err := transfer.Save(ctx, t.MasterDB, rk.Address, &pendingTransfer); err != nil {
@@ -284,22 +285,23 @@ func (t *Transfer) TransferTimeout(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Transfer.TransferTimeout")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.Transfer)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Transfer)
 	if !ok {
 		return errors.New("Could not assert as *actions.Transfer")
 	}
 
 	// Remove pending transfer
-	if err := transfer.Remove(ctx, t.MasterDB, rk.Address, itx.Hash); err != nil {
+	if err := transfer.Remove(ctx, t.MasterDB, rk.Address, &itx.Hash); err != nil {
 		if err != transfer.ErrNotFound {
 			return errors.Wrap(err, "Failed to remove pending transfer")
 		}
 	}
 
 	// Remove tracer for this transfer.
-	boomerangIndex := findBoomerangIndex(itx, msg, rk.Address)
+	boomerangIndex := findBoomerangIndex(itx, msg, rk.LockingScript)
 	if boomerangIndex != 0xffffffff {
-		outpoint := wire.OutPoint{Hash: *itx.Hash, Index: boomerangIndex}
+		outpoint := wire.OutPoint{Hash: itx.Hash, Index: boomerangIndex}
 		t.Tracer.Remove(ctx, &outpoint)
 	}
 
@@ -361,9 +363,12 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 		}
 
 		// Add input from contract to settlement tx so all involved contracts have to sign for a valid tx.
-		err = settleTx.AddInput(wire.OutPoint{Hash: *transferTx.Hash, Index: uint32(instrumentTransfer.ContractIndex)},
-			transferTx.Outputs[instrumentTransfer.ContractIndex].UTXO.LockingScript,
-			transferTx.Outputs[instrumentTransfer.ContractIndex].UTXO.Value)
+		err = settleTx.AddInput(wire.OutPoint{
+			Hash:  transferTx.Hash,
+			Index: uint32(instrumentTransfer.ContractIndex),
+		},
+			transferTx.MsgTx.TxOut[instrumentTransfer.ContractIndex].LockingScript,
+			transferTx.MsgTx.TxOut[instrumentTransfer.ContractIndex].Value)
 		if err != nil {
 			return nil, err
 		}
@@ -391,13 +396,14 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 			if instrumentIsBitcoin {
 				// Check sender input's bitcoin balance.
 				// Bitcoin senders don't need an output.
-				if uint64(quantityIndex.Quantity) >= input.UTXO.Value {
+				if uint64(quantityIndex.Quantity) >= input.Value {
 					return nil, fmt.Errorf("Sender bitcoin quantity higher than input amount for sender %d : %d/%d",
-						senderOffset, input.UTXO.Value, quantityIndex.Quantity)
+						senderOffset, input.Value, quantityIndex.Quantity)
 				}
 			} else {
 				// Add "notification" dust output for settlement.
-				hash, err := input.Address.Hash()
+				ra, _ := bitcoin.RawAddressFromLockingScript(input.LockingScript)
+				hash, err := ra.Hash()
 				if err != nil {
 					return nil, errors.Wrap(err, "sender address hash")
 				}
@@ -406,7 +412,7 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 					// Add output to sender
 					addresses[*hash] = uint32(len(settleTx.MsgTx.TxOut))
 
-					err = settleTx.AddDustOutput(input.Address, false)
+					err = settleTx.AddDustOutput(ra, false)
 					if err != nil {
 						return nil, err
 					}
@@ -476,11 +482,15 @@ func buildSettlementTx(ctx context.Context, masterDB *db.DB, config *node.Config
 		return settleTx, errors.Wrap(err, "Failed to retrieve contract")
 	}
 	if ct.ContractFee > 0 {
-		settleTx.AddPaymentOutput(config.FeeAddress, ct.ContractFee, false)
+		settleTx.AddOutput(config.FeeLockingScript, ct.ContractFee, false, false)
 
+		feeAddress, _ := bitcoin.RawAddressFromLockingScript(config.FeeLockingScript)
 		// Add to settlement request
 		settlementRequest.ContractFees = append(settlementRequest.ContractFees,
-			&messages.TargetAddressField{Address: config.FeeAddress.Bytes(), Quantity: ct.ContractFee})
+			&messages.TargetAddressField{
+				Address:  feeAddress.Bytes(),
+				Quantity: ct.ContractFee,
+			})
 	}
 
 	// Add exchange fee
@@ -538,31 +548,21 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 	}
 
 	// Generate public key hashes for all the outputs
-	transferOutputAddresses := make([]bitcoin.RawAddress, 0, len(transferTx.Outputs))
-	for _, output := range transferTx.Outputs {
-		transferOutputAddresses = append(transferOutputAddresses, output.Address)
+	transferLockingScripts := make([]bitcoin.Script, len(transferTx.MsgTx.TxOut))
+	for i, output := range transferTx.MsgTx.TxOut {
+		transferLockingScripts[i] = output.LockingScript
 	}
 
 	// Generate public key hashes for all the inputs
-	settleInputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.Inputs))
-	for _, input := range settleTx.Inputs {
-		address, err := bitcoin.RawAddressFromLockingScript(input.LockingScript)
-		if err != nil {
-			settleInputAddresses = append(settleInputAddresses, bitcoin.RawAddress{})
-			continue
-		}
-		settleInputAddresses = append(settleInputAddresses, address)
+	settleInputLockingScripts := make([]bitcoin.Script, len(settleTx.Inputs))
+	for i, input := range settleTx.Inputs {
+		settleInputLockingScripts[i] = input.LockingScript
 	}
 
 	// Generate public key hashes for all the outputs
-	settleOutputAddresses := make([]bitcoin.RawAddress, 0, len(settleTx.MsgTx.TxOut))
-	for _, output := range settleTx.MsgTx.TxOut {
-		address, err := bitcoin.RawAddressFromLockingScript(output.LockingScript)
-		if err != nil {
-			settleOutputAddresses = append(settleOutputAddresses, bitcoin.RawAddress{})
-			continue
-		}
-		settleOutputAddresses = append(settleOutputAddresses, address)
+	settleOutputLockingScripts := make([]bitcoin.Script, len(settleTx.MsgTx.TxOut))
+	for i, output := range settleTx.MsgTx.TxOut {
+		settleOutputLockingScripts[i] = output.LockingScript
 	}
 
 	for instrumentOffset, instrumentTransfer := range transfer.Instruments {
@@ -577,8 +577,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					instrumentTransfer.ContractIndex, len(transferTx.Outputs)))
 		}
 
-		contractOutputAddress := transferOutputAddresses[instrumentTransfer.ContractIndex]
-		if contractOutputAddress.IsEmpty() || !contractOutputAddress.Equal(rk.Address) {
+		contractLockingScript := transferLockingScripts[instrumentTransfer.ContractIndex]
+		if !contractLockingScript.Equal(rk.LockingScript) {
 			continue // This instrument is not ours. Skip it.
 		}
 
@@ -604,8 +604,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 		// Find contract input
 		contractInputIndex := uint32(0x0000ffff)
-		for i, input := range settleInputAddresses {
-			if !input.IsEmpty() && input.Equal(rk.Address) {
+		for i, ls := range settleInputLockingScripts {
+			if ls.Equal(rk.LockingScript) {
 				contractInputIndex = uint32(i)
 				break
 			}
@@ -632,6 +632,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 		updatedHoldings := make(map[bitcoin.Hash20]*state.Holding)
 		(*updates)[*instrumentCode] = &updatedHoldings
 
+		adminLockingScript, _ := ct.AdminAddress.LockingScript()
+
 		// Process senders
 		// instrumentTransfer.InstrumentSenders []QuantityIndex {Index uint16, Quantity uint64}
 		senderCount += len(instrumentTransfer.InstrumentSenders)
@@ -643,7 +645,7 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 						instrumentOffset, senderOffset, sender.Index, len(transferTx.Inputs)))
 			}
 
-			if transferTx.Inputs[sender.Index].Address.Equal(ct.AdminAddress) {
+			if transferTx.Inputs[sender.Index].LockingScript.Equal(adminLockingScript) {
 				fromAdministration += sender.Quantity
 			} else {
 				fromNonAdministration += sender.Quantity
@@ -651,9 +653,8 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			// Find output in settle tx
 			settleOutputIndex := uint16(0xffff)
-			for i, outputAddress := range settleOutputAddresses {
-				if !outputAddress.IsEmpty() &&
-					outputAddress.Equal(transferTx.Inputs[sender.Index].Address) {
+			for i, ls := range settleOutputLockingScripts {
+				if ls.Equal(transferTx.Inputs[sender.Index].LockingScript) {
 					settleOutputIndex = uint16(i)
 					break
 				}
@@ -667,45 +668,48 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 
 			// Check sender's available unfrozen balance
 			if hds[settleOutputIndex] != nil {
-				address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-					config.Net)
-				node.LogWarn(ctx, "Duplicate sender entry: instrument=%s party=%s", instrumentID, address)
+				node.LogWarn(ctx, "Duplicate sender entry: instrument=%s party=%s", instrumentID,
+					transferTx.Inputs[sender.Index].LockingScript)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
-			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
-				transferTx.Inputs[sender.Index].Address, v.Now)
+			ra, _ := bitcoin.RawAddressFromLockingScript(transferTx.Inputs[sender.Index].LockingScript)
+
+			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode, ra, v.Now)
 			if err != nil {
 				return 0, 0, errors.Wrap(err, "Failed to get holding")
 			}
 			hds[settleOutputIndex] = h
-			hash, err := transferTx.Inputs[sender.Index].Address.Hash()
+			hash, err := ra.Hash()
 			if err != nil {
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
 					errors.Wrap(err, "Invalid sender address").Error())
 			}
 			updatedHoldings[*hash] = h
 
-			address := bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-				config.Net)
-			if err := holdings.AddDebit(h, transferTx.Hash, sender.Quantity, isSingleContract, v.Now); err != nil {
+			if err := holdings.AddDebit(h, &transferTx.Hash, sender.Quantity, isSingleContract, v.Now); err != nil {
 				if err == holdings.ErrInsufficientHoldings {
 					node.LogWarn(ctx, "Insufficient funds: instrument=%s party=%s : %d/%d", instrumentID,
-						address.String(), sender.Quantity, holdings.SafeBalance(h))
+						transferTx.Inputs[sender.Index].LockingScript, sender.Quantity,
+						holdings.SafeBalance(h))
 					return 0, 0, node.NewError(actions.RejectionsInsufficientQuantity, "")
 				}
 				if err == holdings.ErrHoldingsFrozen {
-					node.LogWarn(ctx, "Frozen funds: instrument=%s party=%s", instrumentID, address)
+					node.LogWarn(ctx, "Frozen funds: instrument=%s party=%s", instrumentID,
+						transferTx.Inputs[sender.Index].LockingScript)
 					return 0, 0, node.NewError(actions.RejectionsHoldingsFrozen, "")
 				}
 				if err == holdings.ErrHoldingsLocked {
-					node.LogWarn(ctx, "Locked funds: instrument=%s party=%s", instrumentID, address)
+					node.LogWarn(ctx, "Locked funds: instrument=%s party=%s", instrumentID,
+						transferTx.Inputs[sender.Index].LockingScript)
 					return 0, 0, node.NewError(actions.RejectionsHoldingsLocked, "")
 				}
-				node.LogWarn(ctx, "Send failed : %s : instrument=%s party=%s", err, instrumentID, address)
+				node.LogWarn(ctx, "Send failed : %s : instrument=%s party=%s", err, instrumentID,
+					transferTx.Inputs[sender.Index].LockingScript)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed, "")
 			} else {
-				logger.Info(ctx, "Debit %d %s to %s", sender.Quantity, instrumentID, address)
+				logger.Info(ctx, "Debit %d %s to %s", sender.Quantity, instrumentID,
+					transferTx.Inputs[sender.Index].LockingScript)
 			}
 
 			// Update total send balance
@@ -721,21 +725,21 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 					errors.Wrap(err, "receiver address").Error())
 			}
 
+			receiverLockingScript, _ := receiverAddress.LockingScript()
+
 			// Find output in settle tx
 			settleOutputIndex := uint32(0x0000ffff)
-			for i, outputAddress := range settleOutputAddresses {
-				if !outputAddress.IsEmpty() && outputAddress.Equal(receiverAddress) {
+			for i, ls := range settleOutputLockingScripts {
+				if ls.Equal(receiverLockingScript) {
 					settleOutputIndex = uint32(i)
 					break
 				}
 			}
 
 			if settleOutputIndex == uint32(0x0000ffff) {
-				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					config.Net)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
 					fmt.Sprintf("Receiver output not found in settle tx for instrument %d receiver %d : %s",
-						instrumentOffset, receiverOffset, address))
+						instrumentOffset, receiverOffset, receiverLockingScript))
 			}
 
 			if receiverAddress.Equal(ct.AdminAddress) {
@@ -745,14 +749,13 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 
 			if hds[settleOutputIndex] != nil {
-				address := bitcoin.NewAddressFromRawAddress(receiverAddress,
-					config.Net)
-				node.LogWarn(ctx, "Duplicate receiver entry: instrument=%s party=%s", instrumentID, address)
+				node.LogWarn(ctx, "Duplicate receiver entry: instrument=%s party=%s", instrumentID,
+					receiverLockingScript)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed, "")
 			}
 
-			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode, receiverAddress,
-				v.Now)
+			h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
+				receiverAddress, v.Now)
 			if err != nil {
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed,
 					errors.Wrap(err, "Failed to get holding").Error())
@@ -765,18 +768,19 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 			}
 			updatedHoldings[*hash] = h
 
-			address := bitcoin.NewAddressFromRawAddress(receiverAddress, config.Net)
-			if err := holdings.AddDeposit(h, transferTx.Hash, receiver.Quantity, isSingleContract,
+			if err := holdings.AddDeposit(h, &transferTx.Hash, receiver.Quantity, isSingleContract,
 				v.Now); err != nil {
 				if err == holdings.ErrHoldingsLocked {
-					node.LogWarn(ctx, "Locked funds: instrument=%s party=%s", instrumentID, address)
+					node.LogWarn(ctx, "Locked funds: instrument=%s party=%s", instrumentID,
+						receiverLockingScript)
 					return 0, 0, node.NewError(actions.RejectionsHoldingsLocked, "")
 				}
 				node.LogWarn(ctx, "Send failed : %s : instrument=%s party=%s", err, instrumentID,
-					address)
+					receiverLockingScript)
 				return 0, 0, node.NewError(actions.RejectionsMsgMalformed, "")
 			} else {
-				logger.Info(ctx, "Deposit %d %s to %s", receiver.Quantity, instrumentID, address)
+				logger.Info(ctx, "Deposit %d %s to %s", receiver.Quantity, instrumentID,
+					receiverLockingScript)
 			}
 
 			// Update instrument balance
@@ -875,12 +879,13 @@ func addSettlementData(ctx context.Context, masterDB *db.DB, config *node.Config
 //   approved settlement tx.
 func findBoomerangIndex(transferTx *inspector.Transaction,
 	transfer *actions.Transfer,
-	contractAddress bitcoin.RawAddress) uint32 {
+	contractLockingScript bitcoin.Script) uint32 {
 
 	outputUsed := make([]bool, len(transferTx.Outputs))
 	for _, instrumentTransfer := range transfer.Instruments {
 		if instrumentTransfer.ContractIndex == uint32(0x0000ffff) ||
-			(instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && len(instrumentTransfer.InstrumentCode) == 0) {
+			(instrumentTransfer.InstrumentType == protocol.BSVInstrumentID &&
+				len(instrumentTransfer.InstrumentCode) == 0) {
 			continue
 		}
 
@@ -892,11 +897,11 @@ func findBoomerangIndex(transferTx *inspector.Transaction,
 		outputUsed[instrumentTransfer.ContractIndex] = true
 	}
 
-	for index, output := range transferTx.Outputs {
+	for index, txout := range transferTx.MsgTx.TxOut {
 		if outputUsed[index] {
 			continue
 		}
-		if output.Address.Equal(contractAddress) {
+		if txout.LockingScript.Equal(contractLockingScript) {
 			return uint32(index)
 		}
 	}
@@ -923,7 +928,7 @@ func sendToNextSettlementContract(ctx context.Context,
 		// If already an M1, use only output
 		boomerangIndex = 0
 	} else {
-		boomerangIndex = findBoomerangIndex(transferTx, transfer, rk.Address)
+		boomerangIndex = findBoomerangIndex(transferTx, transfer, rk.LockingScript)
 	}
 
 	if boomerangIndex == 0xffffffff {
@@ -944,14 +949,15 @@ func sendToNextSettlementContract(ctx context.Context,
 			return errors.New("Transfer contract index out of range")
 		}
 
-		hash, err := transferTx.Outputs[instrument.ContractIndex].Address.Hash()
+		ra, _ := bitcoin.RawAddressFromLockingScript(transferTx.MsgTx.TxOut[instrument.ContractIndex].LockingScript)
+		hash, err := ra.Hash()
 		if err != nil {
 			return errors.Wrap(err, "Transfer contract address invalid")
 		}
 
 		if !currentFound {
 			completedContracts[*hash] = true
-			if transferTx.Outputs[instrument.ContractIndex].Address.Equal(rk.Address) {
+			if transferTx.MsgTx.TxOut[instrument.ContractIndex].LockingScript.Equal(rk.LockingScript) {
 				currentFound = true
 			}
 			continue
@@ -971,19 +977,25 @@ func sendToNextSettlementContract(ctx context.Context,
 	}
 
 	node.Log(ctx, "Sending settlement offer to %s",
-		bitcoin.NewAddressFromRawAddress(transferTx.Outputs[nextContractIndex].Address,
-			w.Config.Net))
+		transferTx.MsgTx.TxOut[nextContractIndex].LockingScript)
 
 	// Setup M1 response
 	var err error
-	err = w.SetUTXOs(ctx, []bitcoin.UTXO{itx.Outputs[boomerangIndex].UTXO})
+	err = w.SetUTXOs(ctx, []bitcoin.UTXO{
+		{
+			Hash:          itx.Hash,
+			Index:         boomerangIndex,
+			Value:         itx.MsgTx.TxOut[boomerangIndex].Value,
+			LockingScript: itx.MsgTx.TxOut[boomerangIndex].LockingScript,
+		},
+	})
 	if err != nil {
 		return err
 	}
 
 	// Add output to next contract.
 	// Mark as change so it gets everything except the tx fee.
-	err = w.AddChangeOutput(ctx, transferTx.Outputs[nextContractIndex].Address)
+	err = w.AddChangeOutput(ctx, transferTx.MsgTx.TxOut[nextContractIndex].LockingScript)
 	if err != nil {
 		return err
 	}
@@ -1011,7 +1023,7 @@ func sendToNextSettlementContract(ctx context.Context,
 	}
 
 	if bytes.Equal(itx.Hash[:], transferTx.Hash[:]) {
-		outpoint := wire.OutPoint{Hash: *itx.Hash, Index: boomerangIndex}
+		outpoint := wire.OutPoint{Hash: itx.Hash, Index: boomerangIndex}
 		tracer.Add(ctx, &outpoint)
 	}
 	return nil
@@ -1032,7 +1044,7 @@ func transferIsSingleContract(ctx context.Context, itx *inspector.Transaction,
 			return false // Invalid contract index
 		}
 
-		if !itx.Outputs[instrumentTransfer.ContractIndex].Address.Equal(rk.Address) {
+		if !itx.MsgTx.TxOut[instrumentTransfer.ContractIndex].LockingScript.Equal(rk.LockingScript) {
 			return false // Another contract is involved
 		}
 	}
@@ -1048,7 +1060,8 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 	node.Log(ctx, "Settlement response")
 
-	msg, ok := itx.MsgProto.(*actions.Settlement)
+	action := getAction(itx)
+	msg, ok := action.(*actions.Settlement)
 	if !ok {
 		return errors.New("Could not assert as *actions.Settlement")
 	}
@@ -1066,7 +1079,8 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 
 	instrumentUpdates := make(map[bitcoin.Hash20]*map[bitcoin.Hash20]*state.Holding)
 	for instrumentIndex, instrumentSettlement := range msg.Instruments {
-		if instrumentSettlement.InstrumentType == protocol.BSVInstrumentID && len(instrumentSettlement.InstrumentCode) == 0 {
+		if instrumentSettlement.InstrumentType == protocol.BSVInstrumentID &&
+			len(instrumentSettlement.InstrumentCode) == 0 {
 			continue // Bitcoin transaction
 		}
 
@@ -1075,11 +1089,11 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 		}
 
 		if int(instrumentSettlement.ContractIndex) >= len(itx.Inputs) {
-			return fmt.Errorf("Settlement contract index %d out of range : %d >= %d", instrumentIndex,
-				instrumentSettlement.ContractIndex, len(itx.Inputs))
+			return fmt.Errorf("Settlement contract index %d out of range : %d >= %d",
+				instrumentIndex, instrumentSettlement.ContractIndex, len(itx.Inputs))
 		}
 
-		if !itx.Inputs[instrumentSettlement.ContractIndex].Address.Equal(rk.Address) {
+		if !itx.Inputs[instrumentSettlement.ContractIndex].LockingScript.Equal(rk.LockingScript) {
 			continue // Instrument not under this contract
 		}
 
@@ -1101,24 +1115,24 @@ func (t *Transfer) SettlementResponse(ctx context.Context, w *node.ResponseWrite
 					settlementQuantity.Index, len(itx.Outputs), instrumentID)
 			}
 
-			h, err := holdings.GetHolding(ctx, t.MasterDB, rk.Address, instrumentCode,
-				itx.Outputs[settlementQuantity.Index].Address, timestamp)
+			ra, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[settlementQuantity.Index].LockingScript)
+
+			h, err := holdings.GetHolding(ctx, t.MasterDB, rk.Address, instrumentCode, ra,
+				timestamp)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get holding")
 			}
 
-			ra := itx.Outputs[settlementQuantity.Index].Address
-			address := bitcoin.NewAddressFromRawAddress(ra, w.Config.Net)
-			if err = holdings.FinalizeTx(h, &itx.Inputs[0].UTXO.Hash, settlementQuantity.Quantity,
-				timestamp); err != nil {
-				return fmt.Errorf("Failed settlement finalize for holding : %s %s : %s", instrumentID,
-					address, err)
+			if err = holdings.FinalizeTx(h, &itx.MsgTx.TxIn[0].PreviousOutPoint.Hash,
+				settlementQuantity.Quantity, timestamp); err != nil {
+				return fmt.Errorf("Failed settlement finalize for holding : %s %s : %s",
+					instrumentID, itx.MsgTx.TxOut[settlementQuantity.Index].LockingScript, err)
 			}
 
 			logger.Info(ctx, "Settled %s balance of %d for %s", instrumentID, h.FinalizedBalance,
-				address)
+				itx.MsgTx.TxOut[settlementQuantity.Index].LockingScript)
 
-			hash, err := itx.Outputs[settlementQuantity.Index].Address.Hash()
+			hash, err := ra.Hash()
 			if err != nil {
 				return errors.Wrap(err, "Invalid settlement address")
 			}
@@ -1151,7 +1165,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Determine UTXOs to fund the reject response.
-	utxos, err := transferTx.UTXOs().ForAddress(rk.Address)
+	utxos, err := transferTx.UTXOs().ForLockingScript(rk.LockingScript)
 	if err != nil {
 		node.LogWarn(ctx, "Transfer UTXOs not found")
 		return nil
@@ -1160,8 +1174,9 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	// Remove boomerang from funding UTXOs since it was already spent.
 	if started {
 		// Remove utxo spent by boomerang
-		boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.Address)
-		if boomerangIndex != 0xffffffff && transferTx.Outputs[boomerangIndex].Address.Equal(rk.Address) {
+		boomerangIndex := findBoomerangIndex(transferTx, transfer, rk.LockingScript)
+		if boomerangIndex != 0xffffffff &&
+			transferTx.MsgTx.TxOut[boomerangIndex].LockingScript.Equal(rk.LockingScript) {
 			found := false
 			for i, utxo := range utxos {
 				if utxo.Index == boomerangIndex {
@@ -1195,14 +1210,15 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 	}
 
 	// Determine if this contract is the first contract and needs to send a refund.
-	if !transferTx.Outputs[first].Address.Equal(rk.Address) {
+	if !transferTx.MsgTx.TxOut[first].LockingScript.Equal(rk.LockingScript) {
 		node.LogWarn(ctx, "This is not the first contract")
 		return nil
 	}
 
 	refundBalance := uint64(0)
 	for instrumentOffset, instrumentTransfer := range transfer.Instruments {
-		if instrumentTransfer.InstrumentType == protocol.BSVInstrumentID && len(instrumentTransfer.InstrumentCode) == 0 {
+		if instrumentTransfer.InstrumentType == protocol.BSVInstrumentID &&
+			len(instrumentTransfer.InstrumentCode) == 0 {
 			// Process bitcoin senders refunds
 			for _, sender := range instrumentTransfer.InstrumentSenders {
 				if int(sender.Index) >= len(transferTx.Inputs) {
@@ -1210,9 +1226,9 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 				}
 
 				node.LogVerbose(ctx, "Bitcoin refund %d : %s", sender.Quantity,
-					bitcoin.NewAddressFromRawAddress(transferTx.Inputs[sender.Index].Address,
-						w.Config.Net))
-				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, sender.Quantity)
+					transferTx.Inputs[sender.Index].LockingScript)
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].LockingScript,
+					sender.Quantity)
 				refundBalance += sender.Quantity
 			}
 		} else {
@@ -1222,7 +1238,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					continue
 				}
 
-				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].Address, 0)
+				w.AddRejectValue(ctx, transferTx.Inputs[sender.Index].LockingScript, 0)
 			}
 
 			if started { // Revert holding statuses
@@ -1231,7 +1247,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					return nil
 				}
 
-				if !transferTx.Outputs[instrumentTransfer.ContractIndex].Address.Equal(rk.Address) {
+				if !transferTx.MsgTx.TxOut[instrumentTransfer.ContractIndex].LockingScript.Equal(rk.LockingScript) {
 					continue // This instrument is not ours. Skip it.
 				}
 
@@ -1246,20 +1262,21 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 				// Revert sender pending statuses
 				for _, sender := range instrumentTransfer.InstrumentSenders {
 					// Revert holding status
-					h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode,
-						transferTx.Inputs[sender.Index].Address, v.Now)
+					ra, _ := bitcoin.RawAddressFromLockingScript(transferTx.Inputs[sender.Index].LockingScript)
+					h, err := holdings.GetHolding(ctx, masterDB, rk.Address, instrumentCode, ra,
+						v.Now)
 					if err != nil {
 						return errors.Wrap(err, "get holding")
 					}
 
-					hash, err := transferTx.Inputs[sender.Index].Address.Hash()
+					hash, err := ra.Hash()
 					if err != nil {
 						return errors.Wrap(err, "sender address hash")
 					}
 					updatedHoldings[*hash] = h
 
 					// Revert holding status
-					err = holdings.RevertStatus(h, transferTx.Hash)
+					err = holdings.RevertStatus(h, &transferTx.Hash)
 					if err != nil {
 						return errors.Wrap(err, "revert status")
 					}
@@ -1286,7 +1303,7 @@ func respondTransferReject(ctx context.Context, masterDB *db.DB,
 					updatedHoldings[*hash] = h
 
 					// Revert holding status
-					err = holdings.RevertStatus(h, transferTx.Hash)
+					err = holdings.RevertStatus(h, &transferTx.Hash)
 					if err != nil {
 						return errors.Wrap(err, "revert status")
 					}

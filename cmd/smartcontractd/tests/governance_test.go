@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -15,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -94,7 +94,7 @@ func holderProposal(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create proposal itx : %v", tests.Failed, err)
 	}
 
-	err = proposalItx.Promote(ctx, test.RPCNode)
+	err = proposalItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote proposal itx : %v", tests.Failed, err)
 	}
@@ -212,7 +212,7 @@ func Test_proposalInstrument(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create proposal itx : %v", tests.Failed, err)
 	}
 
-	err = proposalItx.Promote(ctx, test.RPCNode)
+	err = proposalItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote proposal itx : %v", tests.Failed, err)
 	}
@@ -319,7 +319,7 @@ func sendBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create ballot itx : %v", tests.Failed, err)
 	}
 
-	err = ballotItx.Promote(ctx, test.RPCNode)
+	err = ballotItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote ballot itx : %v", tests.Failed, err)
 	}
@@ -407,7 +407,7 @@ func adminBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create ballot itx : %v", tests.Failed, err)
 	}
 
-	err = ballotItx.Promote(ctx, test.RPCNode)
+	err = ballotItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote ballot itx : %v", tests.Failed, err)
 	}
@@ -471,7 +471,7 @@ func adminBallot(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create ballot itx : %v", tests.Failed, err)
 	}
 
-	err = ballotItx.Promote(ctx, test.RPCNode)
+	err = ballotItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote ballot itx : %v", tests.Failed, err)
 	}
@@ -741,7 +741,7 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 		return err
 	}
 
-	err = proposalItx.Promote(ctx, test.RPCNode)
+	err = proposalItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -780,12 +780,12 @@ func mockUpVote(ctx context.Context, voteSystem uint32) error {
 		return err
 	}
 
-	err = voteItx.Promote(ctx, test.RPCNode)
+	err = voteItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 
-	testVoteTxId = *voteItx.Hash
+	testVoteTxId = voteItx.Hash
 
 	test.RPCNode.SaveTX(ctx, voteTx)
 
@@ -854,7 +854,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, instrumentCode
 		return err
 	}
 
-	err = proposalItx.Promote(ctx, test.RPCNode)
+	err = proposalItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
@@ -872,7 +872,7 @@ func mockUpProposalType(ctx context.Context, proposalType uint32, instrumentCode
 		CreatedAt: protocol.CurrentTimestamp(),
 		UpdatedAt: protocol.CurrentTimestamp(),
 
-		ProposalTxId: proposalItx.Hash,
+		ProposalTxId: &proposalItx.Hash,
 		VoteTxId:     &testVoteTxId,
 		Expires:      protocol.NewTimestamp(now.Nano() + 500000000),
 
@@ -993,7 +993,8 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 	resultInputHash := fundingTx.TxHash()
 
 	// From issuer
-	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(resultInputHash, 0), make([]byte, 130)))
+	resultTx.TxIn = append(resultTx.TxIn, wire.NewTxIn(wire.NewOutPoint(resultInputHash, 0),
+		make([]byte, 130)))
 
 	// To contract
 	script, _ := test.ContractKey.Address.LockingScript()
@@ -1025,12 +1026,12 @@ func mockUpVoteResultTx(ctx context.Context, result string) error {
 		return err
 	}
 
-	err = resultItx.Promote(ctx, test.RPCNode)
+	err = resultItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		return err
 	}
 
-	testVoteResultTxId = *resultItx.Hash
+	testVoteResultTxId = resultItx.Hash
 
 	if err := transactions.AddTx(ctx, test.MasterDB, resultItx); err != nil {
 		return err

@@ -92,7 +92,7 @@ func API(
 	app.Handle("SEE", actions.CodeFreeze, e.FreezeResponse)
 	app.Handle("SEE", actions.CodeThaw, e.ThawResponse)
 	app.Handle("SEE", actions.CodeConfiscation, e.ConfiscationResponse)
-	app.Handle("SEE", actions.CodeReconciliation, e.ReconciliationResponse)
+	app.Handle("SEE", actions.CodeDeprecatedReconciliation, e.ReconciliationResponse)
 
 	// Register enforcement based events.
 	g := Governance{

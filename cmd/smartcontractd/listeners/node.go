@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
@@ -19,7 +20,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/utxos"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/spynode/pkg/client"
 	"github.com/tokenized/threads"
@@ -40,23 +40,23 @@ var (
 )
 
 type Server struct {
-	wallet            wallet.WalletInterface
-	Config            *node.Config
-	MasterDB          *db.DB
-	SpyNode           client.Client
-	Headers           node.BitcoinHeaders
-	Scheduler         *scheduler.Scheduler
-	Tracer            *filters.Tracer
-	utxos             *utxos.UTXOs
-	lock              sync.Mutex
-	Handler           protomux.Handler
-	contractAddresses []bitcoin.RawAddress // Used to determine which txs will be needed again
-	walletLock        sync.RWMutex
-	pendingRequests   []pendingRequest
-	pendingResponses  inspector.TransactionList
-	revertedTxs       []*bitcoin.Hash32
-	blockHeight       int // track current block height for confirm messages
-	inSync            bool
+	wallet                 wallet.WalletInterface
+	Config                 *node.Config
+	MasterDB               *db.DB
+	SpyNode                client.Client
+	Headers                node.BitcoinHeaders
+	Scheduler              *scheduler.Scheduler
+	Tracer                 *filters.Tracer
+	utxos                  *utxos.UTXOs
+	lock                   sync.Mutex
+	Handler                protomux.Handler
+	contractLockingScripts []bitcoin.Script // Used to determine which txs will be needed again
+	walletLock             sync.RWMutex
+	pendingRequests        []pendingRequest
+	pendingResponses       inspector.TransactionList
+	revertedTxs            []*bitcoin.Hash32
+	blockHeight            int // track current block height for confirm messages
+	inSync                 bool
 
 	pendingTxs  map[bitcoin.Hash32]*IncomingTxData
 	readyTxs    []*bitcoin.Hash32 // Saves order of tx approval in case preprocessing doesn't finish before approval.
@@ -318,7 +318,7 @@ func (server *Server) reprocessTx(ctx context.Context, itx *inspector.Transactio
 // response tx. So if that contract request output is spent by another tx, then the contract has
 // already responded.
 func (server *Server) removePendingRequests(ctx context.Context, itx *inspector.Transaction) error {
-	if !itx.IsOutgoingMessageType() {
+	if !itx.IsResponse() {
 		return nil
 	}
 
@@ -326,9 +326,9 @@ func (server *Server) removePendingRequests(ctx context.Context, itx *inspector.
 	for _, input := range itx.MsgTx.TxIn {
 		for i, pendingTx := range server.pendingRequests {
 			if int(input.PreviousOutPoint.Index) == pendingTx.ContractIndex &&
-				input.PreviousOutPoint.Hash.Equal(pendingTx.Itx.Hash) {
+				input.PreviousOutPoint.Hash.Equal(&pendingTx.Itx.Hash) {
 
-				node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash.String())
+				node.Log(ctx, "Canceling pending request tx : %s", pendingTx.Itx.Hash)
 				server.pendingRequests = append(server.pendingRequests[:i],
 					server.pendingRequests[i+1:]...)
 				break
@@ -344,13 +344,13 @@ func (server *Server) cancelTx(ctx context.Context, itx *inspector.Transaction) 
 	defer server.lock.Unlock()
 
 	server.Tracer.RevertTx(ctx, itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
+	server.utxos.Remove(itx.MsgTx, server.contractLockingScripts)
 	return server.Handler.Trigger(ctx, "STOLE", itx)
 }
 
 func (server *Server) revertTx(ctx context.Context, itx *inspector.Transaction) error {
 	server.Tracer.RevertTx(ctx, itx.Hash)
-	server.utxos.Remove(itx.MsgTx, server.contractAddresses)
+	server.utxos.Remove(itx.MsgTx, server.contractLockingScripts)
 	return server.Handler.Trigger(ctx, "LOST", itx)
 }
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
@@ -17,7 +18,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -62,7 +62,7 @@ var outgoingMessageTypes = map[string]bool{
 	actions.CodeFreeze:                   true,
 	actions.CodeThaw:                     true,
 	actions.CodeConfiscation:             true,
-	actions.CodeReconciliation:           true,
+	actions.CodeDeprecatedReconciliation: true,
 	actions.CodeRejection:                true,
 	actions.CodeMessage:                  true,
 }
@@ -231,7 +231,8 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 		}
 	}
 	if responseMsg == nil {
-		t.Fatalf("\t%s\t%s Response doesn't contain tokenized op return", tests.Failed, responseCode)
+		t.Fatalf("\t%s\t%s Response doesn't contain tokenized op return", tests.Failed,
+			responseCode)
 	}
 	if responseMsg.Code() != responseCode {
 		if responseMsg.Code() == actions.CodeRejection {
@@ -240,7 +241,8 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 				t.Errorf("Reject %+v", reject)
 			}
 		}
-		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Code(), responseCode)
+		t.Fatalf("\t%s\tResponse is the wrong type : %s != %s", tests.Failed, responseMsg.Code(),
+			responseCode)
 	}
 
 	// Submit response
@@ -249,7 +251,7 @@ func checkResponse(t testing.TB, responseCode string) *wire.MsgTx {
 		t.Fatalf("\t%s\tFailed to create response itx : %v", tests.Failed, err)
 	}
 
-	err = responseItx.Promote(ctx, test.RPCNode)
+	err = responseItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote response itx : %v", tests.Failed, err)
 	}
@@ -312,4 +314,14 @@ func resetTest(ctx context.Context) error {
 	a.SetReprocessor(reprocessTx)
 	tracer.Clear()
 	return test.Reset(ctx)
+}
+
+func getAction(itx *inspector.Transaction) actions.Action {
+	for _, output := range itx.Outputs {
+		if output.Action != nil {
+			return output.Action
+		}
+	}
+
+	return nil
 }

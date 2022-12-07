@@ -11,26 +11,26 @@ import (
 )
 
 type ResponseWriter struct {
-	Inputs        []bitcoin.UTXO
-	Outputs       []Output
-	RejectInputs  []bitcoin.UTXO
-	RejectOutputs []Output
-	RejectAddress bitcoin.RawAddress
-	Config        *Config
-	MasterDB      *db.DB
-	Mux           protomux.Handler
+	Inputs              []bitcoin.UTXO
+	Outputs             []Output
+	RejectInputs        []bitcoin.UTXO
+	RejectOutputs       []Output
+	RejectLockingScript bitcoin.Script
+	Config              *Config
+	MasterDB            *db.DB
+	Mux                 protomux.Handler
 }
 
 // AddChangeOutput is a helper to add a change output
-func (w *ResponseWriter) AddChangeOutput(ctx context.Context, addr bitcoin.RawAddress) error {
-	out := outputValue(ctx, w.Config, addr, 0, true)
+func (w *ResponseWriter) AddChangeOutput(ctx context.Context, ls bitcoin.Script) error {
+	out := outputValue(ctx, w.Config, ls, 0, true)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
 }
 
 // AddOutput is a helper to add a payment output
-func (w *ResponseWriter) AddOutput(ctx context.Context, addr bitcoin.RawAddress, value uint64) error {
-	out := outputValue(ctx, w.Config, addr, value, false)
+func (w *ResponseWriter) AddOutput(ctx context.Context, ls bitcoin.Script, value uint64) error {
+	out := outputValue(ctx, w.Config, ls, value, false)
 	w.Outputs = append(w.Outputs, *out)
 	return nil
 }
@@ -70,10 +70,10 @@ func (w *ResponseWriter) SetRejectUTXOs(ctx context.Context, utxos []bitcoin.UTX
 // AddRejectValue is a helper to add a refund amount to an address. This is used for multi-party
 //   value transfers when different users input different amounts of bitcoin and need that refunded
 //   if the request is rejected.
-func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.RawAddress, value uint64) error {
+func (w *ResponseWriter) AddRejectValue(ctx context.Context, ls bitcoin.Script, value uint64) error {
 	// Look for existing output to this address.
 	for i, output := range w.RejectOutputs {
-		if output.Address.Equal(addr) {
+		if output.LockingScript.Equal(ls) {
 			w.RejectOutputs[i].Value += value
 			return nil
 		}
@@ -81,9 +81,9 @@ func (w *ResponseWriter) AddRejectValue(ctx context.Context, addr bitcoin.RawAdd
 
 	// Add a new output for this address. If it is the first output make it the change output.
 	w.RejectOutputs = append(w.RejectOutputs, Output{
-		Address: addr,
-		Value:   value,
-		Change:  len(w.RejectOutputs) == 0,
+		LockingScript: ls,
+		Value:         value,
+		Change:        len(w.RejectOutputs) == 0,
 	})
 	return nil
 }
@@ -104,25 +104,22 @@ func (w *ResponseWriter) Respond(ctx context.Context, tx *wire.MsgTx) error {
 
 // Output is an output address for a response
 type Output struct {
-	Address bitcoin.RawAddress
-	Value   uint64
-	Change  bool
+	LockingScript bitcoin.Script
+	Value         uint64
+	Change        bool
 }
 
 // outputValue returns a payment output ensuring the value is always above the dust limit
-func outputValue(ctx context.Context, config *Config, addr bitcoin.RawAddress, value uint64, change bool) *Output {
-	dustLimit, err := txbuilder.DustLimitForAddress(addr, config.DustFeeRate)
-	if err != nil {
-		dustLimit = txbuilder.DustLimit(txbuilder.P2PKHOutputSize, config.DustFeeRate)
-	}
+func outputValue(ctx context.Context, config *Config, ls bitcoin.Script, value uint64, change bool) *Output {
+	dustLimit := txbuilder.DustLimitForLockingScript(ls, config.DustFeeRate)
 	if value < dustLimit {
 		value = dustLimit
 	}
 
 	out := &Output{
-		Address: addr,
-		Value:   value,
-		Change:  change,
+		LockingScript: ls,
+		Value:         value,
+		Change:        change,
 	}
 
 	return out
@@ -132,8 +129,8 @@ func outputValue(ctx context.Context, config *Config, addr bitcoin.RawAddress, v
 func outputFee(ctx context.Context, config *Config, value uint64) *Output {
 	if value > 0 {
 		return &Output{
-			Address: config.FeeAddress,
-			Value:   value,
+			LockingScript: config.FeeLockingScript,
+			Value:         value,
 		}
 	}
 

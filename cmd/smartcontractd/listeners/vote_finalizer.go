@@ -5,10 +5,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 
 	"github.com/tokenized/specification/dist/golang/protocol"
 )

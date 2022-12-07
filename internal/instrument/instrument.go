@@ -197,6 +197,12 @@ func IsTransferable(ctx context.Context, as *state.Instrument, now protocol.Time
 			return node.NewError(actions.RejectionsInstrumentNotPermitted,
 				fmt.Sprintf("TicketAdmission expired at %s", timeString(data.EventEndTimestamp)))
 		}
+
+	case *instruments.CreditNote:
+		if data.ExpirationTimestamp != 0 && data.ExpirationTimestamp < now.Nano() {
+			return node.NewError(actions.RejectionsInstrumentNotPermitted,
+				fmt.Sprintf("CreditNote expired at %s", timeString(data.ExpirationTimestamp)))
+		}
 	}
 
 	return nil

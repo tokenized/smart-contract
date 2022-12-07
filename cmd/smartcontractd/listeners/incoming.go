@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -15,7 +16,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/spynode/pkg/client"
@@ -23,13 +23,23 @@ import (
 	"github.com/pkg/errors"
 )
 
+func getAction(itx *inspector.Transaction) actions.Action {
+	for _, output := range itx.Outputs {
+		if output.Action != nil {
+			return output.Action
+		}
+	}
+
+	return nil
+}
+
 // AddTx adds a tx to the incoming pipeline.
 func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32) error {
 	server.pendingLock.Lock()
 
 	// The tx may already exist if it was created by smart-contract, but the state will not exist
 	// until it has been received.
-	if _, err := transactions.GetTxState(ctx, server.MasterDB, &txid); err == nil {
+	if _, err := transactions.GetTxState(ctx, server.MasterDB, txid); err == nil {
 		server.pendingLock.Unlock()
 		return errors.Wrap(ErrDuplicateTx, txid.String())
 	}
@@ -42,13 +52,15 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 		return err
 	}
 
-	if intx.Itx.MsgProto != nil && intx.Itx.MsgProto.Code() == actions.CodeContractFormation {
-		cf := intx.Itx.MsgProto.(*actions.ContractFormation)
-		node.Log(ctx, "Saving contract formation for %s : %s",
-			bitcoin.NewAddressFromRawAddress(intx.Itx.Inputs[0].Address, server.Config.Net),
+	action := getAction(intx.Itx)
+
+	if action != nil && action.Code() == actions.CodeContractFormation {
+		cf := action.(*actions.ContractFormation)
+		node.Log(ctx, "Saving contract formation for %s : %s", intx.Itx.Inputs[0].LockingScript,
 			intx.Itx.Hash)
-		if err := contract.SaveContractFormation(ctx, server.MasterDB,
-			intx.Itx.Inputs[0].Address, cf, server.Config.IsTest); err != nil {
+		ra, _ := bitcoin.RawAddressFromLockingScript(intx.Itx.Inputs[0].LockingScript)
+		if err := contract.SaveContractFormation(ctx, server.MasterDB, ra, cf,
+			server.Config.IsTest); err != nil {
 			node.LogError(ctx, "Failed to save contract formation : %s", err)
 		}
 	}
@@ -63,7 +75,7 @@ func (server *Server) AddTx(ctx context.Context, tx *client.Tx, txid bitcoin.Has
 		return errors.Wrap(err, "add tx state")
 	}
 
-	_, exists := server.pendingTxs[*intx.Itx.Hash]
+	_, exists := server.pendingTxs[intx.Itx.Hash]
 	if exists {
 		server.pendingLock.Unlock()
 		return errors.Wrap(ErrDuplicateTx, txid.String())
@@ -85,14 +97,14 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 		node.Log(txCtx, "Processing incoming tx")
 
 		if err := intx.Itx.Validate(txCtx); err != nil {
-			server.abortPendingTx(txCtx, *intx.Itx.Hash)
+			server.abortPendingTx(txCtx, intx.Itx.Hash)
 			return errors.Wrap(err, "validate")
 		}
 
-		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsIncomingMessageType() {
+		if server.Config.MinFeeRate > 0.0 && intx.Itx.IsRequest() {
 			feeRate, err := intx.Itx.FeeRate()
 			if err != nil {
-				server.abortPendingTx(txCtx, *intx.Itx.Hash)
+				server.abortPendingTx(txCtx, intx.Itx.Hash)
 				return errors.Wrap(err, "fee rate")
 			}
 			if feeRate < server.Config.MinFeeRate {
@@ -102,7 +114,9 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 		}
 
 		if intx.Itx.RejectCode == 0 {
-			switch msg := intx.Itx.MsgProto.(type) {
+			action := getAction(intx.Itx)
+
+			switch msg := action.(type) {
 			case *actions.Transfer:
 				if err := validateOracles(txCtx, server.MasterDB, intx.Itx, msg, server.Headers,
 					server.Config.IsTest); err != nil {
@@ -121,7 +135,7 @@ func (server *Server) ProcessIncomingTxs(ctx context.Context) error {
 			}
 		}
 
-		server.markPreprocessed(ctx, *intx.Itx.Hash)
+		server.markPreprocessed(ctx, intx.Itx.Hash)
 	}
 
 	return nil
@@ -160,7 +174,7 @@ func (server *Server) processReadyTxs(ctx context.Context) {
 		if intx.IsPreprocessed && intx.IsReady {
 			node.LogVerbose(ctx, "Pending tx added to processing : %s", txid)
 			server.processingTxs.Add(ProcessingTx{Itx: intx.Itx, Event: "SEE"})
-			delete(server.pendingTxs, *intx.Itx.Hash)
+			delete(server.pendingTxs, intx.Itx.Hash)
 			toRemove++
 			continue
 		}
@@ -195,14 +209,14 @@ func (server *Server) MarkSafe(ctx context.Context, txid bitcoin.Hash32) {
 	if !intx.InReady {
 		node.LogVerbose(ctx, "Adding tx to ready : %s", txid)
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 
 	server.pendingLock.Unlock()
 
 	// Re-broadcast to ensure it is accepted by the network.
-	if server.IsInSync() && intx.Itx.IsIncomingMessageType() {
+	if server.IsInSync() && intx.Itx.IsRequest() {
 		if err := server.sendTx(ctx, intx.Itx.MsgTx); err != nil {
 			node.LogWarn(ctx, "Failed to re-broadcast safe incoming : %s", err)
 		}
@@ -225,7 +239,7 @@ func (server *Server) MarkUnsafe(ctx context.Context, txid bitcoin.Hash32) {
 	if !intx.InReady {
 		node.LogVerbose(ctx, "Adding unsafe tx to ready : %s", txid)
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 
@@ -274,7 +288,7 @@ func (server *Server) MarkConfirmed(ctx context.Context, txid bitcoin.Hash32) {
 	if !intx.InReady {
 		node.LogVerbose(ctx, "Adding tx to ready : %s", txid)
 		intx.InReady = true
-		server.readyTxs = append(server.readyTxs, intx.Itx.Hash)
+		server.readyTxs = append(server.readyTxs, &intx.Itx.Hash)
 	}
 	server.processReadyTxs(ctx)
 }
@@ -380,12 +394,12 @@ func NewIncomingTxData(ctx context.Context, tx *client.Tx, txid bitcoin.Hash32,
 	}
 	var err error
 
-	result.Itx, err = inspector.NewTransactionFromOutputs(ctx, &txid, tx.Tx, tx.Outputs, isTest)
+	result.Itx, err = inspector.NewTransactionFromOutputs(ctx, txid, tx.Tx, tx.Outputs, isTest)
 	if err != nil {
 		return nil, err
 	}
 
-	if result.Itx.IsOutgoingMessageType() {
+	if result.Itx.IsResponse() {
 		node.Log(ctx, "Response tx marked as ready immediately")
 		result.IsReady = true
 	}
@@ -446,8 +460,9 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 			continue
 		}
 
-		ct, err := contract.Retrieve(ctx, masterDB,
-			itx.Outputs[instrumentTransfer.ContractIndex].Address, isTest)
+		contractAddress, _ := bitcoin.RawAddressFromLockingScript(itx.MsgTx.TxOut[instrumentTransfer.ContractIndex].LockingScript)
+
+		ct, err := contract.Retrieve(ctx, masterDB, contractAddress, isTest)
 		if err == contract.ErrNotFound {
 			continue // Not associated with one of our contracts
 		}
@@ -458,8 +473,8 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 		// Process receivers
 		for _, receiver := range instrumentTransfer.InstrumentReceivers {
 			// Check Oracle Signature
-			if err := validateOracle(ctx, itx.Outputs[instrumentTransfer.ContractIndex].Address,
-				ct, instrumentTransfer.InstrumentCode, receiver, headers); err != nil {
+			if err := validateOracle(ctx, contractAddress, ct, instrumentTransfer.InstrumentCode,
+				receiver, headers); err != nil {
 				return err
 			}
 		}
@@ -469,7 +484,8 @@ func validateOracles(ctx context.Context, masterDB *db.DB, itx *inspector.Transa
 }
 
 func validateOracle(ctx context.Context, contractAddress bitcoin.RawAddress, ct *state.Contract,
-	instrumentCode []byte, instrumentReceiver *actions.InstrumentReceiverField, headers node.BitcoinHeaders) error {
+	instrumentCode []byte, instrumentReceiver *actions.InstrumentReceiverField,
+	headers node.BitcoinHeaders) error {
 
 	if instrumentReceiver.OracleSigAlgorithm == 0 {
 		identityFound := false
@@ -608,8 +624,7 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 
 		logFields := []logger.Field{}
 
-		logFields = append(logFields, logger.Stringer("admin_address",
-			bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, config.Net)))
+		logFields = append(logFields, logger.Stringer("admin_script", itx.Inputs[0].LockingScript))
 
 		var entity interface{}
 		if len(contractOffer.EntityContract) > 0 {
@@ -632,7 +647,12 @@ func validateAdminIdentityOracleSig(ctx context.Context, dbConn *db.DB, config *
 		logFields = append(logFields, logger.Stringer("block_hash", hash))
 		logFields = append(logFields, logger.Uint64("expiration", cert.Expiration))
 
-		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, itx.Inputs[0].Address,
+		inputAddress, err := bitcoin.RawAddressFromLockingScript(itx.Inputs[0].LockingScript)
+		if err != nil {
+			return errors.Wrap(err, "input address")
+		}
+
+		sigHash, err := protocol.ContractAdminIdentityOracleSigHash(ctx, inputAddress,
 			entity, *hash, cert.Expiration, 1)
 		if err != nil {
 			return err

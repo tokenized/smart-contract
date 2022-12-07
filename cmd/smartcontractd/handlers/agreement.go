@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/agreement"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -12,7 +13,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/permissions"
@@ -27,13 +27,25 @@ type Agreement struct {
 	Config   *node.Config
 }
 
+func getAction(itx *inspector.Transaction) actions.Action {
+	for _, output := range itx.Outputs {
+		if output.Action != nil {
+			return output.Action
+		}
+	}
+
+	return nil
+}
+
 // OfferRequest handles an incoming Body of Agreement Offer and prepares a Formation response
 func (a *Agreement) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 	itx *inspector.Transaction, rk *wallet.Key) error {
 	ctx, span := trace.StartSpan(ctx, "handlers.Agreement.Offer")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.BodyOfAgreementOffer)
+	action := getAction(itx)
+
+	msg, ok := action.(*actions.BodyOfAgreementOffer)
 	if !ok {
 		return errors.New("Could not assert as *actions.BodyOfAgreementOffer")
 	}
@@ -100,7 +112,7 @@ func (a *Agreement) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -124,7 +136,9 @@ func (a *Agreement) AmendmentRequest(ctx context.Context, w *node.ResponseWriter
 
 	node.Log(ctx, "Agreement amendment request")
 
-	msg, ok := itx.MsgProto.(*actions.BodyOfAgreementAmendment)
+	action := getAction(itx)
+
+	msg, ok := action.(*actions.BodyOfAgreementAmendment)
 	if !ok {
 		return errors.New("Could not assert as *actions.BodyOfAgreementAmendment")
 	}
@@ -154,9 +168,8 @@ func (a *Agreement) AmendmentRequest(ctx context.Context, w *node.ResponseWriter
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
+	if !contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript) {
+		node.LogVerbose(ctx, "Requestor is not operator : %s", itx.Inputs[0].LockingScript)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -190,13 +203,15 @@ func (a *Agreement) AmendmentRequest(ctx context.Context, w *node.ResponseWriter
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, *refTxId, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+		voteAction := getAction(voteResultTx)
+
+		voteResult, ok := voteAction.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -281,7 +296,7 @@ func (a *Agreement) AmendmentRequest(ctx context.Context, w *node.ResponseWriter
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -304,16 +319,17 @@ func (a *Agreement) FormationResponse(ctx context.Context, w *node.ResponseWrite
 	ctx, span := trace.StartSpan(ctx, "handlers.Agreement.Formation")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.BodyOfAgreementFormation)
+	action := getAction(itx)
+
+	msg, ok := action.(*actions.BodyOfAgreementFormation)
 	if !ok {
 		return errors.New("Could not assert as *actions.BodyOfAgreementFormation")
 	}
 
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		return fmt.Errorf("Agreement formation not from contract : %s", address)
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Agreement formation not from contract : %s", rk.LockingScript)
 	}
 
 	// Locate contract
@@ -333,10 +349,12 @@ func (a *Agreement) FormationResponse(ctx context.Context, w *node.ResponseWrite
 	}
 
 	// Get request tx to find relevant vote if there was one.
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, itx.MsgTx.TxIn[0].PreviousOutPoint.Hash,
+		a.Config.IsTest)
 	var vt *state.Vote
 	if err == nil && request != nil {
-		amendment, ok := request.MsgProto.(*actions.BodyOfAgreementAmendment)
+		requestAction := getAction(request)
+		amendment, ok := requestAction.(*actions.BodyOfAgreementAmendment)
 
 		if ok && len(amendment.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(amendment.RefTxID)
@@ -345,12 +363,13 @@ func (a *Agreement) FormationResponse(ctx context.Context, w *node.ResponseWrite
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, *refTxId, a.Config.IsTest)
 			if err != nil {
 				return errors.New("Vote Result tx not found for amendment")
 			}
 
-			voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+			voteAction := getAction(voteResultTx)
+			voteResult, ok := voteAction.(*actions.Result)
 			if !ok {
 				return errors.New("Vote Result invalid for amendment")
 			}
@@ -433,7 +452,7 @@ func (a *Agreement) FormationResponse(ctx context.Context, w *node.ResponseWrite
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
 			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId)
-			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, request.Hash,
+			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, &request.Hash,
 				v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}

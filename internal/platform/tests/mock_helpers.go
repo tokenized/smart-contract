@@ -57,6 +57,24 @@ func (cache *mockRpcNode) GetTX(ctx context.Context, txid *bitcoin.Hash32) (*wir
 	return nil, errors.New("Couldn't find tx in cache")
 }
 
+func (cache *mockRpcNode) GetTx(ctx context.Context, txid bitcoin.Hash32) (*wire.MsgTx, error) {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	tx, ok := cache.txs[txid]
+	if ok {
+		return tx, nil
+	}
+	return nil, errors.New("Couldn't find tx in cache")
+}
+
+func (cache *mockRpcNode) SaveTx(ctx context.Context, tx *wire.MsgTx) error {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+
+	cache.txs[*tx.TxHash()] = tx.Copy()
+	return nil
+}
+
 func (cache *mockRpcNode) GetOutputs(ctx context.Context,
 	outpoints []wire.OutPoint) ([]bitcoin.UTXO, error) {
 	cache.lock.Lock()

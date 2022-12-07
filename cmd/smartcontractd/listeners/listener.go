@@ -124,7 +124,7 @@ func (server *Server) handleTxState(ctx context.Context, txid bitcoin.Hash32,
 			return
 		}
 
-		itx, err := transactions.GetTx(ctx, server.MasterDB, &txid, server.Config.IsTest)
+		itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Failed to get cancelled tx : %s", err)
 		}
@@ -171,7 +171,7 @@ func (server *Server) HandleInSync(ctx context.Context) {
 		node.Log(ctx, "Node already in sync")
 		// Check for reorged reverted txs
 		for _, txid := range server.revertedTxs {
-			itx, err := transactions.GetTx(ctx, server.MasterDB, txid, server.Config.IsTest)
+			itx, err := transactions.GetTx(ctx, server.MasterDB, *txid, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to get reverted tx : %s", err)
 			}
@@ -248,14 +248,15 @@ func (server *Server) HandleInSync(ctx context.Context) {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return
 			}
-			voteTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
+			voteTx, err := transactions.GetTx(ctx, server.MasterDB, *hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve vote tx : %s", err)
 				return
 			}
 
 			// Schedule vote finalizer
-			if err = server.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(server.Handler, voteTx, vt.Expires)); err != nil {
+			if err = server.Scheduler.ScheduleJob(ctx, NewVoteFinalizer(server.Handler, voteTx,
+				vt.Expires)); err != nil {
 				node.LogWarn(ctx, "Failed to schedule vote finalizer : %s", err)
 				return
 			}
@@ -279,7 +280,7 @@ func (server *Server) HandleInSync(ctx context.Context) {
 				node.LogWarn(ctx, "Failed to create tx hash : %s", err)
 				return
 			}
-			transferTx, err := transactions.GetTx(ctx, server.MasterDB, hash, server.Config.IsTest)
+			transferTx, err := transactions.GetTx(ctx, server.MasterDB, *hash, server.Config.IsTest)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to retrieve transfer tx : %s", err)
 				return

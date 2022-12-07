@@ -16,12 +16,12 @@ import (
 )
 
 // ContractIsStarted returns true if the contract has been started.
-func (server *Server) ContractIsStarted(ctx context.Context, ca bitcoin.RawAddress) (bool, error) {
+func (server *Server) ContractIsStarted(ctx context.Context, ra bitcoin.RawAddress) (bool, error) {
 	// Check if contract exists
-	c, err := contract.Retrieve(ctx, server.MasterDB, ca, server.Config.IsTest)
+	c, err := contract.Retrieve(ctx, server.MasterDB, ra, server.Config.IsTest)
 	if err == nil && c != nil {
-		node.Log(ctx, "Contract found : %s",
-			bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
+		node.Log(ctx, "Contract found : %s", bitcoin.NewAddressFromRawAddress(ra,
+			server.Config.Net))
 		return true, nil
 	}
 	if err != contract.ErrNotFound {
@@ -36,19 +36,13 @@ func (server *Server) ContractIsStarted(ctx context.Context, ca bitcoin.RawAddre
 func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error {
 	server.walletLock.Lock()
 
-	rawAddress, err := key.Key.RawAddress()
-	if err != nil {
-		server.walletLock.Unlock()
-		return err
-	}
-
 	node.Log(ctx, "Adding key : %s",
-		bitcoin.NewAddressFromRawAddress(rawAddress, server.Config.Net))
+		bitcoin.NewAddressFromRawAddress(key.Address, server.Config.Net))
 
-	server.contractAddresses = append(server.contractAddresses, rawAddress)
+	server.contractLockingScripts = append(server.contractLockingScripts, key.LockingScript)
 
 	if server.SpyNode != nil {
-		hashes, err := rawAddress.Hashes()
+		hashes, err := key.Address.Hashes()
 		if err != nil {
 			server.walletLock.Unlock()
 			return err
@@ -69,22 +63,29 @@ func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error
 
 // RemoveContract removes a contract key from those being monitored if it hasn't been
 // used yet.
-func (server *Server) RemoveContract(ctx context.Context, ca bitcoin.RawAddress,
+func (server *Server) RemoveContract(ctx context.Context, lockingScript bitcoin.Script,
 	publicKey bitcoin.PublicKey) error {
+
+	rawAddress, err := bitcoin.RawAddressFromLockingScript(lockingScript)
+	if err != nil {
+		server.walletLock.Unlock()
+		return err
+	}
 
 	server.walletLock.Lock()
 	defer server.walletLock.Unlock()
 
-	node.Log(ctx, "Removing key : %s", bitcoin.NewAddressFromRawAddress(ca, server.Config.Net))
-	server.wallet.RemoveAddress(ca)
+	node.Log(ctx, "Removing key : %s", bitcoin.NewAddressFromRawAddress(rawAddress,
+		server.Config.Net))
+	server.wallet.RemoveAddress(rawAddress)
 	if err := server.SaveWallet(ctx); err != nil {
 		return err
 	}
 
-	for i, caddress := range server.contractAddresses {
-		if ca.Equal(caddress) {
-			server.contractAddresses = append(server.contractAddresses[:i],
-				server.contractAddresses[i+1:]...)
+	for i, contractLockingScript := range server.contractLockingScripts {
+		if lockingScript.Equal(contractLockingScript) {
+			server.contractLockingScripts = append(server.contractLockingScripts[:i],
+				server.contractLockingScripts[i+1:]...)
 			break
 		}
 	}
@@ -148,10 +149,9 @@ func (server *Server) SyncWallet(ctx context.Context) error {
 	// Refresh node for wallet.
 	keys := server.wallet.ListAll()
 
-	server.contractAddresses = make([]bitcoin.RawAddress, 0, len(keys))
-	for _, key := range keys {
-		// Contract address
-		server.contractAddresses = append(server.contractAddresses, key.Address)
+	server.contractLockingScripts = make([]bitcoin.Script, len(keys))
+	for i, key := range keys {
+		server.contractLockingScripts[i] = key.LockingScript
 	}
 
 	return nil

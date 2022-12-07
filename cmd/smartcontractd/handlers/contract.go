@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
@@ -13,7 +14,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/permissions"
@@ -35,7 +35,8 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Offer")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.ContractOffer)
+	action := getAction(itx)
+	msg, ok := action.(*actions.ContractOffer)
 	if !ok {
 		return errors.New("Could not assert as *actions.ContractOffer")
 	}
@@ -112,14 +113,14 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 						fmt.Sprintf("Contract operator public key invalid : %s", err))
 				}
 
-				serviceAddress, err := servicePublicKey.RawAddress()
+				serviceLockingScript, err := servicePublicKey.LockingScript()
 				if err != nil {
 					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 						fmt.Sprintf("Contract operator public key not addressable : %s", err))
 				}
 
 				// Check that second input is from contract operator service key
-				if !itx.Inputs[1].Address.Equal(serviceAddress) {
+				if !itx.Inputs[1].LockingScript.Equal(serviceLockingScript) {
 					return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 						"Contract operator input from wrong address")
 				}
@@ -199,14 +200,17 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 		return err
 	}
 
-	cf.AdminAddress = itx.Inputs[0].Address.Bytes()
+	adminRA, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[0].LockingScript)
+
+	cf.AdminAddress = adminRA.Bytes()
 	if msg.ContractOperatorIncluded {
 		if len(itx.Inputs) < 2 {
 			node.LogWarn(ctx, "Missing operator input")
 			return node.RespondRejectText(ctx, w, itx, rk, actions.RejectionsMsgMalformed,
 				"missing operator input")
 		}
-		cf.OperatorAddress = itx.Inputs[1].Address.Bytes()
+		operatorRA, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[1].LockingScript)
+		cf.OperatorAddress = operatorRA.Bytes()
 	}
 
 	cf.ContractRevision = 0
@@ -215,7 +219,7 @@ func (c *Contract) OfferRequest(ctx context.Context, w *node.ResponseWriter,
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, msg.ContractFee)
 
 	// Save Tx for when formation is processed.
@@ -240,7 +244,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Amendment")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.ContractAmendment)
+	action := getAction(itx)
+	msg, ok := action.(*actions.ContractAmendment)
 	if !ok {
 		return errors.New("Could not assert as *protocol.ContractAmendment")
 	}
@@ -270,9 +275,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
+	if !contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript) {
+		node.LogVerbose(ctx, "Requestor is not operator : %s", itx.Inputs[0].LockingScript)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -296,13 +300,14 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, *refTxId, c.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+		voteAction := getAction(voteResultTx)
+		voteResult, ok := voteAction.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -376,9 +381,9 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 					actions.RejectionsContractBothOperatorsRequired)
 			}
 
-			if itx.Inputs[0].Address.Equal(itx.Inputs[1].Address) ||
-				!contract.IsOperator(ctx, ct, itx.Inputs[0].Address) ||
-				!contract.IsOperator(ctx, ct, itx.Inputs[1].Address) {
+			if itx.Inputs[0].LockingScript.Equal(itx.Inputs[1].LockingScript) ||
+				!contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript) ||
+				!contract.IsOperator(ctx, ct, itx.Inputs[1].LockingScript) {
 				node.Log(ctx, "All operators required for operator change")
 				return node.RespondReject(ctx, w, itx, rk,
 					actions.RejectionsContractBothOperatorsRequired)
@@ -390,7 +395,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 					actions.RejectionsContractBothOperatorsRequired)
 			}
 
-			if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
+			if !contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript) {
 				node.Log(ctx, "All operators required for operator change")
 				return node.RespondReject(ctx, w, itx, rk,
 					actions.RejectionsContractBothOperatorsRequired)
@@ -410,7 +415,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.New("New administration specified but not included in inputs")
 		}
 
-		cf.AdminAddress = itx.Inputs[inputIndex].Address.Bytes()
+		adminRA, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[inputIndex].LockingScript)
+		cf.AdminAddress = adminRA.Bytes()
 		inputIndex++
 	}
 
@@ -421,7 +427,8 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 			return errors.New("New operator specified but not included in inputs")
 		}
 
-		cf.OperatorAddress = itx.Inputs[inputIndex].Address.Bytes()
+		operatorRA, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[inputIndex].LockingScript)
+		cf.OperatorAddress = operatorRA.Bytes()
 	}
 
 	if err := applyContractAmendments(cf, msg.Amendments, proposed, proposalType,
@@ -494,7 +501,7 @@ func (c *Contract) AmendmentRequest(ctx context.Context, w *node.ResponseWriter,
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -518,7 +525,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.Formation")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.ContractFormation)
+	action := getAction(itx)
+	msg, ok := action.(*actions.ContractFormation)
 	if !ok {
 		return errors.New("Could not assert as *actions.ContractFormation")
 	}
@@ -526,9 +534,8 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Contract. Sender is verified to be contract before this response function is called.
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		return fmt.Errorf("Contract formation not from contract : %s", address)
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Contract formation not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	contractName := msg.ContractName
@@ -543,12 +550,14 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash, c.Config.IsTest)
+	request, err := transactions.GetTx(ctx, c.MasterDB, itx.MsgTx.TxIn[0].PreviousOutPoint.Hash,
+		c.Config.IsTest)
 	var vt *state.Vote
 	var amendment *actions.ContractAmendment
 	if err == nil && request != nil {
 		var ok bool
-		amendment, ok = request.MsgProto.(*actions.ContractAmendment)
+		requestAction := getAction(request)
+		amendment, ok = requestAction.(*actions.ContractAmendment)
 
 		if ok && len(amendment.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(amendment.RefTxID)
@@ -557,12 +566,13 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, refTxId, c.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, c.MasterDB, *refTxId, c.Config.IsTest)
 			if err != nil {
 				return errors.New("Vote Result tx not found for amendment")
 			}
 
-			voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+			voteAction := getAction(voteResultTx)
+			voteResult, ok := voteAction.(*actions.Result)
 			if !ok {
 				return errors.New("Vote Result invalid for amendment")
 			}
@@ -595,25 +605,29 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 
 		// Get contract offer message to retrieve administration and operator.
 		var offerTx *inspector.Transaction
-		offerTx, err = transactions.GetTx(ctx, c.MasterDB, &itx.Inputs[0].UTXO.Hash,
+		offerTx, err = transactions.GetTx(ctx, c.MasterDB, itx.MsgTx.TxIn[0].PreviousOutPoint.Hash,
 			c.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("Contract Offer tx not found : %s",
-				itx.Inputs[0].UTXO.Hash.String()))
+				itx.MsgTx.TxIn[0].PreviousOutPoint.Hash))
 		}
 
 		// Get offer from it
-		offer, ok := offerTx.MsgProto.(*actions.ContractOffer)
+		offerAction := getAction(offerTx)
+		offer, ok := offerAction.(*actions.ContractOffer)
 		if !ok {
 			return fmt.Errorf("Could not find Contract Offer in offer tx")
 		}
 
-		nc.AdminAddress = offerTx.Inputs[0].Address // First input of offer tx
+		adminRa, _ := bitcoin.RawAddressFromLockingScript(offerTx.Inputs[0].LockingScript)
+		nc.AdminAddress = adminRa // First input of offer tx
 		if offer.ContractOperatorIncluded && len(offerTx.Inputs) > 1 {
-			nc.OperatorAddress = offerTx.Inputs[1].Address // Second input of offer tx
+			operatorRA, _ := bitcoin.RawAddressFromLockingScript(offerTx.Inputs[1].LockingScript)
+			nc.OperatorAddress = operatorRA // Second input of offer tx
 		}
 
-		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, c.Config.IsTest, v.Now); err != nil {
+		if err := contract.Create(ctx, c.MasterDB, rk.Address, &nc, c.Config.IsTest,
+			v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to create contract (%s) : %s", contractName, err)
 			return err
 		}
@@ -637,10 +651,11 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New administration specified but not included in inputs")
 			}
 
-			uc.AdminAddress = &request.Inputs[inputIndex].Address
+			adminRa, _ := bitcoin.RawAddressFromLockingScript(request.Inputs[inputIndex].LockingScript)
+			uc.AdminAddress = &adminRa
 			inputIndex++
 			address := bitcoin.NewAddressFromRawAddress(*uc.AdminAddress, w.Config.Net)
-			node.Log(ctx, "Updating contract administration address : %s", address.String())
+			node.Log(ctx, "Updating contract administration address : %s", address)
 		}
 
 		// Operator changes. New operator in second input unless there is also a new administration,
@@ -650,9 +665,10 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 				return errors.New("New operator specified but not included in inputs")
 			}
 
-			uc.OperatorAddress = &request.Inputs[inputIndex].Address
+			operatorRa, _ := bitcoin.RawAddressFromLockingScript(request.Inputs[inputIndex].LockingScript)
+			uc.OperatorAddress = &operatorRa
 			address := bitcoin.NewAddressFromRawAddress(*uc.OperatorAddress, w.Config.Net)
-			node.Log(ctx, "Updating contract operator PKH : %s", address.String())
+			node.Log(ctx, "Updating contract operator PKH : %s", address)
 		}
 
 		if ct.ContractType != msg.ContractType {
@@ -735,7 +751,7 @@ func (c *Contract) FormationResponse(ctx context.Context, w *node.ResponseWriter
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
 			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId.String())
-			if err := vote.MarkApplied(ctx, c.MasterDB, rk.Address, vt.VoteTxId, request.Hash,
+			if err := vote.MarkApplied(ctx, c.MasterDB, rk.Address, vt.VoteTxId, &request.Hash,
 				v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
@@ -752,7 +768,8 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
 	ctx, span := trace.StartSpan(ctx, "handlers.Contract.AddressChange")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.ContractAddressChange)
+	action := getAction(itx)
+	msg, ok := action.(*actions.ContractAddressChange)
 	if !ok {
 		return errors.New("Could not assert as *actions.ContractAddressChange")
 	}
@@ -770,8 +787,9 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
 	}
 
 	// Check that it is from the master PKH
-	if !itx.Inputs[0].Address.Equal(ct.MasterAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
+	authAddress, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[0].LockingScript)
+	if !authAddress.Equal(ct.MasterAddress) {
+		address := bitcoin.NewAddressFromRawAddress(authAddress, w.Config.Net)
 		node.LogWarn(ctx, "Contract address change must be from master address : %s",
 			address.String())
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
@@ -783,14 +801,16 @@ func (c *Contract) AddressChange(ctx context.Context, w *node.ResponseWriter,
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsTxMalformed)
 	}
 
+	newContractLockingScript, _ := newContractAddress.LockingScript()
+
 	// Check that it is to the current contract address and the new contract address
 	toCurrent := false
 	toNew := false
-	for _, output := range itx.Outputs {
-		if output.Address.Equal(rk.Address) {
+	for _, txout := range itx.MsgTx.TxOut {
+		if txout.LockingScript.Equal(rk.LockingScript) {
 			toCurrent = true
 		}
-		if output.Address.Equal(newContractAddress) {
+		if txout.LockingScript.Equal(newContractLockingScript) {
 			toNew = true
 		}
 	}

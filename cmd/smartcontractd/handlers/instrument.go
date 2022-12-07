@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/holdings"
@@ -14,7 +15,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/internal/vote"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/instruments"
@@ -37,7 +37,8 @@ func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWrit
 	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Definition")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.InstrumentDefinition)
+	action := getAction(itx)
+	msg, ok := action.(*actions.InstrumentDefinition)
 	if !ok {
 		return errors.New("Could not assert as *actions.InstrumentDefinition")
 	}
@@ -58,17 +59,17 @@ func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWrit
 
 	if !ct.MovedTo.IsEmpty() {
 		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
-		node.LogWarn(ctx, "Contract address changed : %s", address.String())
+		node.LogWarn(ctx, "Contract address changed : %s", address)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
 	if ct.FreezePeriod.Nano() > v.Now.Nano() {
-		node.LogWarn(ctx, "Contract frozen : %s", ct.FreezePeriod.String())
+		node.LogWarn(ctx, "Contract frozen : %s", ct.FreezePeriod)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFrozen)
 	}
 
 	if ct.ContractExpiration.Nano() != 0 && ct.ContractExpiration.Nano() < v.Now.Nano() {
-		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration.String())
+		node.LogWarn(ctx, "Contract expired : %s", ct.ContractExpiration)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractExpired)
 	}
 
@@ -79,20 +80,22 @@ func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWrit
 	}
 
 	// Verify administration is sender of tx.
-	if !itx.Inputs[0].Address.Equal(ct.AdminAddress) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogWarn(ctx, "Only administration can create instruments: %s", address)
+	adminAddress, _ := bitcoin.RawAddressFromLockingScript(itx.Inputs[0].LockingScript)
+	if !adminAddress.Equal(ct.AdminAddress) {
+		node.LogWarn(ctx, "Only administration can create instruments: %s",
+			itx.Inputs[0].LockingScript)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotAdministration)
 	}
 
 	// Generate Instrument ID
-	instrumentCode := protocol.InstrumentCodeFromContract(rk.Address, uint64(len(ct.InstrumentCodes)))
+	instrumentCode := protocol.InstrumentCodeFromContract(rk.Address,
+		uint64(len(ct.InstrumentCodes)))
 
 	// Locate Instrument
 	_, err = instrument.Retrieve(ctx, a.MasterDB, rk.Address, &instrumentCode)
 	if err != instrument.ErrNotFound {
 		if err == nil {
-			node.LogWarn(ctx, "Instrument already exists : %s", instrumentCode.String())
+			node.LogWarn(ctx, "Instrument already exists : %s", instrumentCode)
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsInstrumentCodeExists)
 		} else {
 			return errors.Wrap(err, "retrieve instrument")
@@ -102,8 +105,8 @@ func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWrit
 	// Allowed to have more instruments
 	if !contract.CanHaveMoreInstruments(ctx, ct) {
 		address := bitcoin.NewAddressFromRawAddress(rk.Address, w.Config.Net)
-		node.LogWarn(ctx, "Number of instruments exceeds contract Qty: %s %s", address.String(),
-			instrumentCode.String())
+		node.LogWarn(ctx, "Number of instruments exceeds contract Qty: %s %s", address,
+			instrumentCode)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractFixedQuantity)
 	}
 
@@ -155,7 +158,7 @@ func (a *Instrument) DefinitionRequest(ctx context.Context, w *node.ResponseWrit
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -184,7 +187,8 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Modification")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.InstrumentModification)
+	action := getAction(itx)
+	msg, ok := action.(*actions.InstrumentModification)
 	if !ok {
 		return errors.New("Could not assert as *actions.InstrumentModification")
 	}
@@ -209,9 +213,8 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsContractMoved)
 	}
 
-	if !contract.IsOperator(ctx, ct, itx.Inputs[0].Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		node.LogVerbose(ctx, "Requestor is not operator : %s", address)
+	if !contract.IsOperator(ctx, ct, itx.Inputs[0].LockingScript) {
+		node.LogVerbose(ctx, "Requestor is not operator : %s", itx.Inputs[0].LockingScript)
 		return node.RespondReject(ctx, w, itx, rk, actions.RejectionsNotOperator)
 	}
 
@@ -251,13 +254,14 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 		}
 
 		// Retrieve Vote Result
-		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
+		voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, *refTxId, a.Config.IsTest)
 		if err != nil {
 			node.LogWarn(ctx, "Vote Result tx not found for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 		}
 
-		voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+		voteResultAction := getAction(voteResultTx)
+		voteResult, ok := voteResultAction.(*actions.Result)
 		if !ok {
 			node.LogWarn(ctx, "Vote Result invalid for amendment")
 			return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -348,14 +352,15 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 
 		// Check administration balance for token quantity reductions. Administration has to hold
 		//   any tokens being "burned".
-		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, instrumentCode, ct.AdminAddress, v.Now)
+		h, err = holdings.GetHolding(ctx, a.MasterDB, rk.Address, instrumentCode, ct.AdminAddress,
+			v.Now)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
 
 		if ac.AuthorizedTokenQty < as.AuthorizedTokenQty {
-			if err := holdings.AddDebit(h, itx.Hash, as.AuthorizedTokenQty-ac.AuthorizedTokenQty, true,
-				v.Now); err != nil {
+			if err := holdings.AddDebit(h, &itx.Hash, as.AuthorizedTokenQty-ac.AuthorizedTokenQty,
+				true, v.Now); err != nil {
 				node.LogWarn(ctx, "Failed to reduce administration holdings : %s", err)
 				if err == holdings.ErrInsufficientHoldings {
 					return node.RespondReject(ctx, w, itx, rk,
@@ -365,7 +370,7 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 				}
 			}
 		} else {
-			if err := holdings.AddDeposit(h, itx.Hash, ac.AuthorizedTokenQty-as.AuthorizedTokenQty,
+			if err := holdings.AddDeposit(h, &itx.Hash, ac.AuthorizedTokenQty-as.AuthorizedTokenQty,
 				true, v.Now); err != nil {
 				node.LogWarn(ctx, "Failed to increase administration holdings : %s", err)
 				return errors.Wrap(err, "Failed to increase holdings")
@@ -376,7 +381,7 @@ func (a *Instrument) ModificationRequest(ctx context.Context, w *node.ResponseWr
 	// Build outputs
 	// 1 - Contract Address
 	// 2 - Contract Fee (change)
-	w.AddOutput(ctx, rk.Address, 0)
+	w.AddOutput(ctx, rk.LockingScript, 0)
 	w.AddContractFee(ctx, ct.ContractFee)
 
 	// Save Tx.
@@ -407,7 +412,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 	ctx, span := trace.StartSpan(ctx, "handlers.Instrument.Definition")
 	defer span.End()
 
-	msg, ok := itx.MsgProto.(*actions.InstrumentCreation)
+	action := getAction(itx)
+	msg, ok := action.(*actions.InstrumentCreation)
 	if !ok {
 		return errors.New("Could not assert as *actions.InstrumentCreation")
 	}
@@ -415,9 +421,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 	v := ctx.Value(node.KeyValues).(*node.Values)
 
 	// Locate Instrument
-	if !itx.Inputs[0].Address.Equal(rk.Address) {
-		address := bitcoin.NewAddressFromRawAddress(itx.Inputs[0].Address, w.Config.Net)
-		return fmt.Errorf("Instrument Creation not from contract : %s", address)
+	if !itx.Inputs[0].LockingScript.Equal(rk.LockingScript) {
+		return fmt.Errorf("Instrument Creation not from contract : %s", itx.Inputs[0].LockingScript)
 	}
 
 	ct, err := contract.Retrieve(ctx, a.MasterDB, rk.Address, a.Config.IsTest)
@@ -426,9 +431,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 	}
 
 	if !ct.MovedTo.IsEmpty() {
-		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo,
-			w.Config.Net)
-		return fmt.Errorf("Contract address changed : %s", address.String())
+		address := bitcoin.NewAddressFromRawAddress(ct.MovedTo, w.Config.Net)
+		return fmt.Errorf("Contract address changed : %s", address)
 	}
 
 	instrumentCode, err := bitcoin.NewHash20(msg.InstrumentCode)
@@ -442,15 +446,17 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 	}
 
 	// Get request tx
-	request, err := transactions.GetTx(ctx, a.MasterDB, &itx.Inputs[0].UTXO.Hash, a.Config.IsTest)
+	request, err := transactions.GetTx(ctx, a.MasterDB, itx.MsgTx.TxIn[0].PreviousOutPoint.Hash,
+		a.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "Failed to retrieve request tx")
 	}
 	var vt *state.Vote
 	var modification *actions.InstrumentModification
 	if request != nil {
+		requestAction := getAction(request)
 		var ok bool
-		modification, ok = request.MsgProto.(*actions.InstrumentModification)
+		modification, ok = requestAction.(*actions.InstrumentModification)
 
 		if ok && len(modification.RefTxID) != 0 {
 			refTxId, err := bitcoin.NewHash32(modification.RefTxID)
@@ -459,12 +465,13 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 			}
 
 			// Retrieve Vote Result
-			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, refTxId, a.Config.IsTest)
+			voteResultTx, err := transactions.GetTx(ctx, a.MasterDB, *refTxId, a.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "Failed to retrieve vote result tx")
 			}
 
-			voteResult, ok := voteResultTx.MsgProto.(*actions.Result)
+			voteResultAction := getAction(voteResultTx)
+			voteResult, ok := voteResultAction.(*actions.Result)
 			if !ok {
 				return errors.New("Vote Result invalid for modification")
 			}
@@ -513,9 +520,9 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 		if err != nil {
 			return errors.Wrap(err, "Failed to get admin holding")
 		}
-		holdings.AddDeposit(h, itx.Hash, msg.AuthorizedTokenQty, true,
+		holdings.AddDeposit(h, &itx.Hash, msg.AuthorizedTokenQty, true,
 			protocol.NewTimestamp(msg.Timestamp))
-		holdings.FinalizeTx(h, itx.Hash, msg.AuthorizedTokenQty,
+		holdings.FinalizeTx(h, &itx.Hash, msg.AuthorizedTokenQty,
 			protocol.NewTimestamp(msg.Timestamp))
 		cacheItem, err := holdings.Save(ctx, a.MasterDB, rk.Address, instrumentCode, h)
 		if err != nil {
@@ -610,12 +617,12 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 			if msg.AuthorizedTokenQty > as.AuthorizedTokenQty {
 				node.Log(ctx, "Increasing token quantity by %d to %d : %s",
 					msg.AuthorizedTokenQty-as.AuthorizedTokenQty, *ua.AuthorizedTokenQty, instrumentCode)
-				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance+(msg.AuthorizedTokenQty-as.AuthorizedTokenQty),
+				holdings.FinalizeTx(h, &itx.Hash, h.FinalizedBalance+(msg.AuthorizedTokenQty-as.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			} else {
 				node.Log(ctx, "Decreasing token quantity by %d to %d : %s",
 					as.AuthorizedTokenQty-msg.AuthorizedTokenQty, *ua.AuthorizedTokenQty, instrumentCode)
-				holdings.FinalizeTx(h, itx.Hash, h.FinalizedBalance-(as.AuthorizedTokenQty-msg.AuthorizedTokenQty),
+				holdings.FinalizeTx(h, &itx.Hash, h.FinalizedBalance-(as.AuthorizedTokenQty-msg.AuthorizedTokenQty),
 					protocol.NewTimestamp(msg.Timestamp))
 			}
 			updateHoldings = true
@@ -651,7 +658,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 			}
 			a.HoldingsChannel.Add(cacheItem)
 		}
-		if err := instrument.Update(ctx, a.MasterDB, rk.Address, instrumentCode, &ua, v.Now); err != nil {
+		if err := instrument.Update(ctx, a.MasterDB, rk.Address, instrumentCode, &ua,
+			v.Now); err != nil {
 			node.LogWarn(ctx, "Failed to update instrument : %s", instrumentCode)
 			return err
 		}
@@ -660,7 +668,7 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 		// Mark vote as "applied" if this amendment was a result of a vote.
 		if vt != nil {
 			node.Log(ctx, "Marking vote as applied : %s", vt.VoteTxId)
-			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, request.Hash,
+			if err := vote.MarkApplied(ctx, a.MasterDB, rk.Address, vt.VoteTxId, &request.Hash,
 				v.Now); err != nil {
 				return errors.Wrap(err, "Failed to mark vote applied")
 			}
@@ -668,7 +676,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 
 		// Update Owner/Administrator Membership instrument in contract
 		if msg.InstrumentType == instruments.CodeMembership {
-			instrumentPayload, err := instruments.Deserialize([]byte(msg.InstrumentType), msg.InstrumentPayload)
+			instrumentPayload, err := instruments.Deserialize([]byte(msg.InstrumentType),
+				msg.InstrumentPayload)
 			if err != nil {
 				node.LogWarn(ctx, "Failed to parse instrument payload : %s", err)
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
@@ -680,7 +689,8 @@ func (a *Instrument) CreationResponse(ctx context.Context, w *node.ResponseWrite
 				return node.RespondReject(ctx, w, itx, rk, actions.RejectionsMsgMalformed)
 			}
 
-			if membership.MembershipClass == "Administrator" && !instrumentCode.Equal(&ct.AdminMemberInstrument) {
+			if membership.MembershipClass == "Administrator" &&
+				!instrumentCode.Equal(&ct.AdminMemberInstrument) {
 				// Set contract AdminMemberInstrument
 				updateContract := &contract.UpdateContract{
 					AdminMemberInstrument: instrumentCode,

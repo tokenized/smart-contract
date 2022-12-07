@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/internal/contract"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
 )
@@ -179,7 +179,7 @@ func createInstrumentContract(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 			}
 
-			err = offerItx.Promote(ctx, test.RPCNode)
+			err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 			if err != nil {
 				t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 			}
@@ -346,7 +346,7 @@ func createEntityContract(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 			}
 
-			err = offerItx.Promote(ctx, test.RPCNode)
+			err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 			if err != nil {
 				t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 			}
@@ -516,7 +516,7 @@ func identityContracts(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 			}
 
-			err = offerItx.Promote(ctx, test.RPCNode)
+			err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 			if err != nil {
 				t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 			}
@@ -772,7 +772,7 @@ func operatorContracts(t *testing.T) {
 				t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 			}
 
-			err = offerItx.Promote(ctx, test.RPCNode)
+			err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 			if err != nil {
 				t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 			}

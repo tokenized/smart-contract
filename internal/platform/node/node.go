@@ -3,10 +3,10 @@ package node
 import (
 	"context"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/smart-contract/internal/platform/db"
 	"github.com/tokenized/smart-contract/internal/platform/protomux"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/protocol"
 	"github.com/tokenized/spynode/pkg/client"
@@ -33,7 +33,8 @@ type BitcoinHeaders interface {
 }
 
 // A Handler is a type that handles a transaction within our own little mini framework.
-type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction, wk *wallet.Key) error
+type Handler func(ctx context.Context, w *ResponseWriter, itx *inspector.Transaction,
+	wk *wallet.Key) error
 
 // App is the entrypoint into our application and what configures our context
 // object for each of our http handlers. Feel free to add any configuration
@@ -48,7 +49,7 @@ type App struct {
 
 // Node configuration
 type Config struct {
-	FeeAddress        bitcoin.RawAddress
+	FeeLockingScript  bitcoin.Script
 	Net               bitcoin.Network
 	FeeRate           float32
 	DustFeeRate       float32
@@ -89,7 +90,7 @@ func (a *App) Handle(verb, event string, handler Handler, mw ...Middleware) {
 		walletKeys := a.wallet.ListAll()
 		handled := false
 		for _, walletKey := range walletKeys {
-			if !itx.IsRelevant(walletKey.Address) {
+			if !itx.IsRelevant(walletKey.LockingScript) {
 				continue
 			}
 

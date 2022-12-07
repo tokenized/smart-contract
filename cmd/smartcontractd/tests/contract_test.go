@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
 	"github.com/tokenized/pkg/wire"
@@ -17,7 +18,6 @@ import (
 	"github.com/tokenized/smart-contract/internal/platform/node"
 	"github.com/tokenized/smart-contract/internal/platform/state"
 	"github.com/tokenized/smart-contract/internal/platform/tests"
-	"github.com/tokenized/smart-contract/pkg/inspector"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/permissions"
 	"github.com/tokenized/specification/dist/golang/protocol"
@@ -103,7 +103,7 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -170,7 +170,7 @@ func createContract(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -278,7 +278,7 @@ func masterAddress(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -345,7 +345,7 @@ func masterAddress(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create itx : %v", tests.Failed, err)
 	}
 
-	err = offerItx.Promote(ctx, test.RPCNode)
+	err = offerItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote itx : %v", tests.Failed, err)
 	}
@@ -700,7 +700,7 @@ func contractAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
 	}
@@ -819,7 +819,7 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
@@ -905,7 +905,7 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
@@ -979,7 +979,7 @@ func contractListAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote amendment itx : %v", tests.Failed, err)
 	}
@@ -1095,7 +1095,7 @@ func contractOracleAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
 	}
@@ -1182,7 +1182,7 @@ func contractProposalAmendment(t *testing.T) {
 		t.Fatalf("\t%s\tFailed to create contract amendment itx : %v", tests.Failed, err)
 	}
 
-	err = amendmentItx.Promote(ctx, test.RPCNode)
+	err = amendmentItx.Promote(ctx, test.RPCNode, test.NodeConfig.IsTest)
 	if err != nil {
 		t.Fatalf("\t%s\tFailed to promote contract amendment itx : %v", tests.Failed, err)
 	}
