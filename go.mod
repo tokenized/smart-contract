@@ -9,10 +9,10 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v0.0.5
 	github.com/tokenized/config v0.2.2-0.20220902160347-43a4340c357e
-	github.com/tokenized/inspector v0.1.2-0.20221207232219-2d14f563286b
+	github.com/tokenized/inspector v0.1.2-0.20221208151312-9d9be05f7c6f
 	github.com/tokenized/logger v0.1.2-0.20221123201255-3047489d4997
 	github.com/tokenized/pkg v0.4.1-0.20221202154605-c39f9adc94f5
-	github.com/tokenized/specification v1.1.2-0.20221207232101-4bcdef7367f7
+	github.com/tokenized/specification v1.1.2-0.20221208151154-bb90ecbdf399
 	github.com/tokenized/spynode v0.2.2-0.20221130210815-5c680ff76a56
 	github.com/tokenized/threads v0.1.1-0.20221115220050-91bea32c8aa2
 	go.opencensus.io v0.22.2

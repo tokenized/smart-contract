@@ -124,8 +124,8 @@ github.com/tokenized/config v0.2.2-0.20220902160347-43a4340c357e/go.mod h1:DFvDB
 github.com/tokenized/envelope v1.0.1-0.20220624212027-b93ec1f54d23/go.mod h1:jj3T1Fm/Vf2zphkUuXlDpEXEVDoFHVUi2jC+ncU9lqM=
 github.com/tokenized/envelope v1.0.1-0.20220902162954-c431b788f500 h1:fP0+oJQmbW5GkO0RDSzjOYd9L4/yInFf43cu3z5GDDc=
 github.com/tokenized/envelope v1.0.1-0.20220902162954-c431b788f500/go.mod h1:EaCQ0+4zMj8IfdybpI/o/bEePUx4pwdDyZqzYJcX9dE=
-github.com/tokenized/inspector v0.1.2-0.20221207232219-2d14f563286b h1:xXs2Ki8Bl5B/Njopol0G1o7qObB3xjDSoE6CLnPpqQY=
-github.com/tokenized/inspector v0.1.2-0.20221207232219-2d14f563286b/go.mod h1:GV9yTRbnS1/SVwc10CeMLyrUsH6xoU2lPzHmwFkasUM=
+github.com/tokenized/inspector v0.1.2-0.20221208151312-9d9be05f7c6f h1:i1w4XcHjwTJpm5DAGKlvuMO7W+s5YWyIN5m1lRQFriw=
+github.com/tokenized/inspector v0.1.2-0.20221208151312-9d9be05f7c6f/go.mod h1:5nArf+JzI3FA0SBkp2+CIv4Mbt2Ob5d7624Iv3UYAiw=
 github.com/tokenized/logger v0.1.0/go.mod h1:bA5PfUEFwtUy0yEIIq4Q3ZwBk1kIZTkYIRASq3fPw+k=
 github.com/tokenized/logger v0.1.1/go.mod h1:bA5PfUEFwtUy0yEIIq4Q3ZwBk1kIZTkYIRASq3fPw+k=
 github.com/tokenized/logger v0.1.2-0.20221123201255-3047489d4997 h1:e4tlkUmre3WodLWuQre0JW87IfqfFM2aVz4eN5KJIyc=
@@ -139,8 +139,8 @@ github.com/tokenized/pkg v0.4.1-0.20221111193511-06a224463802/go.mod h1:uUb7b1xH
 github.com/tokenized/pkg v0.4.1-0.20221202154605-c39f9adc94f5 h1:XAOHByWohsMW+IJvELd5nfRJUBkVQ9upnu4SjXkEzbg=
 github.com/tokenized/pkg v0.4.1-0.20221202154605-c39f9adc94f5/go.mod h1:uUb7b1xHv6KfTB+b+FzAlUNJ/al+K7cEAT2wT2Ltglo=
 github.com/tokenized/specification v1.1.2-0.20220902163651-058d13f0a70f/go.mod h1:oGIczii95Lb/C8kVkHEC0eAaIXhAzhM6HOAr33d4kkc=
-github.com/tokenized/specification v1.1.2-0.20221207232101-4bcdef7367f7 h1:vM/vMmhDWvd/OgiodaflwYL0Px+1NulZaXUgOUP+/xQ=
-github.com/tokenized/specification v1.1.2-0.20221207232101-4bcdef7367f7/go.mod h1:Wn/mZcPNjXm7pAxX2UM3gnVoDVlriMa76GZanmcTxQ4=
+github.com/tokenized/specification v1.1.2-0.20221208151154-bb90ecbdf399 h1:yXDjMq+tpZX4D5vEVBcVrsAt9FUNy2WBsbf5DwRJSnw=
+github.com/tokenized/specification v1.1.2-0.20221208151154-bb90ecbdf399/go.mod h1:Wn/mZcPNjXm7pAxX2UM3gnVoDVlriMa76GZanmcTxQ4=
 github.com/tokenized/spynode v0.2.2-0.20221130210815-5c680ff76a56 h1:BNs+aBOjF13V2Rlgpt5Ga+xPqNrxYjDhvfQRcf2SInM=
 github.com/tokenized/spynode v0.2.2-0.20221130210815-5c680ff76a56/go.mod h1:2h4MQlpzxvrryHBpBkinhtVukh32fh6LhTLTz9XxE5U=
 github.com/tokenized/threads v0.1.1-0.20220902155404-d844f8ac41b5/go.mod h1:Dii75FyJFZwaFWPai5CrczSZpF8vqznaCtkiwDx/WEg=
