@@ -62,6 +62,8 @@ func (server *Server) HandleMessage(ctx context.Context, payload client.MessageP
 				}
 			}
 
+			server.SetSpyNodeIsActive(ctx)
+
 			if err := server.SpyNode.Ready(ctx, nextMessageID); err != nil {
 				logger.Error(ctx, "Failed to notify spynode ready : %s", err)
 				return

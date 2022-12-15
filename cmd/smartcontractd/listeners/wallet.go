@@ -32,6 +32,31 @@ func (server *Server) ContractIsStarted(ctx context.Context, ra bitcoin.RawAddre
 	return false, nil
 }
 
+func (server *Server) SetSpyNodeIsActive(ctx context.Context) {
+	server.spyNodeLock.Lock()
+	defer server.spyNodeLock.Unlock()
+
+	if server.spyNodeIsActive {
+		return // already active
+	}
+
+	if len(server.pushDatasToSubscribe) > 0 {
+		server.SpyNode.SubscribePushDatas(ctx, server.pushDatasToSubscribe)
+		server.pushDatasToSubscribe = nil
+	}
+}
+
+func (server *Server) SubscribePushDatas(ctx context.Context, pushDatas [][]byte) {
+	server.spyNodeLock.Lock()
+	defer server.spyNodeLock.Unlock()
+
+	if server.spyNodeIsActive {
+		server.SpyNode.SubscribePushDatas(ctx, pushDatas)
+	} else {
+		server.pushDatasToSubscribe = append(server.pushDatasToSubscribe, pushDatas...)
+	}
+}
+
 // AddContractKey adds a new contract key to those being monitored.
 func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error {
 	server.walletLock.Lock()
@@ -49,7 +74,7 @@ func (server *Server) AddContractKey(ctx context.Context, key *wallet.Key) error
 		}
 
 		for _, hash := range hashes {
-			server.SpyNode.SubscribePushDatas(ctx, [][]byte{hash[:]})
+			server.SubscribePushDatas(ctx, [][]byte{hash[:]})
 		}
 	}
 

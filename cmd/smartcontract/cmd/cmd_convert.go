@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 
@@ -111,6 +112,7 @@ var cmdConvert = &cobra.Command{
 			fmt.Printf("Public key : %s\n", key.PublicKey().String())
 			ra, _ := key.RawAddress()
 			fmt.Printf("Address : %s\n", bitcoin.NewAddressFromRawAddress(ra, network).String())
+			fmt.Printf("Raw Address (Base64): %s\n", base64.StdEncoding.EncodeToString(ra.Bytes()))
 			return nil
 		}
 
@@ -142,6 +144,7 @@ var cmdConvert = &cobra.Command{
 			pkh, _ := bitcoin.NewHash20(bitcoin.Hash160(publicKey.Bytes()))
 			fmt.Printf("Public Key Hash : %s\n", pkh)
 			fmt.Printf("Reverse Hash : %x\n", (*pkh)[:])
+			fmt.Printf("Raw Address (Base64): %s\n", base64.StdEncoding.EncodeToString(ra.Bytes()))
 			return nil
 		}
 
@@ -172,6 +175,8 @@ var cmdConvert = &cobra.Command{
 				fmt.Printf("Locking Script : %s\n", script)
 			}
 
+			fmt.Printf("Raw Address (Base64): %s\n", base64.StdEncoding.EncodeToString(ra.Bytes()))
+
 			return nil
 		}
 
@@ -193,6 +198,9 @@ var cmdConvert = &cobra.Command{
 				return nil
 			}
 			fmt.Printf("Address : %s\n", address.String())
+
+			ra := bitcoin.NewRawAddressFromAddress(address)
+			fmt.Printf("Raw Address (Base64): %s\n", base64.StdEncoding.EncodeToString(ra.Bytes()))
 			return nil
 		}
 		if n == 21 {
@@ -203,6 +211,8 @@ var cmdConvert = &cobra.Command{
 			}
 			address := bitcoin.NewAddressFromRawAddress(rawAddress, network)
 			fmt.Printf("Address : %s\n", address.String())
+
+			fmt.Printf("Raw Address (Base64): %s\n", base64.StdEncoding.EncodeToString(rawAddress.Bytes()))
 			return nil
 		}
 

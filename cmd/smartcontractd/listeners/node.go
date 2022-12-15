@@ -69,6 +69,10 @@ type Server struct {
 
 	TxSentCount        int
 	AlternateResponder protomux.ResponderFunc
+
+	spyNodeLock          sync.Mutex
+	spyNodeIsActive      bool
+	pushDatasToSubscribe [][]byte
 }
 
 type pendingRequest struct {
