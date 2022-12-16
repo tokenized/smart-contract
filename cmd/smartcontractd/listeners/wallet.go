@@ -40,6 +40,8 @@ func (server *Server) SetSpyNodeIsActive(ctx context.Context) {
 		return // already active
 	}
 
+	server.spyNodeIsActive = true
+
 	if len(server.pushDatasToSubscribe) > 0 {
 		server.SpyNode.SubscribePushDatas(ctx, server.pushDatasToSubscribe)
 		server.pushDatasToSubscribe = nil
