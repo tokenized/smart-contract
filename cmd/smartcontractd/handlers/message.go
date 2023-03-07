@@ -8,7 +8,6 @@ import (
 	"github.com/tokenized/inspector"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/pkg/wire"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/filters"
 	"github.com/tokenized/smart-contract/cmd/smartcontractd/listeners"
@@ -25,6 +24,7 @@ import (
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/messages"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/txbuilder"
 
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -266,7 +266,7 @@ func (m *Message) ProcessRevert(ctx context.Context, w *node.ResponseWriter,
 		}
 	}
 
-	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, tx, m.Config.IsTest)
+	responseItx, err := inspector.NewTransactionFromTransactionWithOutputs(ctx, tx, m.Config.IsTest)
 	if err != nil {
 		return errors.Wrap(err, "inspector from builder")
 	}
@@ -448,7 +448,7 @@ func (m *Message) processSettlementRequest(ctx context.Context, w *node.Response
 		// This shouldn't happen because we recieved this from another contract and they couldn't
 		// have signed it yet since it was incomplete.
 		if settleTx.AllInputsAreSigned() {
-			responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx,
+			responseItx, err := inspector.NewTransactionFromTransactionWithOutputs(ctx, settleTx,
 				m.Config.IsTest)
 			if err != nil {
 				return errors.Wrap(err, "inspector from builder")
@@ -646,7 +646,8 @@ func (m *Message) processSigRequestSettlement(ctx context.Context, w *node.Respo
 			}
 		}
 
-		responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, settleTx, m.Config.IsTest)
+		responseItx, err := inspector.NewTransactionFromTransactionWithOutputs(ctx, settleTx,
+			m.Config.IsTest)
 		if err != nil {
 			return errors.Wrap(err, "inspector from builder")
 		}

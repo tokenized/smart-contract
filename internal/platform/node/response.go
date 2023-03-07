@@ -7,11 +7,11 @@ import (
 	"github.com/tokenized/inspector"
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/bitcoin"
-	"github.com/tokenized/pkg/txbuilder"
 	"github.com/tokenized/smart-contract/internal/transactions"
 	"github.com/tokenized/smart-contract/pkg/wallet"
 	"github.com/tokenized/specification/dist/golang/actions"
 	"github.com/tokenized/specification/dist/golang/protocol"
+	"github.com/tokenized/txbuilder"
 
 	"github.com/pkg/errors"
 )
@@ -160,7 +160,8 @@ func RespondRejectText(ctx context.Context, w *ResponseWriter, itx *inspector.Tr
 		return ErrNoResponse
 	}
 
-	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, rejectTx, w.Config.IsTest)
+	responseItx, err := inspector.NewTransactionFromTransactionWithOutputs(ctx, rejectTx,
+		w.Config.IsTest)
 	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse
@@ -233,7 +234,8 @@ func RespondSuccess(ctx context.Context, w *ResponseWriter, itx *inspector.Trans
 		}
 	}
 
-	responseItx, err := inspector.NewTransactionFromTxBuilder(ctx, respondTx, w.Config.IsTest)
+	responseItx, err := inspector.NewTransactionFromTransactionWithOutputs(ctx, respondTx,
+		w.Config.IsTest)
 	if err != nil {
 		Error(ctx, w, err)
 		return ErrNoResponse

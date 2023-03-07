@@ -8,8 +8,8 @@ import (
 	"github.com/tokenized/logger"
 	"github.com/tokenized/pkg/rpcnode"
 	"github.com/tokenized/pkg/scheduler"
-	"github.com/tokenized/pkg/txbuilder"
 	spynodeBootstrap "github.com/tokenized/spynode/cmd/spynoded/bootstrap"
+	"github.com/tokenized/txbuilder"
 )
 
 // ContextWithLogger wraps the context with a development logger configuration.
